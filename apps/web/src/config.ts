@@ -10,4 +10,5 @@ export const CONTACT_SALES_URL = '/contact-sales'
 // Auth endpoints served by apps/api
 export const AUTH_GOOGLE_URL = '/api/auth/google'
 export const AUTH_EMAIL_URL = '/api/auth/email'
-export const SELF_HOSTING_URL = '/self-hosting'
+export const SELF_HOSTING_URL = '/docs/self-hosting'
+export const DOCS_URL = '/docs'

@@ -11,6 +11,7 @@ COPY apps/web/package.json apps/web/
 RUN pnpm install --frozen-lockfile
 
 COPY apps ./apps
+COPY docs ./docs
 RUN pnpm --filter @the-artifact/web build \
  && pnpm --filter @the-artifact/api build \
  && pnpm --filter @the-artifact/api deploy --prod --legacy /out

@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test'
 test('landing page renders and the pricing toggle switches plans', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByRole('heading', { level: 1, name: 'Your agent writes the page. You send the link.' })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Self-host for free' })).toHaveAttribute('href', '/self-hosting')
+  await expect(page.getByRole('link', { name: 'Self-host for free' })).toHaveAttribute('href', '/docs/self-hosting')
 
   const pricing = page.locator('#pricing')
   await expect(pricing.getByRole('heading', { name: 'Pricing' })).toBeVisible()
@@ -16,7 +16,7 @@ test('landing page renders and the pricing toggle switches plans', async ({ page
   await expect(selfHosted).toHaveAttribute('aria-checked', 'true')
   await expect(pricing.getByRole('heading', { name: 'Self-hosted', exact: true })).toBeVisible()
   await expect(pricing.getByRole('heading', { name: 'Self-hosted Enterprise' })).toBeVisible()
-  await expect(pricing.getByRole('link', { name: 'Read the install guide' })).toHaveAttribute('href', '/self-hosting')
+  await expect(pricing.getByRole('link', { name: 'Read the install guide' })).toHaveAttribute('href', '/docs/self-hosting')
   await expect(pricing.getByRole('link', { name: 'Contact sales' })).toBeVisible()
 
   // Cloud plans are shown but not available yet
@@ -32,11 +32,19 @@ test('landing page renders and the pricing toggle switches plans', async ({ page
   await expect(pricing.getByRole('heading', { name: 'Self-hosted', exact: true })).toBeVisible()
 })
 
-test('the install guide renders', async ({ page }) => {
+test('docs render, link between pages and redirect the old guide address', async ({ page }) => {
   await page.goto('/self-hosting')
-  await expect(page.getByRole('heading', { level: 1, name: 'Self-host The Artifact' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Copy the start command' })).toBeVisible()
-  await expect(page.locator('.command', { has: page.getByRole('button', { name: 'Copy the start command' }) })).toContainText('docker compose -f docker-compose.selfhost.yml up -d')
+  await expect(page).toHaveURL(/\/docs\/self-hosting$/)
+  await expect(page.getByRole('heading', { level: 1, name: 'Self-hosting' })).toBeVisible()
+  await expect(page.locator('.doc-code').first()).toContainText('git clone')
+
+  // Examples use this install's own address
+  await page.getByRole('link', { name: 'Connect your agent', exact: true }).first().click()
+  await expect(page).toHaveURL(/\/docs\/connect-your-agent$/)
+  await expect(page.locator('.doc')).toContainText('claude mcp add --transport http --scope user the-artifact http://localhost:5177/mcp')
+
+  await page.getByRole('link', { name: /Next\s*Publishing pages/ }).click()
+  await expect(page.getByRole('heading', { level: 1, name: 'Publishing pages' })).toBeVisible()
 })
 
 test('unknown paths show the 404 page', async ({ page }) => {

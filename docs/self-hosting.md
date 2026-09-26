@@ -1,4 +1,4 @@
-# Self-hosting The Artifact
+# Self-hosting
 
 The Artifact runs as one Docker image next to a Postgres database. It is free to self-host, with every feature included.
 
@@ -24,6 +24,8 @@ Edit `.env.selfhost`:
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | Your mail server. |
 | `ALLOWED_EMAIL_DOMAINS` | Optional. Comma-separated domains that may create accounts, e.g. `example.com`. People from other domains can still join when they are invited to an organization or a page. Leave it empty to let anyone sign up. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Optional. Without them people sign in by email only. |
+
+Every setting is listed in the [configuration reference](/docs/configuration).
 
 ## 2. Start it
 
@@ -55,7 +57,7 @@ Each person adds the MCP server once, using `APP_URL` followed by `/mcp`:
 claude mcp add --transport http --scope user the-artifact https://artifact.example.com/mcp
 ```
 
-The pages screen shows the setup for Claude Code, Cursor, Codex and other MCP clients.
+See [Connect your agent](/docs/connect-your-agent) for Cursor, Codex and other MCP clients.
 
 ## Google sign-in (optional)
 

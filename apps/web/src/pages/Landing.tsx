@@ -7,7 +7,7 @@ import { FlowDemo } from '../components/FlowDemo'
 import { Pricing } from '../components/Pricing'
 import { Wordmark } from '../components/Wordmark'
 import { CopyCommand } from '../components/CopyCommand'
-import { APP_HOST, LOGIN_URL, SELF_HOSTING_URL } from '../config'
+import { APP_HOST, DOCS_URL, LOGIN_URL, SELF_HOSTING_URL } from '../config'
 
 // undefined while checking, null when signed out
 type Session = Me | null | undefined
@@ -35,6 +35,7 @@ export function Landing() {
         <nav aria-label="Primary">
           <a className="nav-section" href="#how">How it works</a>
           <a className="nav-section" href="#pricing">Pricing</a>
+          <Link className="nav-section" to={DOCS_URL}>Docs</Link>
           {me === undefined ? (
             <span className="nav-pending" aria-hidden="true" />
           ) : me ? (
