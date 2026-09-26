@@ -20,6 +20,7 @@ Settings are environment variables. For a self-hosted install they go in `.env.s
 | `SMTP_SECURE` | `false` | `true` for implicit TLS (usually port 465) |
 | `SMTP_USER`, `SMTP_PASS` | empty | Leave empty for servers without authentication |
 | `ALLOWED_EMAIL_DOMAINS` | empty | Comma-separated domains that may create accounts. Empty lets anyone sign up. People invited to an organization or a page can always join. Used until an instance admin saves a sign-up policy in the admin area, which then takes precedence. |
+| `SALES_EMAIL` | the `SMTP_FROM` address | Where the **Contact sales** form sends messages. Each one has Reply-To set to the sender. |
 | `ADMIN_EMAILS` | empty | Comma-separated addresses that are always instance admins and can always sign up. They can't be demoted or deleted from the admin area. See [The instance admin](/docs/self-hosting#the-instance-admin). |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | empty | Enables **Continue with Google**. Register `APP_URL/api/auth/google/callback` as the redirect URI. |
 | `CHROME_PATH` | empty (the image sets it) | Chrome or Chromium binary that renders gallery thumbnails. Empty skips thumbnails; cards show a sketch. |
