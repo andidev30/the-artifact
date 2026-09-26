@@ -1,24 +1,50 @@
-import { ConnectTabs } from './components/ConnectTabs'
-import { FlowDemo } from './components/FlowDemo'
-import { Pricing } from './components/Pricing'
-import { APP_HOST, LOGIN_URL, SIGNUP_URL } from './config'
-import './App.css'
+import { useEffect, useState } from 'react'
+import { Link } from 'react-router'
+import { fetchMe, type Me } from '../api'
+import { ConnectTabs } from '../components/ConnectTabs'
+import { FlowDemo } from '../components/FlowDemo'
+import { Pricing } from '../components/Pricing'
+import { Wordmark } from '../components/Wordmark'
+import { APP_HOST, LOGIN_URL, SIGNUP_URL } from '../config'
 
-function App() {
+// undefined while checking, null when signed out
+type Session = Me | null | undefined
+
+export function Landing() {
+  const [me, setMe] = useState<Session>(undefined)
+
+  useEffect(() => {
+    fetchMe().then(setMe).catch(() => setMe(null))
+  }, [])
+
+  const signedIn = Boolean(me)
+  const firstName = me?.name?.split(' ')[0]
+
   return (
     <>
       <a className="skip" href="#main">Skip to content</a>
 
       <header className="nav">
-        <a className="wordmark" href="/">
-          <span className="wordmark-mark" aria-hidden="true" />
-          the artifact
-        </a>
+        <Wordmark />
         <nav aria-label="Primary">
           <a className="nav-section" href="#how">How it works</a>
           <a className="nav-section" href="#pricing">Pricing</a>
-          <a href={LOGIN_URL}>Log in</a>
-          <a className="button button-small" href={SIGNUP_URL}>Get started</a>
+          {me === undefined ? (
+            <span className="nav-pending" aria-hidden="true" />
+          ) : me ? (
+            <>
+              <span className="nav-account">
+                {me.avatarUrl && <img src={me.avatarUrl} alt="" referrerPolicy="no-referrer" />}
+                <span>{firstName ?? me.email}</span>
+              </span>
+              <Link className="button button-small" to="/app">Go to your pages</Link>
+            </>
+          ) : (
+            <>
+              <Link to={LOGIN_URL}>Log in</Link>
+              <Link className="button button-small" to={SIGNUP_URL}>Get started</Link>
+            </>
+          )}
         </nav>
       </header>
 
@@ -32,7 +58,11 @@ function App() {
               and you choose who can open them: anyone with the link, or only your team.
             </p>
             <div className="hero-actions">
-              <a className="button" href={SIGNUP_URL}>Get started free</a>
+              {signedIn ? (
+                <Link className="button" to="/app">Go to your pages</Link>
+              ) : (
+                <Link className="button" to={SIGNUP_URL}>Get started free</Link>
+              )}
               <a className="text-link" href="#how">See how it works</a>
             </div>
             <p className="hint">Works with Claude Code, Cursor, Codex, and any MCP client.</p>
@@ -46,10 +76,18 @@ function App() {
             <li>
               <div className="step-text">
                 <h3>Create an account</h3>
-                <p>Sign up with your email or GitHub. Personal use is free.</p>
+                <p>
+                  {signedIn
+                    ? `Done. You are signed in as ${me!.email}.`
+                    : 'Sign up with Google or your email. Personal use is free.'}
+                </p>
               </div>
               <div className="step-action">
-                <a className="button button-quiet" href={SIGNUP_URL}>Create a free account</a>
+                {signedIn ? (
+                  <Link className="button button-quiet" to="/app">Go to your pages</Link>
+                ) : (
+                  <Link className="button button-quiet" to={SIGNUP_URL}>Create a free account</Link>
+                )}
               </div>
             </li>
             <li>
@@ -107,7 +145,6 @@ function App() {
 
         <section id="pricing" className="section">
           <h2>Pricing</h2>
-          <p className="section-lede">Free for your own work. Pay when your team shares a workspace. Talk to us when your company needs SSO and audit logs.</p>
           <Pricing />
         </section>
       </main>
@@ -120,4 +157,3 @@ function App() {
   )
 }
 
-export default App

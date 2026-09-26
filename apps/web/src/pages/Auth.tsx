@@ -1,0 +1,187 @@
+import { useEffect, useState, type FormEvent } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router'
+import { fetchMe } from '../api'
+import { Wordmark } from '../components/Wordmark'
+import { APP_HOST, AUTH_EMAIL_URL, AUTH_GOOGLE_URL, LOGIN_URL, SIGNUP_URL } from '../config'
+import './Auth.css'
+
+type Mode = 'login' | 'signup'
+type Status = { kind: 'idle' } | { kind: 'sending' } | { kind: 'sent'; email: string } | { kind: 'error'; message: string }
+
+const COPY = {
+  login: {
+    title: 'Welcome back',
+    lede: 'Log in to see the pages your agents have published.',
+    submit: 'Email me a sign-in link',
+    switchText: 'New here?',
+    switchLink: 'Create an account',
+    switchTo: SIGNUP_URL,
+  },
+  signup: {
+    title: 'Create your account',
+    lede: 'Free for personal use. No card needed.',
+    submit: 'Email me a sign-up link',
+    switchText: 'Already have an account?',
+    switchLink: 'Log in',
+    switchTo: LOGIN_URL,
+  },
+} as const
+
+// Errors the API sends back to /login?error=…
+const SIGN_IN_ERRORS: Record<string, string> = {
+  google_not_configured: 'Google sign-in is not set up yet. Use your email instead.',
+  google_cancelled: 'Google sign-in was cancelled. Try again, or use your email.',
+  google_failed: 'Google sign-in did not work. Try again, or use your email.',
+  google_unverified: 'Your Google account email is not verified. Use your email instead.',
+  link_invalid: 'That sign-in link has already been used or is not valid. Request a new one below.',
+  link_expired: 'That sign-in link has expired. Request a new one below.',
+}
+
+export function Auth({ mode }: { mode: Mode }) {
+  const [params] = useSearchParams()
+  const plan = params.get('plan')
+  const isOrg = mode === 'signup' && plan === 'organization'
+  const copy = COPY[mode]
+  const signInError = SIGN_IN_ERRORS[params.get('error') ?? '']
+  const navigate = useNavigate()
+
+  // Someone already signed in has nothing to do here
+  useEffect(() => {
+    fetchMe().then((me) => me && navigate('/app', { replace: true })).catch(() => {})
+  }, [navigate])
+
+  useEffect(() => {
+    document.title = `${mode === 'login' ? 'Log in' : 'Sign up'} | The Artifact`
+    return () => { document.title = 'The Artifact' }
+  }, [mode])
+
+  const header = (
+    <header className="nav">
+      <Wordmark />
+      <p className="auth-switch">
+        <span className="auth-switch-text">{copy.switchText} </span>
+        <Link to={copy.switchTo + (isOrg ? '?plan=organization' : '')}>{copy.switchLink}</Link>
+      </p>
+    </header>
+  )
+
+  const form = <AuthForm mode={mode} plan={plan} notice={signInError} lede={isOrg ? 'You will set up your organization and invite your team after this step.' : copy.lede} />
+
+  if (mode === 'login') {
+    return (
+      <div className="auth auth-login">
+        {header}
+        <main id="main" className="auth-main">{form}</main>
+      </div>
+    )
+  }
+
+  return (
+    <div className="auth-signup">
+      <div className="auth auth-signup-form">
+        {header}
+        <main id="main" className="auth-main">{form}</main>
+      </div>
+      <SignupPanel />
+    </div>
+  )
+}
+
+function AuthForm({ mode, plan, lede, notice }: { mode: Mode; plan: string | null; lede: string; notice?: string }) {
+  const copy = COPY[mode]
+  const [status, setStatus] = useState<Status>({ kind: 'idle' })
+  const query = new URLSearchParams({ intent: mode, ...(plan ? { plan } : {}) }).toString()
+
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const email = String(new FormData(e.currentTarget).get('email') ?? '').trim()
+    setStatus({ kind: 'sending' })
+    try {
+      const res = await fetch(AUTH_EMAIL_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, intent: mode, plan }),
+      })
+      if (!res.ok) throw new Error(String(res.status))
+      setStatus({ kind: 'sent', email })
+    } catch {
+      setStatus({ kind: 'error', message: 'The link could not be sent. Check your connection and try again.' })
+    }
+  }
+
+  if (status.kind === 'sent') {
+    return (
+      <section className="auth-box auth-sent" role="status" aria-labelledby="auth-title">
+        <h1 id="auth-title">Check your inbox</h1>
+        <p>
+          We sent a link to <strong>{status.email}</strong>. Open it on this device to
+          finish {mode === 'login' ? 'logging in' : 'creating your account'}.
+        </p>
+        <button type="button" className="auth-reset" onClick={() => setStatus({ kind: 'idle' })}>
+          Use a different email
+        </button>
+      </section>
+    )
+  }
+
+  return (
+    <section className="auth-box" aria-labelledby="auth-title">
+      <h1 id="auth-title">{copy.title}</h1>
+      <p className="auth-lede">{lede}</p>
+      {notice && <p className="auth-notice" role="alert">{notice}</p>}
+
+      <a className="button button-quiet auth-provider" href={`${AUTH_GOOGLE_URL}?${query}`}>
+        <svg viewBox="0 0 48 48" aria-hidden="true">
+          <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z" />
+          <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z" />
+          <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z" />
+          <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z" />
+        </svg>
+        Continue with Google
+      </a>
+
+      <div className="auth-divider"><span>or use your email</span></div>
+
+      <form className="auth-form" onSubmit={onSubmit}>
+        <label htmlFor="email">Email</label>
+        <input
+          id="email"
+          name="email"
+          type="email"
+          autoComplete="email"
+          placeholder="you@company.com"
+          required
+          aria-invalid={status.kind === 'error' || undefined}
+          aria-describedby={status.kind === 'error' ? 'auth-error' : undefined}
+        />
+        {status.kind === 'error' && (
+          <p id="auth-error" className="auth-error" role="alert">{status.message}</p>
+        )}
+        <button type="submit" className="button" disabled={status.kind === 'sending'}>
+          {status.kind === 'sending' ? 'Sending link' : copy.submit}
+        </button>
+      </form>
+    </section>
+  )
+}
+
+// The blueprint side of sign-up: what the first minute with the product looks like
+function SignupPanel() {
+  return (
+    <aside className="auth-panel" aria-label="What you can do after signing up">
+      <div className="auth-panel-inner">
+        <h2>Your first page is one prompt away.</h2>
+        <div className="auth-panel-transcript">
+          <p><span className="auth-panel-caret" aria-hidden="true">&gt;</span>turn this CSV into a chart I can send to the team</p>
+          <p className="auth-panel-tool"><span className="auth-panel-dot" aria-hidden="true" />publish_artifact</p>
+          <p>Published. <mark>{APP_HOST}/a/signups-by-week</mark></p>
+        </div>
+        <ul>
+          <li>Works with Claude Code, Cursor, Codex and any MCP client</li>
+          <li>Pages stay private until you share the link</li>
+          <li>Ask for a change and the same link updates</li>
+        </ul>
+      </div>
+    </aside>
+  )
+}

@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { Link } from 'react-router'
 import { CONTACT_SALES_URL, SIGNUP_URL } from '../config'
 
 type Plan = {
@@ -12,7 +14,7 @@ type Plan = {
 }
 
 // Placeholder prices and limits; change here once they are decided
-const PLANS: Plan[] = [
+const CLOUD_PLANS: Plan[] = [
   {
     name: 'Personal',
     price: '$0',
@@ -60,27 +62,87 @@ const PLANS: Plan[] = [
   },
 ]
 
+const SELF_HOSTED_PLANS: Plan[] = [
+  {
+    name: 'Self-hosted Team',
+    price: '$20',
+    per: 'per member / month, billed yearly',
+    summary: 'Run The Artifact on your own servers, with your own data.',
+    features: [
+      'Everything in Organization',
+      'Ships as a Docker image for your servers or Kubernetes',
+      'Uses your Postgres, your SMTP and your Google sign-in',
+      'Pages and data never leave your network',
+      'Update on your schedule, with release notes',
+    ],
+    cta: 'Get a license',
+    href: `${CONTACT_SALES_URL}?topic=self-hosted-team`,
+    featured: true,
+  },
+  {
+    name: 'Self-hosted Enterprise',
+    price: 'Custom',
+    per: 'yearly contract',
+    summary: 'For companies with strict security reviews or closed networks.',
+    features: [
+      'Everything in Self-hosted Team',
+      'SSO with SAML and user provisioning with SCIM',
+      'Audit log of every publish and share',
+      'Air-gapped install with an offline license',
+      'Priority support with an agreed response time',
+    ],
+    cta: 'Contact sales',
+    href: `${CONTACT_SALES_URL}?topic=self-hosted-enterprise`,
+  },
+]
+
+type Hosting = 'cloud' | 'self-hosted'
+
+const LEDE: Record<Hosting, string> = {
+  cloud: 'Free for your own work. Pay when your team shares a workspace. Talk to us when your company needs SSO and audit logs.',
+  'self-hosted': 'The same product, running inside your own infrastructure. Licensed yearly, per member.',
+}
+
 export function Pricing() {
+  const [hosting, setHosting] = useState<Hosting>('cloud')
+  const plans = hosting === 'cloud' ? CLOUD_PLANS : SELF_HOSTED_PLANS
+
   return (
-    <div className="plans">
-      {PLANS.map((plan) => (
-        <article key={plan.name} className={plan.featured ? 'plan plan-featured' : 'plan'}>
-          <h3>{plan.name}</h3>
-          <p className={plan.price.startsWith('$') ? 'plan-price' : 'plan-price plan-price-text'}>
-            <span>{plan.price}</span>
-            {plan.per}
-          </p>
-          <p className="plan-summary">{plan.summary}</p>
-          <ul>
-            {plan.features.map((f) => (
-              <li key={f}>{f}</li>
-            ))}
-          </ul>
-          <a className={plan.featured ? 'button' : 'button button-quiet'} href={plan.href}>
-            {plan.cta}
-          </a>
-        </article>
-      ))}
-    </div>
+    <>
+      <p className="section-lede">{LEDE[hosting]}</p>
+      <div className="hosting-toggle" role="radiogroup" aria-label="Where The Artifact runs">
+        {(['cloud', 'self-hosted'] as const).map((h) => (
+          <button
+            key={h}
+            type="button"
+            role="radio"
+            aria-checked={hosting === h}
+            onClick={() => setHosting(h)}
+          >
+            {h === 'cloud' ? 'Cloud' : 'Self-hosted'}
+          </button>
+        ))}
+      </div>
+      <div className="plans" data-count={plans.length}>
+        {plans.map((plan) => (
+          <article key={plan.name} className={plan.featured ? 'plan plan-featured' : 'plan'}>
+            <h3>{plan.name}</h3>
+            <p className={plan.price.startsWith('$') ? 'plan-price' : 'plan-price plan-price-text'}>
+              <span>{plan.price}</span>
+              {plan.per}
+            </p>
+            <p className="plan-summary">{plan.summary}</p>
+            <ul>
+              {plan.features.map((f) => (
+                <li key={f}>{f}</li>
+              ))}
+            </ul>
+            <Link className={plan.featured ? 'button' : 'button button-quiet'} to={plan.href}>
+              {plan.cta}
+            </Link>
+          </article>
+        ))}
+      </div>
+    </>
   )
 }

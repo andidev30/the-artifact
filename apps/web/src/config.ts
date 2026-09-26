@@ -6,3 +6,7 @@ export const MCP_URL = `${APP_URL}/mcp`
 export const SIGNUP_URL = '/signup'
 export const LOGIN_URL = '/login'
 export const CONTACT_SALES_URL = '/contact-sales'
+
+// Auth endpoints served by apps/api
+export const AUTH_GOOGLE_URL = '/api/auth/google'
+export const AUTH_EMAIL_URL = '/api/auth/email'

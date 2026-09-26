@@ -31,6 +31,8 @@ main,
 }
 
 .wordmark {
+  flex: none;
+  white-space: nowrap;
   display: inline-flex;
   align-items: center;
   gap: 10px;
@@ -59,6 +61,26 @@ main,
 .nav nav a:not(.button) {
   text-decoration: none;
   color: var(--ink-soft);
+}
+
+.nav-pending {
+  width: 180px;
+  height: 34px;
+}
+
+.nav-account {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.nav-account img {
+  width: 26px;
+  height: 26px;
+  border: 1.5px solid var(--ink);
+  border-radius: 50%;
 }
 
 .nav nav a:not(.button):hover {
@@ -737,7 +759,7 @@ main,
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
   gap: clamp(20px, 3vw, 32px);
-  margin-top: 40px;
+  margin-top: 28px;
 }
 
 .plan {
@@ -819,6 +841,41 @@ main,
   justify-self: start;
 }
 
+/* Cloud / self-hosted switch above the plans */
+
+.hosting-toggle {
+  display: inline-flex;
+  margin-top: 28px;
+  padding: 3px;
+  background: var(--white);
+  border: 1.5px solid var(--ink);
+  border-radius: 3px;
+}
+
+.hosting-toggle button {
+  padding: 8px 18px;
+  font: 600 var(--step--1) var(--sans);
+  color: var(--ink-soft);
+  background: none;
+  border: 0;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.hosting-toggle button:hover {
+  color: var(--ink);
+}
+
+.hosting-toggle button[aria-checked='true'] {
+  color: var(--ink);
+  background: var(--marker);
+}
+
+/* Two plans shouldn't stretch across the whole page */
+.plans[data-count='2'] {
+  max-width: 820px;
+}
+
 /* Narrow screens: the diagram runs top to bottom */
 
 @media (max-width: 860px) {
@@ -881,7 +938,8 @@ main,
     gap: 16px;
   }
 
-  .nav-section {
+  .nav-section,
+  .nav-account span {
     display: none;
   }
 }
