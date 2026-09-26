@@ -23,6 +23,13 @@ A page in a personal workspace is restricted until you share it. A page that som
 - Access tokens last an hour; refresh tokens rotate on every use. All tokens are stored as hashes.
 - An agent acts for one person in one workspace, and only with that person's permissions. Disconnect it in **Settings** to revoke it immediately.
 
+## Instance admins
+
+- On a self-hosted install the first account becomes the instance admin; more can be added from the admin area or with `ADMIN_EMAILS`. See [The instance admin](/docs/self-hosting#the-instance-admin).
+- Admins manage accounts and organizations. They can't read private pages through the admin area: it shows counts, not page content.
+- Suspending someone deletes their sessions and agent tokens at once, and refuses their sign-in links, Google sign-in and MCP calls until they are unsuspended.
+- The last admin can't be removed, suspended or deleted, so an install always keeps a way in.
+
 ## Self-hosted data
 
 Everything, including page HTML and version history, lives in your Postgres database. Nothing is sent to us.

@@ -18,7 +18,9 @@ Settings are environment variables. For a self-hosted install they go in `.env.s
 | `SMTP_PORT` | `587` | |
 | `SMTP_SECURE` | `false` | `true` for implicit TLS (usually port 465) |
 | `SMTP_USER`, `SMTP_PASS` | empty | Leave empty for servers without authentication |
-| `ALLOWED_EMAIL_DOMAINS` | empty | Comma-separated domains that may create accounts. Empty lets anyone sign up. People invited to an organization or a page can always join. |
+| `ALLOWED_EMAIL_DOMAINS` | empty | Comma-separated domains that may create accounts. Empty lets anyone sign up. People invited to an organization or a page can always join. Used until an instance admin saves a sign-up policy in the admin area, which then takes precedence. |
+| `ADMIN_EMAILS` | empty | Comma-separated addresses that are always instance admins and can always sign up. They can't be demoted or deleted from the admin area. See [The instance admin](/docs/self-hosting#the-instance-admin). |
+| `FIRST_USER_ADMIN` | same as `SELF_HOSTED` | `true` makes the first account created on the install its admin. `false` turns that off. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | empty | Enables **Continue with Google**. Register `APP_URL/api/auth/google/callback` as the redirect URI. |
 | `PORT` | `3000` | Port inside the container |
 | `ARTIFACT_PORT` | `8080` | Host port in `docker-compose.selfhost.yml` |
@@ -28,9 +30,18 @@ Settings are environment variables. For a self-hosted install they go in `.env.s
 
 | Variable | Value | Meaning |
 | --- | --- | --- |
-| `SELF_HOSTED` | `true` | Skips the marketing pages; `/` opens the app |
+| `SELF_HOSTED` | `true` | Skips the marketing pages; `/` opens the app. Also makes the first account the instance admin, unless `FIRST_USER_ADMIN=false`. |
 | `WEB_DIR` | `/app/web` | Serves the built web app from the same process |
 | `MIGRATE_ON_START` | `true` | Applies database migrations on every start |
+
+## Settings in the admin area
+
+Instance admins change these at `/admin`; they are stored in the database and apply at once, without a restart.
+
+| Setting | Meaning |
+| --- | --- |
+| Sign-up policy | Anyone, listed email domains, or invited people only. Takes precedence over `ALLOWED_EMAIL_DOMAINS` once saved. |
+| Instance name | Optional, up to 60 characters, shown next to the logo in the signed-in header |
 
 ## Limits
 

@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react'
 export type AppConfig = {
   selfHosted: boolean
   googleSignIn: boolean
+  // Set by the instance admin; shown in the signed-in header
+  instanceName?: string | null
 }
 
 // Fetched once per page load and shared by every component that asks

@@ -14,6 +14,7 @@ import { Viewer } from './pages/Viewer.tsx'
 import { Invite } from './pages/Invite.tsx'
 import { NewOrganization } from './pages/NewOrganization.tsx'
 import { Settings } from './pages/Settings.tsx'
+import { Admin } from './pages/Admin.tsx'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -27,6 +28,7 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/authorize" element={<Authorize />} />
         <Route path="/a/:slug" element={<Viewer />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/admin" element={<Admin />} />
         <Route path="/organizations/new" element={<NewOrganization />} />
         <Route path="/invite/:token" element={<Invite />} />
         <Route path="/docs" element={<Navigate to="/docs/introduction" replace />} />

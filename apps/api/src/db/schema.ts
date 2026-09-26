@@ -1,4 +1,4 @@
-import { index, integer, jsonb, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
+import { boolean, index, integer, jsonb, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -8,6 +8,12 @@ export const users = pgTable('users', {
   googleSub: text('google_sub').unique(),
   // Set once the person finishes choosing a personal or organization workspace
   onboardedAt: timestamp('onboarded_at', { withTimezone: true }),
+  // Instance administrator (see src/instance.ts); ADMIN_EMAILS grants it too, without this flag
+  isAdmin: boolean('is_admin').notNull().default(false),
+  // Suspended people can't sign in or use their agents; their pages stay
+  suspendedAt: timestamp('suspended_at', { withTimezone: true }),
+  // Updated at most every few minutes while they use the web app
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
@@ -183,7 +189,21 @@ export const artifactShares = pgTable(
   (t) => [primaryKey({ columns: [t.artifactId, t.email] }), index('artifact_shares_email_idx').on(t.email)],
 )
 
+export const signupPolicyEnum = pgEnum('signup_policy', ['open', 'domains', 'invite-only'])
+
+// Settings the instance admin edits in the web app. At most one row (id 1); without it the
+// environment (ALLOWED_EMAIL_DOMAINS) decides.
+export const instanceSettings = pgTable('instance_settings', {
+  id: integer('id').primaryKey().default(1),
+  signupPolicy: signupPolicyEnum('signup_policy').notNull(),
+  allowedDomains: jsonb('allowed_domains').$type<string[]>().notNull().default([]),
+  instanceName: text('instance_name'),
+  updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
 export type User = typeof users.$inferSelect
+export type SignupPolicy = (typeof signupPolicyEnum.enumValues)[number]
 export type ShareRole = (typeof shareRoleEnum.enumValues)[number]
 export type Artifact = typeof artifacts.$inferSelect
 export type Visibility = (typeof visibilityEnum.enumValues)[number]

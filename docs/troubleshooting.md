@@ -34,4 +34,12 @@ docker compose -f docker-compose.selfhost.yml logs app
 
 ## Self-hosted: "This server only accepts accounts from invited people"
 
-`ALLOWED_EMAIL_DOMAINS` is set and the address isn't in it. Add the domain, or invite the person to an organization or a page first.
+The sign-up policy doesn't let this address create an account: an admin chose email domains or invited people only under **Admin**, **Sign-up**, or `ALLOWED_EMAIL_DOMAINS` is set and nothing was saved there yet. Add the domain, or invite the person to an organization or a page first.
+
+## Self-hosted: "This account is suspended"
+
+An instance admin suspended the account. An admin can unsuspend it under **Admin**, **People**.
+
+## Self-hosted: nobody is an admin
+
+Add your address to `ADMIN_EMAILS` and restart. See [An existing install without an admin](/docs/self-hosting#an-existing-install-without-an-admin).

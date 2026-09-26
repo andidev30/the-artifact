@@ -36,6 +36,7 @@ const SIGN_IN_ERRORS: Record<string, string> = {
   google_unverified: 'Your Google account email is not verified. Use your email instead.',
   link_invalid: 'That sign-in link has already been used or is not valid. Request a new one below.',
   link_expired: 'That sign-in link has expired. Request a new one below.',
+  account_suspended: 'This account is suspended. Ask an admin of this server if you think that is a mistake.',
   signup_closed: 'This server only accepts accounts from invited people and certain email domains. Ask an admin to invite you.',
 }
 

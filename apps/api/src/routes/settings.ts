@@ -3,6 +3,7 @@ import { Hono } from 'hono'
 import { deleteCookie } from 'hono/cookie'
 import { requireUser, type AuthEnv } from '../auth/session.js'
 import { db, schema } from '../db/index.js'
+import { isLastAdmin, lastAdminError } from '../instance.js'
 
 // Account settings, mounted at /api/me next to GET /api/me
 export const settings = new Hono<AuthEnv>()
@@ -66,7 +67,7 @@ settings.delete('/agents/:clientId', async (c) => {
 
 // Organizations this person owns alone. Those with other people in them block deleting the account;
 // those with nobody else are deleted along with it.
-async function ownedAlone(userId: string) {
+export async function ownedAlone(userId: string) {
   const owned = await db
     .select({ id: schema.organizations.id, name: schema.organizations.name })
     .from(schema.memberships)
@@ -86,6 +87,19 @@ async function ownedAlone(userId: string) {
     else empty.push(org.id)
   }
   return { blocked, empty }
+}
+
+// Removes the account once ownedAlone() found nothing blocking; also used by the admin area
+export async function deleteAccountData(user: { id: string; email: string }, emptyOrganizations: string[]) {
+  await db.transaction(async (tx) => {
+    // Organizations with nobody else in them go too
+    if (emptyOrganizations.length) await tx.delete(schema.organizations).where(inArray(schema.organizations.id, emptyOrganizations))
+    await tx.delete(schema.artifactShares).where(eq(schema.artifactShares.email, user.email))
+    await tx.delete(schema.invitations).where(eq(schema.invitations.email, user.email))
+    await tx.delete(schema.emailTokens).where(eq(schema.emailTokens.email, user.email))
+    // Sessions, memberships, agent tokens and pages cascade from the user
+    await tx.delete(schema.users).where(eq(schema.users.id, user.id))
+  })
 }
 
 // What deleting the account would do, so the page can explain it before anyone types their email
@@ -116,15 +130,8 @@ settings.delete('/', async (c) => {
     )
   }
 
-  await db.transaction(async (tx) => {
-    // Organizations with nobody else in them go too
-    if (empty.length) await tx.delete(schema.organizations).where(inArray(schema.organizations.id, empty))
-    await tx.delete(schema.artifactShares).where(eq(schema.artifactShares.email, user.email))
-    await tx.delete(schema.invitations).where(eq(schema.invitations.email, user.email))
-    await tx.delete(schema.emailTokens).where(eq(schema.emailTokens.email, user.email))
-    // Sessions, memberships, agent tokens and pages cascade from the user
-    await tx.delete(schema.users).where(eq(schema.users.id, user.id))
-  })
+  if (await isLastAdmin(user)) return c.json(lastAdminError, 409)
+  await deleteAccountData(user, empty)
   deleteCookie(c, 'session', { path: '/' })
   return c.body(null, 204)
 })

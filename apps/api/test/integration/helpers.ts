@@ -43,12 +43,12 @@ export type TestUser = { id: string; email: string; name: string | null; cookie:
 let counter = 0
 
 // A signed-in person, created directly in the database (sign-in itself is covered in auth.test.ts)
-export async function createUser(opts: { email?: string; name?: string; onboarded?: boolean } = {}): Promise<TestUser> {
+export async function createUser(opts: { email?: string; name?: string; onboarded?: boolean; admin?: boolean } = {}): Promise<TestUser> {
   counter += 1
   const email = (opts.email ?? `user${counter}@example.com`).toLowerCase()
   const [user] = await db
     .insert(schema.users)
-    .values({ email, name: opts.name ?? null, onboardedAt: opts.onboarded === false ? null : new Date() })
+    .values({ email, name: opts.name ?? null, onboardedAt: opts.onboarded === false ? null : new Date(), isAdmin: opts.admin ?? false })
     .returning()
   const token = randomToken()
   await db.insert(schema.sessions).values({ id: hashToken(token), userId: user.id, expiresAt: new Date(Date.now() + 86_400_000) })

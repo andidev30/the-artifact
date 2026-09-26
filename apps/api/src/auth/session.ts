@@ -12,6 +12,8 @@ const DAY = 24 * 60 * 60 * 1000
 const SESSION_TTL = 30 * DAY
 // Extend a session once less than half its lifetime is left
 const RENEW_BEFORE = 15 * DAY
+// How stale users.last_seen_at may get before a request refreshes it
+const SEEN_EVERY = 5 * 60 * 1000
 
 export type AuthEnv = { Variables: { user: User | null } }
 
@@ -58,7 +60,8 @@ export const loadUser = createMiddleware<AuthEnv>(async (c, next) => {
       .innerJoin(schema.users, eq(schema.sessions.userId, schema.users.id))
       .where(eq(schema.sessions.id, id))
 
-    if (!row || row.session.expiresAt.getTime() < Date.now()) {
+    // Suspended people are signed out everywhere (their sessions are deleted too)
+    if (!row || row.session.expiresAt.getTime() < Date.now() || row.user.suspendedAt) {
       if (row) await db.delete(schema.sessions).where(eq(schema.sessions.id, id))
       deleteCookie(c, COOKIE, { path: '/' })
     } else {
@@ -66,6 +69,10 @@ export const loadUser = createMiddleware<AuthEnv>(async (c, next) => {
         const expiresAt = new Date(Date.now() + SESSION_TTL)
         await db.update(schema.sessions).set({ expiresAt }).where(eq(schema.sessions.id, id))
         setSessionCookie(c, token, expiresAt)
+      }
+      if (!row.user.lastSeenAt || Date.now() - row.user.lastSeenAt.getTime() > SEEN_EVERY) {
+        row.user.lastSeenAt = new Date()
+        await db.update(schema.users).set({ lastSeenAt: row.user.lastSeenAt }).where(eq(schema.users.id, row.user.id))
       }
       c.set('user', row.user)
     }

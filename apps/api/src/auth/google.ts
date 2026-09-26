@@ -99,7 +99,7 @@ google.get('/callback', async (c) => {
     await startSession(c, user.id)
     return c.redirect(afterSignInUrl(plan, next))
   } catch (err) {
-    if (err instanceof SignupClosedError) return c.redirect(signInErrorUrl('signup_closed'))
+    if (err instanceof SignupClosedError) return c.redirect(signInErrorUrl(err.code))
     console.error('Google sign-in failed', err)
     return c.redirect(signInErrorUrl('google_failed'))
   }
