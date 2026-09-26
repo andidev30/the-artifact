@@ -31,8 +31,12 @@ export function InvitationRow({ me, invitation, compact = false, onJoined }: {
     setBusy(kind)
     setProblem(null)
     try {
-      if (kind === 'join') onJoined?.(await accept(invitation))
-      else await decline(invitation)
+      if (kind === 'join') {
+        const org = await accept(invitation)
+        onJoined?.(org)
+      } else {
+        await decline(invitation)
+      }
     } catch (err) {
       setProblem(err instanceof Error ? err.message : 'That did not work. Try again.')
       setBusy(null)
@@ -47,10 +51,10 @@ export function InvitationRow({ me, invitation, compact = false, onJoined }: {
         {INVITE_ROLE_TEXT[invitation.role]}.
       </p>
       <div className="invitation-actions">
-        <button type="button" className="button button-small" onClick={() => run('join')} disabled={busy !== null}>
-          {busy === 'join' ? 'Joining' : `Join ${compact ? '' : org}`.trim()}
+        <button type="button" className="button button-small" onClick={() => run('join')} disabled={busy !== null} aria-label={`Join ${org}`}>
+          {busy === 'join' ? 'Joining' : 'Join'}
         </button>
-        <button type="button" className="auth-reset" onClick={() => run('decline')} disabled={busy !== null}>
+        <button type="button" className="auth-reset" onClick={() => run('decline')} disabled={busy !== null} aria-label={`Decline the invitation to ${org}`}>
           {busy === 'decline' ? 'Declining' : 'Decline'}
         </button>
       </div>

@@ -47,6 +47,11 @@
   gap: 16px;
 }
 
+.invitation-actions .button {
+  font: 700 var(--step--1) var(--sans);
+  cursor: pointer;
+}
+
 .invitation-actions .auth-reset {
   margin: 0;
 }

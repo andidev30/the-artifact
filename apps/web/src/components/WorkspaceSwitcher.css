@@ -195,4 +195,15 @@
     display: inline-flex;
     max-width: 8.5rem;
   }
+
+  /* Full width under the header, so it never runs off the right edge */
+  .switcher-menu {
+    position: fixed;
+    top: 64px;
+    left: 16px;
+    right: 16px;
+    width: auto;
+    max-height: calc(100vh - 80px);
+    overflow-y: auto;
+  }
 }
