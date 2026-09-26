@@ -574,6 +574,35 @@ function InviteForm({ details, myRole, onInvited }: { details: OrganizationDetai
   )
 }
 
+const pagesText = (n: number) => (n === 1 ? '1 page' : `${n} pages`)
+
+// What happens to pages and organizations, from the deletion preview
+function DeletionSummary({ preview }: { preview: DeletionPreview }) {
+  const { pages, transfers, deletesOrganizations: orgs } = preview
+  return (
+    <ul className="deletion-summary">
+      <li data-kind="delete">
+        <strong>{pages.deleted === 0 ? 'No pages' : pagesText(pages.deleted)} deleted.</strong>{' '}
+        {pages.deleted === 0
+          ? 'You have no personal pages.'
+          : `Everything in your personal workspace${orgs.length ? ` and in ${orgs.join(', ')}` : ''}, with its history.`}
+      </li>
+      {transfers.map((t) => (
+        <li key={t.organization} data-kind="keep">
+          <strong>{pagesText(t.pages)} in {t.organization} {t.pages === 1 ? 'stays' : 'stay'}.</strong>{' '}
+          {t.pages === 1 ? 'It moves' : 'They move'} to {t.to}, with {t.pages === 1 ? 'its' : 'their'} history and sharing.
+        </li>
+      ))}
+      {orgs.length > 0 && (
+        <li data-kind="delete">
+          <strong>{orgs.join(', ')} deleted.</strong> {orgs.length === 1 ? 'It has' : 'They have'} nobody else in{' '}
+          {orgs.length === 1 ? 'it' : 'them'}.
+        </li>
+      )}
+    </ul>
+  )
+}
+
 function DeleteSection({ me }: { me: Me }) {
   const navigate = useNavigate()
   const [preview, setPreview] = useState<DeletionPreview | null>(null)
@@ -609,10 +638,12 @@ function DeleteSection({ me }: { me: Me }) {
       <header className="settings-card-head">
         <h2 id="delete-title">Delete account</h2>
         <p>
-          Deletes your account, every page you published and your agent connections. People you shared pages with lose
-          access. This can't be undone.
+          Deletes your account, your personal pages and your agent connections. People you shared personal pages with
+          lose access. This can't be undone.
         </p>
       </header>
+
+      {preview && preview.blockedBy.length === 0 && <DeletionSummary preview={preview} />}
 
       {blocked.length > 0 ? (
         <div className="auth-notice" role="alert">
@@ -622,12 +653,6 @@ function DeleteSection({ me }: { me: Me }) {
         </div>
       ) : (
         <form className="settings-form" onSubmit={onSubmit}>
-          {preview && preview.deletesOrganizations.length > 0 && (
-            <p className="settings-muted">
-              {preview.deletesOrganizations.join(', ')} {preview.deletesOrganizations.length === 1 ? 'has' : 'have'} nobody
-              else in {preview.deletesOrganizations.length === 1 ? 'it' : 'them'} and will be deleted too.
-            </p>
-          )}
           <div className="field">
             <label htmlFor="delete-confirm">
               Type <strong>{me.email}</strong> to confirm

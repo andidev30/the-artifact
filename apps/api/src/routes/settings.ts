@@ -1,4 +1,4 @@
-import { and, count, eq, gt, inArray, max, ne } from 'drizzle-orm'
+import { and, asc, count, eq, gt, inArray, max, ne, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { deleteCookie } from 'hono/cookie'
 import { requireUser, type AuthEnv } from '../auth/session.js'
@@ -88,13 +88,69 @@ async function ownedAlone(userId: string) {
   return { blocked, empty }
 }
 
+const ROLE_RANK = sql`case ${schema.memberships.role} when 'owner' then 0 when 'admin' then 1 else 2 end`
+
+// Who takes over pages someone published in an organization when they delete their account:
+// the longest-standing other owner, or else the longest-standing admin, or else member.
+// While the account can be deleted, every organization with other people in it has another owner,
+// so in practice it is always an owner; the fallbacks cover anything unexpected.
+async function successorIn(organizationId: string, userId: string) {
+  const [row] = await db
+    .select({ id: schema.users.id, email: schema.users.email, name: schema.users.name })
+    .from(schema.memberships)
+    .innerJoin(schema.users, eq(schema.memberships.userId, schema.users.id))
+    .where(and(eq(schema.memberships.organizationId, organizationId), ne(schema.memberships.userId, userId)))
+    .orderBy(ROLE_RANK, asc(schema.memberships.createdAt))
+    .limit(1)
+  return row ?? null
+}
+
+type Transfer = { organizationId: string; organization: string; to: { id: string; email: string; name: string | null }; pageIds: string[] }
+
+// What deleting the account does: organizations it is blocked by or deletes, pages that move to
+// someone else in their organization, and pages deleted with the account
+async function deletionPlan(userId: string) {
+  const { blocked, empty } = await ownedAlone(userId)
+  const pages = await db
+    .select({ id: schema.artifacts.id, organizationId: schema.artifacts.organizationId, organization: schema.organizations.name })
+    .from(schema.artifacts)
+    .leftJoin(schema.organizations, eq(schema.artifacts.organizationId, schema.organizations.id))
+    .where(eq(schema.artifacts.ownerId, userId))
+
+  const transfers = new Map<string, Transfer | null>()
+  let deletedPages = 0
+  for (const page of pages) {
+    // Personal pages, and pages in organizations deleted along with the account
+    if (!page.organizationId || empty.includes(page.organizationId)) {
+      deletedPages += 1
+      continue
+    }
+    if (!transfers.has(page.organizationId)) {
+      const to = await successorIn(page.organizationId, userId)
+      transfers.set(page.organizationId, to ? { organizationId: page.organizationId, organization: page.organization!, to, pageIds: [] } : null)
+    }
+    const transfer = transfers.get(page.organizationId)
+    if (transfer) transfer.pageIds.push(page.id)
+    else deletedPages += 1
+  }
+  return { blocked, empty, transfers: [...transfers.values()].filter((t): t is Transfer => t !== null), deletedPages }
+}
+
 // What deleting the account would do, so the page can explain it before anyone types their email
 settings.get('/deletion', async (c) => {
-  const { blocked, empty } = await ownedAlone(c.get('user')!.id)
+  const { blocked, empty, transfers, deletedPages } = await deletionPlan(c.get('user')!.id)
   const names = empty.length
     ? await db.select({ name: schema.organizations.name }).from(schema.organizations).where(inArray(schema.organizations.id, empty))
     : []
-  return c.json({ blockedBy: blocked, deletesOrganizations: names.map((n) => n.name) })
+  return c.json({
+    blockedBy: blocked,
+    deletesOrganizations: names.map((n) => n.name),
+    pages: {
+      deleted: deletedPages,
+      transferred: transfers.reduce((n, t) => n + t.pageIds.length, 0),
+    },
+    transfers: transfers.map((t) => ({ organization: t.organization, to: t.to.name ?? t.to.email, pages: t.pageIds.length })),
+  })
 })
 
 settings.delete('/', async (c) => {
@@ -103,7 +159,7 @@ settings.delete('/', async (c) => {
   const typed = typeof body?.confirmEmail === 'string' ? body.confirmEmail.trim().toLowerCase() : ''
   if (typed !== user.email) return c.json({ error: 'Type your email address exactly to confirm.', field: 'confirmEmail' }, 400)
 
-  const { blocked, empty } = await ownedAlone(user.id)
+  const { blocked, empty, transfers } = await deletionPlan(user.id)
   if (blocked.length) {
     const names = blocked.map((o) => o.name).join(', ')
     return c.json(
@@ -117,12 +173,21 @@ settings.delete('/', async (c) => {
   }
 
   await db.transaction(async (tx) => {
+    // Pages in organizations with other people stay, with their history, under a new owner
+    for (const t of transfers) {
+      await tx.update(schema.artifacts).set({ ownerId: t.to.id }).where(inArray(schema.artifacts.id, t.pageIds))
+      // The new owner no longer needs to be on the page's share list
+      await tx
+        .delete(schema.artifactShares)
+        .where(and(inArray(schema.artifactShares.artifactId, t.pageIds), eq(schema.artifactShares.email, t.to.email)))
+    }
     // Organizations with nobody else in them go too
     if (empty.length) await tx.delete(schema.organizations).where(inArray(schema.organizations.id, empty))
     await tx.delete(schema.artifactShares).where(eq(schema.artifactShares.email, user.email))
     await tx.delete(schema.invitations).where(eq(schema.invitations.email, user.email))
     await tx.delete(schema.emailTokens).where(eq(schema.emailTokens.email, user.email))
-    // Sessions, memberships, agent tokens and pages cascade from the user
+    // Sessions, memberships, agent tokens and the remaining (personal) pages cascade from the user.
+    // Invitations and shares they sent, and versions they published, keep working without them.
     await tx.delete(schema.users).where(eq(schema.users.id, user.id))
   })
   deleteCookie(c, 'session', { path: '/' })

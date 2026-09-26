@@ -28,4 +28,12 @@ The chip next to the logo shows the current workspace. Click it to switch betwee
 
 ## Leaving or deleting
 
-Members can leave from **Settings → Organization**. Deleting your account (**Settings → Delete account**) removes your pages; it is blocked while you are the only owner of an organization that has other people in it.
+Members can leave from **Settings → Organization**. Pages you published there stay in the organization.
+
+Deleting your account (**Settings → Delete account**) is blocked while you are the only owner of an organization that has other people in it. Otherwise, before you confirm, the page lists what will happen:
+
+- **Pages in organizations with other people stay.** Each one moves, with its version history, sharing and link, to the organization's longest-standing other owner (if an organization somehow had no other owner, its longest-standing admin, then member). This includes pages in organizations you left earlier. The new owner can then rename, share or delete them like their own.
+- **Personal pages are deleted,** with their history. People you shared them with lose access.
+- **Organizations with nobody else in them are deleted,** with their pages.
+
+Invitations you sent and pages you shared keep working; they just no longer name you as the sender. Versions you published show no author.

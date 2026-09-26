@@ -336,6 +336,9 @@ export function disconnectAgent(clientId: string) {
 export type DeletionPreview = {
   blockedBy: { id: string; name: string }[]
   deletesOrganizations: string[]
+  // Pages in organizations with other people move to one of its owners; the rest are deleted
+  pages: { deleted: number; transferred: number }
+  transfers: { organization: string; to: string; pages: number }[]
 }
 
 export function getDeletionPreview() {
