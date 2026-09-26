@@ -10,7 +10,7 @@ const RESERVED = new Set([
   'mcp', 'new', 'onboarding', 'pricing', 'settings', 'signup', 'support', 'www',
 ])
 
-function slugProblem(slug: string): string | null {
+export function slugProblem(slug: string): string | null {
   if (!SLUG_RE.test(slug)) return 'Use 3 to 40 lowercase letters, numbers or hyphens, starting and ending with a letter or number.'
   if (RESERVED.has(slug)) return 'That address is reserved. Pick another one.'
   return null

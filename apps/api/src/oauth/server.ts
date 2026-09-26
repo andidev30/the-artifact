@@ -46,7 +46,7 @@ oauth.get('/.well-known/oauth-authorization-server', (c) =>
 )
 
 // Loopback redirects (native CLIs), https, or an app's own scheme (cursor://...)
-function isAllowedRedirect(uri: string): boolean {
+export function isAllowedRedirect(uri: string): boolean {
   try {
     const url = new URL(uri)
     if (url.hash) return false
@@ -81,7 +81,7 @@ oauth.post('/oauth/register', async (c) => {
 })
 
 // Loopback clients may pick a different port each run (RFC 8252 §7.3)
-function redirectMatches(registered: string[], requested: string): boolean {
+export function redirectMatches(registered: string[], requested: string): boolean {
   if (registered.includes(requested)) return true
   try {
     const req = new URL(requested)
@@ -152,6 +152,11 @@ async function issueTokens(clientId: string, userId: string, organizationId: str
   }
 }
 
+// S256: the challenge is the base64url SHA-256 of the verifier (RFC 7636)
+export function pkceMatches(verifier: string, challenge: string): boolean {
+  return createHash('sha256').update(verifier).digest('base64url') === challenge
+}
+
 function tokenError(c: Context, error: string, description: string) {
   return c.json({ error, error_description: description }, 400)
 }
@@ -169,8 +174,7 @@ oauth.post('/oauth/token', async (c) => {
     if (!grant || !grant.userId || grant.expiresAt.getTime() < Date.now()) return tokenError(c, 'invalid_grant', 'The authorization code is invalid or expired.')
     if (params.client_id && params.client_id !== grant.clientId) return tokenError(c, 'invalid_grant', 'The code was issued to another client.')
     if (params.redirect_uri && params.redirect_uri !== grant.redirectUri) return tokenError(c, 'invalid_grant', 'redirect_uri does not match.')
-    const challenge = createHash('sha256').update(params.code_verifier).digest('base64url')
-    if (challenge !== grant.codeChallenge) return tokenError(c, 'invalid_grant', 'PKCE verification failed.')
+    if (!pkceMatches(params.code_verifier, grant.codeChallenge)) return tokenError(c, 'invalid_grant', 'PKCE verification failed.')
     return c.json(await issueTokens(grant.clientId, grant.userId, grant.organizationId))
   }
 

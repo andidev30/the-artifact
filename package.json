@@ -11,6 +11,11 @@
     "lint": "pnpm -r --if-present lint",
     "services": "docker compose up -d",
     "db:generate": "pnpm --filter @the-artifact/api db:generate",
-    "db:migrate": "pnpm --filter @the-artifact/api db:migrate"
+    "db:migrate": "pnpm --filter @the-artifact/api db:migrate",
+    "test": "pnpm -r --if-present test",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0"
   }
 }
