@@ -17,11 +17,13 @@ test('publish a page, open it, share it, and open it by link while signed out', 
 
   // It shows up in the gallery
   await page.reload()
-  const card = page.getByRole('link', { name: new RegExp(title) })
-  await expect(card).toBeVisible()
+  const link = page.getByRole('link', { name: new RegExp(title) })
+  // The title link covers the whole card; the tags sit beside it inside the card
+  const card = page.locator('.page-card', { has: link })
+  await expect(link).toBeVisible()
   await expect(card).toContainText('Restricted')
   await expect(card).toContainText('e2e-agent')
-  await card.click()
+  await link.click()
 
   // The viewer renders it in a sandboxed frame
   await expect(page).toHaveURL(new RegExp(`/a/${slug}$`))
