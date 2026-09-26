@@ -5,9 +5,11 @@ import { google } from './auth/google.js'
 import { endSession, loadUser, requireUser, type AuthEnv } from './auth/session.js'
 import { db, schema } from './db/index.js'
 import { env } from './env.js'
+import { instanceSettings, isInstanceAdmin } from './instance.js'
 import { mcp } from './mcp.js'
 import { consent } from './oauth/consent.js'
 import { oauth } from './oauth/server.js'
+import { admin } from './routes/admin.js'
 import { artifacts } from './routes/artifacts.js'
 import { invitations, members } from './routes/members.js'
 import { onboarding, organizations } from './routes/organizations.js'
@@ -26,10 +28,11 @@ const api = new Hono<AuthEnv>()
 api.use(loadUser)
 
 // What the web app needs to know about this install
-api.get('/config', (c) =>
+api.get('/config', async (c) =>
   c.json({
     selfHosted: env.selfHosted,
     googleSignIn: Boolean(env.google.clientId && env.google.clientSecret),
+    instanceName: (await instanceSettings()).instanceName,
   }),
 )
 
@@ -50,6 +53,7 @@ api.route('/artifacts', artifacts)
 api.route('/organizations/:orgId', members)
 api.route('/invitations', invitations)
 api.route('/me', settings)
+api.route('/admin', admin)
 
 api.get('/me', requireUser, async (c) => {
   const user = c.get('user')!
@@ -78,6 +82,7 @@ api.get('/me', requireUser, async (c) => {
     organizations: orgs,
     agentConnected: Boolean(token),
     hasPublished: Boolean(page),
+    isAdmin: isInstanceAdmin(user),
   })
 })
 

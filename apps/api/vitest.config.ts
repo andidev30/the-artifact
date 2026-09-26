@@ -10,6 +10,11 @@ const env = {
   SMTP_FROM: 'The Artifact <test@example.com>',
   GOOGLE_CLIENT_ID: '',
   GOOGLE_CLIENT_SECRET: '',
+  // Tests that need these change the env object instead
+  SELF_HOSTED: 'false',
+  ALLOWED_EMAIL_DOMAINS: '',
+  ADMIN_EMAILS: '',
+  FIRST_USER_ADMIN: '',
 }
 
 export default defineConfig({

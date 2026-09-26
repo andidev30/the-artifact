@@ -16,6 +16,8 @@ export type Me = {
   organizations: Organization[]
   agentConnected: boolean
   hasPublished: boolean
+  // Instance admin: can open /admin
+  isAdmin: boolean
 }
 
 // Resolves to the signed-in user, or null when nobody is signed in

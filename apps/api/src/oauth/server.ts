@@ -205,12 +205,12 @@ export async function authenticateBearer(header: string | undefined): Promise<Mc
   const token = header?.match(/^Bearer\s+(.+)$/i)?.[1]
   if (!token) return null
   const [row] = await db
-    .select({ token: schema.oauthTokens, clientName: schema.oauthClients.name, email: schema.users.email })
+    .select({ token: schema.oauthTokens, clientName: schema.oauthClients.name, email: schema.users.email, suspendedAt: schema.users.suspendedAt })
     .from(schema.oauthTokens)
     .innerJoin(schema.oauthClients, eq(schema.oauthTokens.clientId, schema.oauthClients.id))
     .innerJoin(schema.users, eq(schema.oauthTokens.userId, schema.users.id))
     .where(and(eq(schema.oauthTokens.id, hashToken(token)), eq(schema.oauthTokens.kind, 'access')))
-  if (!row || row.token.expiresAt.getTime() < Date.now()) return null
+  if (!row || row.token.expiresAt.getTime() < Date.now() || row.suspendedAt) return null
   await db.update(schema.oauthTokens).set({ lastUsedAt: new Date() }).where(eq(schema.oauthTokens.id, row.token.id))
   return { userId: row.token.userId, email: row.email, organizationId: row.token.organizationId, clientName: row.clientName }
 }

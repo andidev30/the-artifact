@@ -70,7 +70,7 @@ email.get('/verify', async (c) => {
   try {
     user = await findOrCreateUser({ email: row.email })
   } catch (err) {
-    if (err instanceof SignupClosedError) return c.redirect(signInErrorUrl('signup_closed'))
+    if (err instanceof SignupClosedError) return c.redirect(signInErrorUrl(err.code))
     throw err
   }
   await startSession(c, user.id)

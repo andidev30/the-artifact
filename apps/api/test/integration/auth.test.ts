@@ -154,6 +154,7 @@ describe('sessions', () => {
       organizations: [],
       agentConnected: false,
       hasPublished: false,
+      isAdmin: false,
     })
   })
 

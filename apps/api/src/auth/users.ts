@@ -2,6 +2,7 @@ import { and, eq, gt } from 'drizzle-orm'
 import { db, schema } from '../db/index.js'
 import type { User } from '../db/schema.js'
 import { env } from '../env.js'
+import { adminFromEnvironment, firstAccountBecomesAdmin, instanceSettings, lockAdmins } from '../instance.js'
 
 type Profile = {
   email: string
@@ -10,14 +11,24 @@ type Profile = {
   googleSub?: string
 }
 
-export class SignupClosedError extends Error {}
+// `code` is the error the sign-in routes redirect to (/login?error=…)
+export class SignupClosedError extends Error {
+  code = 'signup_closed'
+}
 
-// With ALLOWED_EMAIL_DOMAINS set, new accounts need a matching domain or an invitation
-// to an organization or a page, so outside guests can still join what they were invited to.
+export class AccountSuspendedError extends SignupClosedError {
+  code = 'account_suspended'
+}
+
+// The sign-up policy comes from the admin area's settings, or ALLOWED_EMAIL_DOMAINS until they
+// are saved. In every mode people invited to an organization or a page can still join what they
+// were invited to, and addresses in ADMIN_EMAILS can always sign up.
 export async function canSignUp(email: string): Promise<boolean> {
-  if (env.allowedEmailDomains.length === 0) return true
+  const { signupPolicy, allowedDomains } = await instanceSettings()
+  if (signupPolicy === 'open') return true
   const address = email.toLowerCase()
-  if (env.allowedEmailDomains.includes(address.split('@')[1] ?? '')) return true
+  if (adminFromEnvironment(address)) return true
+  if (signupPolicy === 'domains' && allowedDomains.includes(address.split('@')[1] ?? '')) return true
   const [invite] = await db
     .select({ id: schema.invitations.id })
     .from(schema.invitations)
@@ -39,11 +50,15 @@ export async function findOrCreateUser(profile: Profile): Promise<User> {
 
   if (profile.googleSub) {
     const [bySub] = await db.select().from(schema.users).where(eq(schema.users.googleSub, profile.googleSub))
-    if (bySub) return bySub
+    if (bySub) {
+      if (bySub.suspendedAt) throw new AccountSuspendedError()
+      return bySub
+    }
   }
 
   const [byEmail] = await db.select().from(schema.users).where(eq(schema.users.email, email))
   if (byEmail) {
+    if (byEmail.suspendedAt) throw new AccountSuspendedError()
     if (profile.googleSub && !byEmail.googleSub) {
       const [linked] = await db
         .update(schema.users)
@@ -60,11 +75,18 @@ export async function findOrCreateUser(profile: Profile): Promise<User> {
   }
 
   if (!(await canSignUp(email))) throw new SignupClosedError()
-  const [created] = await db
-    .insert(schema.users)
-    .values({ email, name: profile.name, avatarUrl: profile.avatarUrl, googleSub: profile.googleSub })
-    .returning()
-  return created
+  return db.transaction(async (tx) => {
+    // One account at a time, so only the very first one can become the instance admin
+    await lockAdmins(tx)
+    const [raced] = await tx.select().from(schema.users).where(eq(schema.users.email, email))
+    if (raced) return raced
+    const isAdmin = await firstAccountBecomesAdmin(tx)
+    const [created] = await tx
+      .insert(schema.users)
+      .values({ email, name: profile.name, avatarUrl: profile.avatarUrl, googleSub: profile.googleSub, isAdmin })
+      .returning()
+    return created
+  })
 }
 
 const PLANS = new Set(['organization'])

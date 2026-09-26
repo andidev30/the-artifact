@@ -36,6 +36,13 @@ export const env = {
     .split(',')
     .map((d) => d.trim().toLowerCase().replace(/^@/, ''))
     .filter(Boolean),
+  // The first account created on the instance becomes its admin. On by default when self-hosted.
+  firstUserAdmin: process.env.FIRST_USER_ADMIN ? process.env.FIRST_USER_ADMIN === 'true' : process.env.SELF_HOSTED === 'true',
+  // These addresses are always instance admins (comma separated), e.g. to recover an install
+  adminEmails: (process.env.ADMIN_EMAILS ?? '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean),
 }
 
 export const isProduction = env.appUrl.startsWith('https://')
