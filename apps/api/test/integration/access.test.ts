@@ -49,12 +49,23 @@ async function orgPage(visibility: Visibility) {
   return page
 }
 
+// The page's details and its served content must agree on who gets in
 async function access(slug: string, who: Who): Promise<Expected> {
-  const res = await call(`/api/artifacts/${slug}`, { cookie: who === 'anonymous' ? undefined : people[who].cookie })
-  if (res.status === 404) return 'none'
+  const cookie = who === 'anonymous' ? undefined : people[who].cookie
+  const res = await call(`/api/artifacts/${slug}`, { cookie })
+  const content = await call(`/api/artifacts/${slug}/v/1/`, { cookie })
+  if (res.status === 404) {
+    expect(content.status).toBe(404)
+    return 'none'
+  }
   expect(res.status).toBe(200)
   const body = await res.json()
-  expect(body.html).toBe('<p>secret sauce</p>')
+  expect(body.contentUrl).toBe(`/api/artifacts/${slug}/v/1/`)
+  expect(content.status).toBe(200)
+  expect(await content.text()).toBe('<p>secret sauce</p>')
+  expect(content.headers.get('content-security-policy')).toBe('sandbox allow-scripts allow-forms allow-popups allow-modals allow-downloads')
+  expect(content.headers.get('x-content-type-options')).toBe('nosniff')
+  expect(content.headers.get('cache-control')).toBe('private, max-age=3600')
   return body.canEdit ? 'edit' : 'view'
 }
 

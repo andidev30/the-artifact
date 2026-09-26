@@ -36,6 +36,13 @@ export const env = {
     .split(',')
     .map((d) => d.trim().toLowerCase().replace(/^@/, ''))
     .filter(Boolean),
+  // Gallery thumbnails: a Chrome or Chromium binary (empty skips them), the CDN hosts pages may load
+  // from while rendering (unset uses a built-in list), and whether to run without Chromium's sandbox
+  thumbnails: {
+    chromePath: process.env.CHROME_PATH ?? '',
+    cdnHosts: process.env.THUMBNAIL_CDN_HOSTS,
+    noSandbox: process.env.CHROME_NO_SANDBOX === 'true',
+  },
 }
 
 export const isProduction = env.appUrl.startsWith('https://')

@@ -4,7 +4,6 @@ import {
   accessLevel,
   canEdit,
   checkTitle,
-  currentHtml,
   editableIds,
   findBySlug,
   getVersion,
@@ -13,10 +12,13 @@ import {
   listVersions,
   rename,
   restoreVersion,
+  versionId,
 } from '../artifacts.js'
 import { requireUser, type AuthEnv } from '../auth/session.js'
 import { db, schema } from '../db/index.js'
+import { currentThumbnails, getThumbnail, queueThumbnail, thumbnailsEnabled } from '../thumbnails.js'
 import type { ShareRole, Visibility } from '../db/schema.js'
+import { allowed, serveVersion } from '../content.js'
 import { getSharing, parseEmails, removePerson, setPersonRole, sharePeople, SharingError } from '../sharing.js'
 
 export const artifacts = new Hono<AuthEnv>()
@@ -31,6 +33,7 @@ artifacts.get('/', requireUser, async (c) => {
   if (workspace === 'shared') {
     const rows = (await listSharedWith(user, 50, query)).filter(({ artifact }) => artifact.ownerId !== user.id)
     const editable = await editableIds(user, rows.map((r) => r.artifact))
+    const thumbs = await currentThumbnails(rows.map((r) => r.artifact))
     return c.json(
       rows.map(({ artifact: a, ownerName, ownerEmail, role }) => ({
           slug: a.slug,
@@ -42,6 +45,7 @@ artifacts.get('/', requireUser, async (c) => {
           owner: ownerName ?? ownerEmail,
           mine: false,
           canEdit: editable.has(a.id),
+          thumbnail: thumbs.has(a.id),
           role,
         })),
     )
@@ -57,6 +61,7 @@ artifacts.get('/', requireUser, async (c) => {
   }
   const rows = await listForWorkspace(user.id, organizationId, 50, query)
   const editable = await editableIds(user, rows.map((r) => r.artifact))
+  const thumbs = await currentThumbnails(rows.map((r) => r.artifact))
   return c.json(
     rows.map(({ artifact: a, ownerName, ownerEmail }) => ({
       slug: a.slug,
@@ -68,11 +73,13 @@ artifacts.get('/', requireUser, async (c) => {
       owner: ownerName ?? ownerEmail,
       mine: a.ownerId === user.id,
       canEdit: editable.has(a.id),
+      thumbnail: thumbs.has(a.id),
     })),
   )
 })
 
-// A page and its current HTML. Pages the viewer can't open look the same as missing ones.
+// A page's details. Its content is served as a document tree under /v/<version>/.
+// Pages the viewer can't open look the same as missing ones.
 artifacts.get('/:slug', async (c) => {
   const user = c.get('user')
   const artifact = await findBySlug(c.req.param('slug'))
@@ -89,24 +96,45 @@ artifacts.get('/:slug', async (c) => {
     inOrganization: artifact.organizationId !== null,
     canEdit: access === 'edit',
     isOwner: user?.id === artifact.ownerId,
-    html: await currentHtml(artifact),
+    contentUrl: `/api/artifacts/${artifact.slug}/v/${artifact.currentVersion}/`,
   })
 })
 
-// The current HTML as a document of its own, for gallery thumbnails. The CSP sandbox gives it an
-// opaque origin even when opened directly, so its scripts can't read cookies or call this API.
+// The entry and files of one version, with the same access as the page (older versions: editors)
+artifacts.get('/:slug/v/:version', (c) => c.redirect(`${new URL(c.req.url).pathname}/`, 301))
+artifacts.get('/:slug/v/:version/*', serveVersion)
+
+// Older link to the current HTML, from before pages were served as a tree
 artifacts.get('/:slug/content', async (c) => {
   const artifact = await findBySlug(c.req.param('slug'))
   if (!artifact || !(await accessLevel(artifact, c.get('user')))) return c.text('Not found', 404)
-  return c.body(await currentHtml(artifact), 200, {
-    'Content-Type': 'text/html; charset=utf-8',
-    'Content-Security-Policy': 'sandbox allow-scripts',
+  return c.redirect(`/api/artifacts/${artifact.slug}/v/${artifact.currentVersion}/`, 302)
+})
+
+// The screenshot of a version shown on gallery cards. Missing ones are rendered in the background.
+artifacts.get('/:slug/thumbnails/:version', async (c) => {
+  const artifact = await findBySlug(c.req.param('slug'))
+  const n = Number(c.req.param('version'))
+  if (!artifact || !Number.isInteger(n) || n < 1) return c.json({ error: 'Not found' }, 404)
+  if (!allowed(await accessLevel(artifact, c.get('user')), n === artifact.currentVersion)) return c.json({ error: 'Not found' }, 404)
+  const id = await versionId(artifact, n)
+  if (!id) return c.json({ error: 'Not found' }, 404)
+  const thumb = await getThumbnail(id)
+  if (!thumb?.image) {
+    if (!thumb && thumbnailsEnabled()) queueThumbnail(id)
+    return c.json({ error: 'Not found' }, 404, { 'Cache-Control': 'no-store' })
+  }
+  const etag = `"${id.slice(0, 8)}-${thumb.createdAt.getTime().toString(36)}"`
+  const headers = {
+    'Content-Type': thumb.contentType ?? 'image/webp',
+    'Content-Security-Policy': "default-src 'none'; sandbox",
     'X-Content-Type-Options': 'nosniff',
-    'Referrer-Policy': 'no-referrer',
-    // Private to this browser; the gallery adds ?v=<version> so a new version is fetched fresh
-    'Cache-Control': 'private, max-age=300',
+    'Cache-Control': 'private, max-age=86400',
     Vary: 'Cookie',
-  })
+    ETag: etag,
+  }
+  if (c.req.header('if-none-match') === etag) return c.body(null, 304, headers)
+  return c.body(new Uint8Array(thumb.image), 200, headers)
 })
 
 // Everything below changes the page or who can open it, so it needs edit access
@@ -170,7 +198,7 @@ artifacts.get('/:slug/versions/:version', requireUser, async (c) => {
   const n = versionParam(c)
   const v = artifact && n ? await getVersion(artifact, n) : null
   if (!v) return c.json({ error: 'Not found' }, 404)
-  return c.json({ version: v.version, createdAt: v.createdAt, html: v.html })
+  return c.json({ version: v.version, createdAt: v.createdAt, html: v.html, contentUrl: `/api/artifacts/${artifact!.slug}/v/${v.version}/` })
 })
 
 artifacts.post('/:slug/versions/:version/restore', requireUser, async (c) => {
