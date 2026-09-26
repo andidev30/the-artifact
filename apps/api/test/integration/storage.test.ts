@@ -4,7 +4,6 @@ import { publish } from '../../src/artifacts.js'
 import { db, schema } from '../../src/db/index.js'
 import { sha256 } from '../../src/files.js'
 import { sweepStorage } from '../../src/gc.js'
-import { moveContentToStorage } from '../../src/storage-move.js'
 import { getBlob, listBlobs, putBlob } from '../../src/storage.js'
 import { call, createPage, createUser, type TestUser } from './helpers.js'
 
@@ -27,7 +26,7 @@ describe('object storage', () => {
     const html = unique()
     const page = await createPage(owner, { html })
     const [v] = await db.select().from(schema.artifactVersions).where(eq(schema.artifactVersions.artifactId, page.id))
-    expect(v).toMatchObject({ htmlSha256: sha256(html), htmlSize: Buffer.byteLength(html), legacyHtml: null })
+    expect(v).toMatchObject({ htmlSha256: sha256(html), htmlSize: Buffer.byteLength(html) })
     expect((await getBlob(v.htmlSha256))?.toString()).toBe(html)
     expect(await (await call(`/api/artifacts/${page.slug}/v/1/`, { cookie: owner.cookie })).text()).toBe(html)
   })
@@ -66,27 +65,6 @@ describe('object storage', () => {
     expect(await getBlob(sha256(gone))).toBeNull()
     expect((await getBlob(sha256(kept)))?.toString()).toBe(kept)
     expect((await getBlob(sha256(shared)))?.toString()).toBe(shared)
-  })
-
-  it('moves content stored in the database before object storage', async () => {
-    const owner = await createUser()
-    const page = await createPage(owner)
-    const [v] = await db.select().from(schema.artifactVersions).where(eq(schema.artifactVersions.artifactId, page.id))
-    // As migration 0008 leaves an older install: hashes computed, content still in the columns
-    const html = unique()
-    const css = `/* ${crypto.randomUUID()} */`
-    const image = Buffer.from(crypto.randomUUID())
-    await db.update(schema.artifactVersions).set({ htmlSha256: sha256(html), htmlSize: html.length, legacyHtml: html }).where(eq(schema.artifactVersions.id, v.id))
-    await db.insert(schema.artifactFiles).values({ versionId: v.id, path: 'old.css', contentType: 'text/css; charset=utf-8', size: css.length, sha256: sha256(css), legacyContent: Buffer.from(css) })
-    await db.insert(schema.artifactThumbnails).values({ versionId: v.id, sha256: sha256(image), contentType: 'image/webp', legacyImage: image })
-
-    expect(await moveContentToStorage()).toBe(3)
-    expect(await moveContentToStorage()).toBe(0)
-    const [after] = await db.select().from(schema.artifactVersions).where(eq(schema.artifactVersions.id, v.id))
-    expect(after.legacyHtml).toBeNull()
-    expect(await (await call(`/api/artifacts/${page.slug}/v/1/`, { cookie: owner.cookie })).text()).toBe(html)
-    expect(await (await call(`/api/artifacts/${page.slug}/v/1/old.css`, { cookie: owner.cookie })).text()).toBe(css)
-    expect(Buffer.compare((await getBlob(sha256(image)))!, image)).toBe(0)
   })
 
   it('writes the same content to the same key', async () => {

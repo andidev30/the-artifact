@@ -64,6 +64,13 @@
       "when": 1790439329686,
       "tag": "0008_object_storage",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790440729170,
+      "tag": "0009_drop_legacy_content",
+      "breakpoints": true
     }
   ]
 }

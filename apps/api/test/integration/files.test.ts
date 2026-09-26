@@ -86,8 +86,7 @@ describe('publishing files', () => {
     const png = rows.find((r) => r.path === 'img/dot.png')!
     expect(png).toMatchObject({ contentType: 'image/png', size: PNG.length })
     expect(png.sha256).toBe(createHash('sha256').update(PNG).digest('hex'))
-    // The content is in object storage under its hash, not in the database
-    expect(png.legacyContent).toBeNull()
+    // The content is in object storage under its hash
     expect(Buffer.compare((await getBlob(png.sha256))!, PNG)).toBe(0)
     expect(rows.find((r) => r.path === 'css/site.css')?.contentType).toBe('text/css; charset=utf-8')
   })
