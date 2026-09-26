@@ -1,6 +1,7 @@
 import { lookup } from 'node:dns/promises'
 import { request } from 'node:https'
 import { BlockList, isIP } from 'node:net'
+import { tmpdir } from 'node:os'
 import { and, eq, or, sql } from 'drizzle-orm'
 import { chromium, type Browser, type Request, type Route } from 'playwright-core'
 import { db, schema } from './db/index.js'
@@ -158,6 +159,17 @@ export async function fetchFromCdn(url: URL, accept = '*/*'): Promise<Fetched | 
 }
 
 let browser: Promise<Browser> | null = null
+let explainedSandbox = false
+
+// Chromium doesn't inherit this server's environment (database URL, SMTP password...)
+function browserEnv(): Record<string, string> {
+  const keep: Record<string, string> = { TZ: 'UTC', LANG: 'en_US.UTF-8', HOME: tmpdir() }
+  for (const name of ['PATH', 'TMPDIR', 'FONTCONFIG_PATH', 'FONTCONFIG_FILE', 'XDG_CACHE_HOME']) {
+    const value = process.env[name]
+    if (value) keep[name] = value
+  }
+  return keep
+}
 
 function launch(): Promise<Browser> {
   browser ??= chromium
@@ -165,6 +177,7 @@ function launch(): Promise<Browser> {
       executablePath: config.chromePath,
       headless: true,
       chromiumSandbox: !config.noSandbox,
+      env: browserEnv(),
       timeout: 15_000,
       args: [
         `--proxy-server=${DEAD_PROXY}`,
@@ -186,6 +199,13 @@ function launch(): Promise<Browser> {
     })
     .catch((err) => {
       browser = null
+      if (!explainedSandbox && /sandbox|namespace/i.test(String(err))) {
+        explainedSandbox = true
+        console.error(
+          'Thumbnails are off: Chromium could not start its sandbox. In Docker, run the app with the seccomp profile in ' +
+            'docker/seccomp-chromium.json (docker-compose.selfhost.yml does). See docs/security.md.',
+        )
+      }
       throw err
     })
   return browser
