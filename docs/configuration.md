@@ -50,7 +50,7 @@ Instance admins change these at `/admin`; they are stored in the database and ap
 | Page size | 2 MB of HTML |
 | Page title | 200 characters |
 | People per share | 20 at a time |
-| Sign-in link | Works once, for 15 minutes; a new one can be sent after 60 seconds |
+| Sign-in link | Works once, for 15 minutes, and is used when you press Continue on the page it opens (opening it alone uses nothing); a new one can be sent after 60 seconds |
 | Organization invitation | 7 days |
 | Browser session | 30 days, extended while you use it |
 | Agent access token | 1 hour, refreshed automatically; refresh tokens last 60 days and rotate on use |

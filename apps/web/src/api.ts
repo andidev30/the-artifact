@@ -294,6 +294,27 @@ export function declineInvitation(token: string) {
   return request<null>(`/invitations/${encodeURIComponent(token)}/decline`, { method: 'POST' })
 }
 
+// Invitations to the signed-in person's email, answered inside the app without the email link
+export type MyInvitation = {
+  id: string
+  organization: { id: string; name: string; slug: string }
+  role: InviteRole
+  invitedBy: string | null
+  expiresAt: string
+}
+
+export function listMyInvitations() {
+  return request<MyInvitation[]>('/me/invitations')
+}
+
+export function acceptMyInvitation(id: string) {
+  return request<Organization>(`/me/invitations/${encodeURIComponent(id)}/accept`, { method: 'POST' })
+}
+
+export function declineMyInvitation(id: string) {
+  return request<null>(`/me/invitations/${encodeURIComponent(id)}/decline`, { method: 'POST' })
+}
+
 export function updateProfile(name: string) {
   return request<{ name: string }>('/me', { method: 'PATCH', json: { name } })
 }
@@ -317,6 +338,9 @@ export function disconnectAgent(clientId: string) {
 export type DeletionPreview = {
   blockedBy: { id: string; name: string }[]
   deletesOrganizations: string[]
+  // Pages in organizations with other people move to one of its owners; the rest are deleted
+  pages: { deleted: number; transferred: number }
+  transfers: { organization: string; to: string; pages: number }[]
 }
 
 export function getDeletionPreview() {
@@ -378,4 +402,20 @@ export function deleteArtifact(slug: string) {
 // The page's current HTML as its own sandboxed document; the version busts the browser cache
 export function contentUrl(slug: string, version: number) {
   return `/api/artifacts/${encodeURIComponent(slug)}/content?v=${version}`
+}
+
+// Magic link confirmation: opening the emailed link only looks it up; continuing uses it
+
+export type SignInLink = { email: string; expired: boolean; newAccount: boolean }
+
+export function getSignInLink(token: string) {
+  return request<SignInLink>(`/auth/email/confirm?token=${encodeURIComponent(token)}`)
+}
+
+export function confirmSignInLink(token: string, plan: string | null, next: string | null) {
+  return request<{ redirect: string }>('/auth/email/confirm', { method: 'POST', json: { token, plan, next } })
+}
+
+export function requestSignInLink(email: string, intent: 'login' | 'signup', plan: string | null, next: string | null) {
+  return request<null>('/auth/email', { method: 'POST', json: { email, intent, plan, next } })
 }

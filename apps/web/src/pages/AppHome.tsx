@@ -4,6 +4,7 @@ import { type Me } from '../api'
 import { AccountHeader } from '../components/AccountHeader'
 import { ConnectTabs } from '../components/ConnectTabs'
 import { Gallery } from '../components/Gallery'
+import { InvitationNotice } from '../components/InvitationNotice'
 import { APP_HOST } from '../config'
 import { useMe } from '../useMe'
 import { useWorkspace } from '../workspace'
@@ -46,6 +47,7 @@ function Home({ me }: { me: Me }) {
     <div className="auth">
       <AccountHeader me={me} workspace={workspace} />
       <main id="main" className="app-main">
+        <InvitationNotice me={me} />
         <div className="app-title">
           <h1>Pages</h1>
           <p>

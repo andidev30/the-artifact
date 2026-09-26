@@ -4,9 +4,13 @@
 
 In Claude Code, run `/mcp`, pick `the-artifact` and choose **Authenticate**. In Codex, run `codex mcp login the-artifact`. If you disconnected the agent in Settings, it has to sign in again.
 
-## "That sign-in link has already been used or is not valid"
+## "This sign-in link can't be used"
 
-Links work once. Some email security scanners open links before you do, which uses them up. Request a new link from the login page.
+Opening a sign-in link shows a page that asks you to continue as your email address; the link is only used when you press **Continue**, so email security scanners that open links before you do don't use it up. Each link works once, so this message means it was already used (perhaps in another tab or browser, where you are now signed in) or isn't valid. Request a new link from the login page.
+
+## "This sign-in link has expired"
+
+Links work for 15 minutes. Press **Email me a new link** on the same page to get a fresh one sent to the same address.
 
 ## I can't open a page someone sent me
 

@@ -352,6 +352,56 @@
   overflow-wrap: anywhere;
 }
 
+/* What deleting the account does to pages and organizations */
+.deletion-summary {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+}
+
+.deletion-summary li {
+  position: relative;
+  padding: 10px 12px 10px 38px;
+  overflow-wrap: anywhere;
+  background: var(--paper);
+  border: 1.5px solid var(--grid);
+  border-radius: 3px;
+}
+
+.deletion-summary strong {
+  color: var(--ink);
+}
+
+.deletion-summary li::before {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  display: grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  line-height: 1;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+}
+
+.deletion-summary li[data-kind='delete']::before {
+  content: '\00d7';
+  color: #b3261e;
+}
+
+.deletion-summary li[data-kind='keep']::before {
+  content: '\2192';
+  color: var(--ink);
+  background: var(--marker);
+}
+
 @media (max-width: 860px) {
   .settings-layout {
     grid-template-columns: minmax(0, 1fr);

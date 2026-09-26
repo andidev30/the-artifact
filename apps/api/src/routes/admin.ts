@@ -235,7 +235,7 @@ admin.delete('/users/:id', async (c) => {
     return c.json({ error: `${target.email} is an admin through ADMIN_EMAILS. Remove it there first.`, code: 'admin_from_environment' }, 409)
   }
 
-  const { blocked, empty } = await ownedAlone(target.id)
+  const { blocked } = await ownedAlone(target.id)
   if (blocked.length) {
     const names = blocked.map((o) => o.name).join(', ')
     return c.json(
@@ -248,7 +248,7 @@ admin.delete('/users/:id', async (c) => {
     )
   }
   // The actor is an active admin, so removing someone else never leaves the instance without one
-  await deleteAccountData(target, empty)
+  await deleteAccountData(target)
   return c.body(null, 204)
 })
 

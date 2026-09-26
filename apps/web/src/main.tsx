@@ -15,6 +15,7 @@ import { Invite } from './pages/Invite.tsx'
 import { NewOrganization } from './pages/NewOrganization.tsx'
 import { Settings } from './pages/Settings.tsx'
 import { Admin } from './pages/Admin.tsx'
+import { ConfirmSignIn } from './pages/ConfirmSignIn.tsx'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -23,6 +24,7 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Auth mode="login" />} />
         <Route path="/signup" element={<Auth mode="signup" />} />
+        <Route path="/auth/confirm" element={<ConfirmSignIn />} />
         <Route path="/app" element={<AppHome />} />
         <Route path="/onboarding" element={<Onboarding />} />
         <Route path="/authorize" element={<Authorize />} />

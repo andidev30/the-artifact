@@ -30,7 +30,7 @@ export async function latestMail(request: APIRequestContext, to: string, subject
 
 export async function signInLink(request: APIRequestContext, email: string) {
   const text = await latestMail(request, email, /sign-in link|creating your account/i)
-  const link = text.match(/https?:\/\/\S+\/api\/auth\/email\/verify\S+/)?.[0]
+  const link = text.match(/https?:\/\/\S+\/auth\/confirm\?\S+/)?.[0]
   expect(link, 'sign-in link in email').toBeTruthy()
   return link!
 }
@@ -41,8 +41,14 @@ export async function signUp(page: Page, email: string, path = '/signup') {
   await page.getByLabel('Email').fill(email)
   await page.getByRole('button', { name: 'Email me a sign-up link' }).click()
   await expect(page.getByRole('heading', { name: 'Check your inbox' })).toBeVisible()
-  await page.goto(await signInLink(page.request, email))
+  await openSignInLink(page, await signInLink(page.request, email), email)
   await expect(page).toHaveURL(/\/onboarding/)
+}
+
+// Opening the link only shows a confirmation page; pressing Continue signs in
+export async function openSignInLink(page: Page, link: string, email: string) {
+  await page.goto(link)
+  await page.getByRole('button', { name: `Continue as ${email}` }).click()
 }
 
 export async function signUpPersonal(page: Page, email: string) {

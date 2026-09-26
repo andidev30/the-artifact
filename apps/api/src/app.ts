@@ -11,7 +11,7 @@ import { consent } from './oauth/consent.js'
 import { oauth } from './oauth/server.js'
 import { admin } from './routes/admin.js'
 import { artifacts } from './routes/artifacts.js'
-import { invitations, members } from './routes/members.js'
+import { invitations, members, myInvitations } from './routes/members.js'
 import { onboarding, organizations } from './routes/organizations.js'
 import { settings } from './routes/settings.js'
 import { mountWeb } from './web.js'
@@ -52,6 +52,7 @@ api.route('/artifacts', artifacts)
 // Members, invitations and account settings
 api.route('/organizations/:orgId', members)
 api.route('/invitations', invitations)
+api.route('/me/invitations', myInvitations)
 api.route('/me', settings)
 api.route('/admin', admin)
 

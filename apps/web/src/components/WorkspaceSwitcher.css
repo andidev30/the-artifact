@@ -162,10 +162,48 @@
   border-radius: 50%;
 }
 
+/* How many invitations are waiting, on the chip */
+.switcher-badge {
+  flex: none;
+  display: grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  background: var(--marker);
+  border: 1.5px solid var(--ink);
+  border-radius: 999px;
+}
+
+.switcher-invitations {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1.5px dashed var(--grid);
+}
+
+.switcher-invitations .switcher-heading {
+  padding-bottom: 2px;
+}
+
 @media (max-width: 520px) {
   /* The plain chip hides on phones; the switcher stays, just narrower */
   .switcher .switcher-button {
     display: inline-flex;
     max-width: 8.5rem;
+  }
+
+  /* Full width under the header, so it never runs off the right edge */
+  .switcher-menu {
+    position: fixed;
+    top: 64px;
+    left: 16px;
+    right: 16px;
+    width: auto;
+    max-height: calc(100vh - 80px);
+    overflow-y: auto;
   }
 }

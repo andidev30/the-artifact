@@ -347,6 +347,34 @@
   transform: rotate(-45deg);
 }
 
+/* Magic link confirmation */
+
+.confirm .confirm-email {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.confirm .confirm-continue {
+  font: 700 var(--step-0) var(--sans);
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.confirm .confirm-continue:disabled {
+  opacity: 0.6;
+  cursor: progress;
+  transform: none;
+}
+
+.confirm-sent {
+  padding: 10px 12px;
+  font-size: var(--step--1);
+  background: #fff8d6;
+  border: 1.5px solid var(--ink);
+  border-left-width: 5px;
+  border-radius: 3px;
+}
+
 @media (max-width: 900px) {
   .auth-signup {
     grid-template-columns: minmax(0, 1fr);
