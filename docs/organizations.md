@@ -20,6 +20,8 @@ An organization always keeps at least one owner. The last owner can't leave, be 
 
 In **Settings → Organization**, enter an email address and pick **Admin** or **Member**. The invitation link works for 7 days and only for someone signed in with that email address. Inviting the same address again sends a fresh link and cancels the old one. Pending invitations can be resent or revoked.
 
+You don't need the email to accept. When you are signed in with the invited address, pending invitations show at the top of your pages, in the workspace switcher and on the first step of onboarding, so a new account can join the team instead of creating its own organization. **Join** adds you with the invited role and switches to that workspace; **Decline** removes the invitation.
+
 ## Switching workspaces
 
 The chip next to the logo shows the current workspace. Click it to switch between your organizations and your personal workspace. The app remembers your choice on this device.

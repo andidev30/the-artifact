@@ -1,7 +1,9 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import type { Me } from '../api'
+import { usePendingInvitations } from '../invitations'
 import { useWorkspace } from '../workspace'
+import { InvitationRow } from './InvitationNotice'
 import './WorkspaceSwitcher.css'
 
 const ROLE_LABEL = { owner: 'Owner', admin: 'Admin', member: 'Member' } as const
@@ -9,6 +11,7 @@ const ROLE_LABEL = { owner: 'Owner', admin: 'Admin', member: 'Member' } as const
 // The workspace chip in the header; opens a list of workspaces to switch between
 export function WorkspaceSwitcher({ me }: { me: Me }) {
   const { org, name, choose } = useWorkspace(me)
+  const { invitations } = usePendingInvitations(me.id)
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLDivElement>(null)
   const button = useRef<HTMLButtonElement>(null)
@@ -58,10 +61,11 @@ export function WorkspaceSwitcher({ me }: { me: Me }) {
         className="workspace-chip switcher-button"
         aria-expanded={open}
         aria-controls={menuId}
-        aria-label={`Workspace: ${name}. Switch workspace`}
+        aria-label={`Workspace: ${name}. Switch workspace${invitations.length ? `, ${invitations.length} ${invitations.length === 1 ? 'invitation' : 'invitations'}` : ''}`}
         onClick={() => setOpen((v) => !v)}
       >
         <span className="switcher-name">{name}</span>
+        {invitations.length > 0 && <span className="switcher-badge" aria-hidden="true">{invitations.length}</span>}
         <svg className="switcher-caret" viewBox="0 0 10 6" aria-hidden="true">
           <path d="M1 1l4 4 4-4" />
         </svg>
@@ -83,6 +87,14 @@ export function WorkspaceSwitcher({ me }: { me: Me }) {
               </li>
             ))}
           </ul>
+          {invitations.length > 0 && (
+            <div className="switcher-invitations">
+              <p className="switcher-heading">Invitations</p>
+              {invitations.map((inv) => (
+                <InvitationRow key={inv.id} me={me} invitation={inv} compact onJoined={() => setOpen(false)} />
+              ))}
+            </div>
+          )}
           <div className="switcher-footer">
             <Link to="/organizations/new" onClick={() => setOpen(false)}>
               <span className="switcher-plus" aria-hidden="true">+</span>

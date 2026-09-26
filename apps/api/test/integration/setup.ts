@@ -6,6 +6,7 @@ import { db } from '../../src/db/index.js'
 vi.mock('../../src/mail.js', () => ({
   sendSignInLink: vi.fn(async () => {}),
   sendShareNotice: vi.fn(async () => {}),
+  sendInvitation: vi.fn(async () => {}),
 }))
 
 if (!process.env.DATABASE_URL?.includes('artifact_test')) throw new Error('Integration tests must use the artifact_test database')

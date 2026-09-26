@@ -292,6 +292,27 @@ export function declineInvitation(token: string) {
   return request<null>(`/invitations/${encodeURIComponent(token)}/decline`, { method: 'POST' })
 }
 
+// Invitations to the signed-in person's email, answered inside the app without the email link
+export type MyInvitation = {
+  id: string
+  organization: { id: string; name: string; slug: string }
+  role: InviteRole
+  invitedBy: string | null
+  expiresAt: string
+}
+
+export function listMyInvitations() {
+  return request<MyInvitation[]>('/me/invitations')
+}
+
+export function acceptMyInvitation(id: string) {
+  return request<Organization>(`/me/invitations/${encodeURIComponent(id)}/accept`, { method: 'POST' })
+}
+
+export function declineMyInvitation(id: string) {
+  return request<null>(`/me/invitations/${encodeURIComponent(id)}/decline`, { method: 'POST' })
+}
+
 export function updateProfile(name: string) {
   return request<{ name: string }>('/me', { method: 'PATCH', json: { name } })
 }

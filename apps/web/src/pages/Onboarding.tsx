@@ -3,6 +3,8 @@ import { Link, useNavigate, useSearchParams } from 'react-router'
 import { checkSlug, createOrganization, FieldError, finishPersonalOnboarding, type Me, type Organization, type SlugCheck } from '../api'
 import { AccountHeader } from '../components/AccountHeader'
 import { ConnectTabs } from '../components/ConnectTabs'
+import { InvitationRow } from '../components/InvitationNotice'
+import { usePendingInvitations } from '../invitations'
 import { APP_HOST } from '../config'
 import { useMe } from '../useMe'
 import { LoadError, Loading } from './Status'
@@ -92,6 +94,8 @@ function WorkspaceStep({ me, choice, onChoice, onDone }: {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const firstName = me.name?.split(' ')[0]
+  // Joining an organization finishes onboarding, and the page moves on to /app in that workspace
+  const { invitations } = usePendingInvitations(me.id)
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -110,7 +114,21 @@ function WorkspaceStep({ me, choice, onChoice, onDone }: {
   return (
     <form onSubmit={onSubmit} className="onboarding-step">
       <h1>{firstName ? `Welcome, ${firstName}.` : 'Welcome.'} Who is this workspace for?</h1>
-      <p className="auth-lede">You can create an organization later if you start on your own.</p>
+      <p className="auth-lede">
+        {invitations.length > 0
+          ? 'Join the organization you were invited to, or set up a workspace of your own.'
+          : 'You can create an organization later if you start on your own.'}
+      </p>
+
+      {invitations.length > 0 && (
+        <section className="onboarding-invitations" aria-labelledby="onboarding-invitations-title">
+          <h2 id="onboarding-invitations-title">{invitations.length === 1 ? 'You have an invitation' : 'You have invitations'}</h2>
+          {invitations.map((inv) => (
+            <InvitationRow key={inv.id} me={me} invitation={inv} />
+          ))}
+          <p className="onboarding-or"><span>or set up your own</span></p>
+        </section>
+      )}
 
       <fieldset className="choices">
         <legend className="visually-hidden">Workspace type</legend>

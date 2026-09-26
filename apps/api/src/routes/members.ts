@@ -1,8 +1,8 @@
-import { and, asc, count, eq } from 'drizzle-orm'
+import { and, asc, count, eq, gt, notExists } from 'drizzle-orm'
 import { Hono, type Context } from 'hono'
 import { hashToken, randomToken, requireUser, type AuthEnv } from '../auth/session.js'
 import { db, schema } from '../db/index.js'
-import type { InviteRole, Role } from '../db/schema.js'
+import type { InviteRole, Role, User } from '../db/schema.js'
 import { env } from '../env.js'
 import { sendInvitation } from '../mail.js'
 
@@ -333,19 +333,27 @@ invitations.post('/:token/accept', requireUser, async (c) => {
     return c.json({ error: `This invitation is for ${row.invitation.email}. You are signed in as ${user.email}.`, code: 'email_mismatch' }, 403)
   }
 
+  return c.json(await join(user, row.invitation, row.org))
+})
+
+type InvitationRow = typeof schema.invitations.$inferSelect
+type OrganizationRow = typeof schema.organizations.$inferSelect
+
+// Accepting an invitation, from the email link or from inside the app
+async function join(user: User, invitation: InvitationRow, org: OrganizationRow) {
   await db.transaction(async (tx) => {
     // Already a member (joined another way): keep the role they have
     await tx
       .insert(schema.memberships)
-      .values({ userId: user.id, organizationId: row.org.id, role: row.invitation.role })
+      .values({ userId: user.id, organizationId: org.id, role: invitation.role })
       .onConflictDoNothing()
-    await tx.delete(schema.invitations).where(eq(schema.invitations.id, row.invitation.id))
+    await tx.delete(schema.invitations).where(eq(schema.invitations.id, invitation.id))
     // Joining a team counts as setting up a workspace
     if (!user.onboardedAt) await tx.update(schema.users).set({ onboardedAt: new Date() }).where(eq(schema.users.id, user.id))
   })
-  const joined = await membershipOf(row.org.id, user.id)
-  return c.json({ id: row.org.id, name: row.org.name, slug: row.org.slug, role: joined!.role })
-})
+  const joined = await membershipOf(org.id, user.id)
+  return { id: org.id, name: org.name, slug: org.slug, role: joined!.role }
+}
 
 invitations.post('/:token/decline', requireUser, async (c) => {
   const user = c.get('user')!
@@ -354,6 +362,82 @@ invitations.post('/:token/decline', requireUser, async (c) => {
   if (row.invitation.email !== user.email) {
     return c.json({ error: `This invitation is for ${row.invitation.email}. You are signed in as ${user.email}.`, code: 'email_mismatch' }, 403)
   }
+  await db.delete(schema.invitations).where(eq(schema.invitations.id, row.invitation.id))
+  return c.body(null, 204)
+})
+
+// Invitations to the signed-in person's email, so they can join without the email link.
+// Mounted at /api/me/invitations.
+export const myInvitations = new Hono<AuthEnv>()
+myInvitations.use(requireUser)
+
+myInvitations.get('/', async (c) => {
+  const user = c.get('user')!
+  const rows = await db
+    .select({
+      id: schema.invitations.id,
+      role: schema.invitations.role,
+      expiresAt: schema.invitations.expiresAt,
+      createdAt: schema.invitations.createdAt,
+      orgId: schema.organizations.id,
+      orgName: schema.organizations.name,
+      orgSlug: schema.organizations.slug,
+      inviterName: schema.users.name,
+      inviterEmail: schema.users.email,
+    })
+    .from(schema.invitations)
+    .innerJoin(schema.organizations, eq(schema.invitations.organizationId, schema.organizations.id))
+    .leftJoin(schema.users, eq(schema.invitations.invitedBy, schema.users.id))
+    .where(
+      and(
+        eq(schema.invitations.email, user.email),
+        gt(schema.invitations.expiresAt, new Date()),
+        // Someone who joined another way has nothing to accept
+        notExists(
+          db
+            .select({ one: schema.memberships.userId })
+            .from(schema.memberships)
+            .where(and(eq(schema.memberships.organizationId, schema.invitations.organizationId), eq(schema.memberships.userId, user.id))),
+        ),
+      ),
+    )
+    .orderBy(asc(schema.invitations.createdAt))
+  return c.json(
+    rows.map((r) => ({
+      id: r.id,
+      organization: { id: r.orgId, name: r.orgName, slug: r.orgSlug },
+      role: r.role,
+      invitedBy: r.inviterName ?? r.inviterEmail,
+      expiresAt: r.expiresAt,
+      createdAt: r.createdAt,
+    })),
+  )
+})
+
+// The invitation by id, only when it is for this person's email; others look missing
+async function ownInvitation(c: Context<AuthEnv>) {
+  const id = c.req.param('id') ?? ''
+  if (!UUID_RE.test(id)) return null
+  const [row] = await db
+    .select({ invitation: schema.invitations, org: schema.organizations })
+    .from(schema.invitations)
+    .innerJoin(schema.organizations, eq(schema.invitations.organizationId, schema.organizations.id))
+    .where(and(eq(schema.invitations.id, id), eq(schema.invitations.email, c.get('user')!.email)))
+  return row ?? null
+}
+
+myInvitations.post('/:id/accept', async (c) => {
+  const row = await ownInvitation(c)
+  if (!row) return c.json({ error: 'This invitation is not valid. It may have been revoked or already accepted.' }, 404)
+  if (row.invitation.expiresAt.getTime() < Date.now()) {
+    return c.json({ error: 'This invitation has expired. Ask for a new one.' }, 410)
+  }
+  return c.json(await join(c.get('user')!, row.invitation, row.org))
+})
+
+myInvitations.post('/:id/decline', async (c) => {
+  const row = await ownInvitation(c)
+  if (!row) return c.json({ error: 'This invitation is not valid. It may have been revoked or already accepted.' }, 404)
   await db.delete(schema.invitations).where(eq(schema.invitations.id, row.invitation.id))
   return c.body(null, 204)
 })
