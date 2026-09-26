@@ -4,7 +4,7 @@ import { db, schema } from '../db/index.js'
 import { env } from '../env.js'
 import { sendSignInLink } from '../mail.js'
 import { hashToken, randomToken, startSession } from './session.js'
-import { afterSignInUrl, findOrCreateUser, safeNext, signInErrorUrl } from './users.js'
+import { afterSignInUrl, canSignUp, findOrCreateUser, safeNext, signInErrorUrl, SignupClosedError, userExists } from './users.js'
 
 const LINK_TTL = 15 * 60 * 1000
 // Don't send another link to the same address within this window
@@ -17,6 +17,9 @@ email.post('/', async (c) => {
   const body = await c.req.json().catch(() => null) as { email?: unknown; intent?: unknown; plan?: unknown; next?: unknown } | null
   const address = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : ''
   if (!EMAIL_RE.test(address)) return c.json({ error: 'Enter a valid email address.' }, 400)
+  if (!(await userExists(address)) && !(await canSignUp(address))) {
+    return c.json({ error: 'This server only accepts accounts from invited people and certain email domains. Ask an admin to invite you.', code: 'signup_closed' }, 403)
+  }
   const intent = body?.intent === 'signup' ? 'signup' : 'login'
   const plan = typeof body?.plan === 'string' ? body.plan : null
 
@@ -63,7 +66,13 @@ email.get('/verify', async (c) => {
   if (!row) return c.redirect(signInErrorUrl('link_invalid'))
   if (row.expiresAt.getTime() < Date.now()) return c.redirect(signInErrorUrl('link_expired'))
 
-  const user = await findOrCreateUser({ email: row.email })
+  let user
+  try {
+    user = await findOrCreateUser({ email: row.email })
+  } catch (err) {
+    if (err instanceof SignupClosedError) return c.redirect(signInErrorUrl('signup_closed'))
+    throw err
+  }
   await startSession(c, user.id)
   return c.redirect(afterSignInUrl(c.req.query('plan'), c.req.query('next')))
 })

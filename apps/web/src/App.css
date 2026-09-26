@@ -667,6 +667,11 @@ main,
   min-width: 0;
 }
 
+.step-action .step-link {
+  margin-top: 10px;
+  font-size: var(--step--1);
+}
+
 /* Show the whole command instead of hiding its end behind a scrollbar */
 .step-action .command:not(.command-file) code {
   white-space: normal;
@@ -869,6 +874,41 @@ main,
 .hosting-toggle button[aria-checked='true'] {
   color: var(--ink);
   background: var(--marker);
+}
+
+.plan h3 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.plan-soon {
+  padding: 2px 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  background: var(--marker);
+  border: 1.5px solid var(--ink);
+  border-radius: 3px;
+}
+
+/* Plans that aren't available yet read quieter */
+.plan[data-coming-soon] .plan-price span,
+.plan[data-coming-soon] li {
+  color: var(--ink-soft);
+}
+
+.button-disabled {
+  color: var(--ink-soft);
+  border-color: var(--grid);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.button-disabled:hover {
+  transform: none;
+  box-shadow: none;
 }
 
 /* Two plans shouldn't stretch across the whole page */

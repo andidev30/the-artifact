@@ -9,6 +9,7 @@ import { Authorize } from './pages/Authorize.tsx'
 import { Landing } from './pages/Landing.tsx'
 import { NotFound } from './pages/NotFound.tsx'
 import { Onboarding } from './pages/Onboarding.tsx'
+import { SelfHosting } from './pages/SelfHosting.tsx'
 import { Viewer } from './pages/Viewer.tsx'
 import { Invite } from './pages/Invite.tsx'
 import { NewOrganization } from './pages/NewOrganization.tsx'
@@ -28,6 +29,7 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/settings" element={<Settings />} />
         <Route path="/organizations/new" element={<NewOrganization />} />
         <Route path="/invite/:token" element={<Invite />} />
+        <Route path="/self-hosting" element={<SelfHosting />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>

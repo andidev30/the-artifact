@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router'
+import { Link, Navigate } from 'react-router'
 import { fetchMe, type Me } from '../api'
+import { useConfig } from '../useConfig'
 import { ConnectTabs } from '../components/ConnectTabs'
 import { FlowDemo } from '../components/FlowDemo'
 import { Pricing } from '../components/Pricing'
 import { Wordmark } from '../components/Wordmark'
-import { APP_HOST, LOGIN_URL, SIGNUP_URL } from '../config'
+import { CopyCommand } from '../components/CopyCommand'
+import { APP_HOST, LOGIN_URL, SELF_HOSTING_URL } from '../config'
 
 // undefined while checking, null when signed out
 type Session = Me | null | undefined
@@ -17,8 +19,12 @@ export function Landing() {
     fetchMe().then(setMe).catch(() => setMe(null))
   }, [])
 
+  const config = useConfig()
   const signedIn = Boolean(me)
   const firstName = me?.name?.split(' ')[0]
+
+  // A self-hosted install is the product itself, not its marketing site
+  if (config?.selfHosted) return <Navigate to="/app" replace />
 
   return (
     <>
@@ -42,7 +48,7 @@ export function Landing() {
           ) : (
             <>
               <Link to={LOGIN_URL}>Log in</Link>
-              <Link className="button button-small" to={SIGNUP_URL}>Get started</Link>
+              <Link className="button button-small" to={SELF_HOSTING_URL}>Get started</Link>
             </>
           )}
         </nav>
@@ -61,11 +67,11 @@ export function Landing() {
               {signedIn ? (
                 <Link className="button" to="/app">Go to your pages</Link>
               ) : (
-                <Link className="button" to={SIGNUP_URL}>Get started free</Link>
+                <Link className="button" to={SELF_HOSTING_URL}>Self-host for free</Link>
               )}
               <a className="text-link" href="#how">See how it works</a>
             </div>
-            <p className="hint">Works with Claude Code, Cursor, Codex, and any MCP client.</p>
+            <p className="hint">Works with Claude Code, Cursor, Codex, and any MCP client. The hosted cloud version is coming soon.</p>
           </div>
           <FlowDemo />
         </section>
@@ -75,18 +81,21 @@ export function Landing() {
           <ol className="steps">
             <li>
               <div className="step-text">
-                <h3>Create an account</h3>
+                <h3>Run it on your server</h3>
                 <p>
                   {signedIn
                     ? `Done. You are signed in as ${me!.email}.`
-                    : 'Sign up with Google or your email. Personal use is free.'}
+                    : 'One Docker image and Postgres. The install guide covers email, sign-in and your domain.'}
                 </p>
               </div>
               <div className="step-action">
                 {signedIn ? (
                   <Link className="button button-quiet" to="/app">Go to your pages</Link>
                 ) : (
-                  <Link className="button button-quiet" to={SIGNUP_URL}>Create a free account</Link>
+                  <>
+                    <CopyCommand command="docker compose -f docker-compose.selfhost.yml up -d" label="Copy the install command" />
+                    <p className="step-link"><Link className="text-link" to={SELF_HOSTING_URL}>Read the install guide</Link></p>
+                  </>
                 )}
               </div>
             </li>

@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { fetchMe } from '../api'
+import { useConfig } from '../useConfig'
 import { Wordmark } from '../components/Wordmark'
 import { APP_HOST, AUTH_EMAIL_URL, AUTH_GOOGLE_URL, LOGIN_URL, SIGNUP_URL } from '../config'
 import './Auth.css'
@@ -35,6 +36,7 @@ const SIGN_IN_ERRORS: Record<string, string> = {
   google_unverified: 'Your Google account email is not verified. Use your email instead.',
   link_invalid: 'That sign-in link has already been used or is not valid. Request a new one below.',
   link_expired: 'That sign-in link has expired. Request a new one below.',
+  signup_closed: 'This server only accepts accounts from invited people and certain email domains. Ask an admin to invite you.',
 }
 
 export function Auth({ mode }: { mode: Mode }) {
@@ -95,6 +97,9 @@ export function Auth({ mode }: { mode: Mode }) {
 
 function AuthForm({ mode, plan, next, lede, notice }: { mode: Mode; plan: string | null; next: string | null; lede: string; notice?: string }) {
   const copy = COPY[mode]
+  const config = useConfig()
+  // Self-hosted installs may run without Google sign-in configured
+  const google = config?.googleSignIn ?? true
   const [status, setStatus] = useState<Status>({ kind: 'idle' })
   const query = new URLSearchParams({ intent: mode, ...(plan ? { plan } : {}), ...(next ? { next } : {}) }).toString()
 
@@ -108,6 +113,11 @@ function AuthForm({ mode, plan, next, lede, notice }: { mode: Mode; plan: string
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, intent: mode, plan, next }),
       })
+      // A refusal from the server (bad address, sign-ups closed) says why; show that
+      if (res.status === 400 || res.status === 403) {
+        const data = await res.json().catch(() => ({}))
+        if (data.error) return setStatus({ kind: 'error', message: data.error })
+      }
       if (!res.ok) throw new Error(String(res.status))
       setStatus({ kind: 'sent', email })
     } catch {
@@ -136,6 +146,8 @@ function AuthForm({ mode, plan, next, lede, notice }: { mode: Mode; plan: string
       <p className="auth-lede">{lede}</p>
       {notice && <p className="auth-notice" role="alert">{notice}</p>}
 
+      {google && (
+      <>
       <a className="button button-quiet auth-provider" href={`${AUTH_GOOGLE_URL}?${query}`}>
         <svg viewBox="0 0 48 48" aria-hidden="true">
           <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z" />
@@ -147,6 +159,8 @@ function AuthForm({ mode, plan, next, lede, notice }: { mode: Mode; plan: string
       </a>
 
       <div className="auth-divider"><span>or use your email</span></div>
+      </>
+      )}
 
       <form className="auth-form" onSubmit={onSubmit}>
         <label htmlFor="email">Email</label>

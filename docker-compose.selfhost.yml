@@ -1,0 +1,34 @@
+# Self-hosted The Artifact: the app and its Postgres database.
+# Setup: cp .env.selfhost.example .env.selfhost, edit it, then
+#   docker compose -f docker-compose.selfhost.yml up -d
+services:
+  app:
+    build: .
+    image: the-artifact:latest
+    restart: unless-stopped
+    ports:
+      - '${ARTIFACT_PORT:-8080}:3000'
+    env_file: .env.selfhost
+    environment:
+      DATABASE_URL: postgres://artifact:${POSTGRES_PASSWORD:-artifact}@db:5432/artifact
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: artifact
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-artifact}
+      POSTGRES_DB: artifact
+    volumes:
+      - artifact-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U artifact']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  artifact-data:

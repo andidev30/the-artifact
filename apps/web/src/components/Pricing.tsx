@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { CONTACT_SALES_URL, SIGNUP_URL } from '../config'
+import { CONTACT_SALES_URL, SELF_HOSTING_URL, SIGNUP_URL } from '../config'
 
 type Plan = {
   name: string
@@ -11,6 +11,8 @@ type Plan = {
   cta: string
   href: string
   featured?: boolean
+  // Shown but not available yet: the card says so and its button is disabled
+  comingSoon?: boolean
 }
 
 // Placeholder prices and limits; change here once they are decided
@@ -28,6 +30,7 @@ const CLOUD_PLANS: Plan[] = [
     ],
     cta: 'Get started free',
     href: SIGNUP_URL,
+    comingSoon: true,
   },
   {
     name: 'Organization',
@@ -44,6 +47,7 @@ const CLOUD_PLANS: Plan[] = [
     cta: 'Start with your team',
     href: `${SIGNUP_URL}?plan=organization`,
     featured: true,
+    comingSoon: true,
   },
   {
     name: 'Enterprise',
@@ -59,24 +63,25 @@ const CLOUD_PLANS: Plan[] = [
     ],
     cta: 'Contact sales',
     href: CONTACT_SALES_URL,
+    comingSoon: true,
   },
 ]
 
 const SELF_HOSTED_PLANS: Plan[] = [
   {
-    name: 'Self-hosted Team',
-    price: '$20',
-    per: 'per member / month, billed yearly',
-    summary: 'Run The Artifact on your own servers, with your own data.',
+    name: 'Self-hosted',
+    price: '$0',
+    per: 'free, on your own servers',
+    summary: 'Run The Artifact yourself, with your own database and your own data.',
     features: [
-      'Everything in Organization',
-      'Ships as a Docker image for your servers or Kubernetes',
-      'Uses your Postgres, your SMTP and your Google sign-in',
+      'Every feature: organizations, sharing, version history',
+      'Unlimited pages and members',
+      'One Docker image plus Postgres',
+      'Uses your SMTP server, and your Google sign-in if you want it',
       'Pages and data never leave your network',
-      'Update on your schedule, with release notes',
     ],
-    cta: 'Get a license',
-    href: `${CONTACT_SALES_URL}?topic=self-hosted-team`,
+    cta: 'Read the install guide',
+    href: SELF_HOSTING_URL,
     featured: true,
   },
   {
@@ -85,7 +90,7 @@ const SELF_HOSTED_PLANS: Plan[] = [
     per: 'yearly contract',
     summary: 'For companies with strict security reviews or closed networks.',
     features: [
-      'Everything in Self-hosted Team',
+      'Everything in Self-hosted',
       'SSO with SAML and user provisioning with SCIM',
       'Audit log of every publish and share',
       'Air-gapped install with an offline license',
@@ -99,19 +104,19 @@ const SELF_HOSTED_PLANS: Plan[] = [
 type Hosting = 'cloud' | 'self-hosted'
 
 const LEDE: Record<Hosting, string> = {
-  cloud: 'Free for your own work. Pay when your team shares a workspace. Talk to us when your company needs SSO and audit logs.',
-  'self-hosted': 'The same product, running inside your own infrastructure. Licensed yearly, per member.',
+  'self-hosted': 'Free to run on your own servers. Talk to us when your company needs SSO, audit logs or support.',
+  cloud: 'We host it for you. The cloud version is coming soon; until then, self-host it for free.',
 }
 
 export function Pricing() {
-  const [hosting, setHosting] = useState<Hosting>('cloud')
-  const plans = hosting === 'cloud' ? CLOUD_PLANS : SELF_HOSTED_PLANS
+  const [hosting, setHosting] = useState<Hosting>('self-hosted')
+  const plans = hosting === 'self-hosted' ? SELF_HOSTED_PLANS : CLOUD_PLANS
 
   return (
     <>
       <p className="section-lede">{LEDE[hosting]}</p>
       <div className="hosting-toggle" role="radiogroup" aria-label="Where The Artifact runs">
-        {(['cloud', 'self-hosted'] as const).map((h) => (
+        {(['self-hosted', 'cloud'] as const).map((h) => (
           <button
             key={h}
             type="button"
@@ -125,8 +130,15 @@ export function Pricing() {
       </div>
       <div className="plans" data-count={plans.length}>
         {plans.map((plan) => (
-          <article key={plan.name} className={plan.featured ? 'plan plan-featured' : 'plan'}>
-            <h3>{plan.name}</h3>
+          <article
+            key={plan.name}
+            className={plan.featured && !plan.comingSoon ? 'plan plan-featured' : 'plan'}
+            data-coming-soon={plan.comingSoon || undefined}
+          >
+            <h3>
+              {plan.name}
+              {plan.comingSoon && <span className="plan-soon">Coming soon</span>}
+            </h3>
             <p className={plan.price.startsWith('$') ? 'plan-price' : 'plan-price plan-price-text'}>
               <span>{plan.price}</span>
               {plan.per}
@@ -137,9 +149,13 @@ export function Pricing() {
                 <li key={f}>{f}</li>
               ))}
             </ul>
-            <Link className={plan.featured ? 'button' : 'button button-quiet'} to={plan.href}>
-              {plan.cta}
-            </Link>
+            {plan.comingSoon ? (
+              <span className="button button-quiet button-disabled" aria-disabled="true">Coming soon</span>
+            ) : (
+              <Link className={plan.featured ? 'button' : 'button button-quiet'} to={plan.href}>
+                {plan.cta}
+              </Link>
+            )}
           </article>
         ))}
       </div>
