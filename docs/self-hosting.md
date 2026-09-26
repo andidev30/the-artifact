@@ -48,7 +48,7 @@ Postgres holds accounts, organizations, sharing and the list of versions. The co
 docker compose -f docker-compose.selfhost.yml exec app node dist/scripts/sweep-storage.js
 ```
 
-Back up both: a Postgres dump and the `artifact-content` volume (or your bucket).
+Back up both; see [Backup and restore](/docs/backups).
 
 ### Using S3, R2 or your own MinIO
 
@@ -63,10 +63,6 @@ S3_SECRET_ACCESS_KEY=...
 ```
 
 The bucket should be private: pages are always served through the app, which checks access and adds the sandbox headers. Every setting is in the [configuration reference](/docs/configuration#object-storage).
-
-### Upgrading from a version that stored content in Postgres
-
-Nothing to do: on the first start after upgrading, the app copies existing page content into object storage and clears it from the database. The log says how many items it moved.
 
 ## 3. Put it behind HTTPS
 
@@ -126,7 +122,7 @@ ADMIN_EMAILS=you@example.com
 
 Addresses listed there are admins for as long as they are listed, even when they are suspended in the database or would otherwise be the last admin. Once you are in, you can make others admins from **People** and, if you like, remove your address from `ADMIN_EMAILS` after making yourself an admin there too. An admin granted by `ADMIN_EMAILS` can't be demoted or deleted from the admin area.
 
-The automatic first-account admin is on whenever `SELF_HOSTED=true`, which the Docker image sets. Set `FIRST_USER_ADMIN=false` to turn it off and rely on `ADMIN_EMAILS` alone.
+The automatic first-account admin applies whenever `SELF_HOSTED=true`, which the Docker image sets.
 
 ## Google sign-in (optional)
 
@@ -147,8 +143,4 @@ docker compose -f docker-compose.selfhost.yml exec app node dist/scripts/backfil
 
 ## Backups
 
-Everything lives in Postgres, including page HTML, files, thumbnails and version history:
-
-```sh
-docker compose -f docker-compose.selfhost.yml exec db pg_dump -U artifact artifact > artifact-backup.sql
-```
+Back up the database and the content storage together; [Backup and restore](/docs/backups) has the commands and how to restore onto a new server.

@@ -29,6 +29,7 @@ export const DOC_GROUPS: DocGroup[] = [
     pages: [
       { slug: 'self-hosting', title: 'Install' },
       { slug: 'configuration', title: 'Configuration reference' },
+      { slug: 'backups', title: 'Backup and restore' },
     ],
   },
   {
