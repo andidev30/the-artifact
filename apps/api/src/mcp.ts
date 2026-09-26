@@ -232,7 +232,8 @@ function buildServer(auth: McpAuth) {
 
 // Clients on the 2026-07-28 protocol: each request carries its own envelope, so one handler serves them all,
 // building a fresh server per request for the person and workspace the verified token passed in authInfo.
-const modern = createMcpHandler(({ authInfo }) => buildServer(authInfo?.extra?.mcp as McpAuth), { legacy: 'reject', responseMode: 'json' })
+// The tools send no progress or log messages, so every answer is a single JSON body.
+const modern = createMcpHandler(({ authInfo }) => buildServer(authInfo?.extra?.mcp as McpAuth), { legacy: 'reject' })
 
 export const mcp = new Hono()
 
