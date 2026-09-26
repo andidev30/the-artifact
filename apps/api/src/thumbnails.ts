@@ -23,9 +23,7 @@ export const THUMBNAIL_TYPE = 'image/webp'
 
 // The page is loaded from a made-up origin so relative URLs resolve and nothing real is reachable
 export const PAGE_ORIGIN = 'https://page.the-artifact.invalid'
-const LOAD_TIMEOUT = 8_000
 const SETTLE_MS = 700
-const RENDER_TIMEOUT = 20_000
 const CDN_TIMEOUT = 5_000
 const MAX_CDN_BYTES = 5 * 1024 * 1024
 const MAX_CDN_TOTAL = 15 * 1024 * 1024
@@ -50,7 +48,7 @@ export const DEFAULT_CDN_HOSTS = [
   'rsms.me',
 ]
 
-type Config = { chromePath: string; cdnHosts: Set<string>; noSandbox: boolean }
+type Config = { chromePath: string; cdnHosts: Set<string>; noSandbox: boolean; loadTimeout: number; renderTimeout: number }
 
 function hostsFrom(value: string | undefined): Set<string> {
   // Unset means the defaults; set (even to nothing) replaces them, so "" or "none" blocks every host
@@ -67,6 +65,8 @@ let config: Config = {
   chromePath: env.thumbnails.chromePath,
   cdnHosts: hostsFrom(env.thumbnails.cdnHosts),
   noSandbox: env.thumbnails.noSandbox,
+  loadTimeout: 8_000,
+  renderTimeout: 20_000,
 }
 
 // For tests and scripts
@@ -80,21 +80,23 @@ export function thumbnailsEnabled(): boolean {
 
 // Addresses a CDN host must never resolve to: private, loopback, link-local (cloud metadata lives at
 // 169.254.169.254), shared, documentation, multicast and reserved ranges, and IPv6 forms that embed IPv4
-const NOT_PUBLIC = new BlockList()
+// (two lists: one BlockList would match every IPv4 address against the IPv4-mapped IPv6 range)
+const NOT_PUBLIC_V4 = new BlockList()
+const NOT_PUBLIC_V6 = new BlockList()
 for (const [net, bits] of [
   ['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8], ['169.254.0.0', 16], ['172.16.0.0', 12],
   ['192.0.0.0', 24], ['192.0.2.0', 24], ['192.88.99.0', 24], ['192.168.0.0', 16], ['198.18.0.0', 15],
   ['198.51.100.0', 24], ['203.0.113.0', 24], ['224.0.0.0', 4], ['240.0.0.0', 4],
-] as const) NOT_PUBLIC.addSubnet(net, bits, 'ipv4')
+] as const) NOT_PUBLIC_V4.addSubnet(net, bits, 'ipv4')
 for (const [net, bits] of [
   ['::', 128], ['::1', 128], ['::ffff:0:0', 96], ['64:ff9b::', 96], ['64:ff9b:1::', 48], ['100::', 64],
   ['2001::', 32], ['2001:db8::', 32], ['2002::', 16], ['fc00::', 7], ['fe80::', 10], ['fec0::', 10], ['ff00::', 8],
-] as const) NOT_PUBLIC.addSubnet(net, bits, 'ipv6')
+] as const) NOT_PUBLIC_V6.addSubnet(net, bits, 'ipv6')
 
 export function isPublicAddress(ip: string): boolean {
   const family = isIP(ip)
   if (!family) return false
-  return !NOT_PUBLIC.check(ip, family === 4 ? 'ipv4' : 'ipv6')
+  return family === 4 ? !NOT_PUBLIC_V4.check(ip, 'ipv4') : !NOT_PUBLIC_V6.check(ip, 'ipv6')
 }
 
 export type PageTree = { html: string; files: { path: string; contentType: string; content: Buffer }[] }
@@ -258,7 +260,7 @@ export async function renderPage(tree: PageTree): Promise<RenderResult> {
     })
     const page = await context.newPage()
     const shot = (async () => {
-      await page.goto(`${PAGE_ORIGIN}/`, { waitUntil: 'load', timeout: LOAD_TIMEOUT }).catch(() => {})
+      await page.goto(`${PAGE_ORIGIN}/`, { waitUntil: 'load', timeout: config.loadTimeout }).catch(() => {})
       await new Promise((r) => setTimeout(r, SETTLE_MS))
       const cdp = await context.newCDPSession(page)
       const { data } = await cdp.send('Page.captureScreenshot', {
@@ -268,7 +270,7 @@ export async function renderPage(tree: PageTree): Promise<RenderResult> {
       })
       return Buffer.from(data, 'base64')
     })()
-    const image = await withTimeout(shot, RENDER_TIMEOUT, 'Rendering the thumbnail')
+    const image = await withTimeout(shot, config.renderTimeout, 'Rendering the thumbnail')
     return { image, blocked }
   } catch (err) {
     // A page that hangs its renderer can wedge the browser too; start a fresh one next time

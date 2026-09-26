@@ -10,6 +10,8 @@ const env = {
   SMTP_FROM: 'The Artifact <test@example.com>',
   GOOGLE_CLIENT_ID: '',
   GOOGLE_CLIENT_SECRET: '',
+  // Thumbnails are off unless a test turns them on (test/integration/thumbnails.test.ts)
+  CHROME_PATH: '',
 }
 
 export default defineConfig({
