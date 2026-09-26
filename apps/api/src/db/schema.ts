@@ -57,6 +57,26 @@ export const memberships = pgTable(
   (t) => [primaryKey({ columns: [t.userId, t.organizationId] }), index('memberships_org_idx').on(t.organizationId)],
 )
 
+export const inviteRoleEnum = pgEnum('invite_role', ['admin', 'member'])
+
+// Invitations to join an organization by email. The link carries a random token; only its hash is stored.
+export const invitations = pgTable(
+  'invitations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    email: text('email').notNull(),
+    role: inviteRoleEnum('role').notNull(),
+    tokenHash: text('token_hash').notNull().unique(),
+    invitedBy: uuid('invited_by').references(() => users.id, { onDelete: 'set null' }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('invitations_org_email_unique').on(t.organizationId, t.email), index('invitations_email_idx').on(t.email)],
+)
+
 // OAuth for MCP clients (Claude Code, Cursor, Codex...). Clients register themselves.
 export const oauthClients = pgTable('oauth_clients', {
   id: text('id').primaryKey(),
@@ -163,3 +183,4 @@ export type ShareRole = (typeof shareRoleEnum.enumValues)[number]
 export type Artifact = typeof artifacts.$inferSelect
 export type Visibility = (typeof visibilityEnum.enumValues)[number]
 export type Role = (typeof roleEnum.enumValues)[number]
+export type InviteRole = (typeof inviteRoleEnum.enumValues)[number]

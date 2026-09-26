@@ -6,6 +6,7 @@ import { ConnectTabs } from '../components/ConnectTabs'
 import { APP_HOST } from '../config'
 import { timeAgo } from '../time'
 import { useMe } from '../useMe'
+import { useWorkspace } from '../workspace'
 import { LoadError, Loading } from './Status'
 import './Workspace.css'
 
@@ -39,7 +40,7 @@ const VISIBILITY_LABEL: Record<Visibility, string> = {
 type Gallery = { kind: 'loading' } | { kind: 'ready'; items: ArtifactSummary[] } | { kind: 'error' }
 
 function Home({ me }: { me: Me }) {
-  const org = me.organizations[0]
+  const { org } = useWorkspace(me)
   const workspace = org ? org.name : 'Personal'
   const [tab, setTab] = useState<'workspace' | 'shared'>('workspace')
   const [gallery, setGallery] = useState<Gallery>({ kind: 'loading' })

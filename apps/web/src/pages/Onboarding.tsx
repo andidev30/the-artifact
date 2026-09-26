@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
-import { checkSlug, createOrganization, FieldError, finishPersonalOnboarding, type Me, type SlugCheck } from '../api'
+import { checkSlug, createOrganization, FieldError, finishPersonalOnboarding, type Me, type Organization, type SlugCheck } from '../api'
 import { AccountHeader } from '../components/AccountHeader'
 import { ConnectTabs } from '../components/ConnectTabs'
 import { APP_HOST } from '../config'
@@ -70,8 +70,8 @@ function Flow({ me }: { me: Me }) {
           {step === 'organization' && (
             <OrganizationStep
               onBack={() => setStep('workspace')}
-              onDone={(name) => {
-                setWorkspace(name)
+              onDone={(org) => {
+                setWorkspace(org.name)
                 setStep('agent')
               }}
             />
@@ -153,7 +153,13 @@ function toSlug(name: string): string {
     .replace(/-+$/, '')
 }
 
-function OrganizationStep({ onBack, onDone }: { onBack: () => void; onDone: (name: string) => void }) {
+// Also used on its own page to create another organization later
+export function OrganizationStep({ onBack, onDone, title = 'Name your organization', lede = 'This is what your teammates see when they join. You become its owner.' }: {
+  onBack: () => void
+  onDone: (org: Organization) => void
+  title?: string
+  lede?: string
+}) {
   const [name, setName] = useState('')
   const [slug, setSlug] = useState('')
   const [slugEdited, setSlugEdited] = useState(false)
@@ -185,7 +191,7 @@ function OrganizationStep({ onBack, onDone }: { onBack: () => void; onDone: (nam
     setError(null)
     try {
       const org = await createOrganization(name.trim(), effectiveSlug)
-      onDone(org.name)
+      onDone(org)
     } catch (err) {
       setError(err instanceof FieldError ? { message: err.message, field: err.field } : { message: 'The organization could not be created. Try again.' })
       setSaving(false)
@@ -194,8 +200,8 @@ function OrganizationStep({ onBack, onDone }: { onBack: () => void; onDone: (nam
 
   return (
     <form onSubmit={onSubmit} className="onboarding-step">
-      <h1>Name your organization</h1>
-      <p className="auth-lede">This is what your teammates see when they join. You become its owner.</p>
+      <h1>{title}</h1>
+      <p className="auth-lede">{lede}</p>
 
       <div className="field">
         <label htmlFor="org-name">Organization name</label>

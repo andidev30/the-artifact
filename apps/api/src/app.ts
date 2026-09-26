@@ -8,7 +8,9 @@ import { mcp } from './mcp.js'
 import { consent } from './oauth/consent.js'
 import { oauth } from './oauth/server.js'
 import { artifacts } from './routes/artifacts.js'
+import { invitations, members } from './routes/members.js'
 import { onboarding, organizations } from './routes/organizations.js'
+import { settings } from './routes/settings.js'
 
 export const app = new Hono<AuthEnv>()
 
@@ -33,6 +35,11 @@ api.route('/organizations', organizations)
 api.route('/onboarding', onboarding)
 api.route('/oauth/requests', consent)
 api.route('/artifacts', artifacts)
+
+// Members, invitations and account settings
+api.route('/organizations/:orgId', members)
+api.route('/invitations', invitations)
+api.route('/me', settings)
 
 api.get('/me', requireUser, async (c) => {
   const user = c.get('user')!
