@@ -352,13 +352,17 @@ const pending: string[] = []
 const queued = new Set<string>()
 let draining: Promise<void> | null = null
 
-export function queueThumbnail(versionId: string) {
-  if (!thumbnailsEnabled() || queued.has(versionId) || queued.size >= MAX_QUEUE) return
+// True when the version is (now) waiting for a render or being rendered
+export function queueThumbnail(versionId: string): boolean {
+  if (!thumbnailsEnabled()) return false
+  if (queued.has(versionId)) return true
+  if (queued.size >= MAX_QUEUE) return false
   queued.add(versionId)
   pending.push(versionId)
   draining ??= drain().finally(() => {
     draining = null
   })
+  return true
 }
 
 async function drain() {
@@ -376,10 +380,16 @@ async function drain() {
   }
 }
 
-// Which of these pages have a thumbnail of their current version. Versions that were never
-// rendered (published before thumbnails existed, or while no browser was set up) are queued now.
-export async function currentThumbnails(pages: { id: string; currentVersion: number }[]): Promise<Set<string>> {
-  if (pages.length === 0) return new Set()
+// Where a page's screenshot of its current version stands:
+// - ready: it exists
+// - pending: it is queued or being rendered, so asking again soon may find it
+// - none: it won't come (no browser set up, the render failed, or the queue is full)
+export type ThumbnailState = 'ready' | 'pending' | 'none'
+
+// The thumbnail state of each of these pages, by page id. Versions that were never rendered
+// (published before thumbnails existed, or while no browser was set up) are queued now.
+export async function currentThumbnails(pages: { id: string; currentVersion: number }[]): Promise<Map<string, ThumbnailState>> {
+  if (pages.length === 0) return new Map()
   const v = schema.artifactVersions
   const t = schema.artifactThumbnails
   const rows = await db
@@ -387,8 +397,9 @@ export async function currentThumbnails(pages: { id: string; currentVersion: num
     .from(v)
     .leftJoin(t, eq(t.versionId, v.id))
     .where(or(...pages.map((p) => and(eq(v.artifactId, p.id), eq(v.version, p.currentVersion)))))
-  for (const r of rows) if (!r.tried) queueThumbnail(r.versionId)
-  return new Set(rows.filter((r) => r.ready).map((r) => r.artifactId))
+  const states = new Map<string, ThumbnailState>()
+  for (const r of rows) states.set(r.artifactId, r.ready ? 'ready' : !r.tried && queueThumbnail(r.versionId) ? 'pending' : 'none')
+  return states
 }
 
 // A version's stored render: its image, or null image when rendering failed; null when never tried

@@ -46,7 +46,9 @@ artifacts.get('/', requireUser, async (c) => {
           owner: ownerName ?? ownerEmail,
           mine: false,
           canEdit: editable.has(a.id),
-          thumbnail: thumbs.has(a.id),
+          // thumbnail is kept for older clients; thumbnailState says whether one is still coming
+          thumbnail: thumbs.get(a.id) === 'ready',
+          thumbnailState: thumbs.get(a.id) ?? 'none',
           role,
         })),
     )
@@ -74,7 +76,9 @@ artifacts.get('/', requireUser, async (c) => {
       owner: ownerName ?? ownerEmail,
       mine: a.ownerId === user.id,
       canEdit: editable.has(a.id),
-      thumbnail: thumbs.has(a.id),
+      // thumbnail is kept for older clients; thumbnailState says whether one is still coming
+      thumbnail: thumbs.get(a.id) === 'ready',
+      thumbnailState: thumbs.get(a.id) ?? 'none',
     })),
   )
 })

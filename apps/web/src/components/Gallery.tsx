@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { listArtifacts, thumbnailUrl, type ArtifactSummary, type Visibility } from '../api'
+import { pollThumbnails, withFreshThumbnails } from '../thumbnailPoll'
 import { timeAgo } from '../time'
 import { DeleteDialog, PageMenu, RenameDialog, type MenuItem } from './PageActions'
 import './Gallery.css'
@@ -65,6 +66,31 @@ export function Gallery({ workspaceId, workspaceName, email, aside, onWorkspaceC
     return () => abort.abort()
   }, [workspaceId, search])
 
+  const list = lists[tab]
+  const items = list.kind === 'ready' ? list.items : []
+  // Cards on screen whose screenshot is still being rendered on the server
+  const waiting = items.some((a) => a.thumbnailState === 'pending')
+
+  useEffect(() => {
+    if (!waiting) return
+    const t = tab
+    const abort = new AbortController()
+    const stop = pollThumbnails({
+      refresh: async () => {
+        const fresh = await listArtifacts(t === 'workspace' ? workspaceId : 'shared', search, abort.signal)
+        setLists((l) => {
+          const current = l[t]
+          return current.kind === 'ready' ? { ...l, [t]: { kind: 'ready', items: withFreshThumbnails(current.items, fresh) } } : l
+        })
+        return fresh.some((a) => a.thumbnailState === 'pending')
+      },
+    })
+    return () => {
+      stop()
+      abort.abort()
+    }
+  }, [waiting, tab, workspaceId, search])
+
   function update(slug: string, change: (a: ArtifactSummary) => ArtifactSummary | null) {
     setLists((l) => {
       const next = { ...l }
@@ -95,8 +121,6 @@ export function Gallery({ workspaceId, workspaceName, email, aside, onWorkspaceC
     setAnnounce(`Deleted “${page.title}”.`)
   }
 
-  const list = lists[tab]
-  const items = list.kind === 'ready' ? list.items : []
   const searching = search.length > 0
   const total = totals[tab]
   const showSearch = searching || query.length > 0 || (total ?? 0) > 0
@@ -190,7 +214,7 @@ function Card({ page: a, onRename, onDelete }: { page: ArtifactSummary; onRename
 
   return (
     <div className="page-card">
-      <Thumbnail slug={a.slug} version={a.version} ready={a.thumbnail} />
+      <Thumbnail key={a.version} slug={a.slug} version={a.version} ready={a.thumbnail} />
       <Link className="page-card-link" to={`/a/${a.slug}`}>
         <strong>{a.title}</strong>
       </Link>
