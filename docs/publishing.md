@@ -1,6 +1,6 @@
 # Publishing pages
 
-Agents publish through five MCP tools. You don't call them yourself: ask the agent in plain words and it picks the right one.
+Agents publish through six MCP tools. You don't call them yourself: ask the agent in plain words and it picks the right one.
 
 ## What makes a good page
 
@@ -21,9 +21,9 @@ Publishes a page and returns its link.
 | `title` | yes | Title for the gallery and tab |
 | `html` | yes | The complete HTML document |
 | `artifact_id` | no | Id or link of an existing page. Publishes a new version at the same link. |
-| `visibility` | no | `private`, `organization` or `link` (see [Sharing](/docs/sharing)) |
+| `visibility` | no | `private` (shown as **Restricted**), `organization` or `link` (see [Sharing](/docs/sharing)) |
 
-New pages are private in a personal workspace and visible to the organization in an organization workspace.
+New pages are restricted in a personal workspace and visible to the organization in an organization workspace.
 
 ### list_artifacts
 
@@ -32,6 +32,10 @@ Lists the most recently updated pages in the connected workspace, with their ids
 ### get_artifact
 
 Returns the current HTML of a page, so the agent can edit it and publish a new version.
+
+### rename_artifact
+
+Changes a page's title without publishing a new version. The same rules as renaming in the app apply: editors only, 1 to 200 characters, spaces around it are trimmed.
 
 ### set_artifact_visibility
 

@@ -201,6 +201,21 @@ export function describeVisibility(v: Visibility): string {
 
 export const MAX_TITLE_LENGTH = 200
 
+// Short labels matching the web app ("Restricted" is stored as private)
+export const VISIBILITY_LABEL: Record<Visibility, string> = {
+  private: 'restricted',
+  organization: 'organization',
+  link: 'anyone with the link',
+}
+
+// The rules for a new page name, shared by the web app and agents. Returns the trimmed title or an error.
+export function checkTitle(value: unknown): { title: string } | { error: string } {
+  const title = typeof value === 'string' ? value.trim() : ''
+  if (!title) return { error: 'Give the page a name.' }
+  if (title.length > MAX_TITLE_LENGTH) return { error: `Keep the name under ${MAX_TITLE_LENGTH} characters.` }
+  return { title }
+}
+
 // Of these pages, the ids this person can edit, in two queries instead of one per page
 export async function editableIds(viewer: Viewer, artifacts: Artifact[]): Promise<Set<string>> {
   const ids = new Set(artifacts.filter((a) => a.ownerId === viewer.id).map((a) => a.id))

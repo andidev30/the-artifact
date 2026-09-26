@@ -35,6 +35,7 @@ describe('MCP over /mcp', () => {
       'get_artifact',
       'list_artifacts',
       'publish_artifact',
+      'rename_artifact',
       'set_artifact_visibility',
       'share_artifact',
     ])
@@ -65,7 +66,7 @@ describe('MCP over /mcp', () => {
     expect(await db.select().from(schema.artifactVersions)).toHaveLength(2)
 
     const list = await callTool(token, 'list_artifacts', {})
-    expect(list.text).toContain(`Signups v2 (artifact_id: ${slug}, v2, private)`)
+    expect(list.text).toContain(`Signups v2 (artifact_id: ${slug}, v2, restricted)`)
 
     const got = await callTool(token, 'get_artifact', { artifact_id: slug })
     expect(got.text).toBe('Title: Signups v2\nVersion: 2\n\n<h1>v2</h1>')
@@ -209,5 +210,39 @@ describe('MCP over /mcp', () => {
     expect(res.isError).toBe(true)
     const [row] = await db.select().from(schema.artifacts)
     expect(row.visibility).toBe('private')
+  })
+
+  it('renames a page with the same rules as the web app', async () => {
+    const { token } = await setup()
+    const slug = slugFrom((await callTool(token, 'publish_artifact', { title: 'Draft', html: HTML })).text)
+
+    const res = await callTool(token, 'rename_artifact', { artifact_id: `http://localhost:5177/a/${slug}`, title: '  Q3 report  ' })
+    expect(res.isError).toBe(false)
+    expect(res.text).toContain('Renamed "Draft" to "Q3 report"')
+    const [row] = await db.select().from(schema.artifacts)
+    expect(row).toMatchObject({ title: 'Q3 report', currentVersion: 1 })
+
+    const blank = await callTool(token, 'rename_artifact', { artifact_id: slug, title: '   ' })
+    expect(blank).toMatchObject({ isError: true, text: 'Give the page a name.' })
+    const long = await callTool(token, 'rename_artifact', { artifact_id: slug, title: 'x'.repeat(201) })
+    expect(long).toMatchObject({ isError: true, text: 'Keep the name under 200 characters.' })
+    expect((await callTool(token, 'rename_artifact', { artifact_id: slug, title: 'x'.repeat(200) })).isError).toBe(false)
+  })
+
+  it('only editors can rename', async () => {
+    const { token } = await setup()
+    const slug = slugFrom((await callTool(token, 'publish_artifact', { title: 'Report', html: HTML })).text)
+    await callTool(token, 'share_artifact', { artifact_id: slug, emails: ['editor@example.com'], role: 'editor' })
+    await callTool(token, 'share_artifact', { artifact_id: slug, emails: ['viewer@example.com'], role: 'viewer' })
+    const editorToken = (await connectAgent(await createUser({ email: 'editor@example.com' }))).access_token
+    const viewerToken = (await connectAgent(await createUser({ email: 'viewer@example.com' }))).access_token
+    const strangerToken = (await connectAgent(await createUser({ email: 'stranger@example.com' }))).access_token
+
+    expect((await callTool(viewerToken, 'rename_artifact', { artifact_id: slug, title: 'Viewer' })).text).toContain('No page you can edit')
+    expect((await callTool(strangerToken, 'rename_artifact', { artifact_id: slug, title: 'Stranger' })).isError).toBe(true)
+    expect((await callTool(token, 'rename_artifact', { artifact_id: 'nope', title: 'X' })).isError).toBe(true)
+    expect((await callTool(editorToken, 'rename_artifact', { artifact_id: slug, title: 'Edited' })).isError).toBe(false)
+    const [row] = await db.select().from(schema.artifacts)
+    expect(row.title).toBe('Edited')
   })
 })

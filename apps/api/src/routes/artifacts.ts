@@ -3,6 +3,7 @@ import { Hono, type Context } from 'hono'
 import {
   accessLevel,
   canEdit,
+  checkTitle,
   currentHtml,
   editableIds,
   findBySlug,
@@ -10,7 +11,6 @@ import {
   listForWorkspace,
   listSharedWith,
   listVersions,
-  MAX_TITLE_LENGTH,
   rename,
   restoreVersion,
 } from '../artifacts.js'
@@ -128,9 +128,9 @@ artifacts.patch('/:slug', requireUser, async (c) => {
 
   let title: string | undefined
   if (body.title !== undefined) {
-    title = typeof body.title === 'string' ? body.title.trim() : ''
-    if (!title) return c.json({ error: 'Give the page a name.', field: 'title' }, 400)
-    if (title.length > MAX_TITLE_LENGTH) return c.json({ error: `Keep the name under ${MAX_TITLE_LENGTH} characters.`, field: 'title' }, 400)
+    const checked = checkTitle(body.title)
+    if ('error' in checked) return c.json({ error: checked.error, field: 'title' }, 400)
+    title = checked.title
   }
   if (body.visibility !== undefined) {
     if (!VISIBILITIES.has(body.visibility)) return c.json({ error: 'Choose restricted, organization or anyone with the link.' }, 400)

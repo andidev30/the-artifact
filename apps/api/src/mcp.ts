@@ -7,13 +7,17 @@ import {
   artifactUrl,
   canEdit,
   canView,
+  checkTitle,
   currentHtml,
   describeVisibility,
   findBySlug,
   listForWorkspace,
+  MAX_TITLE_LENGTH,
   parseArtifactRef,
   publish,
   PublishError,
+  rename,
+  VISIBILITY_LABEL,
 } from './artifacts.js'
 import { db, schema } from './db/index.js'
 import { parseEmails, sharePeople, SharingError } from './sharing.js'
@@ -21,7 +25,9 @@ import { authenticateBearer, RESOURCE_METADATA_URL, type McpAuth } from './oauth
 
 const visibility = z
   .enum(['private', 'organization', 'link'])
-  .describe('private: only you and people it is shared with. organization: everyone in your organization. link: anyone with the link.')
+  .describe(
+    'private (shown as "Restricted"): only you and people it is shared with. organization: everyone in your organization. link: anyone with the link.',
+  )
 
 function text(t: string, isError = false) {
   return { content: [{ type: 'text' as const, text: t }], isError }
@@ -85,7 +91,7 @@ function buildServer(auth: McpAuth) {
       if (rows.length === 0) return text('No pages yet. Use publish_artifact to publish one.')
       return text(
         rows
-          .map(({ artifact: a }) => `- ${a.title} (artifact_id: ${a.slug}, v${a.currentVersion}, ${a.visibility}) ${artifactUrl(a.slug)}`)
+          .map(({ artifact: a }) => `- ${a.title} (artifact_id: ${a.slug}, v${a.currentVersion}, ${VISIBILITY_LABEL[a.visibility]}) ${artifactUrl(a.slug)}`)
           .join('\n'),
       )
     },
@@ -107,6 +113,27 @@ function buildServer(auth: McpAuth) {
   )
 
   server.registerTool(
+    'rename_artifact',
+    {
+      title: 'Rename a page',
+      description: 'Change the title of a page without publishing a new version. The link stays the same.',
+      inputSchema: {
+        artifact_id: z.string().describe('Id or link of the page'),
+        title: z.string().describe(`New title, 1 to ${MAX_TITLE_LENGTH} characters`),
+      },
+      annotations: { idempotentHint: true },
+    },
+    async ({ artifact_id, title }) => {
+      const artifact = await findBySlug(parseArtifactRef(artifact_id))
+      if (!artifact || !(await canEdit(artifact, viewer))) return text(`No page you can edit has the id "${artifact_id}".`, true)
+      const checked = checkTitle(title)
+      if ('error' in checked) return text(checked.error, true)
+      const updated = await rename(artifact, checked.title)
+      return text(`Renamed "${artifact.title}" to "${updated.title}".\nLink: ${artifactUrl(updated.slug)}`)
+    },
+  )
+
+  server.registerTool(
     'set_artifact_visibility',
     {
       title: 'Change who can open a page',
@@ -117,7 +144,7 @@ function buildServer(auth: McpAuth) {
     async ({ artifact_id, visibility }) => {
       const artifact = await findBySlug(parseArtifactRef(artifact_id))
       if (!artifact || !(await canEdit(artifact, viewer))) return text(`No page you can edit has the id "${artifact_id}".`, true)
-      if (visibility === 'organization' && !artifact.organizationId) return text('This page is in a personal workspace. Use private or link.', true)
+      if (visibility === 'organization' && !artifact.organizationId) return text('This page is in a personal workspace. Use private (restricted) or link.', true)
       await db.update(schema.artifacts).set({ visibility }).where(eq(schema.artifacts.id, artifact.id))
       return text(`"${artifact.title}" is now ${describeVisibility(visibility)}.\nLink: ${artifactUrl(artifact.slug)}`)
     },
