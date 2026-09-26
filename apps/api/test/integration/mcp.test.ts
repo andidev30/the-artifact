@@ -1,5 +1,7 @@
+import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { eq } from 'drizzle-orm'
 import { describe, expect, it, vi } from 'vitest'
+import { app } from '../../src/app.js'
 import { db, schema } from '../../src/db/index.js'
 import { sendShareNotice } from '../../src/mail.js'
 import { call, callTool, connectAgent, createOrg, createUser, mcpRequest, slugFrom } from './helpers.js'
@@ -244,5 +246,58 @@ describe('MCP over /mcp', () => {
     expect((await callTool(editorToken, 'rename_artifact', { artifact_id: slug, title: 'Edited' })).isError).toBe(false)
     const [row] = await db.select().from(schema.artifacts)
     expect(row.title).toBe('Edited')
+  })
+})
+
+// The official client on the 2026-07-28 revision: per-request envelope, negotiated with server/discover
+describe('MCP over /mcp for 2026-07-28 clients', () => {
+  async function connect(token?: string) {
+    const transport = new StreamableHTTPClientTransport(new URL('http://localhost/mcp'), {
+      fetch: async (url, init) => app.fetch(new Request(url, init)),
+      requestInit: token ? { headers: { authorization: `Bearer ${token}` } } : undefined,
+    })
+    const client = new Client({ name: 'test', version: '1.0.0' }, { versionNegotiation: { mode: 'auto' } })
+    await client.connect(transport)
+    return client
+  }
+
+  it('negotiates the modern revision and serves the same tools', async () => {
+    const { token } = await setup()
+    const client = await connect(token)
+    expect(client.getProtocolEra()).toBe('modern')
+    expect(client.getNegotiatedProtocolVersion()).toBe('2026-07-28')
+    expect(client.getServerVersion()).toMatchObject({ name: 'the-artifact' })
+
+    const { tools } = await client.listTools()
+    expect(tools.map((t) => t.name).sort()).toEqual(['get_artifact', 'list_artifacts', 'publish_artifact', 'rename_artifact', 'set_artifact_visibility', 'share_artifact'])
+    expect(tools.find((t) => t.name === 'get_artifact')?.annotations).toEqual({ readOnlyHint: true })
+    await client.close()
+  })
+
+  it('publishes and reads pages as the person behind the token', async () => {
+    const { user, token } = await setup()
+    const client = await connect(token)
+    type Result = { content: { type: string; text: string }[]; isError?: boolean }
+    const published = (await client.callTool({ name: 'publish_artifact', arguments: { title: 'Modern', html: HTML } })) as Result
+    expect(published.isError).toBeFalsy()
+    const slug = slugFrom(published.content[0].text)
+    const [row] = await db.select().from(schema.artifacts).where(eq(schema.artifacts.slug, slug))
+    expect(row).toMatchObject({ ownerId: user.id, title: 'Modern' })
+
+    const got = (await client.callTool({ name: 'get_artifact', arguments: { artifact_id: slug } })) as Result
+    expect(got.content[0].text).toBe(`Title: Modern\nVersion: 1\n\n${HTML}`)
+    const missing = (await client.callTool({ name: 'get_artifact', arguments: { artifact_id: 'nope' } })) as Result
+    expect(missing).toMatchObject({ isError: true, content: [{ text: 'No page you can open has the id "nope".' }] })
+    await client.close()
+  })
+
+  it('asks for sign-in without a token', async () => {
+    await expect(connect()).rejects.toThrow()
+    const res = await call('/mcp', {
+      headers: { accept: 'application/json, text/event-stream', 'mcp-protocol-version': '2026-07-28' },
+      json: { jsonrpc: '2.0', id: 1, method: 'server/discover', params: {} },
+    })
+    expect(res.status).toBe(401)
+    expect(res.headers.get('www-authenticate')).toMatch(/^Bearer resource_metadata="[^"]+\/\.well-known\/oauth-protected-resource\/mcp"$/)
   })
 })
