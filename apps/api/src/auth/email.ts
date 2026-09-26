@@ -17,7 +17,12 @@ email.post('/', async (c) => {
   const body = await c.req.json().catch(() => null) as { email?: unknown; intent?: unknown; plan?: unknown; next?: unknown } | null
   const address = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : ''
   if (!EMAIL_RE.test(address)) return c.json({ error: 'Enter a valid email address.' }, 400)
-  if (!(await userExists(address)) && !(await canSignUp(address))) {
+  const [existing] = await db.select({ suspendedAt: schema.users.suspendedAt }).from(schema.users).where(eq(schema.users.email, address))
+  // A link a suspended person can't use is not worth an email
+  if (existing?.suspendedAt) {
+    return c.json({ error: 'This account is suspended. Ask an admin of this server to restore it.', code: 'account_suspended' }, 403)
+  }
+  if (!existing && !(await canSignUp(address))) {
     return c.json({ error: 'This server only accepts accounts from invited people and certain email domains. Ask an admin to invite you.', code: 'signup_closed' }, 403)
   }
   const intent = body?.intent === 'signup' ? 'signup' : 'login'
