@@ -14,13 +14,13 @@ const AGENTS: Agent[] = [
   {
     id: 'claude',
     name: 'Claude Code',
-    note: 'Run once in your terminal, then check with /mcp inside Claude Code.',
-    command: `claude mcp add --transport http the-artifact ${MCP_URL}`,
+    note: 'Run once in your terminal, then run /mcp inside Claude Code and choose Authenticate to sign in.',
+    command: `claude mcp add --transport http --scope user the-artifact ${MCP_URL}`,
   },
   {
     id: 'cursor',
     name: 'Cursor',
-    note: 'Add to ~/.cursor/mcp.json for every project, or .cursor/mcp.json for one.',
+    note: 'Add to ~/.cursor/mcp.json for every project, or .cursor/mcp.json for one. Cursor asks you to sign in when it first connects.',
     file: 'mcp.json',
     command: `{
   "mcpServers": {
@@ -33,7 +33,7 @@ const AGENTS: Agent[] = [
   {
     id: 'codex',
     name: 'Codex',
-    note: 'Add to your Codex config, then restart Codex.',
+    note: 'Add to your Codex config, then run codex mcp login the-artifact to sign in and restart Codex.',
     file: '~/.codex/config.toml',
     command: `[mcp_servers.the-artifact]
 url = "${MCP_URL}"`,
