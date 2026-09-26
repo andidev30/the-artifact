@@ -74,6 +74,7 @@ export type ArtifactSummary = {
   updatedAt: string
   owner: string
   mine: boolean
+  canEdit: boolean
   // Set on pages shared with you
   role?: 'viewer' | 'editor'
 }
@@ -87,11 +88,14 @@ export type ArtifactPage = {
   owner: string | null
   inOrganization: boolean
   canEdit: boolean
+  isOwner: boolean
   html: string
 }
 
-export async function listArtifacts(workspace: string): Promise<ArtifactSummary[]> {
-  const res = await fetch(`/api/artifacts?workspace=${encodeURIComponent(workspace)}`, { credentials: 'same-origin' })
+export async function listArtifacts(workspace: string, query = '', signal?: AbortSignal): Promise<ArtifactSummary[]> {
+  const params = new URLSearchParams({ workspace })
+  if (query.trim()) params.set('q', query.trim())
+  const res = await fetch(`/api/artifacts?${params}`, { credentials: 'same-origin', signal })
   if (!res.ok) throw new Error(`Listing pages failed with ${res.status}`)
   return res.json()
 }
@@ -181,4 +185,57 @@ export function setPersonRole(slug: string, email: string, role: ShareRole) {
 
 export function removePerson(slug: string, email: string) {
   return sharingRequest<Sharing>(slug, `/sharing/people?email=${encodeURIComponent(email)}`, { method: 'DELETE' })
+}
+
+// Page history, renaming, deleting and thumbnails
+
+export type ArtifactVersion = {
+  version: number
+  createdAt: string
+  publishedWith: string | null
+  publishedBy: string | null
+  restoredFrom: number | null
+  current: boolean
+}
+
+async function pageRequest<T>(slug: string, path: string, fallback: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`/api/artifacts/${encodeURIComponent(slug)}${path}`, {
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    ...init,
+  })
+  if (res.status === 204) return undefined as T
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error ?? fallback)
+  return data
+}
+
+export function listVersions(slug: string) {
+  return pageRequest<ArtifactVersion[]>(slug, '/versions', 'The history could not be loaded.')
+}
+
+export function getVersionHtml(slug: string, version: number) {
+  return pageRequest<{ version: number; createdAt: string; html: string }>(slug, `/versions/${version}`, 'This version could not be loaded.')
+}
+
+export function restoreVersion(slug: string, version: number) {
+  return pageRequest<{ version: number; updatedAt: string }>(slug, `/versions/${version}/restore`, 'The version could not be restored. Try again.', {
+    method: 'POST',
+  })
+}
+
+export function renameArtifact(slug: string, title: string) {
+  return pageRequest<{ title: string; updatedAt: string }>(slug, '', 'The page could not be renamed. Try again.', {
+    method: 'PATCH',
+    body: JSON.stringify({ title }),
+  })
+}
+
+export function deleteArtifact(slug: string) {
+  return pageRequest<void>(slug, '', 'The page could not be deleted. Try again.', { method: 'DELETE' })
+}
+
+// The page's current HTML as its own sandboxed document; the version busts the browser cache
+export function contentUrl(slug: string, version: number) {
+  return `/api/artifacts/${encodeURIComponent(slug)}/content?v=${version}`
 }

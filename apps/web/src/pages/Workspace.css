@@ -499,34 +499,16 @@
   box-shadow: 7px 7px 0 var(--marker);
 }
 
-/* A drawn stand-in for the page, until real thumbnails exist */
+/* A live preview of the page; the drawn sketch shows until it loads (see Gallery.css) */
 .page-card-thumb {
-  display: grid;
-  align-content: start;
-  gap: 8px;
+  position: relative;
+  display: block;
+  overflow: hidden;
   aspect-ratio: 16 / 9;
   margin-bottom: 4px;
-  padding: 14px;
   background: var(--paper);
   border: 1.5px solid var(--grid);
   border-radius: 2px;
-}
-
-.page-card-thumb span {
-  height: 8px;
-  background: var(--grid);
-  border-radius: 2px;
-}
-
-.page-card-thumb span:first-child {
-  width: 55%;
-  height: 10px;
-  background: var(--ink-soft);
-  opacity: 0.5;
-}
-
-.page-card-thumb span:last-child {
-  width: 70%;
 }
 
 .page-card strong {

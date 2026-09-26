@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { Link, useNavigate, useParams } from 'react-router'
 import { fetchMe, getArtifact, logout, type ArtifactPage, type Visibility } from '../api'
+import { HistoryPanel, OldVersionBar, type Viewing } from '../components/HistoryPanel'
+import { DeleteDialog, PageMenu, RenameDialog, type MenuItem } from '../components/PageActions'
 import { ShareDialog } from '../components/ShareDialog'
 import { Wordmark } from '../components/Wordmark'
 import { LOGIN_URL } from '../config'
@@ -100,8 +102,17 @@ function Unavailable({ slug, email }: { slug: string; email: string | null }) {
 }
 
 function PageFrame({ page, email, onChange }: { page: ArtifactPage; email: string | null; onChange: (p: ArtifactPage) => void }) {
+  const navigate = useNavigate()
   const [copied, setCopied] = useState(false)
   const [sharing, setSharing] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [viewing, setViewing] = useState<Viewing | null>(null)
+  const [dialog, setDialog] = useState<'rename' | 'delete' | null>(null)
+  const [announce, setAnnounce] = useState('')
+
+  const menu: MenuItem[] = []
+  if (page.canEdit) menu.push({ label: 'Rename', onSelect: () => setDialog('rename') })
+  if (page.isOwner) menu.push({ label: 'Delete', onSelect: () => setDialog('delete'), danger: true })
 
   async function copyLink() {
     try {
@@ -111,6 +122,13 @@ function PageFrame({ page, email, onChange }: { page: ArtifactPage; email: strin
     } catch {
       setCopied(false)
     }
+  }
+
+  async function onRestored(from: number) {
+    const fresh = await getArtifact(page.slug).catch(() => null)
+    if (fresh) onChange(fresh)
+    setViewing(null)
+    setAnnounce(`Version ${from} was restored as version ${fresh?.version ?? page.version + 1}.`)
   }
 
   return (
@@ -128,15 +146,62 @@ function PageFrame({ page, email, onChange }: { page: ArtifactPage; email: strin
         </div>
         <div className="viewer-actions">
           <span className="viewer-badge" data-visibility={page.visibility}>{VISIBILITY_LABEL[page.visibility]}</span>
+          {page.canEdit && (
+            <button type="button" className="viewer-history" aria-expanded={historyOpen} aria-controls="history-panel" onClick={() => setHistoryOpen((o) => !o)}>
+              History
+            </button>
+          )}
           {page.canEdit ? (
             <button type="button" className="viewer-copy" onClick={() => setSharing(true)}>Share</button>
           ) : (
             <button type="button" className="viewer-copy" onClick={copyLink}>{copied ? 'Copied' : 'Copy link'}</button>
           )}
+          <PageMenu label="More actions" items={menu} />
         </div>
-        <span className="visually-hidden" role="status">{copied ? 'Link copied' : ''}</span>
+        <span className="visually-hidden" role="status">{copied ? 'Link copied' : announce}</span>
       </header>
-      <iframe className="viewer-frame" title={page.title} sandbox={SANDBOX} srcDoc={page.html} />
+      {viewing && (
+        <OldVersionBar
+          key={viewing.version}
+          slug={page.slug}
+          viewing={viewing}
+          onBack={() => setViewing(null)}
+          onRestored={() => onRestored(viewing.version)}
+        />
+      )}
+      <div className="viewer-body">
+        <iframe
+          key={viewing ? `v${viewing.version}` : 'current'}
+          className="viewer-frame"
+          title={viewing ? `${page.title}, version ${viewing.version}` : page.title}
+          sandbox={SANDBOX}
+          srcDoc={viewing ? viewing.html : page.html}
+        />
+        {historyOpen && (
+          <HistoryPanel
+            slug={page.slug}
+            currentVersion={page.version}
+            selected={viewing?.version ?? page.version}
+            onSelect={setViewing}
+            onClose={() => setHistoryOpen(false)}
+          />
+        )}
+      </div>
+      {dialog === 'rename' && (
+        <RenameDialog
+          slug={page.slug}
+          title={page.title}
+          onClose={() => setDialog(null)}
+          onRenamed={(title) => {
+            onChange({ ...page, title, updatedAt: new Date().toISOString() })
+            document.title = `${title} | The Artifact`
+            setAnnounce(`Renamed to “${title}”.`)
+          }}
+        />
+      )}
+      {dialog === 'delete' && (
+        <DeleteDialog slug={page.slug} title={page.title} onClose={() => setDialog(null)} onDeleted={() => navigate('/app', { replace: true })} />
+      )}
       {sharing && (
         <ShareDialog
           slug={page.slug}
