@@ -15,6 +15,20 @@
       "when": 1790415349650,
       "tag": "0001_fat_random",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790416651604,
+      "tag": "0002_luxuriant_multiple_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790417579224,
+      "tag": "0003_sour_hobgoblin",
+      "breakpoints": true
     }
   ]
 }

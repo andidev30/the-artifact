@@ -45,7 +45,14 @@ export async function findOrCreateUser(profile: Profile): Promise<User> {
 
 const PLANS = new Set(['organization'])
 
-export function afterSignInUrl(plan: string | null | undefined): string {
+// Only same-site paths, so a crafted link can't send people elsewhere after signing in
+export function safeNext(next: string | null | undefined): string | null {
+  return next && next.startsWith('/') && !next.startsWith('//') && !next.startsWith('/\\') ? next : null
+}
+
+export function afterSignInUrl(plan: string | null | undefined, next?: string | null): string {
+  const target = safeNext(next)
+  if (target) return new URL(target, env.appUrl).toString()
   const url = new URL('/app', env.appUrl)
   if (plan && PLANS.has(plan)) url.searchParams.set('plan', plan)
   return url.toString()

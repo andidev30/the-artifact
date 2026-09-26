@@ -3,7 +3,7 @@ import { Hono } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import { env, isProduction } from '../env.js'
 import { randomToken, startSession } from './session.js'
-import { afterSignInUrl, findOrCreateUser, signInErrorUrl } from './users.js'
+import { afterSignInUrl, findOrCreateUser, safeNext, signInErrorUrl } from './users.js'
 
 const AUTHORIZE_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
 const TOKEN_URL = 'https://oauth2.googleapis.com/token'
@@ -35,6 +35,8 @@ google.get('/', (c) => {
   setCookie(c, 'google_verifier', verifier, FLOW_COOKIE)
   const plan = c.req.query('plan')
   if (plan) setCookie(c, 'google_plan', plan, FLOW_COOKIE)
+  const next = safeNext(c.req.query('next'))
+  if (next) setCookie(c, 'google_next', next, FLOW_COOKIE)
 
   const url = new URL(AUTHORIZE_URL)
   url.search = new URLSearchParams({
@@ -54,7 +56,8 @@ google.get('/callback', async (c) => {
   const state = getCookie(c, 'google_state')
   const verifier = getCookie(c, 'google_verifier')
   const plan = getCookie(c, 'google_plan')
-  for (const name of ['google_state', 'google_verifier', 'google_plan']) {
+  const next = getCookie(c, 'google_next')
+  for (const name of ['google_state', 'google_verifier', 'google_plan', 'google_next']) {
     deleteCookie(c, name, { path: FLOW_COOKIE.path })
   }
 
@@ -94,7 +97,7 @@ google.get('/callback', async (c) => {
       googleSub: profile.sub,
     })
     await startSession(c, user.id)
-    return c.redirect(afterSignInUrl(plan))
+    return c.redirect(afterSignInUrl(plan, next))
   } catch (err) {
     console.error('Google sign-in failed', err)
     return c.redirect(signInErrorUrl('google_failed'))

@@ -1,0 +1,302 @@
+.share-dialog {
+  width: min(540px, 100% - 32px);
+  max-height: calc(100dvh - 48px);
+  padding: 24px 24px 20px;
+  color: var(--ink);
+  background: var(--white);
+  border: 1.5px solid var(--ink);
+  border-radius: 4px;
+  box-shadow: 8px 8px 0 var(--marker);
+}
+
+.share-dialog::backdrop {
+  background: rgb(28 43 75 / 0.35);
+}
+
+.share-dialog h2 {
+  margin: 0 0 18px;
+  font-size: var(--step-1);
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+
+.share-dialog h3 {
+  margin: 24px 0 6px;
+  font-size: var(--step--1);
+  font-weight: 700;
+}
+
+/* Add people: input, role and button share one height */
+
+.share-invite {
+  display: flex;
+  gap: 8px;
+}
+
+.share-invite input,
+.share-invite select,
+.share-invite .button {
+  height: 40px;
+  font-size: var(--step--1);
+  border-radius: 3px;
+}
+
+.share-invite input {
+  flex: 1;
+  min-width: 0;
+  padding: 0 12px;
+  font-family: inherit;
+  color: var(--ink);
+  background: var(--white);
+  border: 1.5px solid var(--ink);
+}
+
+.share-invite select {
+  padding: 0 30px 0 12px;
+  font-family: inherit;
+  color: var(--ink);
+  border: 1.5px solid var(--ink);
+}
+
+.share-invite .button {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 18px;
+  font-weight: 700;
+  font-family: var(--sans);
+  cursor: pointer;
+  box-shadow: 3px 3px 0 var(--ink);
+}
+
+.share-invite .button:disabled {
+  color: var(--ink-soft);
+  background: var(--paper);
+  border-color: var(--grid);
+  box-shadow: none;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Every select draws the same small arrow */
+.share-dialog select {
+  appearance: none;
+  background: var(--white) no-repeat right 10px center / 10px
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%231c2b4b' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  cursor: pointer;
+}
+
+/* Roles and general access read as text until you point at them, like Drive */
+.share-dialog .share-quiet {
+  height: 34px;
+  padding: 0 28px 0 10px;
+  font: 600 var(--step--1) var(--sans);
+  color: var(--ink);
+  background-color: transparent;
+  border: 1.5px solid transparent;
+  border-radius: 3px;
+}
+
+.share-dialog .share-quiet:hover {
+  background-color: var(--paper);
+  border-color: var(--grid);
+}
+
+.share-dialog .share-quiet:focus-visible {
+  border-color: var(--ink);
+}
+
+.share-notify {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: var(--step--1);
+}
+
+.share-notify label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.share-notify input {
+  accent-color: var(--ink);
+}
+
+.share-notify textarea {
+  padding: 8px 12px;
+  font: inherit;
+  color: var(--ink);
+  border: 1.5px solid var(--ink);
+  border-radius: 3px;
+  resize: vertical;
+}
+
+.share-message {
+  margin-top: 12px;
+  padding: 8px 12px;
+  font-size: var(--step--1);
+  background: #eef6f0;
+  border: 1.5px solid #1d6b3a;
+  border-radius: 3px;
+}
+
+.share-error {
+  color: #7a1c16;
+  background: #fdecea;
+  border-color: #b3261e;
+}
+
+/* People with access */
+
+.share-people {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.share-people li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+}
+
+.share-avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  font-weight: 700;
+  font-size: 0.875rem;
+  background: var(--paper);
+  border: 1.5px solid var(--ink);
+  border-radius: 50%;
+}
+
+.share-person {
+  flex: 1;
+  display: grid;
+  min-width: 0;
+  font-size: var(--step--1);
+  line-height: 1.35;
+}
+
+.share-person strong,
+.share-person span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.share-person span {
+  color: var(--ink-soft);
+}
+
+.share-person span:empty {
+  display: none;
+}
+
+/* Roles sit in one fixed column; "Owner" starts where the select text does */
+.share-people .share-quiet,
+.share-owner {
+  flex: none;
+  width: 108px;
+}
+
+.share-owner {
+  padding-left: 11.5px;
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+}
+
+/* General access */
+
+.share-general {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  column-gap: 12px;
+  align-items: start;
+  padding-top: 4px;
+}
+
+.share-access-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  background: var(--paper);
+  border: 1.5px solid var(--ink);
+  border-radius: 50%;
+}
+
+.share-access-icon[data-visibility='link'] {
+  background: var(--marker);
+}
+
+.share-access-icon svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.share-general > div {
+  display: grid;
+  justify-items: start;
+  min-width: 0;
+}
+
+/* Pull the select left so its text lines up with the description under it,
+   and size it to the chosen option where the browser supports that */
+.share-general .share-quiet {
+  margin: 1px 0 0 -11.5px;
+  field-sizing: content;
+}
+
+.share-general p {
+  margin-top: -2px;
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+}
+
+.share-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1.5px dashed var(--grid);
+}
+
+.share-footer .button {
+  height: 40px;
+  padding: 0 18px;
+  font: 700 var(--step--1) var(--sans);
+  cursor: pointer;
+  box-shadow: 3px 3px 0 var(--ink);
+}
+
+@media (max-width: 520px) {
+  .share-dialog {
+    padding: 18px;
+  }
+
+  .share-invite {
+    flex-wrap: wrap;
+  }
+
+  .share-invite input {
+    flex-basis: 100%;
+  }
+
+  .share-invite select {
+    flex: 1;
+  }
+}

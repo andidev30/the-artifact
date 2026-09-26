@@ -4,7 +4,7 @@ import { db, schema } from '../db/index.js'
 import { env } from '../env.js'
 import { sendSignInLink } from '../mail.js'
 import { hashToken, randomToken, startSession } from './session.js'
-import { afterSignInUrl, findOrCreateUser, signInErrorUrl } from './users.js'
+import { afterSignInUrl, findOrCreateUser, safeNext, signInErrorUrl } from './users.js'
 
 const LINK_TTL = 15 * 60 * 1000
 // Don't send another link to the same address within this window
@@ -14,7 +14,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 export const email = new Hono()
 
 email.post('/', async (c) => {
-  const body = await c.req.json().catch(() => null) as { email?: unknown; intent?: unknown; plan?: unknown } | null
+  const body = await c.req.json().catch(() => null) as { email?: unknown; intent?: unknown; plan?: unknown; next?: unknown } | null
   const address = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : ''
   if (!EMAIL_RE.test(address)) return c.json({ error: 'Enter a valid email address.' }, 400)
   const intent = body?.intent === 'signup' ? 'signup' : 'login'
@@ -39,6 +39,8 @@ email.post('/', async (c) => {
   const link = new URL('/api/auth/email/verify', env.appUrl)
   link.searchParams.set('token', token)
   if (plan) link.searchParams.set('plan', plan)
+  const next = safeNext(typeof body?.next === 'string' ? body.next : null)
+  if (next) link.searchParams.set('next', next)
 
   try {
     await sendSignInLink(address, link.toString(), intent)
@@ -63,5 +65,5 @@ email.get('/verify', async (c) => {
 
   const user = await findOrCreateUser({ email: row.email })
   await startSession(c, user.id)
-  return c.redirect(afterSignInUrl(c.req.query('plan')))
+  return c.redirect(afterSignInUrl(c.req.query('plan'), c.req.query('next')))
 })

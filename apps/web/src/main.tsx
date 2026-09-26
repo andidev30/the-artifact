@@ -5,9 +5,11 @@ import './index.css'
 import './App.css'
 import { AppHome } from './pages/AppHome.tsx'
 import { Auth } from './pages/Auth.tsx'
+import { Authorize } from './pages/Authorize.tsx'
 import { Landing } from './pages/Landing.tsx'
 import { NotFound } from './pages/NotFound.tsx'
 import { Onboarding } from './pages/Onboarding.tsx'
+import { Viewer } from './pages/Viewer.tsx'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -18,6 +20,8 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/signup" element={<Auth mode="signup" />} />
         <Route path="/app" element={<AppHome />} />
         <Route path="/onboarding" element={<Onboarding />} />
+        <Route path="/authorize" element={<Authorize />} />
+        <Route path="/a/:slug" element={<Viewer />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>

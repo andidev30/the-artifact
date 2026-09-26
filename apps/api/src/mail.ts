@@ -29,3 +29,30 @@ export async function sendSignInLink(to: string, link: string, intent: 'login' |
       </div>`,
   })
 }
+
+type ShareNotice = { from: string; title: string; link: string; role: 'viewer' | 'editor'; message?: string }
+
+function escapeHtml(s: string) {
+  return s.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]!)
+}
+
+export async function sendShareNotice(to: string, n: ShareNotice) {
+  const can = n.role === 'editor' ? 'view and edit' : 'view'
+  await transport.sendMail({
+    from: env.smtp.from,
+    to,
+    subject: `${n.from} shared "${n.title}" with you`,
+    text: `${n.from} shared a page with you on The Artifact. You can ${can} it.\n\n${n.message ? `"${n.message}"\n\n` : ''}${n.title}\n${n.link}\n\nIf you don't have an account yet, sign up with this email address to open it.`,
+    html: `
+      <div style="font-family: -apple-system, 'Segoe UI', sans-serif; color: #1c2b4b; max-width: 480px">
+        <p style="font-size: 16px"><strong>${escapeHtml(n.from)}</strong> shared a page with you. You can ${can} it.</p>
+        ${n.message ? `<p style="padding: 10px 14px; background: #f5f7fb; border-left: 3px solid #1c2b4b">${escapeHtml(n.message)}</p>` : ''}
+        <p>
+          <a href="${n.link}" style="display: inline-block; padding: 12px 20px; background: #ffe066; color: #1c2b4b; border: 1.5px solid #1c2b4b; border-radius: 3px; font-weight: 700; text-decoration: none">
+            Open "${escapeHtml(n.title)}"
+          </a>
+        </p>
+        <p style="font-size: 14px; color: #4a587a">If you don't have an account yet, sign up with this email address to open it.</p>
+      </div>`,
+  })
+}

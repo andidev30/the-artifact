@@ -40,6 +40,9 @@ const SIGN_IN_ERRORS: Record<string, string> = {
 export function Auth({ mode }: { mode: Mode }) {
   const [params] = useSearchParams()
   const plan = params.get('plan')
+  // Where to go after signing in, e.g. back to an agent's connection request
+  const nextParam = params.get('next')
+  const next = nextParam && nextParam.startsWith('/') && !nextParam.startsWith('//') ? nextParam : null
   const isOrg = mode === 'signup' && plan === 'organization'
   const copy = COPY[mode]
   const signInError = SIGN_IN_ERRORS[params.get('error') ?? '']
@@ -47,25 +50,28 @@ export function Auth({ mode }: { mode: Mode }) {
 
   // Someone already signed in has nothing to do here
   useEffect(() => {
-    fetchMe().then((me) => me && navigate('/app', { replace: true })).catch(() => {})
-  }, [navigate])
+    fetchMe().then((me) => me && navigate(next ?? '/app', { replace: true })).catch(() => {})
+  }, [navigate, next])
 
   useEffect(() => {
     document.title = `${mode === 'login' ? 'Log in' : 'Sign up'} | The Artifact`
     return () => { document.title = 'The Artifact' }
   }, [mode])
 
+  const switchParams = new URLSearchParams({ ...(isOrg ? { plan: 'organization' } : {}), ...(next ? { next } : {}) }).toString()
+  const switchQuery = switchParams ? `?${switchParams}` : ''
+
   const header = (
     <header className="nav">
       <Wordmark />
       <p className="auth-switch">
         <span className="auth-switch-text">{copy.switchText} </span>
-        <Link to={copy.switchTo + (isOrg ? '?plan=organization' : '')}>{copy.switchLink}</Link>
+        <Link to={copy.switchTo + switchQuery}>{copy.switchLink}</Link>
       </p>
     </header>
   )
 
-  const form = <AuthForm mode={mode} plan={plan} notice={signInError} lede={isOrg ? 'You will set up your organization and invite your team after this step.' : copy.lede} />
+  const form = <AuthForm mode={mode} plan={plan} next={next} notice={signInError} lede={isOrg ? 'You will set up your organization and invite your team after this step.' : copy.lede} />
 
   if (mode === 'login') {
     return (
@@ -87,10 +93,10 @@ export function Auth({ mode }: { mode: Mode }) {
   )
 }
 
-function AuthForm({ mode, plan, lede, notice }: { mode: Mode; plan: string | null; lede: string; notice?: string }) {
+function AuthForm({ mode, plan, next, lede, notice }: { mode: Mode; plan: string | null; next: string | null; lede: string; notice?: string }) {
   const copy = COPY[mode]
   const [status, setStatus] = useState<Status>({ kind: 'idle' })
-  const query = new URLSearchParams({ intent: mode, ...(plan ? { plan } : {}) }).toString()
+  const query = new URLSearchParams({ intent: mode, ...(plan ? { plan } : {}), ...(next ? { next } : {}) }).toString()
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -100,7 +106,7 @@ function AuthForm({ mode, plan, lede, notice }: { mode: Mode; plan: string | nul
       const res = await fetch(AUTH_EMAIL_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, intent: mode, plan }),
+        body: JSON.stringify({ email, intent: mode, plan, next }),
       })
       if (!res.ok) throw new Error(String(res.status))
       setStatus({ kind: 'sent', email })
