@@ -1,5 +1,4 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
+import { createMcpHandler, isLegacyRequest, McpServer, WebStandardStreamableHTTPServerTransport, type AuthInfo } from '@modelcontextprotocol/server'
 import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
@@ -57,7 +56,7 @@ function buildServer(auth: McpAuth) {
         'or a small site: html is the entry (index.html) and files holds the CSS, JS, images, fonts and data it loads by relative paths. ' +
         `Limits: html up to ${MAX_HTML_BYTES / 1024 / 1024} MB, each file up to ${MAX_FILE_BYTES / 1024 / 1024} MB, ${MAX_TOTAL_BYTES / 1024 / 1024} MB and ${MAX_FILES} files in total. ` +
         'To update a page you published before, pass its artifact_id (or its link) and the link stays the same; send every file again, since each version has its own full set.',
-      inputSchema: {
+      inputSchema: z.object({
         title: z.string().min(1).describe('Short title shown in the gallery and browser tab'),
         html: z.string().min(1).describe('The complete HTML document; for a multi-file page, the entry (index.html)'),
         files: z
@@ -72,7 +71,7 @@ function buildServer(auth: McpAuth) {
           .describe(`Files next to the HTML. Allowed types: ${ALLOWED_EXTENSIONS.join(', ')}.`),
         artifact_id: z.string().optional().describe('Id or link of an existing page to publish a new version of'),
         visibility: visibility.optional(),
-      },
+      }),
     },
     async ({ title, html, files, artifact_id, visibility }) => {
       try {
@@ -107,7 +106,7 @@ function buildServer(auth: McpAuth) {
     {
       title: 'List pages',
       description: 'List the most recently updated pages in the connected workspace.',
-      inputSchema: {},
+      inputSchema: z.object({}),
       annotations: { readOnlyHint: true },
     },
     async () => {
@@ -128,10 +127,10 @@ function buildServer(auth: McpAuth) {
       description:
         'Get the current version of a page, for example to edit it and publish a new version: its entry HTML and the list of its other files. ' +
         'Pass path to read one of those files instead.',
-      inputSchema: {
+      inputSchema: z.object({
         artifact_id: z.string().describe('Id or link of the page'),
         path: z.string().optional().describe('A file of the page to read, e.g. "style.css"; omit for the entry HTML'),
-      },
+      }),
       annotations: { readOnlyHint: true },
     },
     async ({ artifact_id, path }) => {
@@ -165,10 +164,10 @@ function buildServer(auth: McpAuth) {
     {
       title: 'Rename a page',
       description: 'Change the title of a page without publishing a new version. The link stays the same.',
-      inputSchema: {
+      inputSchema: z.object({
         artifact_id: z.string().describe('Id or link of the page'),
         title: z.string().describe(`New title, 1 to ${MAX_TITLE_LENGTH} characters`),
-      },
+      }),
       annotations: { idempotentHint: true },
     },
     async ({ artifact_id, title }) => {
@@ -186,7 +185,7 @@ function buildServer(auth: McpAuth) {
     {
       title: 'Change who can open a page',
       description: 'Change who can open a page without publishing a new version.',
-      inputSchema: { artifact_id: z.string().describe('Id or link of the page'), visibility },
+      inputSchema: z.object({ artifact_id: z.string().describe('Id or link of the page'), visibility }),
       annotations: { idempotentHint: true },
     },
     async ({ artifact_id, visibility }) => {
@@ -203,12 +202,12 @@ function buildServer(auth: McpAuth) {
     {
       title: 'Share a page with people',
       description: 'Give specific people access to a page by email, like sharing a Google Doc. They get an email with the link.',
-      inputSchema: {
+      inputSchema: z.object({
         artifact_id: z.string().describe('Id or link of the page'),
         emails: z.array(z.string()).min(1).describe('Email addresses to share with'),
         role: z.enum(['viewer', 'editor']).default('viewer').describe('viewer can open it; editor can also publish new versions and share it'),
         message: z.string().optional().describe('Optional note included in the email'),
-      },
+      }),
     },
     async ({ artifact_id, emails, role, message }) => {
       const artifact = await findBySlug(parseArtifactRef(artifact_id))
@@ -231,6 +230,10 @@ function buildServer(auth: McpAuth) {
   return server
 }
 
+// Clients on the 2026-07-28 protocol: each request carries its own envelope, so one handler serves them all,
+// building a fresh server per request for the person and workspace the verified token passed in authInfo.
+const modern = createMcpHandler(({ authInfo }) => buildServer(authInfo?.extra?.mcp as McpAuth), { legacy: 'reject', responseMode: 'json' })
+
 export const mcp = new Hono()
 
 mcp.all('/', async (c) => {
@@ -244,8 +247,13 @@ mcp.all('/', async (c) => {
       'WWW-Authenticate': `Bearer resource_metadata="${RESOURCE_METADATA_URL}"${error}`,
     })
   }
-  const server = buildServer(auth)
-  const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true })
-  await server.connect(transport)
-  return transport.handleRequest(c.req.raw)
+  // 2025-era clients (initialize handshake, no per-request envelope): stateless, plain JSON responses
+  if (await isLegacyRequest(c.req.raw)) {
+    const server = buildServer(auth)
+    const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true })
+    await server.connect(transport)
+    return transport.handleRequest(c.req.raw)
+  }
+  const authInfo: AuthInfo = { token: header!.replace(/^Bearer\s+/i, ''), clientId: auth.clientName, scopes: [], extra: { mcp: auth } }
+  return modern.fetch(c.req.raw, { authInfo })
 })
