@@ -18,7 +18,7 @@ const env = {
   // A bucket of its own on the MinIO from docker-compose, created on first use
   S3_ENDPOINT: process.env.TEST_S3_ENDPOINT ?? 'http://localhost:9000',
   S3_REGION: 'us-east-1',
-  S3_BUCKET: 'artifact-test',
+  S3_BUCKET: process.env.TEST_S3_BUCKET ?? 'artifact-test',
   S3_ACCESS_KEY_ID: process.env.TEST_S3_ACCESS_KEY_ID ?? 'artifact',
   S3_SECRET_ACCESS_KEY: process.env.TEST_S3_SECRET_ACCESS_KEY ?? 'artifact-secret',
   S3_FORCE_PATH_STYLE: 'true',
