@@ -149,6 +149,10 @@ export async function serveVersion(c: Context<AuthEnv>) {
     'Content-Security-Policy': CONTENT_CSP,
     'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'no-referrer',
+    // The sandboxed page has an opaque origin, so its fetch(), module scripts and web fonts are
+    // cross-origin requests. "*" never applies to credentialed requests, and a restricted page's
+    // files are only reachable under its link token, so this exposes nothing new.
+    'Access-Control-Allow-Origin': '*',
     'Cache-Control': CACHE,
     ETag: `"${etag}"`,
   }

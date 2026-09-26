@@ -108,6 +108,8 @@ describe('serving a version as a document tree', () => {
     expect(css.headers.get('content-type')).toBe('text/css; charset=utf-8')
     for (const res of [entry, css]) {
       expect(res.headers.get('content-security-policy')).toBe(CSP)
+      // The sandboxed frame's fetch() and fonts are cross-origin requests from an opaque origin
+      expect(res.headers.get('access-control-allow-origin')).toBe('*')
       expect(res.headers.get('x-content-type-options')).toBe('nosniff')
       expect(res.headers.get('cache-control')).toBe('private, max-age=3600')
     }
