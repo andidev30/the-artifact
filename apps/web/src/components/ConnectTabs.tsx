@@ -1,7 +1,6 @@
 import { useRef, useState, type KeyboardEvent } from 'react'
+import { MCP_URL } from '../config'
 import { CopyCommand } from './CopyCommand'
-
-const MCP_URL = 'http://localhost:3000/mcp'
 
 type Agent = {
   id: string

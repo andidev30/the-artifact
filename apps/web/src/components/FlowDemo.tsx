@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
+import { APP_HOST } from '../config'
 
 const PROMPT = 'make a page showing API latency for the last 7 days'
-const URL = 'artifact.local/a/latency-7d'
+const URL = `${APP_HOST}/a/latency-7d`
 const BARS = [42, 38, 61, 47, 90, 52, 44]
 const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
 

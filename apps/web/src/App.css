@@ -50,17 +50,18 @@ main,
 
 .nav nav {
   display: flex;
+  align-items: center;
   gap: 24px;
   font-size: var(--step--1);
   font-weight: 500;
 }
 
-.nav nav a {
+.nav nav a:not(.button) {
   text-decoration: none;
   color: var(--ink-soft);
 }
 
-.nav nav a:hover {
+.nav nav a:not(.button):hover {
   color: var(--ink);
   text-decoration: underline;
   text-underline-offset: 4px;
@@ -117,6 +118,29 @@ main,
 .button:hover {
   transform: translate(2px, 2px);
   box-shadow: 2px 2px 0 var(--ink);
+}
+
+.button-small {
+  padding: 7px 14px;
+  font-size: var(--step--1);
+  box-shadow: 3px 3px 0 var(--ink);
+}
+
+.button-small:hover {
+  box-shadow: 1px 1px 0 var(--ink);
+}
+
+.button-quiet {
+  background: var(--white);
+}
+
+.text-link {
+  font-weight: 600;
+  text-underline-offset: 4px;
+}
+
+.hero-copy .hint {
+  margin-top: 16px;
 }
 
 .hint {
@@ -700,6 +724,101 @@ main,
   color: var(--ink);
 }
 
+/* Pricing */
+
+.section-lede {
+  margin-top: 12px;
+  max-width: 46rem;
+  font-size: var(--step-1);
+  color: var(--ink-soft);
+}
+
+.plans {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: clamp(20px, 3vw, 32px);
+  margin-top: 40px;
+}
+
+.plan {
+  display: grid;
+  grid-template-rows: auto auto auto 1fr auto;
+  gap: 12px;
+  padding: clamp(22px, 3vw, 32px);
+  background: var(--white);
+  border: 1.5px solid var(--ink);
+  border-radius: 3px;
+  box-shadow: 6px 6px 0 var(--grid);
+}
+
+.plan-featured {
+  box-shadow: 6px 6px 0 var(--marker);
+}
+
+.plan h3 {
+  font-size: var(--step-1);
+  font-weight: 700;
+}
+
+.plan-price {
+  display: grid;
+  gap: 6px;
+  color: var(--ink-soft);
+}
+
+/* Same box height for every price so the rows below line up across plans */
+.plan-price span {
+  display: flex;
+  align-items: flex-end;
+  height: var(--step-4);
+  font-size: var(--step-4);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.035em;
+  color: var(--ink);
+}
+
+.plan-price-text span {
+  font-size: calc(var(--step-4) * 0.62);
+  letter-spacing: -0.03em;
+}
+
+.plan-summary {
+  color: var(--ink-soft);
+}
+
+.plan ul {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  margin: 8px 0 12px;
+  padding: 18px 0 0;
+  list-style: none;
+  border-top: 1.5px dashed var(--grid);
+}
+
+.plan li {
+  position: relative;
+  padding-left: 26px;
+}
+
+/* A small tick drawn like the diagram's ink */
+.plan li::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 0.35em;
+  width: 12px;
+  height: 7px;
+  border-left: 2px solid var(--line);
+  border-bottom: 2px solid var(--line);
+  transform: rotate(-45deg);
+}
+
+.plan .button {
+  justify-self: start;
+}
+
 /* Narrow screens: the diagram runs top to bottom */
 
 @media (max-width: 860px) {
@@ -757,8 +876,12 @@ main,
   }
 }
 
-@media (max-width: 520px) {
+@media (max-width: 640px) {
   .nav nav {
+    gap: 16px;
+  }
+
+  .nav-section {
     display: none;
   }
 }

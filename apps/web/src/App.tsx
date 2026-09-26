@@ -1,6 +1,7 @@
 import { ConnectTabs } from './components/ConnectTabs'
-import { CopyCommand } from './components/CopyCommand'
 import { FlowDemo } from './components/FlowDemo'
+import { Pricing } from './components/Pricing'
+import { APP_HOST, LOGIN_URL, SIGNUP_URL } from './config'
 import './App.css'
 
 function App() {
@@ -14,8 +15,10 @@ function App() {
           the artifact
         </a>
         <nav aria-label="Primary">
-          <a href="#how">How it works</a>
-          <a href="#details">Details</a>
+          <a className="nav-section" href="#how">How it works</a>
+          <a className="nav-section" href="#pricing">Pricing</a>
+          <a href={LOGIN_URL}>Log in</a>
+          <a className="button button-small" href={SIGNUP_URL}>Get started</a>
         </nav>
       </header>
 
@@ -26,12 +29,13 @@ function App() {
             <p className="lede">
               The Artifact hosts the HTML pages your coding agent builds: reports,
               prototypes, dashboards. The agent publishes them through an MCP server,
-              and anyone with the link can open them in a browser.
+              and you choose who can open them: anyone with the link, or only your team.
             </p>
             <div className="hero-actions">
-              <a className="button" href="#how">Set up in 3 steps</a>
-              <p className="hint">Works with Claude Code, Cursor, Codex, and any MCP client.</p>
+              <a className="button" href={SIGNUP_URL}>Get started free</a>
+              <a className="text-link" href="#how">See how it works</a>
             </div>
+            <p className="hint">Works with Claude Code, Cursor, Codex, and any MCP client.</p>
           </div>
           <FlowDemo />
         </section>
@@ -41,17 +45,20 @@ function App() {
           <ol className="steps">
             <li>
               <div className="step-text">
-                <h3>Start the server</h3>
-                <p>The Artifact runs on your own machine or server. Run this from the repo root.</p>
+                <h3>Create an account</h3>
+                <p>Sign up with your email or GitHub. Personal use is free.</p>
               </div>
               <div className="step-action">
-                <CopyCommand command="pnpm install && pnpm dev:api" label="Copy the start command" />
+                <a className="button button-quiet" href={SIGNUP_URL}>Create a free account</a>
               </div>
             </li>
             <li>
               <div className="step-text">
                 <h3>Connect your agent</h3>
-                <p>Add the MCP server once. Pick the agent you use and copy its setup.</p>
+                <p>
+                  Add the MCP server once. The first time your agent publishes, it opens a
+                  browser window so you can sign in.
+                </p>
               </div>
               <div className="step-action">
                 <ConnectTabs />
@@ -69,7 +76,7 @@ function App() {
                 <div className="transcript" aria-label="Example request and reply">
                   <p><span className="caret" aria-hidden="true">&gt;</span>turn this CSV into a chart I can send to the team</p>
                   <p className="transcript-tool"><span className="dot" aria-hidden="true" />publish_artifact</p>
-                  <p>Published. <mark>artifact.local/a/signups-by-week</mark></p>
+                  <p>Published. <mark>{APP_HOST}/a/signups-by-week</mark></p>
                 </div>
               </div>
             </li>
@@ -88,8 +95,8 @@ function App() {
               <dd>Each page loads in an isolated frame, so scripts in an artifact can't reach the rest of the site.</dd>
             </div>
             <div>
-              <dt>Files stay on your server</dt>
-              <dd>Artifacts are stored where you host The Artifact. Nothing goes to a third party.</dd>
+              <dt>Private until you share it</dt>
+              <dd>New pages are visible only to you. Share the link with anyone, or only with your organization.</dd>
             </div>
             <div>
               <dt>A gallery of everything published</dt>
@@ -97,11 +104,17 @@ function App() {
             </div>
           </dl>
         </section>
+
+        <section id="pricing" className="section">
+          <h2>Pricing</h2>
+          <p className="section-lede">Free for your own work. Pay when your team shares a workspace. Talk to us when your company needs SSO and audit logs.</p>
+          <Pricing />
+        </section>
       </main>
 
       <footer className="footer">
         <span>The Artifact</span>
-        <span>A self-hosted home for pages made by coding agents.</span>
+        <span>andidev30</span>
       </footer>
     </>
   )
