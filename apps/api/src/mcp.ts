@@ -159,11 +159,14 @@ function buildServer(auth: McpAuth) {
 export const mcp = new Hono()
 
 mcp.all('/', async (c) => {
-  const auth = await authenticateBearer(c.req.header('authorization'))
+  const header = c.req.header('authorization')
+  const auth = await authenticateBearer(header)
   if (!auth) {
-    // Tells the client where to find the authorization server, which starts the browser sign-in
+    // Tells the client where to find the authorization server, which starts the browser sign-in.
+    // A token that was sent but no longer works is flagged invalid_token (RFC 6750) so clients refresh it.
+    const error = header ? ', error="invalid_token"' : ''
     return c.json({ error: 'unauthorized', error_description: 'Sign in to The Artifact to continue.' }, 401, {
-      'WWW-Authenticate': `Bearer resource_metadata="${RESOURCE_METADATA_URL}"`,
+      'WWW-Authenticate': `Bearer resource_metadata="${RESOURCE_METADATA_URL}"${error}`,
     })
   }
   const server = buildServer(auth)
