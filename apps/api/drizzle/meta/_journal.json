@@ -36,6 +36,13 @@
       "when": 1790420062860,
       "tag": "0004_curved_earthquake",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790420101320,
+      "tag": "0005_deep_stellaris",
+      "breakpoints": true
     }
   ]
 }

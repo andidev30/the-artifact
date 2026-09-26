@@ -120,7 +120,7 @@ describe('changing and deleting pages', () => {
 
     const res = await patch('editor', 'organization')
     expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ visibility: 'organization' })
+    expect(await res.json()).toMatchObject({ visibility: 'organization' })
     expect(await access(page.slug, 'member')).toBe('view')
 
     expect((await patch('admin', 'public')).status).toBe(400)

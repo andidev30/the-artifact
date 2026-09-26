@@ -156,6 +156,11 @@ export const artifactVersions = pgTable(
       .references(() => artifacts.id, { onDelete: 'cascade' }),
     version: integer('version').notNull(),
     html: text('html').notNull(),
+    // MCP client that published this version; null for versions made in the web app
+    publishedWith: text('published_with'),
+    publishedBy: uuid('published_by').references(() => users.id, { onDelete: 'set null' }),
+    // The older version this one copies, when someone restored it
+    restoredFrom: integer('restored_from'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex('artifact_versions_unique').on(t.artifactId, t.version)],

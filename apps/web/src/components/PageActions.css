@@ -1,0 +1,167 @@
+/* "More" menu on gallery cards and in the viewer bar */
+
+.page-menu {
+  position: relative;
+}
+
+.page-menu-button {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  color: var(--ink);
+  background: var(--white);
+  border: 1.5px solid var(--ink);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.page-menu-button:hover,
+.page-menu-button[aria-expanded='true'] {
+  background: var(--marker);
+}
+
+.page-menu-button svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
+.page-menu-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  display: grid;
+  min-width: 168px;
+  padding: 4px;
+  background: var(--white);
+  border: 1.5px solid var(--ink);
+  border-radius: 3px;
+  box-shadow: 4px 4px 0 var(--ink);
+}
+
+.page-menu-list [role='menuitem'] {
+  display: block;
+  padding: 8px 12px;
+  font: 600 var(--step--1) var(--sans);
+  text-align: left;
+  text-decoration: none;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.page-menu-list [role='menuitem']:hover,
+.page-menu-list [role='menuitem']:focus-visible {
+  background: var(--paper);
+  outline: none;
+  box-shadow: inset 3px 0 0 var(--marker);
+}
+
+.page-menu-list [data-danger] {
+  color: #9b1c14;
+}
+
+/* Rename and delete confirmations */
+
+.page-dialog {
+  width: min(460px, 100% - 32px);
+  padding: 24px 24px 20px;
+  color: var(--ink);
+  background: var(--white);
+  border: 1.5px solid var(--ink);
+  border-radius: 4px;
+  box-shadow: 8px 8px 0 var(--marker);
+}
+
+.page-dialog::backdrop {
+  background: rgb(28 43 75 / 0.35);
+}
+
+.page-dialog h2 {
+  margin: 0 0 14px;
+  font-size: var(--step-1);
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+
+.page-dialog-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: var(--step--1);
+  font-weight: 700;
+}
+
+.page-dialog-input {
+  width: 100%;
+  height: 42px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: var(--step-0);
+  color: var(--ink);
+  background: var(--white);
+  border: 1.5px solid var(--ink);
+  border-radius: 3px;
+}
+
+.page-dialog-input[aria-invalid] {
+  border-color: #b3261e;
+}
+
+.page-dialog-hint,
+.page-dialog-text {
+  margin-top: 8px;
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+}
+
+.page-dialog-hint[data-over] {
+  color: #9b1c14;
+}
+
+.page-dialog-error {
+  margin-top: 12px;
+  padding: 8px 12px;
+  font-size: var(--step--1);
+  color: #7a1c16;
+  background: #fdecea;
+  border: 1.5px solid #b3261e;
+  border-radius: 3px;
+}
+
+.page-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.page-dialog-actions .button {
+  height: 40px;
+  padding: 0 18px;
+  font: 700 var(--step--1) var(--sans);
+  cursor: pointer;
+  box-shadow: 3px 3px 0 var(--ink);
+}
+
+.page-dialog-actions .button:disabled {
+  color: var(--ink-soft);
+  background: var(--paper);
+  border-color: var(--grid);
+  box-shadow: none;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.page-dialog-actions .page-dialog-danger {
+  color: var(--white);
+  background: #9b1c14;
+  border-color: #5e100b;
+}
