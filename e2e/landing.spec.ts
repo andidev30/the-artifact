@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { latestMail, uniqueEmail } from './helpers'
 
 test('landing page renders and the pricing toggle switches plans', async ({ page }) => {
   await page.goto('/')
@@ -30,6 +31,31 @@ test('landing page renders and the pricing toggle switches plans', async ({ page
 
   await selfHosted.click()
   await expect(pricing.getByRole('heading', { name: 'Self-hosted', exact: true })).toBeVisible()
+})
+
+test('the Enterprise button leads to a contact form that emails sales', async ({ page }) => {
+  await page.goto('/#pricing')
+  await page.locator('#pricing').getByRole('link', { name: 'Contact sales' }).click()
+  await expect(page).toHaveURL(/\/contact-sales\?topic=self-hosted-enterprise$/)
+  await expect(page.getByRole('heading', { level: 1, name: 'Bring The Artifact to your whole company.' })).toBeVisible()
+
+  const email = uniqueEmail('sales')
+  const company = `Acme ${Date.now().toString(36)}`
+  await page.getByLabel('Name', { exact: true }).fill('Dana Lee')
+  await page.getByLabel('Work email').fill(email)
+  await page.getByLabel('Company', { exact: true }).fill(company)
+  await page.getByLabel('Team size').selectOption('51-200')
+  await page.getByLabel('What would you like to talk about?').fill('We want to run it on our own servers with SAML sign-in.')
+  await page.getByRole('button', { name: 'Send message' }).click()
+
+  await expect(page.getByRole('heading', { name: 'Thanks, we got your message' })).toBeVisible()
+  await expect(page.getByRole('status')).toContainText(email)
+
+  // Without SALES_EMAIL set, inquiries go to the sender address
+  const text = await latestMail(page.request, 'e2e@example.com', new RegExp(`Sales inquiry from Dana Lee at ${company}`))
+  expect(text).toContain(`Email: ${email}`)
+  expect(text).toContain('Interested in: Self-hosted Enterprise')
+  expect(text).toContain('SAML sign-in')
 })
 
 test('docs render, link between pages and redirect the old guide address', async ({ page }) => {

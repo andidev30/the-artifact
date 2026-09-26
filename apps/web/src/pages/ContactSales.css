@@ -1,0 +1,157 @@
+/* Contact sales: the pitch on paper, the form in a card beside it */
+
+.contact {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 480px);
+  align-items: start;
+  gap: clamp(32px, 6vw, 88px);
+  padding-block: clamp(24px, 6vh, 64px) clamp(48px, 10vh, 112px);
+}
+
+.contact-pitch {
+  display: grid;
+  gap: 16px;
+  max-width: 34rem;
+}
+
+.contact-eyebrow {
+  justify-self: start;
+  padding: 2px 8px;
+  font-family: var(--mono);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  background: var(--marker);
+  border: 1.5px solid var(--ink);
+  border-radius: 3px;
+}
+
+.contact-pitch h1 {
+  font-size: clamp(2rem, 1.4rem + 2.4vw, 3.25rem);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+
+.contact-lede {
+  font-size: var(--step-1);
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+.contact-pitch h2 {
+  margin-top: 16px;
+  font-size: var(--step--1);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.contact-pitch ul {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--ink-soft);
+}
+
+.contact-pitch li {
+  position: relative;
+  padding-left: 26px;
+}
+
+.contact-pitch li strong {
+  color: var(--ink);
+}
+
+.contact-pitch li::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 0.45em;
+  width: 11px;
+  height: 6px;
+  border-left: 2px solid var(--line);
+  border-bottom: 2px solid var(--line);
+  transform: rotate(-45deg);
+}
+
+.contact-box {
+  width: 100%;
+  box-shadow: 6px 6px 0 var(--marker);
+}
+
+.contact-box h2 {
+  font-size: var(--step-2);
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.contact-form input + label,
+.contact-form select + label,
+.contact-form textarea + label {
+  margin-top: 8px;
+}
+
+.contact-form select,
+.contact-form textarea {
+  width: 100%;
+  padding: 11px 12px;
+  font: inherit;
+  color: var(--ink);
+  background-color: var(--paper);
+  border: 1.5px solid var(--ink);
+  border-radius: 3px;
+}
+
+.contact-form select {
+  padding-right: 32px;
+  appearance: none;
+  background: var(--paper) no-repeat right 12px center / 10px
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%231c2b4b' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  cursor: pointer;
+}
+
+.contact-form select:invalid {
+  color: #8a95ad;
+}
+
+.contact-form option {
+  color: var(--ink);
+}
+
+.contact-form textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.contact-form textarea::placeholder {
+  color: #8a95ad;
+}
+
+.contact-form select[aria-invalid='true'],
+.contact-form textarea[aria-invalid='true'] {
+  border-color: #b3261e;
+}
+
+/* The honeypot: out of sight and out of the tab order */
+.contact-trap {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+@media (max-width: 900px) {
+  .contact {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .contact-box {
+    max-width: 560px;
+  }
+}
