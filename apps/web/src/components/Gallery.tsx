@@ -1,6 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
-import { contentUrl, listArtifacts, type ArtifactSummary, type Visibility } from '../api'
+import { listArtifacts, thumbnailUrl, type ArtifactSummary, type Visibility } from '../api'
 import { timeAgo } from '../time'
 import { DeleteDialog, PageMenu, RenameDialog, type MenuItem } from './PageActions'
 import './Gallery.css'
@@ -11,9 +11,6 @@ const VISIBILITY_LABEL: Record<Visibility, string> = {
   link: 'Anyone with the link',
 }
 
-// The size pages are laid out at before being scaled down into the card
-const FRAME_WIDTH = 1280
-const FRAME_HEIGHT = 720
 const SEARCH_DELAY = 250
 
 type List = { kind: 'loading' } | { kind: 'ready'; items: ArtifactSummary[] } | { kind: 'error' }
@@ -193,7 +190,7 @@ function Card({ page: a, onRename, onDelete }: { page: ArtifactSummary; onRename
 
   return (
     <div className="page-card">
-      <Thumbnail slug={a.slug} version={a.version} />
+      <Thumbnail slug={a.slug} version={a.version} ready={a.thumbnail} />
       <Link className="page-card-link" to={`/a/${a.slug}`}>
         <strong>{a.title}</strong>
       </Link>
@@ -216,42 +213,29 @@ function Card({ page: a, onRename, onDelete }: { page: ArtifactSummary; onRename
   )
 }
 
-// A live, scaled-down render of the page. It loads only near the viewport, can't be focused or
-// clicked (the card link sits on top), and runs sandboxed like the viewer.
-function Thumbnail({ slug, version }: { slug: string; version: number }) {
-  const box = useRef<HTMLSpanElement>(null)
-  const [scale, setScale] = useState(0)
+// A screenshot of the current version, rendered on the server after publishing. Until it exists (or
+// if it can't be rendered) the card shows a drawn sketch of a page instead.
+function Thumbnail({ slug, version, ready }: { slug: string; version: number; ready: boolean }) {
   const [loaded, setLoaded] = useState(false)
-
-  useLayoutEffect(() => {
-    const el = box.current
-    if (!el) return
-    const measure = () => setScale(el.clientWidth / FRAME_WIDTH)
-    measure()
-    const ro = new ResizeObserver(measure)
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [])
+  const [failed, setFailed] = useState(false)
 
   return (
-    <span className="page-card-thumb" ref={box} data-loaded={loaded || undefined} aria-hidden="true">
+    <span className="page-card-thumb" data-loaded={loaded || undefined} aria-hidden="true">
       <span className="page-card-sketch">
         <span />
         <span />
         <span />
       </span>
-      {scale > 0 && (
-        <iframe
-          src={contentUrl(slug, version)}
-          title=""
+      {ready && !failed && (
+        <img
+          src={thumbnailUrl(slug, version)}
+          alt=""
           loading="lazy"
-          sandbox="allow-scripts"
-          tabIndex={-1}
-          aria-hidden="true"
-          width={FRAME_WIDTH}
-          height={FRAME_HEIGHT}
-          style={{ transform: `scale(${scale})` }}
+          decoding="async"
+          width={640}
+          height={360}
           onLoad={() => setLoaded(true)}
+          onError={() => setFailed(true)}
         />
       )}
     </span>

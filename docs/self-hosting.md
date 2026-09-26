@@ -36,6 +36,8 @@ docker compose -f docker-compose.selfhost.yml up -d
 
 The app listens on port 8080 (change it with `ARTIFACT_PORT=9000`). It creates and updates its database tables on every start. Open `APP_URL` and create the first account: it becomes the instance admin (see [The instance admin](#the-instance-admin)). Do this before you share the address.
 
+The image includes a headless Chromium for gallery thumbnails. The compose file runs the app with `docker/seccomp-chromium.json` so Chromium can keep its sandbox on (see [Security](/docs/security)); keep that line if you write your own compose file or Kubernetes manifest, or the log will say thumbnails are off.
+
 The database password defaults to `artifact` and the database is only reachable from the app container. To change it, set `POSTGRES_PASSWORD` in a `.env` file next to `docker-compose.selfhost.yml` before the first start.
 
 ## 3. Put it behind HTTPS
@@ -109,11 +111,15 @@ git pull
 docker compose -f docker-compose.selfhost.yml up -d --build
 ```
 
-Database changes apply automatically when the new version starts.
+Database changes apply automatically when the new version starts. Pages published before thumbnails existed get theirs the first time the gallery lists them; to render them all at once:
+
+```sh
+docker compose -f docker-compose.selfhost.yml exec app node dist/scripts/backfill-thumbnails.js
+```
 
 ## Backups
 
-Everything lives in Postgres, including page HTML and version history:
+Everything lives in Postgres, including page HTML, files, thumbnails and version history:
 
 ```sh
 docker compose -f docker-compose.selfhost.yml exec db pg_dump -U artifact artifact > artifact-backup.sql

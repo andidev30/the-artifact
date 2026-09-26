@@ -12,7 +12,8 @@
     "test": "vitest run",
     "test:unit": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
-    "lint": "tsc -p tsconfig.test.json"
+    "lint": "tsc -p tsconfig.test.json",
+    "thumbnails:backfill": "tsx src/scripts/backfill-thumbnails.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.1",
@@ -20,6 +21,7 @@
     "drizzle-orm": "^0.45.3",
     "hono": "^4.13.9",
     "nodemailer": "^10.0.10",
+    "playwright-core": "1.63.0",
     "postgres": "^3.4.9",
     "zod": "^4.6.5"
   },

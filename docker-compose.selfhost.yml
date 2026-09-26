@@ -9,6 +9,10 @@ services:
     ports:
       - '${ARTIFACT_PORT:-8080}:3000'
     env_file: .env.selfhost
+    # Docker's default seccomp profile plus the namespace calls Chromium's sandbox needs to render
+    # thumbnails of untrusted pages safely (see docs/security.md)
+    security_opt:
+      - seccomp=./docker/seccomp-chromium.json
     environment:
       DATABASE_URL: postgres://artifact:${POSTGRES_PASSWORD:-artifact}@db:5432/artifact
     depends_on:

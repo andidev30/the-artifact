@@ -17,12 +17,23 @@ RUN pnpm --filter @the-artifact/web build \
  && pnpm --filter @the-artifact/api deploy --prod --legacy /out
 
 FROM node:24-slim
+
+# Headless Chromium renders gallery thumbnails, with no network of its own (see docs/security.md).
+# The headless shell needs no GTK, and it draws with its bundled SwiftShader, so the Mesa/LLVM
+# drivers chromium-common pulls in (~150 MB) are removed again. Fonts keep text from rendering as
+# boxes. Unset CHROME_PATH to skip thumbnails.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends chromium-headless-shell fonts-liberation fonts-dejavu-core fonts-noto-color-emoji \
+ && dpkg --remove --force-depends libgl1-mesa-dri libllvm15 libz3-4 \
+ && rm -rf /var/lib/apt/lists/* /usr/share/doc/*
+
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=3000 \
     WEB_DIR=/app/web \
     MIGRATE_ON_START=true \
-    SELF_HOSTED=true
+    SELF_HOSTED=true \
+    CHROME_PATH=/usr/bin/chromium-headless-shell
 
 COPY --from=build /out/node_modules ./node_modules
 COPY --from=build /out/package.json ./package.json

@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { getVersionHtml, listVersions, restoreVersion, type ArtifactVersion } from '../api'
+import { listVersions, restoreVersion, type ArtifactVersion } from '../api'
 import { timeAgo } from '../time'
 import './HistoryPanel.css'
 
-export type Viewing = { version: number; createdAt: string; html: string }
+export type Viewing = { version: number; createdAt: string }
 
 const exactTime = new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' })
 
@@ -26,7 +26,6 @@ type Props = {
 export function HistoryPanel({ slug, currentVersion, selected, onSelect, onClose }: Props) {
   const [versions, setVersions] = useState<ArtifactVersion[] | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState<number | null>(null)
   const heading = useRef<HTMLHeadingElement>(null)
 
   useEffect(() => {
@@ -43,21 +42,8 @@ export function HistoryPanel({ slug, currentVersion, selected, onSelect, onClose
     }
   }, [slug, currentVersion])
 
-  async function pick(v: ArtifactVersion) {
-    if (v.version === currentVersion) {
-      onSelect(null)
-    } else {
-      setLoading(v.version)
-      setError(null)
-      try {
-        onSelect(await getVersionHtml(slug, v.version))
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'This version could not be loaded.')
-        return
-      } finally {
-        setLoading(null)
-      }
-    }
+  function pick(v: ArtifactVersion) {
+    onSelect(v.version === currentVersion ? null : { version: v.version, createdAt: v.createdAt })
     // On narrow screens the panel covers the page, so get out of the way
     if (window.matchMedia('(max-width: 640px)').matches) onClose()
   }
@@ -80,7 +66,6 @@ export function HistoryPanel({ slug, currentVersion, selected, onSelect, onClose
                 type="button"
                 className="history-item"
                 aria-current={v.version === selected ? 'true' : undefined}
-                aria-busy={loading === v.version || undefined}
                 onClick={() => pick(v)}
               >
                 <span className="history-item-top">

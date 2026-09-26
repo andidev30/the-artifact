@@ -15,6 +15,8 @@ const env = {
   ALLOWED_EMAIL_DOMAINS: '',
   ADMIN_EMAILS: '',
   FIRST_USER_ADMIN: '',
+  // Thumbnails are off unless a test turns them on (test/integration/thumbnails.test.ts)
+  CHROME_PATH: '',
 }
 
 export default defineConfig({

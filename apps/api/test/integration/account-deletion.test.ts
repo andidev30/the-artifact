@@ -59,7 +59,13 @@ describe('deleting an account', () => {
 
     // The new owner owns it fully
     const page = await (await call(`/api/artifacts/${orgPage.slug}`, { cookie: founder.cookie })).json()
-    expect(page).toMatchObject({ isOwner: true, canEdit: true, owner: 'Fay Founder', html: '<p>v2</p>' })
+    expect(page).toMatchObject({ isOwner: true, canEdit: true, owner: 'Fay Founder', version: 2 })
+    const [latest] = await db
+      .select({ html: schema.artifactVersions.html })
+      .from(schema.artifactVersions)
+      .innerJoin(schema.artifacts, eq(schema.artifactVersions.artifactId, schema.artifacts.id))
+      .where(and(eq(schema.artifacts.slug, orgPage.slug), eq(schema.artifactVersions.version, 2)))
+    expect(latest.html).toBe('<p>v2</p>')
   })
 
   it('prefers another owner over an admin who joined earlier', async () => {

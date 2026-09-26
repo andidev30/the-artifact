@@ -33,6 +33,9 @@ test('publish a page, open it, share it, and open it by link while signed out', 
   await expect(frame.locator('body')).toHaveAttribute('data-ran', 'yes')
   await expect(page.locator('iframe.viewer-frame')).toHaveAttribute('sandbox', /allow-scripts/)
   await expect(page.locator('iframe.viewer-frame')).not.toHaveAttribute('sandbox', /allow-same-origin/)
+  // Loaded from its own URL (not srcdoc), so a page's files resolve by relative paths
+  await expect(page.locator('iframe.viewer-frame')).toHaveAttribute('src', `/api/artifacts/${slug}/v/1/`)
+  await expect(page.locator('iframe.viewer-frame')).not.toHaveAttribute('srcdoc', /.*/)
 
   // Share with a person
   await page.getByRole('button', { name: 'Share' }).click()
@@ -101,4 +104,42 @@ test('a signed-in stranger sees who they are signed in as', async ({ page, brows
   await expect(strangerPage.getByText(`You're signed in as ${strangerEmail}`)).toBeVisible()
   await expect(strangerPage.getByRole('button', { name: 'Switch account' })).toBeVisible()
   await stranger.close()
+})
+
+// A 4x4 red PNG
+const RED_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAEklEQVR4nGP4z8CAB+GTG8HSALfKY52fTcuYAAAAAElFTkSuQmCC'
+
+test('a restricted multi-file page loads its CSS, JS and images in the viewer and in the history', async ({ page }) => {
+  await signUpPersonal(page, uniqueEmail('site'))
+  const token = await connectAgent(page)
+  const html =
+    '<!doctype html><link rel="stylesheet" href="css/site.css"><h1>Multi-file</h1><img id="dot" src="img/dot.png" width="40" height="40"><p id="data">…</p><script src="js/app.js"></script>'
+  const files = [
+    { path: 'css/site.css', content: 'body { background: rgb(10, 120, 90) }' },
+    { path: 'js/app.js', content: 'document.body.dataset.ran = "yes"; fetch("data.json").then((r) => r.json()).then((d) => { document.getElementById("data").textContent = d.word })' },
+    { path: 'data.json', content: '{"word":"loaded"}' },
+    { path: 'img/dot.png', content: RED_PNG, encoding: 'base64' as const },
+  ]
+  const slug = await publishViaMcp(page.request, token, { title: 'Site v1', html, files })
+  await publishViaMcp(page.request, token, { title: 'Site v2', html: '<h1>Second version</h1>', artifact_id: slug })
+
+  await page.goto(`/a/${slug}`)
+  const frame = page.frameLocator('iframe.viewer-frame')
+  await expect(frame.getByRole('heading', { name: 'Second version' })).toBeVisible()
+
+  // Version 1 from the history: an older, restricted version, so every file needs the owner's access
+  await page.getByRole('button', { name: 'History' }).click()
+  await page.getByRole('button', { name: /Version 1/ }).click()
+  await expect(page.getByText('Viewing version 1')).toBeVisible()
+  await expect(frame.getByRole('heading', { name: 'Multi-file' })).toBeVisible()
+  await expect(frame.locator('body')).toHaveAttribute('data-ran', 'yes')
+  await expect(frame.locator('#data')).toHaveText('loaded')
+  await expect(frame.locator('body')).toHaveCSS('background-color', 'rgb(10, 120, 90)')
+  await expect.poll(() => frame.locator('#dot').evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(4)
+
+  // Restoring brings the files back as version 3
+  await page.getByRole('button', { name: 'Restore this version' }).click()
+  await expect(page.getByText(/Version 3, updated/)).toBeVisible()
+  await expect(page.locator('iframe.viewer-frame')).toHaveAttribute('src', `/api/artifacts/${slug}/v/3/`)
+  await expect(frame.locator('#data')).toHaveText('loaded')
 })

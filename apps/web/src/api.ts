@@ -77,6 +77,8 @@ export type ArtifactSummary = {
   owner: string
   mine: boolean
   canEdit: boolean
+  // Whether a screenshot of the current version exists yet
+  thumbnail: boolean
   // Set on pages shared with you
   role?: 'viewer' | 'editor'
 }
@@ -91,7 +93,6 @@ export type ArtifactPage = {
   inOrganization: boolean
   canEdit: boolean
   isOwner: boolean
-  html: string
 }
 
 export async function listArtifacts(workspace: string, query = '', signal?: AbortSignal): Promise<ArtifactSummary[]> {
@@ -378,10 +379,6 @@ export function listVersions(slug: string) {
   return pageRequest<ArtifactVersion[]>(slug, '/versions', 'The history could not be loaded.')
 }
 
-export function getVersionHtml(slug: string, version: number) {
-  return pageRequest<{ version: number; createdAt: string; html: string }>(slug, `/versions/${version}`, 'This version could not be loaded.')
-}
-
 export function restoreVersion(slug: string, version: number) {
   return pageRequest<{ version: number; updatedAt: string }>(slug, `/versions/${version}/restore`, 'The version could not be restored. Try again.', {
     method: 'POST',
@@ -399,9 +396,14 @@ export function deleteArtifact(slug: string) {
   return pageRequest<void>(slug, '', 'The page could not be deleted. Try again.', { method: 'DELETE' })
 }
 
-// The page's current HTML as its own sandboxed document; the version busts the browser cache
-export function contentUrl(slug: string, version: number) {
-  return `/api/artifacts/${encodeURIComponent(slug)}/content?v=${version}`
+// A version as its own sandboxed document; its CSS, JS and images load by relative paths from here
+export function versionUrl(slug: string, version: number) {
+  return `/api/artifacts/${encodeURIComponent(slug)}/v/${version}/`
+}
+
+// The screenshot shown on gallery cards; versions never change, so the URL caches well
+export function thumbnailUrl(slug: string, version: number) {
+  return `/api/artifacts/${encodeURIComponent(slug)}/thumbnails/${version}`
 }
 
 // Magic link confirmation: opening the emailed link only looks it up; continuing uses it

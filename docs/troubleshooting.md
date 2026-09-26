@@ -22,7 +22,15 @@ Pages run in a sandbox. Code that reads cookies or `localStorage`, or calls APIs
 
 ## "The page is larger than 2 MB"
 
-Ask the agent to compress embedded images, load large assets from a URL, or split the page.
+Ask the agent to move embedded images and scripts into separate files (see [Publishing](/docs/publishing)), compress them, or load large media from a URL. A page and its files can add up to 10 MB.
+
+## A page's CSS, script or image doesn't load
+
+Files are found by their path relative to the page, exactly as published: `css/site.css` in the HTML needs a file with that path. Paths are case-sensitive, and each version has only the files sent with it. Ask the agent to run `get_artifact` to see which files the current version has.
+
+## Cards show a sketch instead of a screenshot
+
+Screenshots are taken a few seconds after publishing; reload the gallery. On a self-hosted install they need Chromium: the Docker image includes it, and the app log says so when it can't start (usually because the container runs without the seccomp profile from `docker-compose.selfhost.yml`). Pages published before an update get their screenshot the first time the gallery lists them.
 
 ## My agent publishes to the wrong workspace
 

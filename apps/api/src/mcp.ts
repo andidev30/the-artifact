@@ -7,21 +7,36 @@ import {
   artifactUrl,
   canEdit,
   canView,
-  currentHtml,
+  checkTitle,
   describeVisibility,
   findBySlug,
+  getFile,
+  getVersion,
+  listFiles,
   listForWorkspace,
+  MAX_TITLE_LENGTH,
   parseArtifactRef,
   publish,
   PublishError,
+  rename,
+  VISIBILITY_LABEL,
 } from './artifacts.js'
 import { db, schema } from './db/index.js'
+import { ALLOWED_EXTENSIONS, checkPath, ENTRY_PATH, isText, MAX_FILE_BYTES, MAX_FILES, MAX_HTML_BYTES, MAX_TOTAL_BYTES } from './files.js'
 import { parseEmails, sharePeople, SharingError } from './sharing.js'
 import { authenticateBearer, RESOURCE_METADATA_URL, type McpAuth } from './oauth/server.js'
 
 const visibility = z
   .enum(['private', 'organization', 'link'])
-  .describe('private: only you and people it is shared with. organization: everyone in your organization. link: anyone with the link.')
+  .describe(
+    'private (shown as "Restricted"): only you and people it is shared with. organization: everyone in your organization. link: anyone with the link.',
+  )
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
+  return `${(n / 1024 / 1024).toFixed(1)} MB`
+}
 
 function text(t: string, isError = false) {
   return { content: [{ type: 'text' as const, text: t }], isError }
@@ -37,16 +52,28 @@ function buildServer(auth: McpAuth) {
     {
       title: 'Publish a page',
       description:
-        'Publish a self-contained HTML page and get a shareable link. Inline CSS and JS; external scripts from CDNs are fine. ' +
-        'To update a page you published before, pass its artifact_id (or its link) and the link stays the same.',
+        'Publish an HTML page and get a shareable link. Either one self-contained document (inline CSS and JS; scripts from public CDNs are fine), ' +
+        'or a small site: html is the entry (index.html) and files holds the CSS, JS, images, fonts and data it loads by relative paths. ' +
+        `Limits: html up to ${MAX_HTML_BYTES / 1024 / 1024} MB, each file up to ${MAX_FILE_BYTES / 1024 / 1024} MB, ${MAX_TOTAL_BYTES / 1024 / 1024} MB and ${MAX_FILES} files in total. ` +
+        'To update a page you published before, pass its artifact_id (or its link) and the link stays the same; send every file again, since each version has its own full set.',
       inputSchema: {
         title: z.string().min(1).describe('Short title shown in the gallery and browser tab'),
-        html: z.string().min(1).describe('The complete HTML document'),
+        html: z.string().min(1).describe('The complete HTML document; for a multi-file page, the entry (index.html)'),
+        files: z
+          .array(
+            z.object({
+              path: z.string().describe('Relative path the HTML uses for it, e.g. "style.css" or "img/logo.png"'),
+              content: z.string().describe('The file content: text as is, or base64 for binary files'),
+              encoding: z.enum(['utf8', 'base64']).optional().describe('utf8 (default) for text files, base64 for images, fonts, audio and other binary files'),
+            }),
+          )
+          .optional()
+          .describe(`Files next to the HTML. Allowed types: ${ALLOWED_EXTENSIONS.join(', ')}.`),
         artifact_id: z.string().optional().describe('Id or link of an existing page to publish a new version of'),
         visibility: visibility.optional(),
       },
     },
-    async ({ title, html, artifact_id, visibility }) => {
+    async ({ title, html, files, artifact_id, visibility }) => {
       try {
         const artifact = await publish({
           userId: auth.userId,
@@ -55,6 +82,7 @@ function buildServer(auth: McpAuth) {
           clientName: auth.clientName,
           title,
           html,
+          files,
           slug: artifact_id ? parseArtifactRef(artifact_id) : undefined,
           visibility,
         })
@@ -63,6 +91,7 @@ function buildServer(auth: McpAuth) {
           `${verb} "${artifact.title}".\n` +
             `Link: ${artifactUrl(artifact.slug)}\n` +
             `artifact_id: ${artifact.slug}\n` +
+            (files?.length ? `Files: index.html and ${files.length} more.\n` : '') +
             `Visibility: ${describeVisibility(artifact.visibility)}.`,
         )
       } catch (err) {
@@ -85,7 +114,7 @@ function buildServer(auth: McpAuth) {
       if (rows.length === 0) return text('No pages yet. Use publish_artifact to publish one.')
       return text(
         rows
-          .map(({ artifact: a }) => `- ${a.title} (artifact_id: ${a.slug}, v${a.currentVersion}, ${a.visibility}) ${artifactUrl(a.slug)}`)
+          .map(({ artifact: a }) => `- ${a.title} (artifact_id: ${a.slug}, v${a.currentVersion}, ${VISIBILITY_LABEL[a.visibility]}) ${artifactUrl(a.slug)}`)
           .join('\n'),
       )
     },
@@ -95,14 +124,58 @@ function buildServer(auth: McpAuth) {
     'get_artifact',
     {
       title: 'Read a page',
-      description: 'Get the current HTML of a page, for example to edit it and publish a new version.',
-      inputSchema: { artifact_id: z.string().describe('Id or link of the page') },
+      description:
+        'Get the current version of a page, for example to edit it and publish a new version: its entry HTML and the list of its other files. ' +
+        'Pass path to read one of those files instead.',
+      inputSchema: {
+        artifact_id: z.string().describe('Id or link of the page'),
+        path: z.string().optional().describe('A file of the page to read, e.g. "style.css"; omit for the entry HTML'),
+      },
       annotations: { readOnlyHint: true },
     },
-    async ({ artifact_id }) => {
+    async ({ artifact_id, path }) => {
       const artifact = await findBySlug(parseArtifactRef(artifact_id))
       if (!artifact || !(await canView(artifact, viewer))) return text(`No page you can open has the id "${artifact_id}".`, true)
-      return text(`Title: ${artifact.title}\nVersion: ${artifact.currentVersion}\n\n${await currentHtml(artifact)}`)
+      const current = await getVersion(artifact, artifact.currentVersion)
+      if (!current) return text(`No page you can open has the id "${artifact_id}".`, true)
+
+      if (path && path !== ENTRY_PATH) {
+        const checked = checkPath(path)
+        const file = 'path' in checked ? await getFile(current.id, checked.path) : null
+        if (!file) return text(`Version ${artifact.currentVersion} of "${artifact.title}" has no file "${path}". Call get_artifact without path to list its files.`, true)
+        const header = `Path: ${file.path}\nType: ${file.contentType}\nSize: ${formatBytes(file.size)}\n`
+        if (isText(file.contentType)) return text(`${header}Encoding: utf8\n\n${file.content.toString('utf8')}`)
+        return text(`${header}Encoding: base64\n\n${file.content.toString('base64')}`)
+      }
+
+      const files = await listFiles(current.id)
+      const list = files.length
+        ? `Files (send them all again when you publish a new version):\n` +
+          [`- index.html (${formatBytes(Buffer.byteLength(current.html))}, this HTML)`, ...files.map((f) => `- ${f.path} (${formatBytes(f.size)})`)].join('\n') +
+          '\n'
+        : ''
+      return text(`Title: ${artifact.title}\nVersion: ${artifact.currentVersion}\n${list}\n${current.html}`)
+    },
+  )
+
+  server.registerTool(
+    'rename_artifact',
+    {
+      title: 'Rename a page',
+      description: 'Change the title of a page without publishing a new version. The link stays the same.',
+      inputSchema: {
+        artifact_id: z.string().describe('Id or link of the page'),
+        title: z.string().describe(`New title, 1 to ${MAX_TITLE_LENGTH} characters`),
+      },
+      annotations: { idempotentHint: true },
+    },
+    async ({ artifact_id, title }) => {
+      const artifact = await findBySlug(parseArtifactRef(artifact_id))
+      if (!artifact || !(await canEdit(artifact, viewer))) return text(`No page you can edit has the id "${artifact_id}".`, true)
+      const checked = checkTitle(title)
+      if ('error' in checked) return text(checked.error, true)
+      const updated = await rename(artifact, checked.title)
+      return text(`Renamed "${artifact.title}" to "${updated.title}".\nLink: ${artifactUrl(updated.slug)}`)
     },
   )
 
@@ -117,7 +190,7 @@ function buildServer(auth: McpAuth) {
     async ({ artifact_id, visibility }) => {
       const artifact = await findBySlug(parseArtifactRef(artifact_id))
       if (!artifact || !(await canEdit(artifact, viewer))) return text(`No page you can edit has the id "${artifact_id}".`, true)
-      if (visibility === 'organization' && !artifact.organizationId) return text('This page is in a personal workspace. Use private or link.', true)
+      if (visibility === 'organization' && !artifact.organizationId) return text('This page is in a personal workspace. Use private (restricted) or link.', true)
       await db.update(schema.artifacts).set({ visibility }).where(eq(schema.artifacts.id, artifact.id))
       return text(`"${artifact.title}" is now ${describeVisibility(visibility)}.\nLink: ${artifactUrl(artifact.slug)}`)
     },

@@ -1,4 +1,4 @@
-import { boolean, index, integer, jsonb, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
+import { boolean, customType, index, integer, jsonb, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -171,6 +171,46 @@ export const artifactVersions = pgTable(
   },
   (t) => [uniqueIndex('artifact_versions_unique').on(t.artifactId, t.version)],
 )
+
+const bytea = customType<{ data: Buffer }>({ dataType: () => 'bytea' })
+
+// The other files of a multi-file version (CSS, JS, images, fonts...), served next to the entry
+// HTML, which stays in artifact_versions.html. Versions never change, so neither do their files.
+export const artifactFiles = pgTable(
+  'artifact_files',
+  {
+    versionId: uuid('version_id')
+      .notNull()
+      .references(() => artifactVersions.id, { onDelete: 'cascade' }),
+    // Relative to the entry, e.g. "css/site.css"
+    path: text('path').notNull(),
+    contentType: text('content_type').notNull(),
+    size: integer('size').notNull(),
+    // Hex SHA-256 of the content, used as the ETag
+    sha256: text('sha256').notNull(),
+    content: bytea('content').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.versionId, t.path] })],
+)
+
+// A screenshot of a version for gallery cards, rendered in a headless browser after publishing.
+// A row without an image records a render that failed, so it isn't retried on every gallery load.
+export const artifactThumbnails = pgTable('artifact_thumbnails', {
+  versionId: uuid('version_id')
+    .primaryKey()
+    .references(() => artifactVersions.id, { onDelete: 'cascade' }),
+  image: bytea('image'),
+  contentType: text('content_type'),
+  error: text('error'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+// Random keys the server creates for itself on first use, e.g. to sign page content links
+export const serverSecrets = pgTable('server_secrets', {
+  name: text('name').primaryKey(),
+  value: text('value').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
 
 export const shareRoleEnum = pgEnum('share_role', ['viewer', 'editor'])
 

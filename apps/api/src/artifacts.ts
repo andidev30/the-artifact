@@ -1,10 +1,12 @@
 import { randomBytes } from 'node:crypto'
-import { and, desc, eq, ilike, inArray, isNull, or, type SQL } from 'drizzle-orm'
+import { and, asc, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from 'drizzle-orm'
 import { db, schema } from './db/index.js'
 import type { Artifact, Visibility } from './db/schema.js'
 import { env } from './env.js'
+import { MAX_HTML_BYTES, prepareFiles, PublishError, type FileInput, type PreparedFile } from './files.js'
+import { queueThumbnail } from './thumbnails.js'
 
-export const MAX_HTML_BYTES = 2 * 1024 * 1024
+export { MAX_HTML_BYTES, PublishError }
 const SLUG_ALPHABET = 'abcdefghijkmnpqrstuvwxyz23456789'
 
 function newSlug(): string {
@@ -85,16 +87,26 @@ type PublishInput = {
   clientName: string
   title: string
   html: string
+  // Files next to the entry HTML, referenced by relative paths; each publish sends the full set
+  files?: FileInput[]
   slug?: string
   visibility?: Visibility
 }
 
-export class PublishError extends Error {}
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0]
+
+async function insertVersion(tx: Tx, values: typeof schema.artifactVersions.$inferInsert, files: PreparedFile[]) {
+  const [row] = await tx.insert(schema.artifactVersions).values(values).returning({ id: schema.artifactVersions.id })
+  if (files.length) await tx.insert(schema.artifactFiles).values(files.map((f) => ({ versionId: row.id, ...f })))
+  return row.id
+}
 
 export async function publish(input: PublishInput): Promise<Artifact> {
-  if (Buffer.byteLength(input.html, 'utf8') > MAX_HTML_BYTES) {
-    throw new PublishError(`The page is larger than ${MAX_HTML_BYTES / 1024 / 1024} MB. Inline fewer assets or compress images.`)
+  const htmlBytes = Buffer.byteLength(input.html, 'utf8')
+  if (htmlBytes > MAX_HTML_BYTES) {
+    throw new PublishError(`The page is larger than ${MAX_HTML_BYTES / 1024 / 1024} MB. Move large assets into files or compress images.`)
   }
+  const files = prepareFiles(input.files, htmlBytes)
   const title = input.title.trim().slice(0, 200) || 'Untitled page'
 
   if (input.slug) {
@@ -103,11 +115,17 @@ export async function publish(input: PublishInput): Promise<Artifact> {
       throw new PublishError(`No page you can edit has the id "${input.slug}". Publish without artifact_id to create a new page.`)
     }
     if (input.visibility === 'organization' && !existing.organizationId) {
-      throw new PublishError('This page is in a personal workspace. Use private or link.')
+      throw new PublishError('This page is in a personal workspace. Use private (restricted) or link.')
     }
-    return db.transaction(async (tx) => {
-      const version = existing.currentVersion + 1
-      await tx.insert(schema.artifactVersions).values({ artifactId: existing.id, version, html: input.html, publishedWith: input.clientName, publishedBy: input.userId })
+    const { updated, versionId } = await db.transaction(async (tx) => {
+      // Lock the page so two publishes (or a publish and a restore) can't pick the same number
+      const [locked] = await tx.select().from(schema.artifacts).where(eq(schema.artifacts.id, existing.id)).for('update')
+      const version = locked.currentVersion + 1
+      const versionId = await insertVersion(
+        tx,
+        { artifactId: existing.id, version, html: input.html, publishedWith: input.clientName, publishedBy: input.userId },
+        files,
+      )
       const [updated] = await tx
         .update(schema.artifacts)
         .set({
@@ -119,15 +137,17 @@ export async function publish(input: PublishInput): Promise<Artifact> {
         })
         .where(eq(schema.artifacts.id, existing.id))
         .returning()
-      return updated
+      return { updated, versionId }
     })
+    queueThumbnail(versionId)
+    return updated
   }
 
   const visibility = input.visibility ?? (input.organizationId ? 'organization' : 'private')
   if (visibility === 'organization' && !input.organizationId) {
-    throw new PublishError('Organization visibility needs an organization workspace. Use private or link.')
+    throw new PublishError('Organization visibility needs an organization workspace. Use private (restricted) or link.')
   }
-  return db.transaction(async (tx) => {
+  const { created, versionId } = await db.transaction(async (tx) => {
     const [created] = await tx
       .insert(schema.artifacts)
       .values({
@@ -139,11 +159,43 @@ export async function publish(input: PublishInput): Promise<Artifact> {
         publishedWith: input.clientName,
       })
       .returning()
-    await tx
-      .insert(schema.artifactVersions)
-      .values({ artifactId: created.id, version: 1, html: input.html, publishedWith: input.clientName, publishedBy: input.userId })
-    return created
+    const versionId = await insertVersion(
+      tx,
+      { artifactId: created.id, version: 1, html: input.html, publishedWith: input.clientName, publishedBy: input.userId },
+      files,
+    )
+    return { created, versionId }
   })
+  queueThumbnail(versionId)
+  return created
+}
+
+// Paths and sizes of a version's files, without their content
+export async function listFiles(versionId: string) {
+  return db
+    .select({ path: schema.artifactFiles.path, size: schema.artifactFiles.size, contentType: schema.artifactFiles.contentType })
+    .from(schema.artifactFiles)
+    .where(eq(schema.artifactFiles.versionId, versionId))
+    .orderBy(asc(schema.artifactFiles.path))
+}
+
+export async function getFile(versionId: string, path: string) {
+  const [f] = await db
+    .select()
+    .from(schema.artifactFiles)
+    .where(and(eq(schema.artifactFiles.versionId, versionId), eq(schema.artifactFiles.path, path)))
+  return f ?? null
+}
+
+// Everything needed to render a version, e.g. for its thumbnail
+export async function loadVersionTree(versionId: string) {
+  const [v] = await db.select({ html: schema.artifactVersions.html }).from(schema.artifactVersions).where(eq(schema.artifactVersions.id, versionId))
+  if (!v) return null
+  const files = await db
+    .select({ path: schema.artifactFiles.path, contentType: schema.artifactFiles.contentType, content: schema.artifactFiles.content })
+    .from(schema.artifactFiles)
+    .where(eq(schema.artifactFiles.versionId, versionId))
+  return { html: v.html, files }
 }
 
 // Case-insensitive "title contains", with % and _ taken literally
@@ -200,6 +252,21 @@ export function describeVisibility(v: Visibility): string {
 }
 
 export const MAX_TITLE_LENGTH = 200
+
+// Short labels matching the web app ("Restricted" is stored as private)
+export const VISIBILITY_LABEL: Record<Visibility, string> = {
+  private: 'restricted',
+  organization: 'organization',
+  link: 'anyone with the link',
+}
+
+// The rules for a new page name, shared by the web app and agents. Returns the trimmed title or an error.
+export function checkTitle(value: unknown): { title: string } | { error: string } {
+  const title = typeof value === 'string' ? value.trim() : ''
+  if (!title) return { error: 'Give the page a name.' }
+  if (title.length > MAX_TITLE_LENGTH) return { error: `Keep the name under ${MAX_TITLE_LENGTH} characters.` }
+  return { title }
+}
 
 // Of these pages, the ids this person can edit, in two queries instead of one per page
 export async function editableIds(viewer: Viewer, artifacts: Artifact[]): Promise<Set<string>> {
@@ -271,26 +338,47 @@ export async function getVersion(artifact: Artifact, version: number) {
   return v ?? null
 }
 
-// Restoring never rewrites history: it publishes the old HTML as a new version on top
+// Restoring never rewrites history: it publishes the old HTML and files as a new version on top
 export async function restoreVersion(artifact: Artifact, version: number, userId: string): Promise<Artifact | null> {
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     // Lock the page so two restores (or a restore and a publish) can't pick the same number
     const [locked] = await tx.select().from(schema.artifacts).where(eq(schema.artifacts.id, artifact.id)).for('update')
     if (!locked) return null
     const [old] = await tx
-      .select({ html: schema.artifactVersions.html })
+      .select({ id: schema.artifactVersions.id, html: schema.artifactVersions.html })
       .from(schema.artifactVersions)
       .where(and(eq(schema.artifactVersions.artifactId, artifact.id), eq(schema.artifactVersions.version, version)))
     if (!old) return null
     const next = locked.currentVersion + 1
-    await tx
+    const [created] = await tx
       .insert(schema.artifactVersions)
       .values({ artifactId: artifact.id, version: next, html: old.html, publishedBy: userId, restoredFrom: version })
+      .returning({ id: schema.artifactVersions.id })
+    // The same files and, when there is one, the same screenshot, copied inside the database
+    await tx.execute(sql`
+      insert into artifact_files (version_id, path, content_type, size, sha256, content)
+      select ${created.id}, path, content_type, size, sha256, content from artifact_files where version_id = ${old.id}`)
+    const copied = await tx.execute(sql`
+      insert into artifact_thumbnails (version_id, image, content_type)
+      select ${created.id}, image, content_type from artifact_thumbnails where version_id = ${old.id} and image is not null
+      returning version_id`)
     const [updated] = await tx
       .update(schema.artifacts)
       .set({ currentVersion: next, updatedAt: new Date() })
       .where(eq(schema.artifacts.id, artifact.id))
       .returning()
-    return updated
+    return { updated, versionId: created.id, hasThumbnail: [...copied].length > 0 }
   })
+  if (!result) return null
+  if (!result.hasThumbnail) queueThumbnail(result.versionId)
+  return result.updated
+}
+
+// The id of a version, for its files and thumbnail
+export async function versionId(artifact: Artifact, version: number): Promise<string | null> {
+  const [v] = await db
+    .select({ id: schema.artifactVersions.id })
+    .from(schema.artifactVersions)
+    .where(and(eq(schema.artifactVersions.artifactId, artifact.id), eq(schema.artifactVersions.version, version)))
+  return v?.id ?? null
 }
