@@ -67,6 +67,8 @@ export async function createOrganization(name: string, slug: string): Promise<Or
 
 export type Visibility = 'private' | 'organization' | 'link'
 
+export type ThumbnailState = 'ready' | 'pending' | 'none'
+
 export type ArtifactSummary = {
   slug: string
   title: string
@@ -79,6 +81,9 @@ export type ArtifactSummary = {
   canEdit: boolean
   // Whether a screenshot of the current version exists yet
   thumbnail: boolean
+  // Whether one is still being rendered ('pending'), so the gallery should ask again.
+  // Missing from servers older than this field; treat that like 'none'.
+  thumbnailState?: ThumbnailState
   // Set on pages shared with you
   role?: 'viewer' | 'editor'
 }

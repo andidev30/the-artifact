@@ -11,6 +11,7 @@ import { consent } from './oauth/consent.js'
 import { oauth } from './oauth/server.js'
 import { admin } from './routes/admin.js'
 import { artifacts } from './routes/artifacts.js'
+import { contact } from './routes/contact.js'
 import { invitations, members, myInvitations } from './routes/members.js'
 import { onboarding, organizations } from './routes/organizations.js'
 import { settings } from './routes/settings.js'
@@ -48,6 +49,7 @@ api.route('/organizations', organizations)
 api.route('/onboarding', onboarding)
 api.route('/oauth/requests', consent)
 api.route('/artifacts', artifacts)
+api.route('/contact-sales', contact)
 
 // Members, invitations and account settings
 api.route('/organizations/:orgId', members)

@@ -51,7 +51,8 @@ describe('without a browser', () => {
     await thumbnailQueueIdle()
     expect(await db.select().from(schema.artifactThumbnails)).toEqual([])
     const [card] = await (await call('/api/artifacts', { cookie: owner.cookie })).json()
-    expect(card.thumbnail).toBe(false)
+    // Nothing is coming, so the gallery has no reason to ask again
+    expect(card).toMatchObject({ thumbnail: false, thumbnailState: 'none' })
     expect((await call(`/api/artifacts/${page.slug}/thumbnails/1`, { cookie: owner.cookie })).status).toBe(404)
     expect(await db.select().from(schema.artifactThumbnails)).toEqual([])
   })
@@ -64,9 +65,9 @@ describe('without a browser', () => {
     const [row] = await db.select().from(schema.artifactThumbnails)
     expect(row.sha256).toBeNull()
     expect(row.error).toBeTruthy()
-    // Not queued again on every gallery load
+    // Not queued again on every gallery load, and the gallery stops waiting for it
     const [card] = await (await call('/api/artifacts', { cookie: owner.cookie })).json()
-    expect(card).toMatchObject({ slug: page.slug, thumbnail: false })
+    expect(card).toMatchObject({ slug: page.slug, thumbnail: false, thumbnailState: 'none' })
     await thumbnailQueueIdle()
     expect((await db.select().from(schema.artifactThumbnails)).length).toBe(1)
   })
@@ -139,7 +140,7 @@ describe.skipIf(!hasChrome)('rendering in headless Chrome', () => {
     expect(webpSize(image)).toEqual({ width: 640, height: 360 })
 
     const [card] = await (await call('/api/artifacts', { cookie: owner.cookie })).json()
-    expect(card.thumbnail).toBe(true)
+    expect(card).toMatchObject({ thumbnail: true, thumbnailState: 'ready' })
 
     const url = `/api/artifacts/${page.slug}/thumbnails/1`
     const res = await call(url, { cookie: viewer.cookie })
@@ -173,10 +174,10 @@ describe.skipIf(!hasChrome)('rendering in headless Chrome', () => {
 
     enable()
     const [card] = await (await call('/api/artifacts', { cookie: owner.cookie })).json()
-    expect(card).toMatchObject({ slug: page.slug, thumbnail: false })
+    expect(card).toMatchObject({ slug: page.slug, thumbnail: false, thumbnailState: 'pending' })
     await thumbnailQueueIdle()
     const [again] = await (await call('/api/artifacts', { cookie: owner.cookie })).json()
-    expect(again.thumbnail).toBe(true)
+    expect(again).toMatchObject({ thumbnail: true, thumbnailState: 'ready' })
   })
 
   it('runs the page script with its own files but reaches nothing on the network', async () => {
@@ -237,6 +238,26 @@ describe.skipIf(!hasChrome)('rendering in headless Chrome', () => {
     const second = await renderPage({ html: `<script>if (localStorage.getItem('x') || document.cookie) fetch('http://127.0.0.1:${port}/leaked')</script>`, files: [] })
     expect(second.blocked).toEqual([])
   })
+
+  it('tells the gallery a render is on its way, then whether it came or failed', async () => {
+    enable()
+    configureThumbnails({ loadTimeout: 1500, renderTimeout: 4000 })
+    try {
+      const owner = await createUser()
+      const good = await createPage(owner, { title: 'Good', html: '<h1>fine</h1>' })
+      const bad = await createPage(owner, { title: 'Bad', html: '<script>while (true) {}</script>' })
+      const states = async () => {
+        const cards = (await (await call('/api/artifacts', { cookie: owner.cookie })).json()) as { slug: string; thumbnailState: string }[]
+        return Object.fromEntries(cards.map((c) => [c.slug, c.thumbnailState]))
+      }
+      // Asked right after publishing, before the background renders are done
+      expect(await states()).toEqual({ [good.slug]: 'pending', [bad.slug]: 'pending' })
+      await thumbnailQueueIdle()
+      expect(await states()).toEqual({ [good.slug]: 'ready', [bad.slug]: 'none' })
+    } finally {
+      configureThumbnails({ loadTimeout: 8000, renderTimeout: 20_000 })
+    }
+  }, 40_000)
 
   it('queues each version once', async () => {
     enable()
