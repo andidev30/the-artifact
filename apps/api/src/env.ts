@@ -43,6 +43,19 @@ export const env = {
     .split(',')
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean),
+  // Object storage (S3 API: MinIO, AWS S3, Cloudflare R2...) for page content and thumbnails.
+  // Without keys, the AWS SDK's usual credential chain applies (e.g. an IAM role).
+  storage: {
+    endpoint: process.env.S3_ENDPOINT ?? '',
+    region: process.env.S3_REGION || 'us-east-1',
+    bucket: required('S3_BUCKET'),
+    accessKeyId: process.env.S3_ACCESS_KEY_ID ?? '',
+    secretAccessKey: process.env.S3_SECRET_ACCESS_KEY ?? '',
+    // MinIO and most self-hosted stores want bucket/key paths rather than bucket.host names
+    forcePathStyle: process.env.S3_FORCE_PATH_STYLE ? process.env.S3_FORCE_PATH_STYLE === 'true' : Boolean(process.env.S3_ENDPOINT),
+    // Create the bucket on start when it doesn't exist (handy for MinIO; needs the permission)
+    createBucket: process.env.S3_CREATE_BUCKET ? process.env.S3_CREATE_BUCKET === 'true' : Boolean(process.env.S3_ENDPOINT),
+  },
   // Gallery thumbnails: a Chrome or Chromium binary (empty skips them), the CDN hosts pages may load
   // from while rendering (unset uses a built-in list), and whether to run without Chromium's sandbox
   thumbnails: {

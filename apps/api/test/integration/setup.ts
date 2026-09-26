@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm'
-import { afterAll, beforeEach, vi } from 'vitest'
+import { afterAll, beforeAll, beforeEach, vi } from 'vitest'
 import { db } from '../../src/db/index.js'
+import { ensureBucket } from '../../src/storage.js'
 
 // No real email in integration tests: assert on these mocks instead
 vi.mock('../../src/mail.js', () => ({
@@ -10,6 +11,10 @@ vi.mock('../../src/mail.js', () => ({
 }))
 
 if (!process.env.DATABASE_URL?.includes('artifact_test')) throw new Error('Integration tests must use the artifact_test database')
+
+beforeAll(async () => {
+  await ensureBucket()
+})
 
 beforeEach(async () => {
   vi.clearAllMocks()

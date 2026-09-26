@@ -1,11 +1,11 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import type { Context } from 'hono'
-import { accessLevel, findBySlug, getFile, getVersion, type Viewer } from './artifacts.js'
+import { accessLevel, findBySlug, getFile, getVersion, versionHtml, type Viewer } from './artifacts.js'
 import type { AuthEnv } from './auth/session.js'
 import { db, schema } from './db/index.js'
 import type { Artifact } from './db/schema.js'
-import { checkPath, ENTRY_PATH, sha256 } from './files.js'
+import { checkPath, ENTRY_PATH } from './files.js'
 
 // A version is served as a real document tree at /api/artifacts/<slug>/v/<version>/, so the entry
 // HTML can load its CSS, JS and images by relative paths.
@@ -132,9 +132,10 @@ export async function serveVersion(c: Context<AuthEnv>) {
   let contentType: string
   let etag: string
   if (path === ENTRY_PATH) {
-    body = v.html
+    etag = v.htmlSha256.slice(0, 32)
     contentType = 'text/html; charset=utf-8'
-    etag = sha256(v.html).slice(0, 32)
+    // Unchanged pages revalidate without a trip to storage
+    body = c.req.header('if-none-match') === `"${etag}"` ? '' : await versionHtml(v)
   } else {
     const file = await getFile(v.id, path)
     if (!file) return notFound(c)

@@ -1,6 +1,6 @@
 # Self-hosting
 
-The Artifact runs as one Docker image next to a Postgres database. It is free to self-host, with every feature included.
+The Artifact runs as one Docker image next to a Postgres database and an S3-compatible object store. The compose file brings all three, with MinIO as the object store. It is free to self-host, with every feature included.
 
 ## What you need
 
@@ -38,7 +38,35 @@ The app listens on port 8080 (change it with `ARTIFACT_PORT=9000`). It creates a
 
 The image includes a headless Chromium for gallery thumbnails. The compose file runs the app with `docker/seccomp-chromium.json` so Chromium can keep its sandbox on (see [Security](/docs/security)); keep that line if you write your own compose file or Kubernetes manifest, or the log will say thumbnails are off.
 
-The database password defaults to `artifact` and the database is only reachable from the app container. To change it, set `POSTGRES_PASSWORD` in a `.env` file next to `docker-compose.selfhost.yml` before the first start.
+The database and MinIO passwords default to `artifact` and `artifact-secret`, and neither service is reachable from outside the compose network. To change them, set `POSTGRES_PASSWORD` and `MINIO_ROOT_PASSWORD` in a `.env` file next to `docker-compose.selfhost.yml` before the first start.
+
+## Where content is stored
+
+Postgres holds accounts, organizations, sharing and the list of versions. The content itself (every version's HTML, its files and its thumbnail) is in object storage, one object per distinct content under `blobs/<sha256>`. Versions that reuse a stylesheet or image, and restored versions, store nothing new. When pages or accounts are deleted, their objects are removed by a sweep that runs every few hours; to run it now:
+
+```sh
+docker compose -f docker-compose.selfhost.yml exec app node dist/scripts/sweep-storage.js
+```
+
+Back up both: a Postgres dump and the `artifact-content` volume (or your bucket).
+
+### Using S3, R2 or your own MinIO
+
+Set these in the `.env` file next to `docker-compose.selfhost.yml`, then remove the `minio` service and the app's `depends_on: minio` from the compose file:
+
+```sh
+S3_ENDPOINT=https://<account>.r2.cloudflarestorage.com   # empty for AWS S3
+S3_REGION=auto
+S3_BUCKET=artifact
+S3_ACCESS_KEY_ID=...
+S3_SECRET_ACCESS_KEY=...
+```
+
+The bucket should be private: pages are always served through the app, which checks access and adds the sandbox headers. Every setting is in the [configuration reference](/docs/configuration#object-storage).
+
+### Upgrading from a version that stored content in Postgres
+
+Nothing to do: on the first start after upgrading, the app copies existing page content into object storage and clears it from the database. The log says how many items it moved.
 
 ## 3. Put it behind HTTPS
 

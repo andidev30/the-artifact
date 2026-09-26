@@ -10,6 +10,7 @@ Settings are environment variables. For a self-hosted install they go in `.env.s
 | `DATABASE_URL` | Postgres connection string. `docker-compose.selfhost.yml` sets it for its own database. |
 | `SMTP_HOST` | Mail server for sign-in links, invitations and share emails |
 | `SMTP_FROM` | Sender, e.g. `"The Artifact <artifact@example.com>"` |
+| `S3_BUCKET` | Bucket for page content and thumbnails. `docker-compose.selfhost.yml` sets it for its own MinIO. |
 
 ## Optional
 
@@ -28,6 +29,21 @@ Settings are environment variables. For a self-hosted install they go in `.env.s
 | `PORT` | `3000` | Port inside the container |
 | `ARTIFACT_PORT` | `8080` | Host port in `docker-compose.selfhost.yml` |
 | `POSTGRES_PASSWORD` | `artifact` | Database password in `docker-compose.selfhost.yml`; set it in a `.env` file next to the compose file before the first start |
+
+## Object storage
+
+Any service with the S3 API works: MinIO, AWS S3, Cloudflare R2, Backblaze B2, Google Cloud Storage (interoperability keys). `docker-compose.selfhost.yml` points these at its bundled MinIO unless you set them in the `.env` next to it.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `S3_ENDPOINT` | empty (AWS S3) | e.g. `http://minio:9000` or `https://<account>.r2.cloudflarestorage.com` |
+| `S3_REGION` | `us-east-1` | `auto` for R2 |
+| `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | empty | Without them, the AWS SDK's usual credential chain applies (environment, IAM role) |
+| `S3_FORCE_PATH_STYLE` | `true` when `S3_ENDPOINT` is set | `bucket/key` URLs rather than `bucket.host`; MinIO needs it |
+| `S3_CREATE_BUCKET` | `true` when `S3_ENDPOINT` is set | Create the bucket on start if it doesn't exist |
+| `MINIO_ROOT_PASSWORD` | `artifact-secret` | Password of the bundled MinIO in `docker-compose.selfhost.yml`; set it in the `.env` next to the compose file before the first start |
+
+The app only needs to read, write, list and delete objects in its bucket. Keep the bucket private.
 
 ## Set by the image
 

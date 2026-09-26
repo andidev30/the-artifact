@@ -12,7 +12,7 @@ The Artifact hosts the HTML pages coding agents build. Claude Code, Cursor, Code
 
 ```sh
 pnpm install
-pnpm services        # Postgres and Mailpit (http://localhost:8025) in Docker
+pnpm services        # Postgres, MinIO (console http://localhost:9001) and Mailpit (http://localhost:8025) in Docker
 cp apps/api/.env.example apps/api/.env
 pnpm db:migrate
 pnpm dev             # API on :3000, web on :5173

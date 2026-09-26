@@ -6,6 +6,9 @@ import { and, eq, or, sql } from 'drizzle-orm'
 import { chromium, type Browser, type Request, type Route } from 'playwright-core'
 import { db, schema } from './db/index.js'
 import { env } from './env.js'
+import { sha256 } from './files.js'
+import { holdStorageLock } from './gc.js'
+import { getBlob, getText, putBlob } from './storage.js'
 
 // Gallery thumbnails are screenshots of a version, taken in headless Chromium after it is published.
 // Page HTML is untrusted and runs here on the server, so the browser gets no network of its own:
@@ -303,20 +306,28 @@ export async function renderPage(tree: PageTree): Promise<RenderResult> {
 }
 
 async function loadTree(versionId: string): Promise<PageTree | null> {
-  const [v] = await db.select({ html: schema.artifactVersions.html }).from(schema.artifactVersions).where(eq(schema.artifactVersions.id, versionId))
+  const [v] = await db.select({ htmlSha256: schema.artifactVersions.htmlSha256 }).from(schema.artifactVersions).where(eq(schema.artifactVersions.id, versionId))
   if (!v) return null
-  const files = await db
-    .select({ path: schema.artifactFiles.path, contentType: schema.artifactFiles.contentType, content: schema.artifactFiles.content })
+  const html = await getText(v.htmlSha256)
+  if (html === null) return null
+  const rows = await db
+    .select({ path: schema.artifactFiles.path, contentType: schema.artifactFiles.contentType, sha256: schema.artifactFiles.sha256 })
     .from(schema.artifactFiles)
     .where(eq(schema.artifactFiles.versionId, versionId))
-  return { html: v.html, files }
+  const files = await Promise.all(rows.map(async (f) => ({ path: f.path, contentType: f.contentType, content: (await getBlob(f.sha256)) ?? Buffer.alloc(0) })))
+  return { html, files }
 }
 
 async function store(versionId: string, values: { image: Buffer | null; contentType: string | null; error: string | null }) {
-  await db
-    .insert(schema.artifactThumbnails)
-    .values({ versionId, ...values })
-    .onConflictDoUpdate({ target: schema.artifactThumbnails.versionId, set: { ...values, createdAt: sql`now()` } })
+  const row = { sha256: values.image ? sha256(values.image) : null, contentType: values.contentType, error: values.error }
+  await db.transaction(async (tx) => {
+    await holdStorageLock(tx)
+    if (values.image) await putBlob(values.image, row.sha256!)
+    await tx
+      .insert(schema.artifactThumbnails)
+      .values({ versionId, ...row })
+      .onConflictDoUpdate({ target: schema.artifactThumbnails.versionId, set: { ...row, createdAt: sql`now()` } })
+  })
 }
 
 // Renders one version and stores the result; a failure is stored too, so it isn't retried endlessly
@@ -372,7 +383,7 @@ export async function currentThumbnails(pages: { id: string; currentVersion: num
   const v = schema.artifactVersions
   const t = schema.artifactThumbnails
   const rows = await db
-    .select({ artifactId: v.artifactId, versionId: v.id, tried: sql<boolean>`${t.versionId} is not null`, ready: sql<boolean>`${t.image} is not null` })
+    .select({ artifactId: v.artifactId, versionId: v.id, tried: sql<boolean>`${t.versionId} is not null`, ready: sql<boolean>`${t.sha256} is not null` })
     .from(v)
     .leftJoin(t, eq(t.versionId, v.id))
     .where(or(...pages.map((p) => and(eq(v.artifactId, p.id), eq(v.version, p.currentVersion)))))
@@ -380,9 +391,11 @@ export async function currentThumbnails(pages: { id: string; currentVersion: num
   return new Set(rows.filter((r) => r.ready).map((r) => r.artifactId))
 }
 
+// A version's stored render: its image, or null image when rendering failed; null when never tried
 export async function getThumbnail(versionId: string) {
   const [row] = await db.select().from(schema.artifactThumbnails).where(eq(schema.artifactThumbnails.versionId, versionId))
-  return row ?? null
+  if (!row) return null
+  return { ...row, image: row.sha256 ? await getBlob(row.sha256) : null }
 }
 
 // Resolves once the queue is empty (tests and the backfill script wait on it)

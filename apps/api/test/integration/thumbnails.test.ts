@@ -4,6 +4,7 @@ import type { AddressInfo } from 'node:net'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { publish } from '../../src/artifacts.js'
 import { db, schema } from '../../src/db/index.js'
+import { getBlob } from '../../src/storage.js'
 import {
   closeThumbnailBrowser,
   configureThumbnails,
@@ -61,7 +62,7 @@ describe('without a browser', () => {
     const page = await createPage(owner)
     await thumbnailQueueIdle()
     const [row] = await db.select().from(schema.artifactThumbnails)
-    expect(row.image).toBeNull()
+    expect(row.sha256).toBeNull()
     expect(row.error).toBeTruthy()
     // Not queued again on every gallery load
     const [card] = await (await call('/api/artifacts', { cookie: owner.cookie })).json()
@@ -133,8 +134,9 @@ describe.skipIf(!hasChrome)('rendering in headless Chrome', () => {
     const [row] = await db.select().from(schema.artifactThumbnails)
     expect(row.error).toBeNull()
     expect(row.contentType).toBe('image/webp')
-    expect(isWebp(row.image!)).toBe(true)
-    expect(webpSize(row.image!)).toEqual({ width: 640, height: 360 })
+    const image = (await getBlob(row.sha256!))!
+    expect(isWebp(image)).toBe(true)
+    expect(webpSize(image)).toEqual({ width: 640, height: 360 })
 
     const [card] = await (await call('/api/artifacts', { cookie: owner.cookie })).json()
     expect(card.thumbnail).toBe(true)

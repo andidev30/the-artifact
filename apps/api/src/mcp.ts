@@ -13,6 +13,7 @@ import {
   getFile,
   getVersion,
   listFiles,
+  versionHtml,
   listForWorkspace,
   MAX_TITLE_LENGTH,
   parseArtifactRef,
@@ -148,13 +149,14 @@ function buildServer(auth: McpAuth) {
         return text(`${header}Encoding: base64\n\n${file.content.toString('base64')}`)
       }
 
+      const html = await versionHtml(current)
       const files = await listFiles(current.id)
       const list = files.length
         ? `Files (send them all again when you publish a new version):\n` +
-          [`- index.html (${formatBytes(Buffer.byteLength(current.html))}, this HTML)`, ...files.map((f) => `- ${f.path} (${formatBytes(f.size)})`)].join('\n') +
+          [`- index.html (${formatBytes(current.htmlSize)}, this HTML)`, ...files.map((f) => `- ${f.path} (${formatBytes(f.size)})`)].join('\n') +
           '\n'
         : ''
-      return text(`Title: ${artifact.title}\nVersion: ${artifact.currentVersion}\n${list}\n${current.html}`)
+      return text(`Title: ${artifact.title}\nVersion: ${artifact.currentVersion}\n${list}\n${html}`)
     },
   )
 

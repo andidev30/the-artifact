@@ -7,6 +7,7 @@ import {
   editableIds,
   findBySlug,
   getVersion,
+  versionHtml,
   listForWorkspace,
   listSharedWith,
   listVersions,
@@ -198,7 +199,7 @@ artifacts.get('/:slug/versions/:version', requireUser, async (c) => {
   const n = versionParam(c)
   const v = artifact && n ? await getVersion(artifact, n) : null
   if (!v) return c.json({ error: 'Not found' }, 404)
-  return c.json({ version: v.version, createdAt: v.createdAt, html: v.html, contentUrl: `/api/artifacts/${artifact!.slug}/v/${v.version}/` })
+  return c.json({ version: v.version, createdAt: v.createdAt, html: await versionHtml(v), contentUrl: `/api/artifacts/${artifact!.slug}/v/${v.version}/` })
 })
 
 artifacts.post('/:slug/versions/:version/restore', requireUser, async (c) => {

@@ -161,7 +161,11 @@ export const artifactVersions = pgTable(
       .notNull()
       .references(() => artifacts.id, { onDelete: 'cascade' }),
     version: integer('version').notNull(),
-    html: text('html').notNull(),
+    // The entry HTML lives in object storage under its hash (see src/storage.ts)
+    htmlSha256: text('html_sha256').notNull(),
+    htmlSize: integer('html_size').notNull(),
+    // Content from before object storage; moved there on start (src/storage-move.ts), then emptied
+    legacyHtml: text('html'),
     // MCP client that published this version; null for versions made in the web app
     publishedWith: text('published_with'),
     publishedBy: uuid('published_by').references(() => users.id, { onDelete: 'set null' }),
@@ -175,7 +179,7 @@ export const artifactVersions = pgTable(
 const bytea = customType<{ data: Buffer }>({ dataType: () => 'bytea' })
 
 // The other files of a multi-file version (CSS, JS, images, fonts...), served next to the entry
-// HTML, which stays in artifact_versions.html. Versions never change, so neither do their files.
+// HTML. Their content is in object storage under its hash; versions never change, so neither do their files.
 export const artifactFiles = pgTable(
   'artifact_files',
   {
@@ -186,9 +190,10 @@ export const artifactFiles = pgTable(
     path: text('path').notNull(),
     contentType: text('content_type').notNull(),
     size: integer('size').notNull(),
-    // Hex SHA-256 of the content, used as the ETag
+    // Hex SHA-256 of the content: its key in object storage, and the ETag
     sha256: text('sha256').notNull(),
-    content: bytea('content').notNull(),
+    // From before object storage; moved there on start, then emptied
+    legacyContent: bytea('content'),
   },
   (t) => [primaryKey({ columns: [t.versionId, t.path] })],
 )
@@ -199,7 +204,10 @@ export const artifactThumbnails = pgTable('artifact_thumbnails', {
   versionId: uuid('version_id')
     .primaryKey()
     .references(() => artifactVersions.id, { onDelete: 'cascade' }),
-  image: bytea('image'),
+  // The image's key in object storage; null when the render failed
+  sha256: text('sha256'),
+  // From before object storage; moved there on start, then emptied
+  legacyImage: bytea('image'),
   contentType: text('content_type'),
   error: text('error'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

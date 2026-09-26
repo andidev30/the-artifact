@@ -57,4 +57,4 @@ A page in a personal workspace is restricted until you share it. A page that som
 
 ## Self-hosted data
 
-Everything, including page HTML, files, thumbnails and version history, lives in your Postgres database. Nothing is sent to us. While rendering thumbnails, the server may fetch scripts and fonts that pages load from the public CDNs listed above; set `THUMBNAIL_CDN_HOSTS=none` to turn that off.
+Everything lives in your own Postgres database and object storage: accounts and version history in Postgres, page HTML, files and thumbnails in the bucket. Nothing is sent to us. The bucket should stay private; pages are only ever served through the app, which checks access and adds the sandbox headers. While rendering thumbnails, the server may fetch scripts and fonts that pages load from the public CDNs listed above; set `THUMBNAIL_CDN_HOSTS=none` to turn that off.

@@ -3,7 +3,9 @@ import { and, asc, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from 'd
 import { db, schema } from './db/index.js'
 import type { Artifact, Visibility } from './db/schema.js'
 import { env } from './env.js'
-import { MAX_HTML_BYTES, prepareFiles, PublishError, type FileInput, type PreparedFile } from './files.js'
+import { MAX_HTML_BYTES, prepareFiles, PublishError, sha256, type FileInput, type PreparedFile } from './files.js'
+import { holdStorageLock } from './gc.js'
+import { getBlob, getText, putBlob } from './storage.js'
 import { queueThumbnail } from './thumbnails.js'
 
 export { MAX_HTML_BYTES, PublishError }
@@ -72,12 +74,16 @@ export async function findBySlug(slug: string) {
   return row ?? null
 }
 
+// A version's entry HTML, from object storage
+export async function versionHtml(v: { htmlSha256: string }): Promise<string> {
+  const html = await getText(v.htmlSha256)
+  if (html === null) throw new Error(`The HTML of a version is missing from storage (${v.htmlSha256})`)
+  return html
+}
+
 export async function currentHtml(artifact: Artifact): Promise<string> {
-  const [v] = await db
-    .select({ html: schema.artifactVersions.html })
-    .from(schema.artifactVersions)
-    .where(and(eq(schema.artifactVersions.artifactId, artifact.id), eq(schema.artifactVersions.version, artifact.currentVersion)))
-  return v?.html ?? ''
+  const v = await getVersion(artifact, artifact.currentVersion)
+  return v ? versionHtml(v) : ''
 }
 
 type PublishInput = {
@@ -95,9 +101,22 @@ type PublishInput = {
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0]
 
-async function insertVersion(tx: Tx, values: typeof schema.artifactVersions.$inferInsert, files: PreparedFile[]) {
-  const [row] = await tx.insert(schema.artifactVersions).values(values).returning({ id: schema.artifactVersions.id })
-  if (files.length) await tx.insert(schema.artifactFiles).values(files.map((f) => ({ versionId: row.id, ...f })))
+type Content = { html: string; htmlSha256: string; htmlSize: number; files: PreparedFile[] }
+
+// Uploads a version's content inside the transaction that records it, so the storage sweep can't
+// remove a blob between the upload and the commit
+async function insertVersion(tx: Tx, values: Omit<typeof schema.artifactVersions.$inferInsert, 'htmlSha256' | 'htmlSize'>, content: Content) {
+  await holdStorageLock(tx)
+  await Promise.all([putBlob(content.html, content.htmlSha256), ...content.files.map((f) => putBlob(f.content, f.sha256))])
+  const [row] = await tx
+    .insert(schema.artifactVersions)
+    .values({ ...values, htmlSha256: content.htmlSha256, htmlSize: content.htmlSize })
+    .returning({ id: schema.artifactVersions.id })
+  if (content.files.length) {
+    await tx.insert(schema.artifactFiles).values(
+      content.files.map((f) => ({ versionId: row.id, path: f.path, contentType: f.contentType, size: f.size, sha256: f.sha256 })),
+    )
+  }
   return row.id
 }
 
@@ -106,7 +125,7 @@ export async function publish(input: PublishInput): Promise<Artifact> {
   if (htmlBytes > MAX_HTML_BYTES) {
     throw new PublishError(`The page is larger than ${MAX_HTML_BYTES / 1024 / 1024} MB. Move large assets into files or compress images.`)
   }
-  const files = prepareFiles(input.files, htmlBytes)
+  const content: Content = { html: input.html, htmlSha256: sha256(input.html), htmlSize: htmlBytes, files: prepareFiles(input.files, htmlBytes) }
   const title = input.title.trim().slice(0, 200) || 'Untitled page'
 
   if (input.slug) {
@@ -123,8 +142,8 @@ export async function publish(input: PublishInput): Promise<Artifact> {
       const version = locked.currentVersion + 1
       const versionId = await insertVersion(
         tx,
-        { artifactId: existing.id, version, html: input.html, publishedWith: input.clientName, publishedBy: input.userId },
-        files,
+        { artifactId: existing.id, version, publishedWith: input.clientName, publishedBy: input.userId },
+        content,
       )
       const [updated] = await tx
         .update(schema.artifacts)
@@ -161,8 +180,8 @@ export async function publish(input: PublishInput): Promise<Artifact> {
       .returning()
     const versionId = await insertVersion(
       tx,
-      { artifactId: created.id, version: 1, html: input.html, publishedWith: input.clientName, publishedBy: input.userId },
-      files,
+      { artifactId: created.id, version: 1, publishedWith: input.clientName, publishedBy: input.userId },
+      content,
     )
     return { created, versionId }
   })
@@ -179,23 +198,26 @@ export async function listFiles(versionId: string) {
     .orderBy(asc(schema.artifactFiles.path))
 }
 
+const f = schema.artifactFiles
+const FILE_META = { path: f.path, contentType: f.contentType, size: f.size, sha256: f.sha256 }
+
+async function withContent<T extends { sha256: string }>(file: T): Promise<T & { content: Buffer }> {
+  const content = await getBlob(file.sha256)
+  if (!content) throw new Error(`A file is missing from storage (${file.sha256})`)
+  return { ...file, content }
+}
+
 export async function getFile(versionId: string, path: string) {
-  const [f] = await db
-    .select()
-    .from(schema.artifactFiles)
-    .where(and(eq(schema.artifactFiles.versionId, versionId), eq(schema.artifactFiles.path, path)))
-  return f ?? null
+  const [file] = await db.select(FILE_META).from(f).where(and(eq(f.versionId, versionId), eq(f.path, path)))
+  return file ? withContent(file) : null
 }
 
 // Everything needed to render a version, e.g. for its thumbnail
 export async function loadVersionTree(versionId: string) {
-  const [v] = await db.select({ html: schema.artifactVersions.html }).from(schema.artifactVersions).where(eq(schema.artifactVersions.id, versionId))
+  const [v] = await db.select({ htmlSha256: schema.artifactVersions.htmlSha256 }).from(schema.artifactVersions).where(eq(schema.artifactVersions.id, versionId))
   if (!v) return null
-  const files = await db
-    .select({ path: schema.artifactFiles.path, contentType: schema.artifactFiles.contentType, content: schema.artifactFiles.content })
-    .from(schema.artifactFiles)
-    .where(eq(schema.artifactFiles.versionId, versionId))
-  return { html: v.html, files }
+  const files = await db.select(FILE_META).from(f).where(eq(f.versionId, versionId))
+  return { html: await versionHtml(v), files: await Promise.all(files.map(withContent)) }
 }
 
 // Case-insensitive "title contains", with % and _ taken literally
@@ -344,23 +366,24 @@ export async function restoreVersion(artifact: Artifact, version: number, userId
     // Lock the page so two restores (or a restore and a publish) can't pick the same number
     const [locked] = await tx.select().from(schema.artifacts).where(eq(schema.artifacts.id, artifact.id)).for('update')
     if (!locked) return null
+    await holdStorageLock(tx)
     const [old] = await tx
-      .select({ id: schema.artifactVersions.id, html: schema.artifactVersions.html })
+      .select({ id: schema.artifactVersions.id, htmlSha256: schema.artifactVersions.htmlSha256, htmlSize: schema.artifactVersions.htmlSize })
       .from(schema.artifactVersions)
       .where(and(eq(schema.artifactVersions.artifactId, artifact.id), eq(schema.artifactVersions.version, version)))
     if (!old) return null
     const next = locked.currentVersion + 1
     const [created] = await tx
       .insert(schema.artifactVersions)
-      .values({ artifactId: artifact.id, version: next, html: old.html, publishedBy: userId, restoredFrom: version })
+      .values({ artifactId: artifact.id, version: next, htmlSha256: old.htmlSha256, htmlSize: old.htmlSize, publishedBy: userId, restoredFrom: version })
       .returning({ id: schema.artifactVersions.id })
-    // The same files and, when there is one, the same screenshot, copied inside the database
+    // The same files and, when there is one, the same screenshot: new rows for the same blobs
     await tx.execute(sql`
-      insert into artifact_files (version_id, path, content_type, size, sha256, content)
-      select ${created.id}, path, content_type, size, sha256, content from artifact_files where version_id = ${old.id}`)
+      insert into artifact_files (version_id, path, content_type, size, sha256)
+      select ${created.id}, path, content_type, size, sha256 from artifact_files where version_id = ${old.id}`)
     const copied = await tx.execute(sql`
-      insert into artifact_thumbnails (version_id, image, content_type)
-      select ${created.id}, image, content_type from artifact_thumbnails where version_id = ${old.id} and image is not null
+      insert into artifact_thumbnails (version_id, sha256, content_type)
+      select ${created.id}, sha256, content_type from artifact_thumbnails where version_id = ${old.id} and sha256 is not null
       returning version_id`)
     const [updated] = await tx
       .update(schema.artifacts)

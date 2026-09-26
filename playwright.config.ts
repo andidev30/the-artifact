@@ -43,6 +43,14 @@ export default defineConfig({
         ALLOWED_EMAIL_DOMAINS: '',
         GOOGLE_CLIENT_ID: '',
         GOOGLE_CLIENT_SECRET: '',
+        // The MinIO from docker-compose, in the bucket the API tests use
+        S3_ENDPOINT: 'http://localhost:9000',
+        S3_REGION: 'us-east-1',
+        S3_BUCKET: 'artifact-test',
+        S3_ACCESS_KEY_ID: 'artifact',
+        S3_SECRET_ACCESS_KEY: 'artifact-secret',
+        S3_FORCE_PATH_STYLE: 'true',
+        S3_CREATE_BUCKET: 'true',
       },
     },
     {

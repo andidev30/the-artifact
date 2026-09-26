@@ -13,9 +13,11 @@
     "test:unit": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
     "lint": "tsc -p tsconfig.test.json",
-    "thumbnails:backfill": "tsx src/scripts/backfill-thumbnails.ts"
+    "thumbnails:backfill": "tsx src/scripts/backfill-thumbnails.ts",
+    "storage:sweep": "tsx src/scripts/sweep-storage.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1140.0",
     "@hono/node-server": "^2.1.1",
     "@modelcontextprotocol/sdk": "^1.30.1",
     "drizzle-orm": "^0.45.3",

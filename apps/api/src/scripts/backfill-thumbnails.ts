@@ -20,7 +20,7 @@ const rows = await db
   .from(schema.artifacts)
   .innerJoin(v, and(eq(v.artifactId, schema.artifacts.id), eq(v.version, schema.artifacts.currentVersion)))
   .leftJoin(t, eq(t.versionId, v.id))
-  .where(retryFailed ? or(isNull(t.versionId), isNull(t.image)) : isNull(t.versionId))
+  .where(retryFailed ? or(isNull(t.versionId), isNull(t.sha256)) : isNull(t.versionId))
 
 console.log(`${rows.length} page${rows.length === 1 ? '' : 's'} to render`)
 let failed = 0

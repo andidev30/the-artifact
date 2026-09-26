@@ -1,7 +1,9 @@
+import { createHash } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import { publish } from '../../src/artifacts.js'
 import { signContentLink } from '../../src/content.js'
+import { getBlob } from '../../src/storage.js'
 import { db, schema } from '../../src/db/index.js'
 import { addMember, call, callTool, connectAgent, createOrg, createUser, slugFrom, type TestUser } from './helpers.js'
 
@@ -83,8 +85,10 @@ describe('publishing files', () => {
     const rows = await db.select().from(schema.artifactFiles)
     const png = rows.find((r) => r.path === 'img/dot.png')!
     expect(png).toMatchObject({ contentType: 'image/png', size: PNG.length })
-    expect(Buffer.compare(png.content, PNG)).toBe(0)
-    expect(png.sha256).toMatch(/^[0-9a-f]{64}$/)
+    expect(png.sha256).toBe(createHash('sha256').update(PNG).digest('hex'))
+    // The content is in object storage under its hash, not in the database
+    expect(png.legacyContent).toBeNull()
+    expect(Buffer.compare((await getBlob(png.sha256))!, PNG)).toBe(0)
     expect(rows.find((r) => r.path === 'css/site.css')?.contentType).toBe('text/css; charset=utf-8')
   })
 })

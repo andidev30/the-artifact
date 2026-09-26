@@ -3,16 +3,16 @@
 | Suite | Tool | Where | Needs |
 | --- | --- | --- | --- |
 | Unit | Vitest | `apps/api/test/unit`, `apps/web/src/**/*.test.ts` | nothing |
-| Integration | Vitest + Hono `app.request()` | `apps/api/test/integration` | Postgres |
-| End-to-end | Playwright | `e2e/` | Postgres, Mailpit, Google Chrome |
+| Integration | Vitest + Hono `app.request()` | `apps/api/test/integration` | Postgres, MinIO |
+| End-to-end | Playwright | `e2e/` | Postgres, MinIO, Mailpit, Google Chrome |
 
-Start the services first with `pnpm services` (Postgres on 5432, Mailpit on 1025/8025), and create the test database once:
+Start the services first with `pnpm services` (Postgres on 5432, MinIO on 9000/9001, Mailpit on 1025/8025), and create the test database once:
 
 ```sh
 docker compose exec postgres createdb -U artifact artifact_test
 ```
 
-Tests never read `apps/api/.env`. They set their own environment and only use the `artifact_test` database (override with `TEST_DATABASE_URL`, which must still contain `artifact_test`). Migrations from `apps/api/drizzle` run automatically before the integration and e2e suites.
+Tests never read `apps/api/.env`. They set their own environment and only use the `artifact_test` database (override with `TEST_DATABASE_URL`, which must still contain `artifact_test`). Migrations from `apps/api/drizzle` run automatically before the integration and e2e suites. Page content goes to the `artifact-test` bucket on that MinIO, created on first use (override the endpoint and keys with `TEST_S3_ENDPOINT`, `TEST_S3_ACCESS_KEY_ID`, `TEST_S3_SECRET_ACCESS_KEY`).
 
 ## Run
 
