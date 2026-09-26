@@ -56,3 +56,26 @@ export async function sendShareNotice(to: string, n: ShareNotice) {
       </div>`,
   })
 }
+
+type InvitationNotice = { from: string; organization: string; role: 'admin' | 'member'; link: string; expiresInDays: number }
+
+export async function sendInvitation(to: string, n: InvitationNotice) {
+  const as = n.role === 'admin' ? 'an admin' : 'a member'
+  await transport.sendMail({
+    from: env.smtp.from,
+    to,
+    subject: `${n.from} invited you to ${n.organization} on The Artifact`,
+    text: `${n.from} invited you to join ${n.organization} on The Artifact as ${as}. You will see the pages your team's agents publish.\n\nAccept the invitation:\n${n.link}\n\nLog in or sign up with ${to} to accept. The invitation expires in ${n.expiresInDays} days.`,
+    html: `
+      <div style="font-family: -apple-system, 'Segoe UI', sans-serif; color: #1c2b4b; max-width: 480px">
+        <p style="font-size: 16px"><strong>${escapeHtml(n.from)}</strong> invited you to join <strong>${escapeHtml(n.organization)}</strong> on The Artifact as ${as}.</p>
+        <p style="font-size: 14px; color: #4a587a">You will see the pages your team's agents publish.</p>
+        <p>
+          <a href="${n.link}" style="display: inline-block; padding: 12px 20px; background: #ffe066; color: #1c2b4b; border: 1.5px solid #1c2b4b; border-radius: 3px; font-weight: 700; text-decoration: none">
+            Accept invitation
+          </a>
+        </p>
+        <p style="font-size: 14px; color: #4a587a">Log in or sign up with ${escapeHtml(to)} to accept. The invitation expires in ${n.expiresInDays} days.</p>
+      </div>`,
+  })
+}

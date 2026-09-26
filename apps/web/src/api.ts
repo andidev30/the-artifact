@@ -182,3 +182,141 @@ export function setPersonRole(slug: string, email: string, role: ShareRole) {
 export function removePerson(slug: string, email: string) {
   return sharingRequest<Sharing>(slug, `/sharing/people?email=${encodeURIComponent(email)}`, { method: 'DELETE' })
 }
+
+// Members, invitations and account settings
+
+export type InviteRole = 'admin' | 'member'
+
+export type OrganizationMember = {
+  id: string
+  email: string
+  name: string | null
+  avatarUrl: string | null
+  role: Role
+  joinedAt: string
+}
+
+export type PendingInvitation = {
+  id: string
+  email: string
+  role: InviteRole
+  expiresAt: string
+  createdAt: string
+  invitedBy: string | null
+  expired: boolean
+}
+
+export type OrganizationDetails = Organization & {
+  members: OrganizationMember[]
+  invitations: PendingInvitation[]
+}
+
+export class ApiError extends Error {
+  status: number
+  code: string | undefined
+  field: string | undefined
+  constructor(message: string, status: number, code?: string, field?: string) {
+    super(message)
+    this.status = status
+    this.code = code
+    this.field = field
+  }
+}
+
+async function request<T>(path: string, init?: { method?: string; json?: unknown }): Promise<T> {
+  const res = await fetch(`/api${path}`, {
+    method: init?.method,
+    credentials: 'same-origin',
+    headers: init?.json === undefined ? undefined : { 'Content-Type': 'application/json' },
+    body: init?.json === undefined ? undefined : JSON.stringify(init.json),
+  })
+  const data = res.status === 204 ? null : await res.json().catch(() => ({}))
+  if (!res.ok) throw new ApiError(data?.error ?? 'Something went wrong. Try again.', res.status, data?.code, data?.field)
+  return data as T
+}
+
+const orgPath = (id: string) => `/organizations/${encodeURIComponent(id)}`
+
+export function getOrganization(id: string) {
+  return request<OrganizationDetails>(orgPath(id))
+}
+
+export function renameOrganization(id: string, name: string) {
+  return request<OrganizationDetails>(orgPath(id), { method: 'PATCH', json: { name } })
+}
+
+export function inviteMember(id: string, email: string, role: InviteRole) {
+  return request<{ emailed: boolean; link?: string; organization: OrganizationDetails }>(`${orgPath(id)}/invitations`, {
+    method: 'POST',
+    json: { email, role },
+  })
+}
+
+export function revokeInvitation(id: string, invitationId: string) {
+  return request<OrganizationDetails>(`${orgPath(id)}/invitations/${encodeURIComponent(invitationId)}`, { method: 'DELETE' })
+}
+
+export function setMemberRole(id: string, userId: string, role: Role) {
+  return request<OrganizationDetails>(`${orgPath(id)}/members/${encodeURIComponent(userId)}`, { method: 'PATCH', json: { role } })
+}
+
+// Resolves to null when you removed yourself (left)
+export function removeMember(id: string, userId: string) {
+  return request<OrganizationDetails | null>(`${orgPath(id)}/members/${encodeURIComponent(userId)}`, { method: 'DELETE' })
+}
+
+export type Invitation = {
+  organization: { id: string; name: string; slug: string; memberCount: number }
+  email: string
+  role: InviteRole
+  invitedBy: string | null
+  expiresAt: string
+  expired: boolean
+  signedInAs: string | null
+  alreadyMember: boolean
+}
+
+export function getInvitation(token: string) {
+  return request<Invitation>(`/invitations/${encodeURIComponent(token)}`)
+}
+
+export function acceptInvitation(token: string) {
+  return request<Organization>(`/invitations/${encodeURIComponent(token)}/accept`, { method: 'POST' })
+}
+
+export function declineInvitation(token: string) {
+  return request<null>(`/invitations/${encodeURIComponent(token)}/decline`, { method: 'POST' })
+}
+
+export function updateProfile(name: string) {
+  return request<{ name: string }>('/me', { method: 'PATCH', json: { name } })
+}
+
+export type ConnectedAgent = {
+  clientId: string
+  name: string
+  workspaces: string[]
+  lastUsedAt: string | null
+  connectedAt: string
+}
+
+export function listAgents() {
+  return request<ConnectedAgent[]>('/me/agents')
+}
+
+export function disconnectAgent(clientId: string) {
+  return request<null>(`/me/agents/${encodeURIComponent(clientId)}`, { method: 'DELETE' })
+}
+
+export type DeletionPreview = {
+  blockedBy: { id: string; name: string }[]
+  deletesOrganizations: string[]
+}
+
+export function getDeletionPreview() {
+  return request<DeletionPreview>('/me/deletion')
+}
+
+export function deleteAccount(confirmEmail: string) {
+  return request<null>('/me', { method: 'DELETE', json: { confirmEmail } })
+}

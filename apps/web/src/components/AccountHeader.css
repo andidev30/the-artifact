@@ -1,0 +1,22 @@
+.app-account .app-account-link {
+  font-weight: 600;
+  color: var(--ink);
+  text-decoration: none;
+  text-underline-offset: 4px;
+}
+
+.app-account .app-account-link:hover,
+.app-account .app-account-link[aria-current='page'] {
+  text-decoration: underline;
+}
+
+.app-account .app-account-link {
+  white-space: nowrap;
+}
+
+/* Phones: the switcher and Settings take the row; Log out lives on the Settings page */
+@media (max-width: 520px) {
+  .app-account:has(.app-account-link) .auth-reset {
+    display: none;
+  }
+}

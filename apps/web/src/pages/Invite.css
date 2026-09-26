@@ -1,0 +1,81 @@
+.invite {
+  width: min(500px, 100%);
+  gap: 18px;
+}
+
+/* You, joined by a wire to the organization */
+.invite-diagram {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  margin-bottom: 4px;
+}
+
+.invite-node {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 55%;
+  padding: 5px 12px 5px 5px;
+  font-size: var(--step--1);
+  font-weight: 700;
+  background: var(--white);
+  border: 1.5px solid var(--ink);
+  border-radius: 999px;
+}
+
+.invite-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.invite-node-org {
+  flex: none;
+  max-width: 45%;
+  background: var(--marker);
+}
+
+.invite-dot {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  background: var(--white);
+  border: 1.5px solid var(--ink);
+  border-radius: 50%;
+}
+
+.invite-note {
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+}
+
+.invite-note strong {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.invite-mismatch {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  font-size: var(--step--1);
+  background: #fff8d6;
+  border: 1.5px solid var(--ink);
+  border-left-width: 5px;
+  border-radius: 3px;
+}
+
+.invite-mismatch strong {
+  overflow-wrap: anywhere;
+}
+
+.invite .onboarding-actions .button {
+  text-align: center;
+}
