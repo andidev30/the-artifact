@@ -377,3 +377,19 @@ export function deleteArtifact(slug: string) {
 export function contentUrl(slug: string, version: number) {
   return `/api/artifacts/${encodeURIComponent(slug)}/content?v=${version}`
 }
+
+// Magic link confirmation: opening the emailed link only looks it up; continuing uses it
+
+export type SignInLink = { email: string; expired: boolean; newAccount: boolean }
+
+export function getSignInLink(token: string) {
+  return request<SignInLink>(`/auth/email/confirm?token=${encodeURIComponent(token)}`)
+}
+
+export function confirmSignInLink(token: string, plan: string | null, next: string | null) {
+  return request<{ redirect: string }>('/auth/email/confirm', { method: 'POST', json: { token, plan, next } })
+}
+
+export function requestSignInLink(email: string, intent: 'login' | 'signup', plan: string | null, next: string | null) {
+  return request<null>('/auth/email', { method: 'POST', json: { email, intent, plan, next } })
+}

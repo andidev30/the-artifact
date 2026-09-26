@@ -15,22 +15,33 @@ async function requestLink(email: string, extra: Record<string, unknown> = {}) {
   return { to, link: new URL(link), intent }
 }
 
-// The emailed link points at the web app, which proxies /api to this app
-function verifyPath(link: URL) {
-  return link.pathname + link.search
+function tokenOf(link: URL) {
+  return link.searchParams.get('token')!
+}
+
+// What the confirmation page does when someone presses Continue
+function confirm(link: URL, extra: Record<string, unknown> = {}) {
+  return call('/api/auth/email/confirm', {
+    json: {
+      token: tokenOf(link),
+      plan: link.searchParams.get('plan'),
+      next: link.searchParams.get('next'),
+      ...extra,
+    },
+  })
 }
 
 describe('magic link sign-in', () => {
-  it('emails a link that signs in and creates the account', async () => {
+  it('emails a link to the confirmation page, and continuing signs in and creates the account', async () => {
     const { to, link, intent } = await requestLink('  New.Person@Example.com ', { intent: 'signup' })
     expect(to).toBe('new.person@example.com')
     expect(intent).toBe('signup')
     expect(link.origin).toBe('http://localhost:5177')
-    expect(link.pathname).toBe('/api/auth/email/verify')
+    expect(link.pathname).toBe('/auth/confirm')
 
-    const res = await call(verifyPath(link))
-    expect(res.status).toBe(302)
-    expect(res.headers.get('location')).toBe('http://localhost:5177/app')
+    const res = await confirm(link)
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ redirect: 'http://localhost:5177/app' })
     const cookie = sessionCookie(res)
     expect(cookie).toBeTruthy()
     expect(res.headers.getSetCookie()[0]).toMatch(/HttpOnly/i)
@@ -46,10 +57,36 @@ describe('magic link sign-in', () => {
     })
   })
 
+  it('looking the link up has no side effects', async () => {
+    const { link } = await requestLink('scanner@example.com')
+    const path = `/api/auth/email/confirm?token=${encodeURIComponent(tokenOf(link))}`
+
+    // A mail scanner (or the page itself) can look as often as it likes
+    for (let i = 0; i < 3; i++) {
+      const res = await call(path)
+      expect(res.status).toBe(200)
+      expect(await res.json()).toEqual({ email: 'scanner@example.com', expired: false, newAccount: true })
+      expect(sessionCookie(res)).toBeNull()
+    }
+    expect(await db.select().from(schema.emailTokens)).toHaveLength(1)
+    expect(await db.select().from(schema.users)).toHaveLength(0)
+    expect(await db.select().from(schema.sessions)).toHaveLength(0)
+
+    // The link still works afterwards
+    expect(sessionCookie(await confirm(link))).toBeTruthy()
+  })
+
+  it('says whether continuing logs in to an existing account', async () => {
+    await createUser({ email: 'old@example.com' })
+    const { link } = await requestLink('old@example.com')
+    const res = await call(`/api/auth/email/confirm?token=${encodeURIComponent(tokenOf(link))}`)
+    expect(await res.json()).toMatchObject({ email: 'old@example.com', newAccount: false })
+  })
+
   it('signs in to an existing account instead of creating another', async () => {
     const existing = await createUser({ email: 'known@example.com' })
     const { link } = await requestLink('KNOWN@example.com')
-    const res = await call(verifyPath(link))
+    const res = await confirm(link)
     const me = await (await call('/api/me', { cookie: sessionCookie(res)! })).json()
     expect(me.id).toBe(existing.id)
     expect(await db.select().from(schema.users)).toHaveLength(1)
@@ -57,35 +94,76 @@ describe('magic link sign-in', () => {
 
   it('works only once', async () => {
     const { link } = await requestLink('once@example.com')
-    expect(sessionCookie(await call(verifyPath(link)))).toBeTruthy()
+    expect(sessionCookie(await confirm(link))).toBeTruthy()
 
-    const again = await call(verifyPath(link))
-    expect(again.status).toBe(302)
-    expect(again.headers.get('location')).toBe('http://localhost:5177/login?error=link_invalid')
+    const again = await confirm(link)
+    expect(again.status).toBe(400)
+    expect(await again.json()).toMatchObject({ code: 'link_invalid' })
     expect(sessionCookie(again)).toBeNull()
+
+    // The confirmation page now says it was used
+    const lookup = await call(`/api/auth/email/confirm?token=${encodeURIComponent(tokenOf(link))}`)
+    expect(lookup.status).toBe(404)
+    expect(await lookup.json()).toMatchObject({ code: 'link_invalid' })
+  })
+
+  it('works once even when Continue is pressed twice at the same time', async () => {
+    const { link } = await requestLink('race@example.com')
+    const results = await Promise.all([confirm(link), confirm(link)])
+    expect(results.map((r) => r.status).sort()).toEqual([200, 400])
+    expect(await db.select().from(schema.sessions)).toHaveLength(1)
   })
 
   it('rejects an expired link', async () => {
     const { link } = await requestLink('late@example.com')
-    const token = link.searchParams.get('token')!
-    await db.update(schema.emailTokens).set({ expiresAt: new Date(Date.now() - 1000) }).where(eq(schema.emailTokens.id, hashToken(token)))
+    await db.update(schema.emailTokens).set({ expiresAt: new Date(Date.now() - 1000) }).where(eq(schema.emailTokens.id, hashToken(tokenOf(link))))
 
-    const res = await call(verifyPath(link))
-    expect(res.headers.get('location')).toBe('http://localhost:5177/login?error=link_expired')
+    const lookup = await call(`/api/auth/email/confirm?token=${encodeURIComponent(tokenOf(link))}`)
+    expect(lookup.status).toBe(200)
+    expect(await lookup.json()).toEqual({ email: 'late@example.com', expired: true, newAccount: true })
+
+    const res = await confirm(link)
+    expect(res.status).toBe(410)
+    expect(await res.json()).toMatchObject({ code: 'link_expired', email: 'late@example.com' })
     expect(sessionCookie(res)).toBeNull()
     expect(await db.select().from(schema.users)).toHaveLength(0)
   })
 
   it('rejects missing and unknown tokens', async () => {
-    for (const path of ['/api/auth/email/verify', '/api/auth/email/verify?token=nope']) {
-      const res = await call(path)
-      expect(res.headers.get('location')).toBe('http://localhost:5177/login?error=link_invalid')
+    for (const path of ['/api/auth/email/confirm', '/api/auth/email/confirm?token=nope']) {
+      expect((await call(path)).status).toBe(404)
     }
+    for (const json of [{}, { token: 'nope' }, { token: 42 }]) {
+      const res = await call('/api/auth/email/confirm', { json })
+      expect(res.status).toBe(400)
+      expect(sessionCookie(res)).toBeNull()
+    }
+  })
+
+  it('sends links from before the confirmation page to it, without using them', async () => {
+    const { link } = await requestLink('legacy@example.com', { next: '/a/abc234', plan: 'organization' })
+    const q = new URLSearchParams({ token: tokenOf(link), plan: 'organization', next: '/a/abc234' })
+    const res = await call(`/api/auth/email/verify?${q}`)
+    expect(res.status).toBe(302)
+    expect(sessionCookie(res)).toBeNull()
+    const location = new URL(res.headers.get('location')!)
+    expect(location.origin + location.pathname).toBe('http://localhost:5177/auth/confirm')
+    expect(location.searchParams.get('token')).toBe(tokenOf(link))
+    expect(location.searchParams.get('plan')).toBe('organization')
+    expect(location.searchParams.get('next')).toBe('/a/abc234')
+    expect(await db.select().from(schema.emailTokens)).toHaveLength(1)
+
+    // An unsafe next is dropped on the way
+    const evil = await call(`/api/auth/email/verify?token=${tokenOf(link)}&next=//evil.com`)
+    expect(new URL(evil.headers.get('location')!).searchParams.has('next')).toBe(false)
+
+    const missing = await call('/api/auth/email/verify')
+    expect(missing.headers.get('location')).toBe('http://localhost:5177/login?error=link_invalid')
   })
 
   it('stores only a hash of the token', async () => {
     const { link } = await requestLink('hash@example.com')
-    const token = link.searchParams.get('token')!
+    const token = tokenOf(link)
     const [row] = await db.select().from(schema.emailTokens)
     expect(row.id).toBe(hashToken(token))
     expect(row.id).not.toBe(token)
@@ -94,20 +172,19 @@ describe('magic link sign-in', () => {
   it('returns to a safe next path and keeps the plan', async () => {
     const { link } = await requestLink('next@example.com', { next: '/a/abc234', plan: 'organization' })
     expect(link.searchParams.get('next')).toBe('/a/abc234')
-    const res = await call(verifyPath(link))
-    expect(res.headers.get('location')).toBe('http://localhost:5177/a/abc234')
+    const res = await confirm(link)
+    expect((await res.json()).redirect).toBe('http://localhost:5177/a/abc234')
 
     sendMock.mockClear()
     const { link: orgLink } = await requestLink('plan@example.com', { plan: 'organization' })
-    expect((await call(verifyPath(orgLink))).headers.get('location')).toBe('http://localhost:5177/app?plan=organization')
+    expect((await (await confirm(orgLink)).json()).redirect).toBe('http://localhost:5177/app?plan=organization')
   })
 
   it('drops an unsafe next path', async () => {
     const { link } = await requestLink('evil@example.com', { next: '//evil.com' })
     expect(link.searchParams.has('next')).toBe(false)
-    // Even a next added to the link by hand is ignored
-    link.searchParams.set('next', '//evil.com')
-    expect((await call(verifyPath(link))).headers.get('location')).toBe('http://localhost:5177/app')
+    // Even a next sent by hand is ignored
+    expect((await (await confirm(link, { next: '//evil.com' })).json()).redirect).toBe('http://localhost:5177/app')
   })
 
   it('rejects invalid email addresses', async () => {

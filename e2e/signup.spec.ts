@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import { expect, test } from '@playwright/test'
-import { signInLink, signUp, uniqueEmail } from './helpers'
+import { openSignInLink, signInLink, signUp, uniqueEmail } from './helpers'
 
 test('sign up with a magic link, create an organization, land in its workspace', async ({ page }) => {
   const email = uniqueEmail('signup')
@@ -44,16 +44,31 @@ test('sign up with a magic link, create an organization, land in its workspace',
   expect((await page.request.get('/api/me')).status()).toBe(401)
 })
 
-test('a used sign-in link shows an error on the login page', async ({ page, browser }) => {
+test('opening a sign-in link does not use it up; it works once', async ({ page, browser }) => {
   const email = uniqueEmail('reuse')
-  await signUp(page, email)
+  await page.goto('/login')
+  await page.getByLabel('Email').fill(email)
+  await page.getByRole('button', { name: 'Email me a sign-in link' }).click()
+  await expect(page.getByRole('heading', { name: 'Check your inbox' })).toBeVisible()
+  const link = await signInLink(page.request, email)
 
-  // Open the same link again in another browser
-  const used = await signInLink(page.request, email)
+  // A mail scanner opens the link first: nothing happens
+  const scanner = await browser.newContext()
+  const scannerPage = await scanner.newPage()
+  await scannerPage.goto(link)
+  await expect(scannerPage.getByRole('button', { name: `Continue as ${email}` })).toBeVisible()
+  expect((await scannerPage.request.get('/api/me')).status()).toBe(401)
+  await scanner.close()
+
+  // The person opens it and continues
+  await openSignInLink(page, link, email)
+  await expect(page).toHaveURL(/\/onboarding/)
+
+  // Opening the same link again in another browser explains it was used
   const other = await browser.newContext()
   const otherPage = await other.newPage()
-  await otherPage.goto(used)
-  await expect(otherPage).toHaveURL(/\/login\?error=link_invalid/)
-  await expect(otherPage.getByRole('alert')).toHaveText(/already been used/)
+  await otherPage.goto(link)
+  await expect(otherPage.getByRole('heading', { name: "This sign-in link can't be used" })).toBeVisible()
+  await expect(otherPage.getByRole('link', { name: 'Request a new link' })).toBeVisible()
   await other.close()
 })
