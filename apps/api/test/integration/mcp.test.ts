@@ -202,9 +202,7 @@ describe('MCP over /mcp', () => {
     expect((await callTool(viewerToken, 'publish_artifact', { title: 'x', html: 'x', artifact_id: slug })).isError).toBe(true)
   })
 
-  // BUG: publish_artifact with artifact_id skips the check that set_artifact_visibility and
-  // PATCH /api/artifacts/:slug make, so a personal page can end up with "organization" visibility.
-  it.fails('refuses organization visibility when republishing a personal page', async () => {
+  it('refuses organization visibility when republishing a personal page', async () => {
     const { token } = await setup()
     const slug = slugFrom((await callTool(token, 'publish_artifact', { title: 'Page', html: HTML })).text)
     const res = await callTool(token, 'publish_artifact', { title: 'Page', html: HTML, artifact_id: slug, visibility: 'organization' })

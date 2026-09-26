@@ -180,13 +180,13 @@ oauth.post('/oauth/token', async (c) => {
 
   if (params.grant_type === 'refresh_token') {
     if (!params.refresh_token) return tokenError(c, 'invalid_request', 'refresh_token is required.')
+    const where = and(eq(schema.oauthTokens.id, hashToken(params.refresh_token)), eq(schema.oauthTokens.kind, 'refresh'))
+    // Check the client before using the token up, so a wrong client can't burn someone else's token
+    const [found] = await db.select({ clientId: schema.oauthTokens.clientId }).from(schema.oauthTokens).where(where)
+    if (found && params.client_id && params.client_id !== found.clientId) return tokenError(c, 'invalid_grant', 'The token was issued to another client.')
     // Refresh tokens rotate: the old one stops working once used
-    const [old] = await db
-      .delete(schema.oauthTokens)
-      .where(and(eq(schema.oauthTokens.id, hashToken(params.refresh_token)), eq(schema.oauthTokens.kind, 'refresh')))
-      .returning()
+    const [old] = await db.delete(schema.oauthTokens).where(where).returning()
     if (!old || old.expiresAt.getTime() < Date.now()) return tokenError(c, 'invalid_grant', 'The refresh token is invalid or expired.')
-    if (params.client_id && params.client_id !== old.clientId) return tokenError(c, 'invalid_grant', 'The token was issued to another client.')
     return c.json(await issueTokens(old.clientId, old.userId, old.organizationId))
   }
 

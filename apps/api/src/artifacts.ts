@@ -102,6 +102,9 @@ export async function publish(input: PublishInput): Promise<Artifact> {
     if (!existing || !(await canEdit(existing, { id: input.userId, email: input.email }))) {
       throw new PublishError(`No page you can edit has the id "${input.slug}". Publish without artifact_id to create a new page.`)
     }
+    if (input.visibility === 'organization' && !existing.organizationId) {
+      throw new PublishError('This page is in a personal workspace. Use private or link.')
+    }
     return db.transaction(async (tx) => {
       const version = existing.currentVersion + 1
       await tx.insert(schema.artifactVersions).values({ artifactId: existing.id, version, html: input.html })

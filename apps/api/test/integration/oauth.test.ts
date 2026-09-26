@@ -265,6 +265,8 @@ describe('full MCP OAuth flow', () => {
     const other = await registerClient('other')
     const res = await token({ grant_type: 'refresh_token', refresh_token: tokens.refresh_token, client_id: other.client_id })
     expect((await res.json()).error).toBe('invalid_grant')
+    // The attempt from the wrong client didn't use the token up
+    expect((await token({ grant_type: 'refresh_token', refresh_token: tokens.refresh_token })).status).toBe(200)
   })
 
   it('expired access tokens are rejected', async () => {
