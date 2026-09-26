@@ -4,13 +4,13 @@ import { AccountSuspendedError, canSignUp, findOrCreateUser } from '../../src/au
 import { hashToken } from '../../src/auth/session.js'
 import { db, schema } from '../../src/db/index.js'
 import { env } from '../../src/env.js'
+import { sendSignInLink } from '../../src/mail.js'
 import { addMember, call, callTool, connectAgent, createOrg, createPage, createUser, mcpRequest, type TestUser } from './helpers.js'
 
-const original = { selfHosted: env.selfHosted, firstUserAdmin: env.firstUserAdmin }
+const original = { selfHosted: env.selfHosted }
 
 afterEach(() => {
   env.selfHosted = original.selfHosted
-  env.firstUserAdmin = original.firstUserAdmin
   env.adminEmails.length = 0
   env.allowedEmailDomains.length = 0
 })
@@ -27,7 +27,7 @@ async function me(user: TestUser) {
 
 describe('first account becomes the instance admin', () => {
   it('makes only the first account an admin when self-hosted', async () => {
-    env.firstUserAdmin = true
+    env.selfHosted = true
     await findOrCreateUser({ email: 'first@example.com' })
     await findOrCreateUser({ email: 'second@example.com' })
     expect(await isAdminInDb('first@example.com')).toBe(true)
@@ -35,7 +35,7 @@ describe('first account becomes the instance admin', () => {
   })
 
   it('gives exactly one of many simultaneous sign-ups admin', async () => {
-    env.firstUserAdmin = true
+    env.selfHosted = true
     const emails = Array.from({ length: 8 }, (_, i) => `racer${i}@example.com`)
     const users = await Promise.all(emails.map((email) => findOrCreateUser({ email })))
     expect(users.filter((u) => u.isAdmin)).toHaveLength(1)
@@ -45,14 +45,14 @@ describe('first account becomes the instance admin', () => {
   })
 
   it('creates one account when the same person signs up twice at once', async () => {
-    env.firstUserAdmin = true
+    env.selfHosted = true
     const [a, b] = await Promise.all([findOrCreateUser({ email: 'twice@example.com' }), findOrCreateUser({ email: 'twice@example.com' })])
     expect(a.id).toBe(b.id)
     expect(a.isAdmin).toBe(true)
   })
 
-  it('does nothing on the hosted service (FIRST_USER_ADMIN off)', async () => {
-    env.firstUserAdmin = false
+  it('does nothing on the hosted service', async () => {
+    env.selfHosted = false
     const user = await findOrCreateUser({ email: 'cloud@example.com' })
     expect(user.isAdmin).toBe(false)
   })
@@ -236,6 +236,11 @@ describe('suspension', () => {
     const refresh = await call('/oauth/token', { form: { grant_type: 'refresh_token', refresh_token: tokens.refresh_token } })
     expect(refresh.status).toBe(400)
     await expect(findOrCreateUser({ email: 'bob@example.com' })).rejects.toBeInstanceOf(AccountSuspendedError)
+    // No sign-in link is sent to a suspended account
+    const link = await call('/api/auth/email', { json: { email: 'BOB@example.com' } })
+    expect(link.status).toBe(403)
+    expect(await link.json()).toMatchObject({ code: 'account_suspended' })
+    expect(sendSignInLink).not.toHaveBeenCalled()
 
     // The page is still there and still opens by link
     expect((await call(`/api/artifacts/${page.slug}`)).status).toBe(200)

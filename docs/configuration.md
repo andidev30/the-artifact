@@ -21,11 +21,9 @@ Settings are environment variables. For a self-hosted install they go in `.env.s
 | `SMTP_USER`, `SMTP_PASS` | empty | Leave empty for servers without authentication |
 | `ALLOWED_EMAIL_DOMAINS` | empty | Comma-separated domains that may create accounts. Empty lets anyone sign up. People invited to an organization or a page can always join. Used until an instance admin saves a sign-up policy in the admin area, which then takes precedence. |
 | `ADMIN_EMAILS` | empty | Comma-separated addresses that are always instance admins and can always sign up. They can't be demoted or deleted from the admin area. See [The instance admin](/docs/self-hosting#the-instance-admin). |
-| `FIRST_USER_ADMIN` | same as `SELF_HOSTED` | `true` makes the first account created on the install its admin. `false` turns that off. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | empty | Enables **Continue with Google**. Register `APP_URL/api/auth/google/callback` as the redirect URI. |
 | `CHROME_PATH` | empty (the image sets it) | Chrome or Chromium binary that renders gallery thumbnails. Empty skips thumbnails; cards show a sketch. |
 | `THUMBNAIL_CDN_HOSTS` | a built-in list | Comma-separated hosts pages may load scripts, styles and fonts from while their thumbnail renders, e.g. `cdn.jsdelivr.net,fonts.gstatic.com`. `none` blocks every host (pages that need a CDN then render without it). The built-in list: `cdn.jsdelivr.net`, `unpkg.com`, `cdnjs.cloudflare.com`, `esm.sh`, `ga.jspm.io`, `cdn.skypack.dev`, `cdn.tailwindcss.com`, `code.jquery.com`, `d3js.org`, `cdn.plot.ly`, `fonts.googleapis.com`, `fonts.gstatic.com`, `rsms.me`. |
-| `CHROME_NO_SANDBOX` | `false` | `true` runs Chromium without its sandbox. Only for containers isolated some other way; see [Security](/docs/security). |
 | `PORT` | `3000` | Port inside the container |
 | `ARTIFACT_PORT` | `8080` | Host port in `docker-compose.selfhost.yml` |
 | `POSTGRES_PASSWORD` | `artifact` | Database password in `docker-compose.selfhost.yml`; set it in a `.env` file next to the compose file before the first start |
@@ -39,17 +37,15 @@ Any service with the S3 API works: MinIO, AWS S3, Cloudflare R2, Backblaze B2, G
 | `S3_ENDPOINT` | empty (AWS S3) | e.g. `http://minio:9000` or `https://<account>.r2.cloudflarestorage.com` |
 | `S3_REGION` | `us-east-1` | `auto` for R2 |
 | `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | empty | Without them, the AWS SDK's usual credential chain applies (environment, IAM role) |
-| `S3_FORCE_PATH_STYLE` | `true` when `S3_ENDPOINT` is set | `bucket/key` URLs rather than `bucket.host`; MinIO needs it |
-| `S3_CREATE_BUCKET` | `true` when `S3_ENDPOINT` is set | Create the bucket on start if it doesn't exist |
 | `MINIO_ROOT_PASSWORD` | `artifact-secret` | Password of the bundled MinIO in `docker-compose.selfhost.yml`; set it in the `.env` next to the compose file before the first start |
 
-The app only needs to read, write, list and delete objects in its bucket. Keep the bucket private.
+With `S3_ENDPOINT` set, the app uses `bucket/key` addresses (path style), which MinIO and most other stores need. It creates the bucket on start if it doesn't exist; without permission to do that, create it yourself. Besides that, the app only needs to read, write, list and delete objects in its bucket. Keep the bucket private.
 
 ## Set by the image
 
 | Variable | Value | Meaning |
 | --- | --- | --- |
-| `SELF_HOSTED` | `true` | Skips the marketing pages; `/` opens the app. Also makes the first account the instance admin, unless `FIRST_USER_ADMIN=false`. |
+| `SELF_HOSTED` | `true` | Skips the marketing pages; `/` opens the app. Also makes the first account the instance admin. |
 | `WEB_DIR` | `/app/web` | Serves the built web app from the same process |
 | `MIGRATE_ON_START` | `true` | Applies database migrations on every start |
 | `CHROME_PATH` | `/usr/bin/chromium-headless-shell` | Renders gallery thumbnails |

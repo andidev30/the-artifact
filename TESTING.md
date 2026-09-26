@@ -27,7 +27,7 @@ pnpm lint                                        # includes a type check of the 
 
 ## Integration tests
 
-They call the Hono app in-process, so no server runs. Every table in the `public` schema is truncated before each test, and files run one at a time because they share the database. Email is mocked (`vi.mock` of `src/mail.ts`), so Mailpit isn't needed; tests assert on the mocked `sendSignInLink` and `sendShareNotice` calls. Helpers in `test/integration/helpers.ts` create signed-in users, organizations, pages and complete MCP OAuth connections. `vitest.config.ts` pins `SELF_HOSTED`, `ALLOWED_EMAIL_DOMAINS`, `ADMIN_EMAILS` and `FIRST_USER_ADMIN` to their hosted defaults so a local `.env` can't leak in; tests that need other values change the `env` object and restore it afterwards (see `admin.test.ts`).
+They call the Hono app in-process, so no server runs. Every table in the `public` schema is truncated before each test, and files run one at a time because they share the database. Email is mocked (`vi.mock` of `src/mail.ts`), so Mailpit isn't needed; tests assert on the mocked `sendSignInLink` and `sendShareNotice` calls. Helpers in `test/integration/helpers.ts` create signed-in users, organizations, pages and complete MCP OAuth connections. `vitest.config.ts` pins `SELF_HOSTED`, `ALLOWED_EMAIL_DOMAINS`, and `ADMIN_EMAILS` to their hosted defaults so a local `.env` can't leak in; tests that need other values change the `env` object and restore it afterwards (see `admin.test.ts`).
 
 Thumbnails are off in tests (`CHROME_PATH` is empty). `thumbnails.test.ts` turns them on with the installed Google Chrome (override with `TEST_CHROME_PATH`) to check rendering, serving and network isolation; without Chrome those tests are skipped.
 

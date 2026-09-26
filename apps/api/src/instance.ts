@@ -36,10 +36,10 @@ export async function activeAdminCount(tx: Tx | typeof db = db): Promise<number>
   return row.n
 }
 
-// Whether a new account should be the instance admin: only the very first one, and only when
-// FIRST_USER_ADMIN is on (the default when SELF_HOSTED). Call inside the transaction holding lockAdmins.
+// Whether a new account should be the instance admin: only the very first one, and only on a
+// self-hosted install. Call inside the transaction holding lockAdmins.
 export async function firstAccountBecomesAdmin(tx: Tx): Promise<boolean> {
-  if (!env.firstUserAdmin) return false
+  if (!env.selfHosted) return false
   const [any] = await tx.select({ id: schema.users.id }).from(schema.users).limit(1)
   return !any
 }

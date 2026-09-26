@@ -52,7 +52,7 @@ export const DEFAULT_CDN_HOSTS = [
   'rsms.me',
 ]
 
-type Config = { chromePath: string; cdnHosts: Set<string>; noSandbox: boolean; loadTimeout: number; renderTimeout: number }
+type Config = { chromePath: string; cdnHosts: Set<string>; loadTimeout: number; renderTimeout: number }
 
 function hostsFrom(value: string | undefined): Set<string> {
   // Unset means the defaults; set (even to nothing) replaces them, so "" or "none" blocks every host
@@ -68,7 +68,6 @@ function hostsFrom(value: string | undefined): Set<string> {
 let config: Config = {
   chromePath: env.thumbnails.chromePath,
   cdnHosts: hostsFrom(env.thumbnails.cdnHosts),
-  noSandbox: env.thumbnails.noSandbox,
   loadTimeout: 8_000,
   renderTimeout: 20_000,
 }
@@ -179,7 +178,7 @@ function launch(): Promise<Browser> {
     .launch({
       executablePath: config.chromePath,
       headless: true,
-      chromiumSandbox: !config.noSandbox,
+      chromiumSandbox: true,
       env: browserEnv(),
       timeout: 15_000,
       args: [

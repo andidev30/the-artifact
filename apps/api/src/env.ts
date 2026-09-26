@@ -26,7 +26,8 @@ export const env = {
     pass: process.env.SMTP_PASS ?? '',
     from: required('SMTP_FROM'),
   },
-  // Self-hosted installs skip the marketing pages and go straight to the app
+  // Self-hosted installs skip the marketing pages and go straight to the app, and their first
+  // account becomes the instance admin
   selfHosted: process.env.SELF_HOSTED === 'true',
   // Built web app to serve from this process (the Docker image sets it); empty in development
   webDir: process.env.WEB_DIR ?? '',
@@ -36,8 +37,6 @@ export const env = {
     .split(',')
     .map((d) => d.trim().toLowerCase().replace(/^@/, ''))
     .filter(Boolean),
-  // The first account created on the instance becomes its admin. On by default when self-hosted.
-  firstUserAdmin: process.env.FIRST_USER_ADMIN ? process.env.FIRST_USER_ADMIN === 'true' : process.env.SELF_HOSTED === 'true',
   // These addresses are always instance admins (comma separated), e.g. to recover an install
   adminEmails: (process.env.ADMIN_EMAILS ?? '')
     .split(',')
@@ -51,17 +50,12 @@ export const env = {
     bucket: required('S3_BUCKET'),
     accessKeyId: process.env.S3_ACCESS_KEY_ID ?? '',
     secretAccessKey: process.env.S3_SECRET_ACCESS_KEY ?? '',
-    // MinIO and most self-hosted stores want bucket/key paths rather than bucket.host names
-    forcePathStyle: process.env.S3_FORCE_PATH_STYLE ? process.env.S3_FORCE_PATH_STYLE === 'true' : Boolean(process.env.S3_ENDPOINT),
-    // Create the bucket on start when it doesn't exist (handy for MinIO; needs the permission)
-    createBucket: process.env.S3_CREATE_BUCKET ? process.env.S3_CREATE_BUCKET === 'true' : Boolean(process.env.S3_ENDPOINT),
   },
-  // Gallery thumbnails: a Chrome or Chromium binary (empty skips them), the CDN hosts pages may load
-  // from while rendering (unset uses a built-in list), and whether to run without Chromium's sandbox
+  // Gallery thumbnails: a Chrome or Chromium binary (empty skips them) and the CDN hosts pages may
+  // load from while rendering (unset uses a built-in list)
   thumbnails: {
     chromePath: process.env.CHROME_PATH ?? '',
     cdnHosts: process.env.THUMBNAIL_CDN_HOSTS,
-    noSandbox: process.env.CHROME_NO_SANDBOX === 'true',
   },
 }
 

@@ -21,7 +21,8 @@ const PREFIX = 'blobs/'
 const s3 = new S3Client({
   region: env.storage.region,
   ...(env.storage.endpoint ? { endpoint: env.storage.endpoint } : {}),
-  forcePathStyle: env.storage.forcePathStyle,
+  // A custom endpoint (MinIO and most other stores) wants bucket/key paths, not bucket.host names
+  forcePathStyle: Boolean(env.storage.endpoint),
   ...(env.storage.accessKeyId
     ? { credentials: { accessKeyId: env.storage.accessKeyId, secretAccessKey: env.storage.secretAccessKey } }
     : {}),
@@ -114,18 +115,26 @@ export async function deleteBlobs(hashes: string[]) {
   }
 }
 
-// Fails early, with a clear message, when the bucket can't be reached; creates it if allowed
+// Fails early, with a clear message, when the bucket can't be reached; creates it when missing
 export async function ensureBucket() {
   try {
     await s3.send(new HeadBucketCommand({ Bucket }))
     return
   } catch (err) {
     const status = (err as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode
-    if (status !== 404 || !env.storage.createBucket) {
-      const where = env.storage.endpoint || 'AWS S3'
-      throw new Error(`Can't use the storage bucket "${Bucket}" at ${where} (${status ?? (err as Error).message}). Check the S3_* settings.`)
-    }
+    if (status !== 404) throw bucketError(err)
   }
-  await s3.send(new CreateBucketCommand({ Bucket }))
+  try {
+    await s3.send(new CreateBucketCommand({ Bucket }))
+  } catch (err) {
+    throw bucketError(err, 'it does not exist and could not be created')
+  }
   console.log(`Created the storage bucket "${Bucket}"`)
+}
+
+function bucketError(err: unknown, why?: string) {
+  const status = (err as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode
+  const where = env.storage.endpoint || 'AWS S3'
+  const detail = why ?? `HTTP ${status ?? '?'}`
+  return new Error(`Can't use the storage bucket "${Bucket}" at ${where}: ${detail} (${(err as Error).message}). Check the S3_* settings.`)
 }
