@@ -10,3 +10,8 @@ dist-ssr
 .vscode/*
 !.vscode/extensions.json
 .claude/
+
+# Playwright
+test-results
+playwright-report
+blob-report
