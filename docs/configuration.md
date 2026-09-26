@@ -20,6 +20,9 @@ Settings are environment variables. For a self-hosted install they go in `.env.s
 | `SMTP_USER`, `SMTP_PASS` | empty | Leave empty for servers without authentication |
 | `ALLOWED_EMAIL_DOMAINS` | empty | Comma-separated domains that may create accounts. Empty lets anyone sign up. People invited to an organization or a page can always join. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | empty | Enables **Continue with Google**. Register `APP_URL/api/auth/google/callback` as the redirect URI. |
+| `CHROME_PATH` | empty (the image sets it) | Chrome or Chromium binary that renders gallery thumbnails. Empty skips thumbnails; cards show a sketch. |
+| `THUMBNAIL_CDN_HOSTS` | a built-in list | Comma-separated hosts pages may load scripts, styles and fonts from while their thumbnail renders, e.g. `cdn.jsdelivr.net,fonts.gstatic.com`. `none` blocks every host (pages that need a CDN then render without it). The built-in list: `cdn.jsdelivr.net`, `unpkg.com`, `cdnjs.cloudflare.com`, `esm.sh`, `ga.jspm.io`, `cdn.skypack.dev`, `cdn.tailwindcss.com`, `code.jquery.com`, `d3js.org`, `cdn.plot.ly`, `fonts.googleapis.com`, `fonts.gstatic.com`, `rsms.me`. |
+| `CHROME_NO_SANDBOX` | `false` | `true` runs Chromium without its sandbox. Only for containers isolated some other way; see [Security](/docs/security). |
 | `PORT` | `3000` | Port inside the container |
 | `ARTIFACT_PORT` | `8080` | Host port in `docker-compose.selfhost.yml` |
 | `POSTGRES_PASSWORD` | `artifact` | Database password in `docker-compose.selfhost.yml`; set it in a `.env` file next to the compose file before the first start |
@@ -31,12 +34,17 @@ Settings are environment variables. For a self-hosted install they go in `.env.s
 | `SELF_HOSTED` | `true` | Skips the marketing pages; `/` opens the app |
 | `WEB_DIR` | `/app/web` | Serves the built web app from the same process |
 | `MIGRATE_ON_START` | `true` | Applies database migrations on every start |
+| `CHROME_PATH` | `/usr/bin/chromium-headless-shell` | Renders gallery thumbnails |
 
 ## Limits
 
 | What | Limit |
 | --- | --- |
 | Page size | 2 MB of HTML |
+| Files per page | 100 besides the HTML, each up to 5 MB |
+| Page and files together | 10 MB |
+| File path | 200 characters |
+| Thumbnail render | 8 seconds to load, 20 in all; 640×360 WebP of a 1280×720 viewport |
 | Page title | 200 characters |
 | People per share | 20 at a time |
 | Sign-in link | Works once, for 15 minutes; a new one can be sent after 60 seconds |

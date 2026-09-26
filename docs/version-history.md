@@ -8,7 +8,7 @@ Open a page and choose **History** (editors and owners). Each version shows when
 
 ## Restoring
 
-**Restore this version** publishes that version's HTML again as a new version. The history keeps both, so you can always go back.
+**Restore this version** publishes that version's HTML and files again as a new version. The history keeps both, so you can always go back.
 
 ## Who can see history
 
