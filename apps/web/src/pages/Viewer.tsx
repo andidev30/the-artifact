@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { fetchMe, getArtifact, logout, type ArtifactPage, type Visibility } from '../api'
+import { fetchMe, getArtifact, logout, versionUrl, type ArtifactPage, type Visibility } from '../api'
 import { HistoryPanel, OldVersionBar, type Viewing } from '../components/HistoryPanel'
 import { DeleteDialog, PageMenu, RenameDialog, type MenuItem } from '../components/PageActions'
 import { ShareDialog } from '../components/ShareDialog'
@@ -18,7 +18,8 @@ const VISIBILITY_LABEL: Record<Visibility, string> = {
   link: 'Anyone with the link',
 }
 
-// Opaque origin: the page's scripts run, but can't read cookies or reach this app
+// Opaque origin: the page's scripts run, but can't read cookies or reach this app. The frame loads the
+// version from its own URL, so a page's files resolve by relative paths.
 const SANDBOX = 'allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads'
 
 export function Viewer() {
@@ -175,7 +176,7 @@ function PageFrame({ page, email, onChange }: { page: ArtifactPage; email: strin
           className="viewer-frame"
           title={viewing ? `${page.title}, version ${viewing.version}` : page.title}
           sandbox={SANDBOX}
-          srcDoc={viewing ? viewing.html : page.html}
+          src={versionUrl(page.slug, viewing ? viewing.version : page.version)}
         />
         {historyOpen && (
           <HistoryPanel

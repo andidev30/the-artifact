@@ -77,7 +77,15 @@ export async function connectAgent(page: Page, organizationId: string | null = n
   return tokens.access_token as string
 }
 
-export async function publishViaMcp(request: APIRequestContext, token: string, args: { title: string; html: string; visibility?: string }) {
+type PublishArgs = {
+  title: string
+  html: string
+  visibility?: string
+  artifact_id?: string
+  files?: { path: string; content: string; encoding?: 'utf8' | 'base64' }[]
+}
+
+export async function publishViaMcp(request: APIRequestContext, token: string, args: PublishArgs) {
   const res = await request.post('/mcp', {
     headers: { authorization: `Bearer ${token}`, accept: 'application/json, text/event-stream' },
     data: { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'publish_artifact', arguments: args } },
