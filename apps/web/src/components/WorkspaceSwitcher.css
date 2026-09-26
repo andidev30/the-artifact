@@ -196,14 +196,22 @@
     max-width: 8.5rem;
   }
 
-  /* Full width under the header, so it never runs off the right edge */
+  /* The menu spans the header's content width instead of hanging off the chip, so it never
+     runs off the right edge. With top: auto it sits right under the chip, wherever the header
+     puts it, and it scrolls with the page, so a long menu is never cut off. */
+  .nav:has(.switcher) {
+    position: relative;
+  }
+
+  .switcher {
+    position: static;
+  }
+
   .switcher-menu {
-    position: fixed;
-    top: 64px;
-    left: 16px;
-    right: 16px;
+    top: auto;
+    left: var(--gutter);
+    right: var(--gutter);
     width: auto;
-    max-height: calc(100vh - 80px);
-    overflow-y: auto;
+    margin-top: 10px;
   }
 }
