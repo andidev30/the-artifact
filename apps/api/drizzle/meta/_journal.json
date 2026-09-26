@@ -43,6 +43,13 @@
       "when": 1790420101320,
       "tag": "0005_deep_stellaris",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790436212459,
+      "tag": "0006_fantastic_mockingbird",
+      "breakpoints": true
     }
   ]
 }
