@@ -48,7 +48,7 @@ function Flow({ me }: { me: Me }) {
         <ol className="onboarding-rail" aria-label="Setup progress">
           {steps.map((s, i) => (
             <li key={s.id} data-state={i < current ? 'done' : i === current ? 'current' : 'todo'} aria-current={i === current ? 'step' : undefined}>
-              {s.label}
+              <span>{s.label}</span>
             </li>
           ))}
         </ol>

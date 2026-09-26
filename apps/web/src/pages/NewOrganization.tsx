@@ -31,8 +31,8 @@ function Page({ me }: { me: Me }) {
       <AccountHeader me={me} workspace={name} />
       <main id="main" className="onboarding">
         <ol className="onboarding-rail" aria-label="Steps">
-          <li data-state="current" aria-current="step">Name your organization</li>
-          <li data-state="todo">Invite your team</li>
+          <li data-state="current" aria-current="step"><span>Name your organization</span></li>
+          <li data-state="todo"><span>Invite your team</span></li>
         </ol>
         <div className="onboarding-panel">
           <OrganizationStep

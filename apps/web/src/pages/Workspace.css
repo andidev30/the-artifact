@@ -459,23 +459,51 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
+  /* One row of numbered circles joined by short lines; only the current step keeps its label */
   .onboarding-rail {
     display: flex;
-    flex-wrap: wrap;
-    gap: 8px 20px;
+    align-items: center;
   }
 
   .onboarding-rail li {
+    min-width: 0;
     padding-bottom: 0;
   }
 
-  .onboarding-rail li::after {
-    display: none;
+  .onboarding-rail li[data-state='current'] {
+    flex: 0 1 auto;
   }
 
+  /* Only the current label gives way: on the narrowest phones it ends in an ellipsis */
+  .onboarding-rail li span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* The label's font size would shrink the number with it, so the circle sets its own */
+  .onboarding-rail li::before {
+    font-size: var(--step--1);
+  }
+
+  .onboarding-rail li:not(:last-child)::after {
+    position: static;
+    flex: none;
+    width: 16px;
+    height: 2px;
+    margin-inline: 6px;
+  }
+
+  .onboarding-rail li[data-state='current']:not(:last-child)::after {
+    margin-left: 0;
+  }
+
+  /* The other steps' labels stay in the list for screen readers, just not on screen */
   .onboarding-rail li:not([data-state='current']) {
-    font-size: 0;
+    flex: none;
     gap: 0;
+    font-size: 0;
   }
 
   .choices {
