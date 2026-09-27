@@ -17,7 +17,8 @@ Hono on Node 26, Drizzle ORM over `postgres`, S3 via `@aws-sdk/client-s3`, MCP v
 | `src/thumbnails.ts` | Gallery screenshots of untrusted HTML with no network of its own |
 | `src/sharing.ts` | Per-person shares by email |
 | `src/instance.ts` | Instance admins, sign-up policy and instance settings |
-| `src/mcp.ts` | The six MCP tools (`publish_artifact`, `list_artifacts`, `get_artifact`, `rename_artifact`, `set_artifact_visibility`, `share_artifact`) |
+| `src/mcp.ts` | The MCP tools (`publish_artifact`, `list_artifacts`, `get_artifact`, `rename_artifact`, `set_artifact_visibility`, `share_artifact`, and `prepare_upload`/`publish_upload` when `S3_PUBLIC_ENDPOINT` is set) |
+| `src/uploads.ts` | Publishing by direct upload: upload links, then checking and claiming what arrived |
 | `src/oauth/` | OAuth 2.1 server for MCP clients (discovery, dynamic registration, PKCE) and the consent API |
 | `src/auth/` | Sessions, email links, passwords, Google sign-in, account lookup/creation |
 | `src/routes/` | REST routers for the web app |
@@ -28,7 +29,7 @@ Hono on Node 26, Drizzle ORM over `postgres`, S3 via `@aws-sdk/client-s3`, MCP v
 ## Rules that aren't obvious from one file
 
 - **Access.** Owners and invited editors edit; invited viewers view; organization admins and owners edit every page in their organization; general access (`private` shown as "Restricted", `organization`, `link`) opens a page wider. Older versions and history are editor-only. Go through `accessLevel`/`canView`/`canEdit`; don't re-implement checks in routes.
-- **Blobs are shared and immutable.** Content lives under `blobs/<sha256>`; rows only hold hashes. Anything that uploads blobs and then writes rows that reference them must call `holdStorageLock(tx)` inside the same transaction first, or the sweep can delete a blob between upload and commit.
+- **Blobs are shared and immutable.** Content lives under `blobs/<sha256>`; rows only hold hashes. Only the API writes there: direct uploads land under `uploads/<id>/` and are hashed before they become blobs. Anything that uploads blobs and then writes rows that reference them must call `holdStorageLock(tx)` inside the same transaction first, or the sweep can delete a blob between upload and commit.
 - **Version numbers.** Publish and restore lock the page row (`for update`) before picking the next number. Restore never rewrites history; it publishes the old content as a new version.
 - **Tokens are stored hashed** (`hashToken`): sessions, email links, invitations, OAuth codes and tokens. Links work once; delete the row as it is used.
 - **Email links must survive mail scanners.** Opening a sign-in link only shows a confirmation page; the POST on Continue uses it up.

@@ -3,11 +3,14 @@ import {
   DeleteObjectsCommand,
   GetObjectCommand,
   HeadBucketCommand,
+  HeadObjectCommand,
   ListObjectsV2Command,
   NoSuchKey,
+  NotFound,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3'
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { env } from './env.js'
 import { sha256 } from './files.js'
 
@@ -17,15 +20,34 @@ import { sha256 } from './files.js'
 // Blobs are never changed; ones nothing refers to any more are removed by sweepStorage (src/gc.ts).
 
 const PREFIX = 'blobs/'
+// Direct uploads land here first. Only the API writes under blobs/, after checking the hash, since a
+// blob is shared by every page with the same content.
+const UPLOADS = 'uploads/'
+export const UPLOAD_TTL_SECONDS = 15 * 60
 
-const s3 = new S3Client({
-  region: env.storage.region,
-  ...(env.storage.endpoint ? { endpoint: env.storage.endpoint } : {}),
-  // A custom endpoint (MinIO and most other stores) wants bucket/key paths, not bucket.host names
-  forcePathStyle: Boolean(env.storage.endpoint),
-  ...(env.storage.accessKeyId ? { credentials: { accessKeyId: env.storage.accessKeyId, secretAccessKey: env.storage.secretAccessKey } } : {}),
-})
+function client(endpoint: string) {
+  return new S3Client({
+    region: env.storage.region,
+    ...(endpoint ? { endpoint } : {}),
+    // A custom endpoint (MinIO and most other stores) wants bucket/key paths, not bucket.host names
+    forcePathStyle: Boolean(endpoint),
+    ...(env.storage.accessKeyId ? { credentials: { accessKeyId: env.storage.accessKeyId, secretAccessKey: env.storage.secretAccessKey } } : {}),
+  })
+}
+
+const s3 = client(env.storage.endpoint)
 const Bucket = env.storage.bucket
+
+// Upload links are signed for the host agents connect to, which can differ from the API's
+let signer: { endpoint: string; s3: S3Client } | null = null
+function signingClient(): S3Client {
+  const endpoint = env.storage.publicEndpoint
+  if (signer?.endpoint !== endpoint) signer = { endpoint, s3: client(endpoint) }
+  return signer.s3
+}
+
+// Read on every call, so tests can switch uploads off by changing env
+export const directUploads = () => Boolean(env.storage.publicEndpoint)
 
 export function blobKey(hash: string): string {
   return `${PREFIX}${hash}`
@@ -90,25 +112,86 @@ export async function getText(hash: string): Promise<string | null> {
   return data ? data.toString('utf8') : null
 }
 
-// Every stored blob with when it was written, a page of the listing at a time
-export async function* listBlobs(): AsyncGenerator<{ hash: string; lastModified: Date }> {
+async function* listKeys(Prefix: string): AsyncGenerator<{ key: string; lastModified: Date }> {
   let ContinuationToken: string | undefined
   do {
-    const res = await s3.send(new ListObjectsV2Command({ Bucket, Prefix: PREFIX, ContinuationToken }))
+    const res = await s3.send(new ListObjectsV2Command({ Bucket, Prefix, ContinuationToken }))
     for (const o of res.Contents ?? []) {
-      if (o.Key) yield { hash: o.Key.slice(PREFIX.length), lastModified: o.LastModified ?? new Date(0) }
+      if (o.Key) yield { key: o.Key, lastModified: o.LastModified ?? new Date(0) }
     }
     ContinuationToken = res.IsTruncated ? res.NextContinuationToken : undefined
   } while (ContinuationToken)
 }
 
-export async function deleteBlobs(hashes: string[]) {
-  for (let i = 0; i < hashes.length; i += 1000) {
-    const batch = hashes.slice(i, i + 1000)
-    batch.forEach(forget)
-    const res = await s3.send(new DeleteObjectsCommand({ Bucket, Delete: { Objects: batch.map((h) => ({ Key: blobKey(h) })), Quiet: true } }))
-    if (res.Errors?.length) throw new Error(`Could not delete ${res.Errors.length} blobs: ${res.Errors[0].Message}`)
+async function deleteKeys(keys: string[]) {
+  for (let i = 0; i < keys.length; i += 1000) {
+    const res = await s3.send(new DeleteObjectsCommand({ Bucket, Delete: { Objects: keys.slice(i, i + 1000).map((Key) => ({ Key })), Quiet: true } }))
+    if (res.Errors?.length) throw new Error(`Could not delete ${res.Errors.length} objects: ${res.Errors[0].Message}`)
   }
+}
+
+// Every stored blob with when it was written, a page of the listing at a time
+export async function* listBlobs(): AsyncGenerator<{ hash: string; lastModified: Date }> {
+  for await (const o of listKeys(PREFIX)) yield { hash: o.key.slice(PREFIX.length), lastModified: o.lastModified }
+}
+
+export async function deleteBlobs(hashes: string[]) {
+  hashes.forEach(forget)
+  await deleteKeys(hashes.map(blobKey))
+}
+
+// The size of a stored blob, or null when there is none
+export async function blobSize(hash: string): Promise<number | null> {
+  try {
+    const res = await s3.send(new HeadObjectCommand({ Bucket, Key: blobKey(hash) }))
+    return res.ContentLength ?? null
+  } catch (err) {
+    if (err instanceof NotFound || err instanceof NoSuchKey) return null
+    throw err
+  }
+}
+
+function uploadKey(uploadId: string, hash: string): string {
+  return `${UPLOADS}${uploadId}/${hash}`
+}
+
+// A short-lived link an agent PUTs one file's bytes to, straight to the bucket
+export function presignUpload(uploadId: string, hash: string, size: number): Promise<string> {
+  return getSignedUrl(signingClient(), new PutObjectCommand({ Bucket, Key: uploadKey(uploadId, hash), ContentLength: size }), {
+    expiresIn: UPLOAD_TTL_SECONDS,
+  })
+}
+
+// Stores an uploaded file as a blob if its bytes really have this hash and size. The API hashes
+// them itself rather than trusting a checksum header, which S3-compatible stores support unevenly.
+export async function promoteUpload(uploadId: string, hash: string, size: number): Promise<'stored' | 'missing' | 'mismatch'> {
+  const Key = uploadKey(uploadId, hash)
+  let data: Buffer
+  try {
+    const res = await s3.send(new GetObjectCommand({ Bucket, Key }))
+    // Checked before reading, so an oversized upload never makes it into memory
+    if (res.ContentLength !== size) {
+      ;(res.Body as { destroy?: () => void } | undefined)?.destroy?.()
+      await deleteKeys([Key])
+      return 'mismatch'
+    }
+    data = Buffer.from(await res.Body!.transformToByteArray())
+  } catch (err) {
+    if (err instanceof NoSuchKey) return 'missing'
+    throw err
+  }
+  await deleteKeys([Key])
+  if (data.length !== size || sha256(data) !== hash) return 'mismatch'
+  await putBlob(data, hash)
+  return 'stored'
+}
+
+// Uploads never committed, once their links have long expired
+export async function deleteStaleUploads(olderThanMs: number, now = Date.now()): Promise<number> {
+  const stale: string[] = []
+  for await (const o of listKeys(UPLOADS)) if (now - o.lastModified.getTime() >= olderThanMs) stale.push(o.key)
+  await deleteKeys(stale)
+  return stale.length
 }
 
 // Fails early, with a clear message, when the bucket can't be reached; creates it when missing

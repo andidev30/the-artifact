@@ -39,9 +39,10 @@ Any service with the S3 API works: MinIO, AWS S3, Cloudflare R2, Backblaze B2, G
 | `S3_ENDPOINT` | empty (AWS S3) | e.g. `http://minio:9000` or `https://<account>.r2.cloudflarestorage.com` |
 | `S3_REGION` | `us-east-1` | `auto` for R2 |
 | `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | empty | Without them, the AWS SDK's usual credential chain applies (environment, IAM role) |
+| `S3_PUBLIC_ENDPOINT` | empty | Where agents can reach the bucket themselves, e.g. `https://<account>.r2.cloudflarestorage.com`. Turns on [publishing by direct upload](/docs/publishing#publishing-by-direct-upload). Empty keeps publishing inline only, which is right when the bucket is on a private network, like the bundled MinIO. |
 | `MINIO_ROOT_PASSWORD` | `artifact-secret` | Password of the bundled MinIO in `deploy/docker-compose/docker-compose.yml`; set it in the `.env` next to the compose file before the first start |
 
-With `S3_ENDPOINT` set, the app uses `bucket/key` addresses (path style), which MinIO and most other stores need. It creates the bucket on start if it doesn't exist; without permission to do that, create it yourself. Besides that, the app only needs to read, write, list and delete objects in its bucket. Keep the bucket private.
+With `S3_ENDPOINT` set, the app uses `bucket/key` addresses (path style), which MinIO and most other stores need. It creates the bucket on start if it doesn't exist; without permission to do that, create it yourself. Besides that, the app only needs to read, write, list and delete objects in its bucket. Keep the bucket private: with `S3_PUBLIC_ENDPOINT` set, agents write to it only through upload links that expire after 15 minutes, into a staging area the app checks before anything is published.
 
 ## Set by the image
 

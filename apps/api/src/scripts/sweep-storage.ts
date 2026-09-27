@@ -5,6 +5,6 @@
 import { db } from '../db/index.js'
 import { sweepStorage } from '../gc.js'
 
-const { checked, deleted } = await sweepStorage()
-console.log(`Checked ${checked} blob${checked === 1 ? '' : 's'}, removed ${deleted}`)
+const { checked, deleted, uploads } = await sweepStorage()
+console.log(`Checked ${checked} blob${checked === 1 ? '' : 's'}, removed ${deleted}, and ${uploads} unpublished upload${uploads === 1 ? '' : 's'}`)
 await db.$client.end()

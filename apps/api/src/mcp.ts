@@ -18,13 +18,17 @@ import {
   parseArtifactRef,
   publish,
   PublishError,
+  publishUpload,
   rename,
   VISIBILITY_LABEL,
 } from './artifacts.js'
 import { db, schema } from './db/index.js'
+import type { Artifact } from './db/schema.js'
 import { ALLOWED_EXTENSIONS, checkPath, ENTRY_PATH, isText, MAX_FILE_BYTES, MAX_FILES, MAX_HTML_BYTES, MAX_TOTAL_BYTES } from './files.js'
 import { parseEmails, sharePeople, SharingError } from './sharing.js'
 import { authenticateBearer, RESOURCE_METADATA_URL, type McpAuth } from './oauth/server.js'
+import { directUploads, UPLOAD_TTL_SECONDS } from './storage.js'
+import { prepareUpload } from './uploads.js'
 
 const visibility = z
   .enum(['private', 'organization', 'link'])
@@ -40,6 +44,27 @@ function text(t: string, isError = false) {
   return { content: [{ type: 'text' as const, text: t }], isError }
 }
 
+function published(artifact: Artifact, otherFiles: number) {
+  const verb = artifact.currentVersion === 1 ? 'Published' : `Published version ${artifact.currentVersion} of`
+  return text(
+    `${verb} "${artifact.title}".\n` +
+      `Link: ${artifactUrl(artifact.slug)}\n` +
+      `artifact_id: ${artifact.slug}\n` +
+      (otherFiles ? `Files: index.html and ${otherFiles} more.\n` : '') +
+      `Visibility: ${describeVisibility(artifact.visibility)}.`,
+  )
+}
+
+const manifest = z
+  .array(
+    z.object({
+      path: z.string().describe('index.html for the page itself, or the relative path the HTML uses for a file, e.g. "img/hero.png"'),
+      size: z.number().int().nonnegative().describe('Size in bytes, e.g. from wc -c'),
+      sha256: z.string().describe('SHA-256 of the exact bytes, as hex, e.g. from sha256sum or shasum -a 256'),
+    }),
+  )
+  .min(1)
+
 // One server per request (stateless), bound to the person and workspace behind the token
 function buildServer(auth: McpAuth) {
   const viewer = { id: auth.userId, email: auth.email }
@@ -53,7 +78,10 @@ function buildServer(auth: McpAuth) {
         'Publish an HTML page and get a shareable link. Either one self-contained document (inline CSS and JS; scripts from public CDNs are fine), ' +
         'or a small site: html is the entry (index.html) and files holds the CSS, JS, images, fonts and data it loads by relative paths. ' +
         `Limits: html up to ${MAX_HTML_BYTES / 1024 / 1024} MB, each file up to ${MAX_FILE_BYTES / 1024 / 1024} MB, ${MAX_TOTAL_BYTES / 1024 / 1024} MB and ${MAX_FILES} files in total. ` +
-        'To update a page you published before, pass its artifact_id (or its link) and the link stays the same; send every file again, since each version has its own full set.',
+        'To update a page you published before, pass its artifact_id (or its link) and the link stays the same; send every file again, since each version has its own full set.' +
+        (directUploads()
+          ? ' If you can run shell commands or make HTTP requests, prefer prepare_upload and publish_upload for pages with images, fonts or media, or over 1 MB: the files go straight to storage instead of through this call.'
+          : ''),
       inputSchema: z.object({
         title: z.string().min(1).describe('Short title shown in the gallery and browser tab'),
         html: z.string().min(1).describe('The complete HTML document; for a multi-file page, the entry (index.html)'),
@@ -84,20 +112,82 @@ function buildServer(auth: McpAuth) {
           slug: artifact_id ? parseArtifactRef(artifact_id) : undefined,
           visibility,
         })
-        const verb = artifact.currentVersion === 1 ? 'Published' : `Published version ${artifact.currentVersion} of`
-        return text(
-          `${verb} "${artifact.title}".\n` +
-            `Link: ${artifactUrl(artifact.slug)}\n` +
-            `artifact_id: ${artifact.slug}\n` +
-            (files?.length ? `Files: index.html and ${files.length} more.\n` : '') +
-            `Visibility: ${describeVisibility(artifact.visibility)}.`,
-        )
+        return published(artifact, files?.length ?? 0)
       } catch (err) {
         if (err instanceof PublishError) return text(err.message, true)
         throw err
       }
     },
   )
+
+  if (directUploads()) {
+    server.registerTool(
+      'prepare_upload',
+      {
+        title: 'Prepare to upload a page',
+        description:
+          'First step of publishing a page by uploading its files yourself, for agents that can run shell commands or make HTTP requests. ' +
+          'List every file of the page with its size and sha256, including index.html (the page itself). Returns an upload_id and a link per file: ' +
+          "PUT each file's exact bytes to its link, then call publish_upload with the upload_id and the same files. " +
+          `Files already stored need no upload. The same limits as publish_artifact apply: html up to ${MAX_HTML_BYTES / 1024 / 1024} MB, ` +
+          `each file up to ${MAX_FILE_BYTES / 1024 / 1024} MB, ${MAX_TOTAL_BYTES / 1024 / 1024} MB and ${MAX_FILES} files in total. Allowed types: ${ALLOWED_EXTENSIONS.join(', ')}.`,
+        inputSchema: z.object({ files: manifest.describe('Every file of the page, index.html included') }),
+      },
+      async ({ files }) => {
+        try {
+          const { uploadId, uploads, stored } = await prepareUpload(files)
+          const commands = uploads.map((u) => `curl -fsS -T '${u.paths[0]}' '${u.url}'${u.paths.length > 1 ? `  # also ${u.paths.slice(1).join(', ')}` : ''}`)
+          return text(
+            `upload_id: ${uploadId}\n` +
+              (uploads.length
+                ? `PUT each file's exact bytes to its link within ${UPLOAD_TTL_SECONDS / 60} minutes, for example with curl from the page's folder:\n${commands.join('\n')}\n`
+                : '') +
+              (stored.length ? `Already stored, no upload needed: ${stored.join(', ')}\n` : '') +
+              'Then call publish_upload with this upload_id, the title and the same files.',
+          )
+        } catch (err) {
+          if (err instanceof PublishError) return text(err.message, true)
+          throw err
+        }
+      },
+    )
+
+    server.registerTool(
+      'publish_upload',
+      {
+        title: 'Publish uploaded files',
+        description:
+          'Second step after prepare_upload: checks that every file arrived with the size and sha256 you listed, then publishes the page and returns its link. ' +
+          'Pass artifact_id to publish a new version of an existing page; the link stays the same.',
+        inputSchema: z.object({
+          title: z.string().min(1).describe('Short title shown in the gallery and browser tab'),
+          upload_id: z.string().describe('The upload_id prepare_upload returned'),
+          files: manifest.describe('The same files you passed to prepare_upload'),
+          artifact_id: z.string().optional().describe('Id or link of an existing page to publish a new version of'),
+          visibility: visibility.optional(),
+        }),
+      },
+      async ({ title, upload_id, files, artifact_id, visibility }) => {
+        try {
+          const artifact = await publishUpload({
+            userId: auth.userId,
+            email: auth.email,
+            organizationId: auth.organizationId,
+            clientName: auth.clientName,
+            title,
+            uploadId: upload_id,
+            files,
+            slug: artifact_id ? parseArtifactRef(artifact_id) : undefined,
+            visibility,
+          })
+          return published(artifact, files.length - 1)
+        } catch (err) {
+          if (err instanceof PublishError) return text(err.message, true)
+          throw err
+        }
+      },
+    )
+  }
 
   server.registerTool(
     'list_artifacts',
