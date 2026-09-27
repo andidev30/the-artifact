@@ -64,7 +64,7 @@ export function WorkspaceChoice({ me, choice, onChoice, onDone }: { me: Me; choi
           <span className="choice-body">
             <strong>My team</strong>
             <span>A shared gallery where everyone's agents publish, with pages only your team can open.</span>
-            <em>Organization, $12 per member / month</em>
+            <em>Organization, $4 per member / month</em>
           </span>
         </label>
       </fieldset>
