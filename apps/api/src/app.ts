@@ -11,10 +11,12 @@ import { historyCron, personalPageLimit } from './ee/plans.js'
 import { env, mailEnabled } from './env.js'
 import { hasAccounts, instanceSettings, isInstanceAdmin } from './instance.js'
 import { mcp } from './mcp.js'
+import { observeRequests } from './metrics.js'
 import { consent } from './oauth/consent.js'
 import { oauth } from './oauth/server.js'
 import { admin } from './routes/admin.js'
 import { cron } from './routes/cron.js'
+import { health } from './routes/health.js'
 import { artifacts } from './routes/artifacts.js'
 import { invitations, members, myInvitations } from './routes/members.js'
 import { onboarding, organizations } from './routes/organizations.js'
@@ -22,6 +24,10 @@ import { settings } from './routes/settings.js'
 import { mountWeb } from './web.js'
 
 export const app = new Hono<AuthEnv>()
+
+// First, so every request gets an id, a log line and its timing
+app.use(observeRequests)
+app.route('/', health)
 
 // The hosted service's plan limits; they check SELF_HOSTED themselves, so they do nothing on a self-hosted install
 setNewPageCheck(personalPageLimit)

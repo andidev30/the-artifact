@@ -6,6 +6,7 @@ import { createPasswordAccount, userExists } from '../auth/users.js'
 import { db, schema } from '../db/index.js'
 import type { InviteRole, Role, User } from '../db/schema.js'
 import { env, mailEnabled } from '../env.js'
+import { log } from '../log.js'
 import { sendInvitation } from '../mail.js'
 import { EMAIL_RE } from '../validation.js'
 
@@ -177,7 +178,7 @@ members.post('/invitations', async (c) => {
     try {
       await sendInvitation(email, { from: user.name ?? user.email, organization: me.org.name, role, link, expiresInDays: INVITE_DAYS })
     } catch (err) {
-      console.error('Sending invitation email failed', err)
+      log.error('Sending invitation email failed', { err })
       emailed = false
     }
   }

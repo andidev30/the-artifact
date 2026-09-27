@@ -3,6 +3,7 @@ import { Hono } from 'hono'
 import { db, schema } from '../db/index.js'
 import type { User } from '../db/schema.js'
 import { env, mailEnabled } from '../env.js'
+import { log } from '../log.js'
 import { sendSignInLink } from '../mail.js'
 import { EMAIL_RE } from '../validation.js'
 import { hashPassword, passwordProblem } from './password.js'
@@ -57,7 +58,7 @@ email.post('/', async (c) => {
   try {
     await sendSignInLink(address, link, intent)
   } catch (err) {
-    console.error('Sending sign-in email failed', err)
+    log.error('Sending sign-in email failed', { err })
     return c.json({ error: 'The link could not be sent.' }, 502)
   }
   return c.body(null, 204)

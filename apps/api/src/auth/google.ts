@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { Hono } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import { env, isProduction } from '../env.js'
+import { log } from '../log.js'
 import { randomToken, startSession } from './session.js'
 import { afterSignInUrl, findOrCreateUser, safeNext, signInErrorUrl, SignupClosedError } from './users.js'
 
@@ -100,7 +101,7 @@ google.get('/callback', async (c) => {
     return c.redirect(afterSignInUrl(plan, next))
   } catch (err) {
     if (err instanceof SignupClosedError) return c.redirect(signInErrorUrl(err.code))
-    console.error('Google sign-in failed', err)
+    log.error('Google sign-in failed', { err })
     return c.redirect(signInErrorUrl('google_failed'))
   }
 })

@@ -5,6 +5,7 @@ import { migrate } from 'drizzle-orm/postgres-js/migrator'
 import { app } from './app.js'
 import { db } from './db/index.js'
 import { env } from './env.js'
+import { log } from './log.js'
 import { scheduleSweeps } from './gc.js'
 import { ensureBucket } from './storage.js'
 
@@ -12,7 +13,7 @@ import { ensureBucket } from './storage.js'
 if (env.migrateOnStart) {
   const migrationsFolder = process.env.MIGRATIONS_DIR ?? join(dirname(fileURLToPath(import.meta.url)), '..', 'drizzle')
   await migrate(db, { migrationsFolder })
-  console.log('Database is up to date')
+  log.info('Database is up to date')
 }
 
 await ensureBucket()
@@ -24,6 +25,6 @@ serve(
     port: env.port,
   },
   (info) => {
-    console.log(`Server is running on http://localhost:${info.port}`)
+    log.info('Server is running', { port: info.port })
   },
 )
