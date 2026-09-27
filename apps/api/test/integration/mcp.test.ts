@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { app } from '../../src/app.js'
 import { db, schema } from '../../src/db/index.js'
 import { sendShareNotice } from '../../src/mail.js'
-import { call, callTool, connectAgent, createOrg, createUser, mcpRequest, slugFrom } from './helpers.js'
+import { addMember, call, callTool, connectAgent, createOrg, createUser, mcpRequest, slugFrom } from './helpers.js'
 
 const HTML = '<!doctype html><title>Chart</title><h1>Signups by week</h1>'
 
@@ -34,12 +34,16 @@ describe('MCP over /mcp', () => {
     const { token } = await setup()
     const body = await (await mcpRequest(token, 'tools/list')).json()
     expect(body.result.tools.map((t: { name: string }) => t.name).sort()).toEqual([
+      'delete_artifact',
+      'download_artifact',
       'get_artifact',
       'list_artifacts',
+      'list_versions',
       'prepare_upload',
       'publish_artifact',
       'publish_upload',
       'rename_artifact',
+      'restore_version',
       'set_artifact_visibility',
       'share_artifact',
     ])
@@ -249,6 +253,88 @@ describe('MCP over /mcp', () => {
     const [row] = await db.select().from(schema.artifacts)
     expect(row.title).toBe('Edited')
   })
+
+  it('only the owner deletes a page, as in the gallery', async () => {
+    const { token } = await setup()
+    const slug = slugFrom((await callTool(token, 'publish_artifact', { title: 'Report', html: HTML })).text)
+    await callTool(token, 'share_artifact', { artifact_id: slug, emails: ['editor@example.com'], role: 'editor' })
+    const editorToken = (await connectAgent(await createUser({ email: 'editor@example.com' }))).access_token
+
+    const refused = await callTool(editorToken, 'delete_artifact', { artifact_id: slug })
+    expect(refused).toMatchObject({ isError: true, text: `No page you own has the id "${slug}". Only the owner of a page can delete it.` })
+    expect((await callTool(token, 'delete_artifact', { artifact_id: 'doesnotexist' })).isError).toBe(true)
+    expect(await db.select().from(schema.artifacts)).toHaveLength(1)
+
+    const res = await callTool(token, 'delete_artifact', { artifact_id: `http://localhost:5177/a/${slug}` })
+    expect(res).toMatchObject({ isError: false, text: 'Deleted "Report". Its link no longer works.' })
+    expect(await db.select().from(schema.artifacts)).toHaveLength(0)
+    expect(await db.select().from(schema.artifactVersions)).toHaveLength(0)
+    expect(await db.select().from(schema.artifactShares)).toHaveLength(0)
+    expect((await callTool(token, 'get_artifact', { artifact_id: slug })).isError).toBe(true)
+  })
+
+  it("organization admins can't delete someone else's page either", async () => {
+    const founder = await createUser({ email: 'founder@example.com' })
+    const org = await createOrg(founder)
+    const author = await createUser({ email: 'author@example.com' })
+    await addMember(org.id, author, 'member')
+    const authorToken = (await connectAgent(author, org.id)).access_token
+    const founderToken = (await connectAgent(founder, org.id)).access_token
+    const slug = slugFrom((await callTool(authorToken, 'publish_artifact', { title: 'Team page', html: HTML })).text)
+
+    // They can edit it, but deleting stays with the owner
+    expect((await callTool(founderToken, 'rename_artifact', { artifact_id: slug, title: 'Renamed' })).isError).toBe(false)
+    expect((await callTool(founderToken, 'delete_artifact', { artifact_id: slug })).isError).toBe(true)
+    expect((await callTool(authorToken, 'delete_artifact', { artifact_id: slug })).isError).toBe(false)
+  })
+
+  it('lists and restores versions like the history panel', async () => {
+    const { user, token } = await setup()
+    const slug = slugFrom((await callTool(token, 'publish_artifact', { title: 'Chart', html: '<h1>v1</h1>' })).text)
+    await callTool(token, 'publish_artifact', { title: 'Chart', html: '<h1>v2</h1>', artifact_id: slug })
+
+    const listed = await callTool(token, 'list_versions', { artifact_id: slug })
+    expect(listed.isError).toBe(false)
+    expect(listed.text).toMatch(
+      /^Versions of "Chart", newest first:\n- Version 2 \(current\): \d{4}-\d\d-\d\d \d\d:\d\d UTC, published with claude-code by Dev Person\n- Version 1: /,
+    )
+
+    const same = await callTool(token, 'restore_version', { artifact_id: slug, version: 2 })
+    expect(same).toMatchObject({ isError: true, text: 'This is already the current version.' })
+    const missing = await callTool(token, 'restore_version', { artifact_id: slug, version: 7 })
+    expect(missing).toMatchObject({ isError: true, text: '"Chart" has no version 7. Call list_versions to see its versions.' })
+
+    const restored = await callTool(token, 'restore_version', { artifact_id: slug, version: 1 })
+    expect(restored).toMatchObject({ isError: false })
+    expect(restored.text).toBe(`Restored version 1 of "Chart" as version 3.\nLink: http://localhost:5177/a/${slug}`)
+    expect((await callTool(token, 'get_artifact', { artifact_id: slug })).text).toBe('Title: Chart\nVersion: 3\n\n<h1>v1</h1>')
+
+    // The history panel's API sees the same history
+    const history = await (await call(`/api/artifacts/${slug}/versions`, { cookie: user.cookie })).json()
+    expect(history[0]).toMatchObject({ version: 3, restoredFrom: 1, current: true, publishedBy: 'Dev Person' })
+    expect((await callTool(token, 'list_versions', { artifact_id: slug })).text).toMatch(/Version 3 \(current\): [^\n]*, restored from version 1 by Dev Person/)
+  })
+
+  it('only editors see and restore versions', async () => {
+    const { token } = await setup()
+    const slug = slugFrom((await callTool(token, 'publish_artifact', { title: 'Report', html: '<h1>v1</h1>', visibility: 'link' })).text)
+    await callTool(token, 'publish_artifact', { title: 'Report', html: '<h1>v2</h1>', artifact_id: slug })
+    await callTool(token, 'share_artifact', { artifact_id: slug, emails: ['editor@example.com'], role: 'editor' })
+    await callTool(token, 'share_artifact', { artifact_id: slug, emails: ['viewer@example.com'], role: 'viewer' })
+    const editorToken = (await connectAgent(await createUser({ email: 'editor@example.com' }))).access_token
+    const viewerToken = (await connectAgent(await createUser({ email: 'viewer@example.com' }))).access_token
+    const strangerToken = (await connectAgent(await createUser({ email: 'stranger@example.com' }))).access_token
+
+    for (const t of [viewerToken, strangerToken]) {
+      expect(await callTool(t, 'list_versions', { artifact_id: slug })).toMatchObject({ isError: true, text: `No page you can edit has the id "${slug}".` })
+      expect((await callTool(t, 'restore_version', { artifact_id: slug, version: 1 })).isError).toBe(true)
+    }
+    const [before] = await db.select().from(schema.artifacts)
+    expect(before.currentVersion).toBe(2)
+
+    expect((await callTool(editorToken, 'list_versions', { artifact_id: slug })).isError).toBe(false)
+    expect((await callTool(editorToken, 'restore_version', { artifact_id: slug, version: 1 })).text).toContain('as version 3')
+  })
 })
 
 // The official client on the 2026-07-28 revision: per-request envelope, negotiated with server/discover
@@ -272,12 +358,16 @@ describe('MCP over /mcp for 2026-07-28 clients', () => {
 
     const { tools } = await client.listTools()
     expect(tools.map((t) => t.name).sort()).toEqual([
+      'delete_artifact',
+      'download_artifact',
       'get_artifact',
       'list_artifacts',
+      'list_versions',
       'prepare_upload',
       'publish_artifact',
       'publish_upload',
       'rename_artifact',
+      'restore_version',
       'set_artifact_visibility',
       'share_artifact',
     ])

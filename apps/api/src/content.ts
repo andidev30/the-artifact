@@ -1,11 +1,13 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import type { Context } from 'hono'
-import { accessLevel, findBySlug, getFile, getVersion, versionHtml, type Viewer } from './artifacts.js'
+import { accessLevel, findBySlug, getFile, getVersion, loadVersionTree, versionHtml, type Viewer } from './artifacts.js'
 import type { AuthEnv } from './auth/session.js'
 import { db, schema } from './db/index.js'
 import type { Artifact } from './db/schema.js'
+import { env } from './env.js'
 import { checkPath, ENTRY_PATH } from './files.js'
+import { zip } from './zip.js'
 
 // A version is served as a real document tree at /api/artifacts/<slug>/v/<version>/, so the entry
 // HTML can load its CSS, JS and images by relative paths.
@@ -20,7 +22,7 @@ import { checkPath, ENTRY_PATH } from './files.js'
 export const CONTENT_CSP = 'sandbox allow-scripts allow-forms allow-popups allow-modals allow-downloads'
 // Versions never change; this bounds how long a browser keeps a page someone has since lost access to
 const CACHE = 'private, max-age=3600'
-const TOKEN_HOURS = 12
+export const TOKEN_HOURS = 12
 const NAVIGATIONS = new Set(['document', 'iframe', 'frame', 'embed', 'object'])
 
 let secret: Promise<Buffer> | null = null
@@ -160,4 +162,56 @@ export async function serveVersion(c: Context<AuthEnv>) {
   if (!token) headers.Vary = 'Cookie'
   if (c.req.header('if-none-match') === `"${etag}"`) return c.body(null, 304, headers)
   return c.body(typeof body === 'string' ? body : new Uint8Array(body), 200, headers)
+}
+
+// "Signups by week" → "signups-by-week-v3.zip"; titles with no Latin letters or digits fall back to the page id
+function zipName(artifact: Artifact, version: number) {
+  const base = artifact.title
+    .normalize('NFKD')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80)
+  return `${base || artifact.slug}-v${version}.zip`
+}
+
+// A download link an agent can fetch without a session. It carries a link token like the sandboxed
+// frame's, so it only works for this person and version, and access is checked again when it is used.
+export async function downloadLink(userId: string, artifact: Artifact, version: number) {
+  const token = await signContentLink(userId, artifact, version)
+  return `${env.appUrl}/api/artifacts/${artifact.slug}/download?version=${version}&token=${token}`
+}
+
+// GET /api/artifacts/:slug/download[?version=<n>][&token=<link token>]: index.html and every file of a
+// version as one zip, with the same access as viewing that version
+export async function downloadVersion(c: Context<AuthEnv>) {
+  const artifact = await findBySlug(c.req.param('slug')!)
+  if (!artifact) return notFound(c)
+  const asked = c.req.query('version')
+  const version = asked === undefined ? artifact.currentVersion : Number(asked)
+  if (!Number.isInteger(version) || version < 1) return notFound(c)
+
+  let viewer: Viewer | null = c.get('user')
+  const token = c.req.query('token')
+  if (token) {
+    const userId = await verifyContentLink(token, artifact, version)
+    viewer = userId ? await userById(userId) : null
+    if (!viewer) return notFound(c)
+  }
+  if (!allowed(await accessLevel(artifact, viewer), version === artifact.currentVersion)) return notFound(c)
+  const v = await getVersion(artifact, version)
+  const tree = v ? await loadVersionTree(v.id) : null
+  if (!v || !tree) return notFound(c)
+
+  const archive = zip(
+    [{ path: ENTRY_PATH, content: Buffer.from(tree.html, 'utf8') }, ...tree.files.map((f) => ({ path: f.path, content: f.content }))],
+    v.createdAt,
+  )
+  return c.body(new Uint8Array(archive), 200, {
+    'Content-Type': 'application/zip',
+    'Content-Disposition': `attachment; filename="${zipName(artifact, version)}"`,
+    'X-Content-Type-Options': 'nosniff',
+    'Cache-Control': 'private, no-store',
+    'Referrer-Policy': 'no-referrer',
+  })
 }

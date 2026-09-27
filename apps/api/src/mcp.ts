@@ -3,10 +3,13 @@ import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import {
+  accessLevel,
   artifactUrl,
+  canDelete,
   canEdit,
   canView,
   checkTitle,
+  deleteArtifact,
   describeVisibility,
   findBySlug,
   getFile,
@@ -14,14 +17,17 @@ import {
   listFiles,
   versionHtml,
   listForWorkspace,
+  listVersions,
   MAX_TITLE_LENGTH,
   parseArtifactRef,
   publish,
   PublishError,
   publishUpload,
   rename,
+  restoreVersion,
   VISIBILITY_LABEL,
 } from './artifacts.js'
+import { allowed, downloadLink, TOKEN_HOURS } from './content.js'
 import { db, schema } from './db/index.js'
 import type { Artifact } from './db/schema.js'
 import { ALLOWED_EXTENSIONS, checkPath, ENTRY_PATH, isText, MAX_FILE_BYTES, MAX_FILES, MAX_HTML_BYTES, MAX_TOTAL_BYTES } from './files.js'
@@ -324,6 +330,99 @@ function buildServer(auth: McpAuth) {
         if (err instanceof SharingError) return text(err.message, true)
         throw err
       }
+    },
+  )
+
+  server.registerTool(
+    'delete_artifact',
+    {
+      title: 'Delete a page',
+      description:
+        'Delete a page for good, like deleting it from the gallery: the link stops working for everyone and every version is deleted. ' +
+        'Only the owner of a page can delete it. This cannot be undone, so only call it when the person asked to delete this page.',
+      inputSchema: z.object({ artifact_id: z.string().describe('Id or link of the page') }),
+      annotations: { destructiveHint: true, idempotentHint: true },
+    },
+    async ({ artifact_id }) => {
+      const artifact = await findBySlug(parseArtifactRef(artifact_id))
+      if (!artifact || !canDelete(artifact, viewer)) return text(`No page you own has the id "${artifact_id}". Only the owner of a page can delete it.`, true)
+      await deleteArtifact(artifact)
+      return text(`Deleted "${artifact.title}". Its link no longer works.`)
+    },
+  )
+
+  server.registerTool(
+    'list_versions',
+    {
+      title: 'List the versions of a page',
+      description: "List every version of a page, newest first, as the page's version history shows them. For people who can edit the page.",
+      inputSchema: z.object({ artifact_id: z.string().describe('Id or link of the page') }),
+      annotations: { readOnlyHint: true },
+    },
+    async ({ artifact_id }) => {
+      const artifact = await findBySlug(parseArtifactRef(artifact_id))
+      if (!artifact || !(await canEdit(artifact, viewer))) return text(`No page you can edit has the id "${artifact_id}".`, true)
+      const rows = await listVersions(artifact)
+      const lines = rows.map((v) => {
+        const by = v.publishedByName ?? v.publishedByEmail
+        const how = v.restoredFrom ? `restored from version ${v.restoredFrom}` : v.publishedWith ? `published with ${v.publishedWith}` : 'published'
+        const when = `${v.createdAt.toISOString().slice(0, 16).replace('T', ' ')} UTC`
+        return `- Version ${v.version}${v.version === artifact.currentVersion ? ' (current)' : ''}: ${when}, ${how}${by ? ` by ${by}` : ''}`
+      })
+      return text(`Versions of "${artifact.title}", newest first:\n${lines.join('\n')}\nUse restore_version to make an older one current again.`)
+    },
+  )
+
+  server.registerTool(
+    'restore_version',
+    {
+      title: 'Restore an older version',
+      description:
+        'Make an older version of a page current again, like Restore this version in the history. ' +
+        'Nothing is overwritten: its HTML and files are published again as a new version, and the link stays the same. For people who can edit the page.',
+      inputSchema: z.object({
+        artifact_id: z.string().describe('Id or link of the page'),
+        version: z.number().int().positive().describe('The version number to restore, from list_versions'),
+      }),
+    },
+    async ({ artifact_id, version }) => {
+      const artifact = await findBySlug(parseArtifactRef(artifact_id))
+      if (!artifact || !(await canEdit(artifact, viewer))) return text(`No page you can edit has the id "${artifact_id}".`, true)
+      if (version === artifact.currentVersion) return text('This is already the current version.', true)
+      const updated = await restoreVersion(artifact, version, auth.userId)
+      if (!updated) return text(`"${artifact.title}" has no version ${version}. Call list_versions to see its versions.`, true)
+      return text(`Restored version ${version} of "${updated.title}" as version ${updated.currentVersion}.\nLink: ${artifactUrl(updated.slug)}`)
+    },
+  )
+
+  server.registerTool(
+    'download_artifact',
+    {
+      title: 'Download a page as a zip',
+      description:
+        'Get a link that downloads a page and all its files as one zip, for agents that can run shell commands or make HTTP requests, ' +
+        `e.g. to work on the page locally. The link works for you for ${TOKEN_HOURS} hours and needs no sign-in. ` +
+        'Pass version for an older version (editors only). To read the files one at a time instead, use get_artifact.',
+      inputSchema: z.object({
+        artifact_id: z.string().describe('Id or link of the page'),
+        version: z.number().int().positive().optional().describe('A version number from list_versions; omit for the current version'),
+      }),
+      annotations: { readOnlyHint: true },
+    },
+    async ({ artifact_id, version }) => {
+      const artifact = await findBySlug(parseArtifactRef(artifact_id))
+      const n = version ?? artifact?.currentVersion
+      if (!artifact || !n || !allowed(await accessLevel(artifact, viewer), n === artifact.currentVersion))
+        return text(`No page you can open has the id "${artifact_id}".`, true)
+      const v = await getVersion(artifact, n)
+      if (!v) return text(`"${artifact.title}" has no version ${n}.`, true)
+      const files = await listFiles(v.id)
+      const link = await downloadLink(auth.userId, artifact, n)
+      return text(
+        `Version ${n} of "${artifact.title}": index.html${files.length ? ` and ${files.length} more ${files.length === 1 ? 'file' : 'files'}` : ''}.\n` +
+          `Download: ${link}\n` +
+          `For example: curl -fsSL -o page.zip '${link}'`,
+      )
     },
   )
 
