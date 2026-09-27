@@ -1,0 +1,54 @@
+The Artifact Enterprise License
+
+Copyright (c) 2026 andidev30
+
+This license applies to every file in a directory named "ee" in this repository
+(currently apps/api/src/ee and apps/web/src/ee) and to nothing else. Everything
+outside those directories is licensed under the GNU Affero General Public
+License version 3, in the LICENSE file.
+
+1. Definitions
+
+"Licensor" means the copyright holder named above. "Software" means the files
+this license applies to. "Hosted mode" means running the Software with the
+SELF_HOSTED environment variable set to "false", which turns on the features of
+the hosted service (the marketing site, contact sales form and workspace choice
+in onboarding).
+
+2. What you may do without an agreement
+
+a. Read, copy and modify the Software to develop and test The Artifact.
+b. Run the Software unmodified as part of a self-hosted install of The Artifact
+   that is not in hosted mode. The Software stays inactive in that case.
+c. Contribute changes back to this repository.
+
+3. What needs an agreement with the Licensor
+
+Running the Software, or a modified version of it, in hosted mode in
+production, or offering it to third parties as a service, requires a separate
+written agreement with the Licensor.
+
+4. Restrictions
+
+You may not sell, sublicense or distribute the Software, or a modified version
+of it, except as part of an unmodified copy of this repository or as allowed by
+an agreement under section 3. You may not remove or change this license or any
+copyright notice.
+
+5. Contributions
+
+Contributions to the Software are licensed to the Licensor under the terms of
+this license, and the Licensor may relicense them.
+
+6. Third-party components
+
+Third-party components used by the Software keep their own licenses.
+
+7. No warranty
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE LICENSOR BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

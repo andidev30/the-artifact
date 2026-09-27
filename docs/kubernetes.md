@@ -6,18 +6,27 @@
 
 - A cluster with a default storage class for two volumes (k3s has one: `local-path`)
 - An ingress controller for HTTPS (k3s includes Traefik), or your own way to route traffic to the `the-artifact` service
-- Somewhere the cluster can pull the image from
+- Access to `ghcr.io` from the cluster, or a registry of your own for your own builds
 
-## 1. Build the image
+## 1. Choose the image
 
-There is no published image; build it from the repository and push it to your registry:
+Every commit to `main` is published as `ghcr.io/andidev30/the-artifact`, for `linux/amd64` and `linux/arm64`: `latest` follows `main`, and each release is also tagged with its version (`1.2.0`, `1.2`). Name it under `images` in `deploy/kubernetes/kustomization.yaml`, pinned to a version:
+
+```yaml
+images:
+  - name: the-artifact
+    newName: ghcr.io/andidev30/the-artifact
+    newTag: '1.2.0'
+```
+
+To run your own build instead, build it from the repository and push it to your registry:
 
 ```sh
 docker build -t registry.example.com/the-artifact:latest .
 docker push registry.example.com/the-artifact:latest
 ```
 
-Then name it under `images` in `deploy/kubernetes/kustomization.yaml`:
+Then name that one under `images`:
 
 ```yaml
 images:
@@ -26,7 +35,7 @@ images:
     newTag: latest
 ```
 
-On a single-node k3s you can skip the registry and import the image into the node's containerd:
+On a single-node k3s you can skip the registry and import your build into the node's containerd, with `newName: the-artifact` and `newTag: latest`:
 
 ```sh
 docker build -t the-artifact:latest .
@@ -96,7 +105,9 @@ kubectl -n the-artifact exec deploy/the-artifact -c app -- node dist/scripts/swe
 
 ### Updating
 
-Give every build its own tag, so the cluster pulls it instead of reusing the image it has. Database changes apply when the new version starts.
+With the published image, set `newTag` to the new version and run `kubectl apply -k deploy/kubernetes`. Database changes apply when the new version starts.
+
+With your own builds, give every build its own tag, so the cluster pulls it instead of reusing the image it has:
 
 ```sh
 git pull

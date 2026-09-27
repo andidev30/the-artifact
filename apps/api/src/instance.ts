@@ -30,11 +30,14 @@ export async function activeAdminCount(tx: Tx | typeof db = db): Promise<number>
   return row.n
 }
 
-// Whether a new account should be the instance admin: only the very first one, and only on a
-// self-hosted install. Call inside the transaction holding lockAdmins.
-export async function firstAccountBecomesAdmin(tx: Tx): Promise<boolean> {
-  if (!env.selfHosted) return false
-  return !(await hasAccounts(tx))
+// How a new account starts. On a self-hosted install the very first account becomes the instance
+// admin and sets the server up in onboarding; everyone after it starts in their personal workspace
+// with nothing to choose, and joins organizations by invitation. On the hosted service everyone
+// chooses a workspace. Call inside the transaction holding lockAdmins.
+export async function newAccountFields(tx: Tx): Promise<{ isAdmin: boolean; onboardedAt: Date | null }> {
+  if (!env.selfHosted) return { isAdmin: false, onboardedAt: null }
+  const isAdmin = !(await hasAccounts(tx))
+  return { isAdmin, onboardedAt: isAdmin ? null : new Date() }
 }
 
 export async function hasAccounts(tx: Tx | typeof db = db): Promise<boolean> {

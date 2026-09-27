@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { Wordmark } from '../components/Wordmark'
 import { CONTACT_SALES_API_URL } from '../config'
-import './Auth.css'
+import '../pages/Auth.css'
 import './ContactSales.css'
 
 type Field = 'name' | 'email' | 'company' | 'teamSize' | 'message'
@@ -12,7 +12,7 @@ type Status =
   | { kind: 'sent'; email: string }
   | { kind: 'error'; message: string; field?: Field }
 
-// Keep in sync with TEAM_SIZES in apps/api/src/routes/contact.ts
+// Keep in sync with TEAM_SIZES in apps/api/src/ee/contact.ts
 const TEAM_SIZES = [
   { value: '1-10', label: '1 to 10 people' },
   { value: '11-50', label: '11 to 50 people' },

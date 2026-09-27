@@ -13,10 +13,10 @@ resources:
   - app.yaml
   - ingress.yaml
 
-# Your image: build it from the repository's Dockerfile and push it where the cluster can pull it
+# The published image; pin newTag to a release, or point this at your own build (see docs/kubernetes.md)
 images:
   - name: the-artifact
-    newName: the-artifact
+    newName: ghcr.io/andidev30/the-artifact
     newTag: latest
 
 # Every setting, in one Secret: the app reads all of it, Postgres and MinIO their passwords

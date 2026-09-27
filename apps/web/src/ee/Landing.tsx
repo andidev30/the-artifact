@@ -1,18 +1,18 @@
 import { useEffect, useState } from 'react'
-import { Link, Navigate } from 'react-router'
+import { Link } from 'react-router'
 import { fetchMe, type Me } from '../api'
-import { useConfig } from '../useConfig'
-import { ServerUnreachable } from './Status'
 import { ConnectTabs } from '../components/ConnectTabs'
-import { FlowDemo } from '../components/FlowDemo'
-import { Pricing } from '../components/Pricing'
-import { Wordmark } from '../components/Wordmark'
 import { CopyCommand } from '../components/CopyCommand'
+import { Wordmark } from '../components/Wordmark'
 import { APP_HOST, DOCS_URL, LOGIN_URL, SELF_HOSTING_URL } from '../config'
+import { FlowDemo } from './FlowDemo'
+import { Pricing } from './Pricing'
+import './Landing.css'
 
 // undefined while checking, null when signed out
 type Session = Me | null | undefined
 
+// The hosted service's home page. Self-hosted installs never load it (see pages/Home.tsx).
 export function Landing() {
   const [me, setMe] = useState<Session>(undefined)
 
@@ -20,15 +20,8 @@ export function Landing() {
     fetchMe().then(setMe).catch(() => setMe(null))
   }, [])
 
-  const config = useConfig()
   const signedIn = Boolean(me)
   const firstName = me?.name?.split(' ')[0]
-
-  // Nothing until the config says which kind of install this is, so a self-hosted one never
-  // flashes the marketing site. A self-hosted install is the product itself.
-  if (!config) return null
-  if (config.unreachable) return <ServerUnreachable />
-  if (config.selfHosted) return <Navigate to="/app" replace />
 
   return (
     <>

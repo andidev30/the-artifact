@@ -91,7 +91,8 @@ describe('address checks for CDN requests', () => {
   })
 })
 
-describe.skipIf(!hasChrome)('rendering in headless Chrome', () => {
+// Starting Chrome for the first render can take several seconds on a cold CI runner
+describe.skipIf(!hasChrome)('rendering in headless Chrome', { timeout: 30_000 }, () => {
   let listener: Server
   let port: number
   const hits: string[] = []

@@ -3,15 +3,13 @@ import { Link, useNavigate, useSearchParams } from 'react-router'
 import { checkSlug, createOrganization, FieldError, finishPersonalOnboarding, type Me, type Organization, type SlugCheck } from '../api'
 import { AccountHeader } from '../components/AccountHeader'
 import { ConnectTabs } from '../components/ConnectTabs'
-import { InvitationRow } from '../components/InvitationNotice'
-import { usePendingInvitations } from '../invitations'
 import { APP_HOST } from '../config'
+import { WorkspaceChoice, type Choice } from '../ee/WorkspaceChoice'
 import { useConfig } from '../useConfig'
 import { useMe } from '../useMe'
 import { LoadError, Loading } from './Status'
 import './Workspace.css'
 
-type Choice = 'personal' | 'team'
 type Step = 'workspace' | 'organization' | 'agent'
 
 export function Onboarding() {
@@ -28,12 +26,23 @@ export function Onboarding() {
   if (state.kind === 'loading' || !config) return <Loading />
   if (state.kind === 'error') return <LoadError />
   if (state.me.onboarded) return null
+  if (config.selfHosted && !state.me.isAdmin) return <StartPersonal />
   // Whoever set up a self-hosted server names the organization everyone there works in; no choice to make
-  const setUp = config.selfHosted && state.me.isAdmin
-  return <Flow me={state.me} selfHosted={config.selfHosted} setUp={setUp} />
+  return <Flow me={state.me} setUp={config.selfHosted} />
 }
 
-function Flow({ me, selfHosted, setUp }: { me: Me; selfHosted: boolean; setUp: boolean }) {
+// Everyone else on a self-hosted server starts in their personal workspace and joins organizations by
+// invitation. New accounts start that way; this finishes older ones that were made before.
+function StartPersonal() {
+  const navigate = useNavigate()
+  const [failed, setFailed] = useState(false)
+  useEffect(() => {
+    finishPersonalOnboarding().then(() => navigate('/app', { replace: true }), () => setFailed(true))
+  }, [navigate])
+  return failed ? <LoadError /> : <Loading />
+}
+
+function Flow({ me, setUp }: { me: Me; setUp: boolean }) {
   const [params] = useSearchParams()
   const [choice, setChoice] = useState<Choice>(setUp || params.get('plan') === 'organization' ? 'team' : 'personal')
   const [step, setStep] = useState<Step>(setUp ? 'organization' : 'workspace')
@@ -75,9 +84,8 @@ function Flow({ me, selfHosted, setUp }: { me: Me; selfHosted: boolean; setUp: b
 
         <div className="onboarding-panel">
           {step === 'workspace' && (
-            <WorkspaceStep
+            <WorkspaceChoice
               me={me}
-              selfHosted={selfHosted}
               choice={choice}
               onChoice={setChoice}
               onDone={() => {
@@ -111,82 +119,6 @@ function Flow({ me, selfHosted, setUp }: { me: Me; selfHosted: boolean; setUp: b
         </div>
       </main>
     </div>
-  )
-}
-
-function WorkspaceStep({ me, selfHosted, choice, onChoice, onDone }: {
-  me: Me
-  selfHosted: boolean
-  choice: Choice
-  onChoice: (c: Choice) => void
-  onDone: () => void
-}) {
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const firstName = me.name?.split(' ')[0]
-  // Joining an organization finishes onboarding, and the page moves on to /app in that workspace
-  const { invitations } = usePendingInvitations(me.id)
-
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault()
-    if (choice === 'team') return onDone()
-    setSaving(true)
-    setError(null)
-    try {
-      await finishPersonalOnboarding()
-      onDone()
-    } catch {
-      setError('Your workspace could not be saved. Try again.')
-      setSaving(false)
-    }
-  }
-
-  return (
-    <form onSubmit={onSubmit} className="onboarding-step">
-      <h1>{firstName ? `Welcome, ${firstName}.` : 'Welcome.'} Who is this workspace for?</h1>
-      <p className="auth-lede">
-        {invitations.length > 0
-          ? 'Join the organization you were invited to, or set up a workspace of your own.'
-          : 'You can create an organization later if you start on your own.'}
-      </p>
-
-      {invitations.length > 0 && (
-        <section className="onboarding-invitations" aria-labelledby="onboarding-invitations-title">
-          <h2 id="onboarding-invitations-title">{invitations.length === 1 ? 'You have an invitation' : 'You have invitations'}</h2>
-          {invitations.map((inv) => (
-            <InvitationRow key={inv.id} me={me} invitation={inv} />
-          ))}
-          <p className="onboarding-or"><span>or set up your own</span></p>
-        </section>
-      )}
-
-      <fieldset className="choices">
-        <legend className="visually-hidden">Workspace type</legend>
-        <label className="choice">
-          <input type="radio" name="workspace" value="personal" checked={choice === 'personal'} onChange={() => onChoice('personal')} />
-          <span className="choice-body">
-            <strong>Just me</strong>
-            <span>Pages you publish are yours. Share them by link when you want.</span>
-            <em>{selfHosted ? 'Personal' : 'Personal, free'}</em>
-          </span>
-        </label>
-        <label className="choice">
-          <input type="radio" name="workspace" value="team" checked={choice === 'team'} onChange={() => onChoice('team')} />
-          <span className="choice-body">
-            <strong>My team</strong>
-            <span>A shared gallery where everyone's agents publish, with pages only your team can open.</span>
-            <em>{selfHosted ? 'Organization' : 'Organization, $12 per member / month'}</em>
-          </span>
-        </label>
-      </fieldset>
-
-      {error && <p className="auth-notice" role="alert">{error}</p>}
-      <div className="onboarding-actions">
-        <button type="submit" className="button" disabled={saving}>
-          {saving ? 'Saving' : 'Continue'}
-        </button>
-      </div>
-    </form>
   )
 }
 

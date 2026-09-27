@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
-import { sendSalesInquiry } from '../mail.js'
+import { env } from '../env.js'
 import { EMAIL_RE } from '../validation.js'
+import { sendSalesInquiry } from './mail.js'
 
 // Control characters (newlines included) have no place in one-line fields that end up in a subject
 const CONTROL_RE = /[\u0000-\u001f\u007f]/
@@ -39,8 +40,14 @@ function line(value: unknown, max: number): string | null {
   return s
 }
 
-// The Enterprise "Contact sales" form on the marketing site. Public: no account needed.
+// The Enterprise "Contact sales" form on the marketing site. Public: no account needed, and only on
+// the hosted service; a self-hosted install has no marketing site.
 export const contact = new Hono()
+
+contact.use(async (c, next) => {
+  if (env.selfHosted) return c.json({ error: 'Not found.' }, 404)
+  await next()
+})
 
 contact.post('/', async (c) => {
   const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null
