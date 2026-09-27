@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { env } from '../env.js'
+import { log } from '../log.js'
 import { EMAIL_RE } from '../validation.js'
 import { sendSalesInquiry } from './mail.js'
 
@@ -76,7 +77,7 @@ contact.post('/', async (c) => {
   try {
     await sendSalesInquiry({ name, email, company, teamSize, topic, message })
   } catch (err) {
-    console.error('Sending sales inquiry failed', err)
+    log.error('Sending sales inquiry failed', { err })
     return c.json({ error: 'Your message could not be sent. Try again in a moment.' }, 502)
   }
   return c.body(null, 204)

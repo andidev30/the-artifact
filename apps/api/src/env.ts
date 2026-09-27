@@ -39,6 +39,8 @@ export const env = {
   migrateOnStart: process.env.MIGRATE_ON_START === 'true',
   // Bearer token for GET /api/cron/*, for hosts that run scheduled jobs from outside (Vercel Cron)
   cronSecret: process.env.CRON_SECRET ?? '',
+  // Bearer token Prometheus scrapes GET /metrics with; without it, /metrics doesn't exist
+  metricsToken: process.env.METRICS_TOKEN ?? '',
   // Object storage (S3 API: MinIO, AWS S3, Cloudflare R2...) for page content and thumbnails.
   // Without keys, the AWS SDK's usual credential chain applies (e.g. an IAM role).
   storage: {

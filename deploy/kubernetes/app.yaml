@@ -80,21 +80,24 @@ spec:
           ports:
             - name: http
               containerPort: 3000
-          # The first start migrates the database, so give it time before the other probes count
+          # The server listens once migrations are done, so the first start gets time before the other
+          # probes count. /healthz only says the process answers; /readyz also checks Postgres and
+          # object storage, so an outage takes the pod out of the Service without restarting it.
           startupProbe:
             httpGet:
-              path: /api/config
+              path: /healthz
               port: http
             periodSeconds: 5
             failureThreshold: 60
           readinessProbe:
             httpGet:
-              path: /api/config
+              path: /readyz
               port: http
             periodSeconds: 10
+            timeoutSeconds: 5
           livenessProbe:
             httpGet:
-              path: /api/config
+              path: /healthz
               port: http
             periodSeconds: 30
             failureThreshold: 5

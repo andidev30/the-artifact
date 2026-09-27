@@ -13,6 +13,8 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { env } from './env.js'
 import { sha256 } from './files.js'
+import { log } from './log.js'
+import { s3Duration } from './metrics.js'
 
 // Page content (entry HTML, files, thumbnails) lives in an S3-compatible bucket such as MinIO,
 // stored once per distinct content under blobs/<sha256>. Postgres keeps only the hashes, so a
@@ -37,6 +39,23 @@ function client(endpoint: string) {
 
 const s3 = client(env.storage.endpoint)
 const Bucket = env.storage.bucket
+
+// Times every request, retries included. A 404 is its own outcome: looking up a blob that isn't
+// there is routine, not a storage problem.
+s3.middlewareStack.add(
+  (next, context) => async (args) => {
+    const end = s3Duration.startTimer({ operation: (context.commandName ?? 'unknown').replace(/Command$/, '') })
+    try {
+      const result = await next(args)
+      end({ outcome: 'ok' })
+      return result
+    } catch (err) {
+      end({ outcome: (err as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode === 404 ? 'not_found' : 'error' })
+      throw err
+    }
+  },
+  { step: 'initialize', name: 'artifactMetrics' },
+)
 
 // Upload links are signed for the host agents connect to, which can differ from the API's
 let signer: { endpoint: string; s3: S3Client } | null = null
@@ -208,7 +227,12 @@ export async function ensureBucket() {
   } catch (err) {
     throw bucketError(err, 'it does not exist and could not be created')
   }
-  console.log(`Created the storage bucket "${Bucket}"`)
+  log.info(`Created the storage bucket "${Bucket}"`)
+}
+
+// For GET /readyz: throws unless the bucket answers within the time given
+export async function checkBucket(timeoutMs: number) {
+  await s3.send(new HeadBucketCommand({ Bucket }), { abortSignal: AbortSignal.timeout(timeoutMs) })
 }
 
 function bucketError(err: unknown, why?: string) {

@@ -27,6 +27,8 @@ const env = {
 export default defineConfig({
   test: {
     env,
+    // Every request logs a line (src/log.ts); show them only for the tests that fail
+    silent: 'passed-only',
     projects: [
       { extends: true, test: { name: 'unit', include: ['test/unit/**/*.test.ts'] } },
       {

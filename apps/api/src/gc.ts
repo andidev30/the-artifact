@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm'
 import { db } from './db/index.js'
+import { log } from './log.js'
 import { deleteBlobs, deleteStaleUploads, listBlobs } from './storage.js'
 
 // Blobs are shared by every version that has the same content, so deleting a page or an account
@@ -49,8 +50,8 @@ export async function sweepStorage({ graceMs = GRACE_MS, now = Date.now() } = {}
 export function scheduleSweeps() {
   const run = () =>
     sweepStorage()
-      .then(({ deleted }) => deleted && console.log(`Storage: removed ${deleted} unused blob${deleted === 1 ? '' : 's'}`))
-      .catch((err) => console.error('Storage sweep failed:', err))
+      .then(({ deleted, uploads }) => (deleted || uploads) && log.info('Storage sweep', { deleted, uploads }))
+      .catch((err) => log.error('Storage sweep failed', { err }))
   setTimeout(run, 60_000).unref()
   setInterval(run, EVERY_MS).unref()
 }

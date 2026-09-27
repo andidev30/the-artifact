@@ -24,6 +24,8 @@ Hono on Node 26, Drizzle ORM over `postgres`, S3 via `@aws-sdk/client-s3`, MCP v
 | `src/oauth/` | OAuth 2.1 server for MCP clients (discovery, dynamic registration, PKCE) and the consent API |
 | `src/auth/` | Sessions, email links, passwords, Google sign-in, account lookup/creation |
 | `src/routes/` | REST routers for the web app |
+| `src/log.ts` | JSON logs, one object per line, tagged with the request id. Use `log.info/warn/error` rather than `console` |
+| `src/metrics.ts`, `src/routes/health.ts` | Prometheus metrics and the per-request middleware (request id, log line, timing by route pattern); `/healthz`, `/readyz` and `/metrics` (only with `METRICS_TOKEN`) |
 | `src/mail.ts` | Outgoing email. Throws `MailDisabledError` without SMTP |
 | `src/ee/` | Hosted-service-only routes (contact sales); see `src/ee/CLAUDE.md` |
 | `src/scripts/` | Operator CLIs (`admin:grant`, `storage:sweep`, `thumbnails:backfill`), also run as `node dist/scripts/*.js` in the image |

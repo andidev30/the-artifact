@@ -37,6 +37,14 @@
       "destination": "/api"
     },
     {
+      "source": "/healthz",
+      "destination": "/api"
+    },
+    {
+      "source": "/readyz",
+      "destination": "/api"
+    },
+    {
       "source": "/((?!assets/).*)",
       "destination": "/index.html"
     }

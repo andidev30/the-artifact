@@ -204,6 +204,64 @@ docker compose up -d
 
 Your data stays: the compose file keeps the project name `the-artifact`, so it finds the same volumes. If you cloned into a folder with another name, set `name:` at the top of `docker-compose.yml` to that folder's name first (`docker volume ls` shows it before `_artifact-data`).
 
+## Health checks and metrics
+
+The app answers two probes on its own port, without signing in:
+
+| Path | Answers `200` when | Otherwise |
+| --- | --- | --- |
+| `/healthz` | The process is running and answering requests | No answer |
+| `/readyz` | Postgres and object storage both answer within 2 seconds | `503`, with which of them failed |
+
+Both return JSON, e.g. `{"status":"ok","checks":{"database":"ok","storage":"ok"}}` from `/readyz`. The reason a check failed goes to the app's log, not into the response. The compose file uses `/readyz` as the app's healthcheck, so `docker compose ps` shows the app as `healthy` once it can serve pages. On Kubernetes, `/healthz` is the startup and liveness probe and `/readyz` the readiness probe, so a database outage takes the pod out of the service without restarting it.
+
+### Logs
+
+The app logs one JSON object per line: one per request, with `requestId`, `method`, `route`, `status` and `durationMs`, and others for things like failed emails or thumbnails. `route` is the pattern that matched (`/api/artifacts/:slug`), never the address itself, so page links and tokens stay out of the log. Every response has an `X-Request-Id` header with the request's id. When your reverse proxy sends its own `X-Request-Id` (letters, digits, `.`, `_`, `:` and `-`, up to 128 characters), the app uses that instead, so you can follow one request through both logs. Probes and scrapes that succeed aren't logged.
+
+```sh
+docker compose logs app | grep '"status":5'
+```
+
+### Scraping the metrics
+
+Metrics are off until you set `METRICS_TOKEN`. Choose a long random value, put it in `app.env` and restart:
+
+```sh
+echo "METRICS_TOKEN=$(openssl rand -hex 32)" >> app.env
+docker compose up -d
+```
+
+`GET /metrics` then returns metrics in the Prometheus text format to requests that send the token as a bearer token. Without the token, or with a wrong one, it answers `404` like any unknown address. The token is checked by the app rather than by keeping the metrics on a separate port, because the compose file and the Kubernetes manifests publish a single port, and every Prometheus-compatible scraper can send a bearer token. Anyone who can reach `APP_URL` can also reach `/metrics`, so keep the token secret; your reverse proxy can block `/metrics` from outside as well.
+
+A Prometheus scrape job:
+
+```yaml
+scrape_configs:
+  - job_name: the-artifact
+    scheme: https
+    metrics_path: /metrics
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/the-artifact-token
+    static_configs:
+      - targets: ['artifact.example.com']
+```
+
+On Kubernetes, scrape the service inside the cluster (`the-artifact.the-artifact.svc:80`, scheme `http`) instead of going through the ingress.
+
+| Metric | Type | What it measures |
+| --- | --- | --- |
+| `artifact_http_request_duration_seconds` | histogram | Requests by `method`, `route` (the matched pattern) and `status` |
+| `artifact_db_pool_max` | gauge | Connections the database pool may open (10) |
+| `artifact_db_pool_active` | gauge | Queries and transactions holding or waiting for a database connection. Above `artifact_db_pool_max`, requests are queueing for the database. |
+| `artifact_s3_request_duration_seconds` | histogram | Object storage requests by `operation` (`GetObject`, `PutObject`, ...) and `outcome` (`ok`, `not_found`, `error`), retries included |
+| `artifact_thumbnail_queue_length` | gauge | Versions waiting for a thumbnail or being rendered |
+| `artifact_thumbnail_render_duration_seconds` | histogram | Thumbnail renders by `outcome` (`stored`, `failed`) |
+| `artifact_process_*`, `artifact_nodejs_*` | various | CPU, memory, event loop lag and garbage collection of the Node.js process |
+
+The numbers are per process and start from zero when the app restarts, which Prometheus handles on its own.
+
 ## Backups
 
 Back up the database and the content storage together; [Backup and restore](/docs/backups) has the commands and how to restore onto a new server.

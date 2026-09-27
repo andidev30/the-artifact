@@ -8,6 +8,8 @@ import { db, schema } from './db/index.js'
 import { env } from './env.js'
 import { sha256 } from './files.js'
 import { holdStorageLock } from './gc.js'
+import { log, requestContext } from './log.js'
+import { thumbnailDuration, thumbnailQueue } from './metrics.js'
 import { getBlob, getText, putBlob } from './storage.js'
 
 // Gallery thumbnails are screenshots of a version, taken in headless Chromium after it is published.
@@ -228,7 +230,7 @@ function launch(): Promise<Browser> {
       browser = null
       if (!explainedSandbox && /sandbox|namespace/i.test(String(err))) {
         explainedSandbox = true
-        console.error(
+        log.error(
           'Thumbnails are off: Chromium could not start its sandbox. Run the app with the seccomp profile in ' +
             'deploy/seccomp-chromium.json (deploy/docker-compose does; on Kubernetes see docs/kubernetes.md). See docs/security.md.',
         )
@@ -358,13 +360,16 @@ async function store(versionId: string, values: { image: Buffer | null; contentT
 export async function renderThumbnail(versionId: string): Promise<'stored' | 'failed' | 'missing'> {
   const tree = await loadTree(versionId)
   if (!tree) return 'missing'
+  const end = thumbnailDuration.startTimer()
   try {
     const { image } = await renderPage(tree)
     await store(versionId, { image, contentType: THUMBNAIL_TYPE, error: null })
+    end({ outcome: 'stored' })
     return 'stored'
   } catch (err) {
+    end({ outcome: 'failed' })
     const message = err instanceof Error ? err.message : String(err)
-    console.error(`Thumbnail for version ${versionId} failed: ${message}`)
+    log.error('Thumbnail failed', { versionId, error: message })
     // The version may have been deleted while it rendered
     await store(versionId, { image: null, contentType: null, error: message.slice(0, 500) }).catch(() => {})
     return 'failed'
@@ -382,8 +387,11 @@ export function queueThumbnail(versionId: string): boolean {
   if (queued.has(versionId)) return true
   if (queued.size >= MAX_QUEUE) return false
   queued.add(versionId)
+  thumbnailQueue.set(queued.size)
   pending.push(versionId)
-  draining ??= drain().finally(() => {
+  // Outside the request's context: the queue outlives it and renders other people's versions too,
+  // so its log lines shouldn't carry this request's id
+  draining ??= requestContext.exit(drain).finally(() => {
     draining = null
   })
   return true
@@ -397,9 +405,10 @@ async function drain() {
     try {
       await renderThumbnail(id)
     } catch (err) {
-      console.error('Thumbnail queue:', err)
+      log.error('Thumbnail queue failed', { versionId: id, err })
     } finally {
       queued.delete(id)
+      thumbnailQueue.set(queued.size)
     }
   }
 }

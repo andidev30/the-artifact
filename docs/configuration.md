@@ -16,6 +16,7 @@ Settings are environment variables. With Docker Compose they go in `deploy/docke
 | --- | --- | --- |
 | `DATABASE_PREPARE` | `true` | `false` when `DATABASE_URL` goes through a transaction-mode pooler (PgBouncer in transaction mode, Supabase's pooler on port 6543), which can't keep prepared statements |
 | `CRON_SECRET` | empty | For hosts without a long-running server, like Vercel: turns on `GET /api/cron/sweep`, which a scheduler calls with `Authorization: Bearer <CRON_SECRET>` to run the [storage sweep](/docs/self-hosting#where-content-is-stored). The Docker image doesn't need it; its server sweeps every 6 hours on its own. |
+| `METRICS_TOKEN` | empty | Turns on Prometheus metrics at `GET /metrics`, which answers only requests with `Authorization: Bearer <METRICS_TOKEN>`. Empty means there is no `/metrics`. See [Health checks and metrics](/docs/self-hosting#health-checks-and-metrics). |
 | `SMTP_HOST` | empty | Mail server for sign-in links, invitations and share emails. Empty runs without email: password sign-in, and links admins pass on themselves. See [Running without email](/docs/self-hosting#running-without-email). |
 | `SMTP_FROM` | `The Artifact <no-reply@localhost>` | Sender, e.g. `"The Artifact <artifact@example.com>"` |
 | `SMTP_PORT` | `587` | |

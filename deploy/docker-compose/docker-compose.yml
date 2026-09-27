@@ -31,6 +31,14 @@ services:
       S3_BUCKET: ${S3_BUCKET:-artifact}
       S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-artifact}
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-${MINIO_ROOT_PASSWORD:-artifact-secret}}
+    # Healthy once Postgres and object storage answer (GET /readyz). The image has no curl, so Node asks.
+    # The first start migrates the database before the server listens, hence the start period.
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://localhost:3000/readyz').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 5m
     depends_on:
       db:
         condition: service_healthy

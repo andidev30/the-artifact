@@ -3,6 +3,7 @@ import { artifactUrl } from './artifacts.js'
 import { db, schema } from './db/index.js'
 import type { Artifact, ShareRole } from './db/schema.js'
 import { mailEnabled } from './env.js'
+import { log } from './log.js'
 import { sendShareNotice } from './mail.js'
 import { EMAIL_RE } from './validation.js'
 
@@ -86,7 +87,7 @@ export async function sharePeople(artifact: Artifact, inviter: Inviter, emails: 
       targets.map((to) => sendShareNotice(to, { from, title: artifact.title, link: artifactUrl(artifact.slug), role, message: message?.slice(0, 500) })),
     )
     const failed = targets.filter((_, i) => results[i].status === 'rejected')
-    if (failed.length) console.error('Share notice failed for', failed)
+    if (failed.length) log.error('Share notice failed', { recipients: failed })
     return { shared: targets, notifyFailed: failed }
   }
   return { shared: targets, notifyFailed: [] }
