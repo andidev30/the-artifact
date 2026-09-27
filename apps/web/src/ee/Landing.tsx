@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { fetchMe, type Me } from '../api'
 import { ConnectTabs } from '../components/ConnectTabs'
-import { CopyCommand } from '../components/CopyCommand'
 import { Wordmark } from '../components/Wordmark'
 import { APP_HOST, DOCS_URL, LOGIN_URL, SELF_HOSTING_URL, SIGNUP_URL } from '../config'
 import { FlowDemo } from './FlowDemo'
@@ -100,12 +99,8 @@ export function Landing() {
           <ol className="steps">
             <li>
               <div className="step-text">
-                <h3>Run it on your server</h3>
-                <p>
-                  {signedIn
-                    ? `Done. You are signed in as ${me!.email}.`
-                    : 'One Docker image and Postgres. The install guide covers email, sign-in and your domain.'}
-                </p>
+                <h3>Create a free account</h3>
+                <p>{signedIn ? `Done. You are signed in as ${me!.email}.` : 'Sign up with your email. Your pages stay private until you share them.'}</p>
               </div>
               <div className="step-action">
                 {signedIn ? (
@@ -114,10 +109,12 @@ export function Landing() {
                   </Link>
                 ) : (
                   <>
-                    <CopyCommand command="cd deploy/docker-compose && docker compose up -d" label="Copy the install command" />
+                    <Link className="button" to={SIGNUP_URL}>
+                      Get started free
+                    </Link>
                     <p className="step-link">
                       <Link className="text-link" to={SELF_HOSTING_URL}>
-                        Read the install guide
+                        Or run it on your own server
                       </Link>
                     </p>
                   </>

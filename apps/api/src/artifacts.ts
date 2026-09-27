@@ -149,6 +149,16 @@ export async function publishUpload(input: PublishTarget & { uploadId: string; f
   return publishContent(input, { htmlSha256: html.sha256, htmlSize: html.size, files, store: () => claimUploads(input.uploadId, [html, ...files]) })
 }
 
+// A rule for creating a page that isn't part of every install, set once by an entry point (src/app.ts
+// sets the hosted service's plan limits from ee/). It runs inside the transaction that creates the
+// page and refuses it by throwing a PublishError.
+export type NewPageCheck = (tx: Tx, owner: { userId: string; organizationId: string | null }) => Promise<void>
+let newPageCheck: NewPageCheck | null = null
+
+export function setNewPageCheck(check: NewPageCheck) {
+  newPageCheck = check
+}
+
 async function publishContent(input: PublishTarget, content: Content): Promise<Artifact> {
   const title = input.title.trim().slice(0, 200) || 'Untitled page'
 
@@ -187,6 +197,7 @@ async function publishContent(input: PublishTarget, content: Content): Promise<A
     throw new PublishError('Organization visibility needs an organization workspace. Use private (restricted) or link.')
   }
   const { created, versionId } = await db.transaction(async (tx) => {
+    await newPageCheck?.(tx, { userId: input.userId, organizationId: input.organizationId })
     const [created] = await tx
       .insert(schema.artifacts)
       .values({

@@ -1,5 +1,5 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
-import { Hono } from 'hono'
+import { Hono, type MiddlewareHandler } from 'hono'
 import { env } from '../env.js'
 import { sweepStorage } from '../gc.js'
 
@@ -15,9 +15,11 @@ function authorized(header: string | undefined): boolean {
   return timingSafeEqual(digest(header), digest(`Bearer ${env.cronSecret}`))
 }
 
-cron.use(async (c, next) => {
+export const requireCronSecret: MiddlewareHandler = async (c, next) => {
   if (!authorized(c.req.header('authorization'))) return c.json({ error: 'Not found' }, 404)
   await next()
-})
+}
+
+cron.use(requireCronSecret)
 
 cron.get('/sweep', async (c) => c.json(await sweepStorage()))

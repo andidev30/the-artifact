@@ -58,6 +58,10 @@
   ],
   "crons": [
     {
+      "path": "/api/cron/history",
+      "schedule": "30 18 * * *"
+    },
+    {
       "path": "/api/cron/sweep",
       "schedule": "0 19 * * *"
     }

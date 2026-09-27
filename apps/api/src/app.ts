@@ -1,11 +1,13 @@
 import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
+import { setNewPageCheck } from './artifacts.js'
 import { email } from './auth/email.js'
 import { google } from './auth/google.js'
 import { password, passwordSignUpOpen } from './auth/password.js'
 import { endSession, loadUser, requireUser, type AuthEnv } from './auth/session.js'
 import { db, schema } from './db/index.js'
 import { contact } from './ee/contact.js'
+import { historyCron, personalPageLimit } from './ee/plans.js'
 import { env, mailEnabled } from './env.js'
 import { hasAccounts, instanceSettings, isInstanceAdmin } from './instance.js'
 import { mcp } from './mcp.js'
@@ -20,6 +22,9 @@ import { settings } from './routes/settings.js'
 import { mountWeb } from './web.js'
 
 export const app = new Hono<AuthEnv>()
+
+// The hosted service's plan limits; they check SELF_HOSTED themselves, so they do nothing on a self-hosted install
+setNewPageCheck(personalPageLimit)
 
 if (!env.webDir) app.get('/', (c) => c.text('The Artifact API'))
 
@@ -65,6 +70,7 @@ api.route('/invitations', invitations)
 api.route('/me/invitations', myInvitations)
 api.route('/me', settings)
 api.route('/admin', admin)
+api.route('/cron/history', historyCron)
 api.route('/cron', cron)
 
 api.get('/me', requireUser, async (c) => {
