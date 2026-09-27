@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping. Bug reports, fixes, docs and features are all welcome. For anything larger than a small fix, open an issue first so we can agree on the approach before you write the code.
+Thanks for helping. Bug reports, fixes, docs and features are all welcome. For anything larger than a small fix, open an issue first so we can agree on the approach before you write the code. What's planned, and what is up next, is on the [project board](https://github.com/users/andidev30/projects/2); issues in **Todo** are good places to start.
 
 ## Getting set up
 
