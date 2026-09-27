@@ -96,7 +96,14 @@ export async function findOrCreateUser(profile: Profile): Promise<User> {
     if (raced) return raced
     const [created] = await tx
       .insert(schema.users)
-      .values({ email, name: profile.name, avatarUrl: profile.avatarUrl, googleSub: profile.googleSub, passwordHash: profile.passwordHash, ...(await newAccountFields(tx)) })
+      .values({
+        email,
+        name: profile.name,
+        avatarUrl: profile.avatarUrl,
+        googleSub: profile.googleSub,
+        passwordHash: profile.passwordHash,
+        ...(await newAccountFields(tx)),
+      })
       .returning()
     return created
   })
@@ -106,7 +113,7 @@ const PLANS = new Set(['organization'])
 
 // Only same-site paths, so a crafted link can't send people elsewhere after signing in
 export function safeNext(next: string | null | undefined): string | null {
-  return next && next.startsWith('/') && !next.startsWith('//') && !next.startsWith('/\\') ? next : null
+  return next?.startsWith('/') && !next.startsWith('//') && !next.startsWith('/\\') ? next : null
 }
 
 export function afterSignInUrl(plan: string | null | undefined, next?: string | null): string {
@@ -130,7 +137,10 @@ export async function createPasswordAccount(email: string, name: string | null, 
     await lockAdmins(tx)
     const [taken] = await tx.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, email))
     if (taken) return null
-    const [created] = await tx.insert(schema.users).values({ email, name, passwordHash, ...(await newAccountFields(tx)) }).returning()
+    const [created] = await tx
+      .insert(schema.users)
+      .values({ email, name, passwordHash, ...(await newAccountFields(tx)) })
+      .returning()
     return created
   })
 }

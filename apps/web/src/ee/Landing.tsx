@@ -17,7 +17,9 @@ export function Landing() {
   const [me, setMe] = useState<Session>(undefined)
 
   useEffect(() => {
-    fetchMe().then(setMe).catch(() => setMe(null))
+    fetchMe()
+      .then(setMe)
+      .catch(() => setMe(null))
   }, [])
 
   const signedIn = Boolean(me)
@@ -25,14 +27,22 @@ export function Landing() {
 
   return (
     <>
-      <a className="skip" href="#main">Skip to content</a>
+      <a className="skip" href="#main">
+        Skip to content
+      </a>
 
       <header className="nav">
         <Wordmark />
         <nav aria-label="Primary">
-          <a className="nav-section" href="#how">How it works</a>
-          <a className="nav-section" href="#pricing">Pricing</a>
-          <Link className="nav-section" to={DOCS_URL}>Docs</Link>
+          <a className="nav-section" href="#how">
+            How it works
+          </a>
+          <a className="nav-section" href="#pricing">
+            Pricing
+          </a>
+          <Link className="nav-section" to={DOCS_URL}>
+            Docs
+          </Link>
           {me === undefined ? (
             <span className="nav-pending" aria-hidden="true" />
           ) : me ? (
@@ -41,12 +51,16 @@ export function Landing() {
                 {me.avatarUrl && <img src={me.avatarUrl} alt="" referrerPolicy="no-referrer" />}
                 <span>{firstName ?? me.email}</span>
               </span>
-              <Link className="button button-small" to="/app">Go to your pages</Link>
+              <Link className="button button-small" to="/app">
+                Go to your pages
+              </Link>
             </>
           ) : (
             <>
               <Link to={LOGIN_URL}>Log in</Link>
-              <Link className="button button-small" to={SELF_HOSTING_URL}>Get started</Link>
+              <Link className="button button-small" to={SELF_HOSTING_URL}>
+                Get started
+              </Link>
             </>
           )}
         </nav>
@@ -57,17 +71,22 @@ export function Landing() {
           <div className="hero-copy">
             <h1>Your agent writes the page. You send the link.</h1>
             <p className="lede">
-              The Artifact hosts the HTML pages your coding agent builds: reports,
-              prototypes, dashboards. The agent publishes them through an MCP server,
-              and you choose who can open them: anyone with the link, or only your team.
+              The Artifact hosts the HTML pages your coding agent builds: reports, prototypes, dashboards. The agent publishes them through an MCP server, and
+              you choose who can open them: anyone with the link, or only your team.
             </p>
             <div className="hero-actions">
               {signedIn ? (
-                <Link className="button" to="/app">Go to your pages</Link>
+                <Link className="button" to="/app">
+                  Go to your pages
+                </Link>
               ) : (
-                <Link className="button" to={SELF_HOSTING_URL}>Self-host for free</Link>
+                <Link className="button" to={SELF_HOSTING_URL}>
+                  Self-host for free
+                </Link>
               )}
-              <a className="text-link" href="#how">See how it works</a>
+              <a className="text-link" href="#how">
+                See how it works
+              </a>
             </div>
             <p className="hint">Works with Claude Code, Cursor, Codex, and any MCP client. The hosted cloud version is coming soon.</p>
           </div>
@@ -88,11 +107,17 @@ export function Landing() {
               </div>
               <div className="step-action">
                 {signedIn ? (
-                  <Link className="button button-quiet" to="/app">Go to your pages</Link>
+                  <Link className="button button-quiet" to="/app">
+                    Go to your pages
+                  </Link>
                 ) : (
                   <>
                     <CopyCommand command="cd deploy/docker-compose && docker compose up -d" label="Copy the install command" />
-                    <p className="step-link"><Link className="text-link" to={SELF_HOSTING_URL}>Read the install guide</Link></p>
+                    <p className="step-link">
+                      <Link className="text-link" to={SELF_HOSTING_URL}>
+                        Read the install guide
+                      </Link>
+                    </p>
                   </>
                 )}
               </div>
@@ -100,10 +125,7 @@ export function Landing() {
             <li>
               <div className="step-text">
                 <h3>Connect your agent</h3>
-                <p>
-                  Add the MCP server once. The first time your agent publishes, it opens a
-                  browser window so you can sign in.
-                </p>
+                <p>Add the MCP server once. The first time your agent publishes, it opens a browser window so you can sign in.</p>
               </div>
               <div className="step-action">
                 <ConnectTabs />
@@ -113,15 +135,24 @@ export function Landing() {
               <div className="step-text">
                 <h3>Ask for a page</h3>
                 <p>
-                  Ask in plain words. The agent writes the page, calls{' '}
-                  <code>publish_artifact</code>, and replies with a link you can send.
+                  Ask in plain words. The agent writes the page, calls <code>publish_artifact</code>, and replies with a link you can send.
                 </p>
               </div>
               <div className="step-action">
-                <div className="transcript" aria-label="Example request and reply">
-                  <p><span className="caret" aria-hidden="true">&gt;</span>turn this CSV into a chart I can send to the team</p>
-                  <p className="transcript-tool"><span className="dot" aria-hidden="true" />publish_artifact</p>
-                  <p>Published. <mark>{APP_HOST}/a/signups-by-week</mark></p>
+                <div className="transcript" role="group" aria-label="Example request and reply">
+                  <p>
+                    <span className="caret" aria-hidden="true">
+                      &gt;
+                    </span>
+                    turn this CSV into a chart I can send to the team
+                  </p>
+                  <p className="transcript-tool">
+                    <span className="dot" aria-hidden="true" />
+                    publish_artifact
+                  </p>
+                  <p>
+                    Published. <mark>{APP_HOST}/a/signups-by-week</mark>
+                  </p>
                 </div>
               </div>
             </li>
@@ -163,4 +194,3 @@ export function Landing() {
     </>
   )
 }
-

@@ -48,8 +48,18 @@ export function Viewer() {
     }
   }, [slug])
 
-  if (state.kind === 'loading') return <div className="viewer-status" role="status">Loading page</div>
-  if (state.kind === 'error') return <div className="viewer-status" role="alert">The page could not be loaded. Reload to try again.</div>
+  if (state.kind === 'loading')
+    return (
+      <div className="viewer-status" role="status">
+        Loading page
+      </div>
+    )
+  if (state.kind === 'error')
+    return (
+      <div className="viewer-status" role="alert">
+        The page could not be loaded. Reload to try again.
+      </div>
+    )
   if (state.kind === 'missing') return <Unavailable slug={slug} email={state.email} />
 
   return <PageFrame page={state.page} email={state.email} onChange={(page) => setState({ ...state, page })} />
@@ -72,27 +82,36 @@ function Unavailable({ slug, email }: { slug: string; email: string | null }) {
       <main id="main" className="auth-main">
         <section className="auth-box unavailable" aria-labelledby="unavailable-title">
           <span className="unavailable-icon" aria-hidden="true">
-            <svg viewBox="0 0 20 20"><path d="M6 9V7a4 4 0 1 1 8 0v2M5 9h10v8H5z" /></svg>
+            <svg viewBox="0 0 20 20">
+              <path d="M6 9V7a4 4 0 1 1 8 0v2M5 9h10v8H5z" />
+            </svg>
           </span>
           <h1 id="unavailable-title">This page isn't available</h1>
           {email ? (
             <>
               <p className="auth-lede">
-                You're signed in as <strong>{email}</strong>, and this page isn't shared with that address. It may
-                also have been deleted.
+                You're signed in as <strong>{email}</strong>, and this page isn't shared with that address. It may also have been deleted.
               </p>
               <p className="auth-lede">Ask the person who sent it to share it with {email}, or switch to the account it was shared with.</p>
               <div className="unavailable-actions">
-                <button type="button" className="button" onClick={switchAccount}>Switch account</button>
-                <Link className="text-link" to="/app">Go to your pages</Link>
+                <button type="button" className="button" onClick={switchAccount}>
+                  Switch account
+                </button>
+                <Link className="text-link" to="/app">
+                  Go to your pages
+                </Link>
               </div>
             </>
           ) : (
             <>
               <p className="auth-lede">It's private or it was deleted. If it was shared with you, log in with the email address it was sent to.</p>
               <div className="unavailable-actions">
-                <Link className="button" to={back}>Log in to open it</Link>
-                <Link className="text-link" to="/">What is The Artifact?</Link>
+                <Link className="button" to={back}>
+                  Log in to open it
+                </Link>
+                <Link className="text-link" to="/">
+                  What is The Artifact?
+                </Link>
               </div>
             </>
           )}
@@ -146,20 +165,34 @@ function PageFrame({ page, email, onChange }: { page: ArtifactPage; email: strin
           </p>
         </div>
         <div className="viewer-actions">
-          <span className="viewer-badge" data-visibility={page.visibility}>{VISIBILITY_LABEL[page.visibility]}</span>
+          <span className="viewer-badge" data-visibility={page.visibility}>
+            {VISIBILITY_LABEL[page.visibility]}
+          </span>
           {page.canEdit && (
-            <button type="button" className="viewer-history" aria-expanded={historyOpen} aria-controls="history-panel" onClick={() => setHistoryOpen((o) => !o)}>
+            <button
+              type="button"
+              className="viewer-history"
+              aria-expanded={historyOpen}
+              aria-controls="history-panel"
+              onClick={() => setHistoryOpen((o) => !o)}
+            >
               History
             </button>
           )}
           {page.canEdit ? (
-            <button type="button" className="viewer-copy" onClick={() => setSharing(true)}>Share</button>
+            <button type="button" className="viewer-copy" onClick={() => setSharing(true)}>
+              Share
+            </button>
           ) : (
-            <button type="button" className="viewer-copy" onClick={copyLink}>{copied ? 'Copied' : 'Copy link'}</button>
+            <button type="button" className="viewer-copy" onClick={copyLink}>
+              {copied ? 'Copied' : 'Copy link'}
+            </button>
           )}
           <PageMenu label="More actions" items={menu} />
         </div>
-        <span className="visually-hidden" role="status">{copied ? 'Link copied' : announce}</span>
+        <span className="visually-hidden" role="status">
+          {copied ? 'Link copied' : announce}
+        </span>
       </header>
       {viewing && (
         <OldVersionBar

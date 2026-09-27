@@ -57,7 +57,9 @@ export function AccountMenu({ me }: { me: Me }) {
         {me.avatarUrl ? (
           <img className="account-avatar" src={me.avatarUrl} alt="" referrerPolicy="no-referrer" />
         ) : (
-          <span className="account-avatar" aria-hidden="true">{display.slice(0, 1).toUpperCase()}</span>
+          <span className="account-avatar" aria-hidden="true">
+            {display.slice(0, 1).toUpperCase()}
+          </span>
         )}
         <span className="account-name">{display}</span>
         <svg className="account-caret" viewBox="0 0 10 6" aria-hidden="true">
@@ -74,21 +76,29 @@ export function AccountMenu({ me }: { me: Me }) {
           <ul>
             {me.onboarded && (
               <li>
-                <Link to="/settings" onClick={() => setOpen(false)}>Account settings</Link>
+                <Link to="/settings" onClick={() => setOpen(false)}>
+                  Account settings
+                </Link>
               </li>
             )}
             {me.onboarded && org && (
               <li>
-                <Link to={organizationSettingsPath(org)} onClick={() => setOpen(false)}>{org.name} settings</Link>
+                <Link to={organizationSettingsPath(org)} onClick={() => setOpen(false)}>
+                  {org.name} settings
+                </Link>
               </li>
             )}
             {me.isAdmin && (
               <li className="account-admin">
-                <Link to="/admin" onClick={() => setOpen(false)}>Server admin</Link>
+                <Link to="/admin" onClick={() => setOpen(false)}>
+                  Server admin
+                </Link>
               </li>
             )}
             <li className="account-logout">
-              <button type="button" onClick={onLogout}>Log out</button>
+              <button type="button" onClick={onLogout}>
+                Log out
+              </button>
             </li>
           </ul>
         </div>

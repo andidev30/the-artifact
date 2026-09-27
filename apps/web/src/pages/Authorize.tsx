@@ -23,9 +23,7 @@ export function Authorize() {
   const requestId = params.get('request')
   const linkError = params.get('error')
   const [state, setState] = useState<State>(() =>
-    linkError || !requestId
-      ? { kind: 'error', message: LINK_ERRORS[linkError ?? ''] ?? LINK_ERRORS.unknown_client }
-      : { kind: 'loading' },
+    linkError || !requestId ? { kind: 'error', message: LINK_ERRORS[linkError ?? ''] ?? LINK_ERRORS.unknown_client } : { kind: 'loading' },
   )
   const [workspace, setWorkspace] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -68,7 +66,11 @@ export function Authorize() {
       </header>
       <main id="main" className="auth-main">
         <section className="auth-box consent" aria-labelledby="consent-title" aria-busy={state.kind === 'loading'}>
-          {state.kind === 'loading' && <p className="auth-lede" role="status">Loading the connection request</p>}
+          {state.kind === 'loading' && (
+            <p className="auth-lede" role="status">
+              Loading the connection request
+            </p>
+          )}
 
           {state.kind === 'error' && (
             <>
@@ -97,8 +99,8 @@ export function Authorize() {
               </div>
               <h1 id="consent-title">Connect {state.request.clientName}</h1>
               <p className="auth-lede">
-                {state.request.clientName} will be able to publish pages, list them, read their HTML and change
-                who can open them. It can't see your account settings or other workspaces.
+                {state.request.clientName} will be able to publish pages, list them, read their HTML and change who can open them. It can't see your account
+                settings or other workspaces.
               </p>
 
               {state.request.workspaces.length > 1 && (
@@ -106,12 +108,7 @@ export function Authorize() {
                   <legend>Publish pages to</legend>
                   {state.request.workspaces.map((w) => (
                     <label key={w.id ?? 'personal'} className="consent-option">
-                      <input
-                        type="radio"
-                        name="workspace"
-                        checked={workspace === w.id}
-                        onChange={() => setWorkspace(w.id)}
-                      />
+                      <input type="radio" name="workspace" checked={workspace === w.id} onChange={() => setWorkspace(w.id)} />
                       <span>{w.name}</span>
                     </label>
                   ))}

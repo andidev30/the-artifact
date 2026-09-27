@@ -269,7 +269,14 @@ describe('MCP over /mcp for 2026-07-28 clients', () => {
     expect(client.getServerVersion()).toMatchObject({ name: 'the-artifact' })
 
     const { tools } = await client.listTools()
-    expect(tools.map((t) => t.name).sort()).toEqual(['get_artifact', 'list_artifacts', 'publish_artifact', 'rename_artifact', 'set_artifact_visibility', 'share_artifact'])
+    expect(tools.map((t) => t.name).sort()).toEqual([
+      'get_artifact',
+      'list_artifacts',
+      'publish_artifact',
+      'rename_artifact',
+      'set_artifact_visibility',
+      'share_artifact',
+    ])
     expect(tools.find((t) => t.name === 'get_artifact')?.annotations).toEqual({ readOnlyHint: true })
     await client.close()
   })

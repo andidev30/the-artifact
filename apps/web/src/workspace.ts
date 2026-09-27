@@ -22,7 +22,7 @@ export function chooseWorkspace(id: string) {
   } catch {
     // Storage blocked; the choice lasts until the tab closes
   }
-  listeners.forEach((l) => l())
+  for (const l of listeners) l()
 }
 
 function subscribe(listener: () => void) {

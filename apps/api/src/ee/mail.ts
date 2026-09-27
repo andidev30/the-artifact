@@ -6,7 +6,13 @@ export type SalesInquiry = { name: string; email: string; company: string; teamS
 // The contact-sales form. Goes to SALES_EMAIL (the sender address when unset); replying answers the person who wrote.
 export async function sendSalesInquiry(q: SalesInquiry) {
   const to = process.env.SALES_EMAIL?.trim() || env.smtp.from
-  const rows: [string, string][] = [['Name', q.name], ['Email', q.email], ['Company', q.company], ['Team size', q.teamSize], ['Interested in', q.topic]]
+  const rows: [string, string][] = [
+    ['Name', q.name],
+    ['Email', q.email],
+    ['Company', q.company],
+    ['Team size', q.teamSize],
+    ['Interested in', q.topic],
+  ]
   await transport.sendMail({
     from: env.smtp.from,
     to,

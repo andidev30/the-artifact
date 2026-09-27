@@ -21,7 +21,12 @@ export async function getSharing(artifact: Artifact) {
     ? await db
         .select({ email: schema.users.email, name: schema.users.name, avatarUrl: schema.users.avatarUrl })
         .from(schema.users)
-        .where(inArray(schema.users.email, shares.map((s) => s.email)))
+        .where(
+          inArray(
+            schema.users.email,
+            shares.map((s) => s.email),
+          ),
+        )
     : []
   const byEmail = new Map(known.map((u) => [u.email, u]))
 
@@ -46,7 +51,14 @@ export async function getSharing(artifact: Artifact) {
 
 export function parseEmails(input: unknown): string[] {
   const list = Array.isArray(input) ? input : typeof input === 'string' ? input.split(/[\s,;]+/) : []
-  return [...new Set(list.filter((e): e is string => typeof e === 'string').map((e) => e.trim().toLowerCase()).filter(Boolean))]
+  return [
+    ...new Set(
+      list
+        .filter((e): e is string => typeof e === 'string')
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  ]
 }
 
 type Inviter = { id: string; name: string | null; email: string }
@@ -90,7 +102,5 @@ export async function setPersonRole(artifact: Artifact, email: string, role: Sha
 }
 
 export async function removePerson(artifact: Artifact, email: string) {
-  await db
-    .delete(schema.artifactShares)
-    .where(and(eq(schema.artifactShares.artifactId, artifact.id), eq(schema.artifactShares.email, email.toLowerCase())))
+  await db.delete(schema.artifactShares).where(and(eq(schema.artifactShares.artifactId, artifact.id), eq(schema.artifactShares.email, email.toLowerCase())))
 }

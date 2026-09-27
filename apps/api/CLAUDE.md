@@ -1,6 +1,6 @@
 # apps/api
 
-Hono on Node 24, Drizzle ORM over `postgres`, S3 via `@aws-sdk/client-s3`, MCP via `@modelcontextprotocol/server`, thumbnails via `playwright-core` driving headless Chromium. Runs with `tsx watch` in dev, `tsc` → `dist/` in production.
+Hono on Node 26, Drizzle ORM over `postgres`, S3 via `@aws-sdk/client-s3`, MCP via `@modelcontextprotocol/server`, thumbnails via `playwright-core` driving headless Chromium. Runs with `tsx watch` in dev, `tsc` → `dist/` in production.
 
 ## Where things are
 

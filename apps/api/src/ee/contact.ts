@@ -4,6 +4,7 @@ import { EMAIL_RE } from '../validation.js'
 import { sendSalesInquiry } from './mail.js'
 
 // Control characters (newlines included) have no place in one-line fields that end up in a subject
+// biome-ignore lint/suspicious/noControlCharactersInRegex: matching control characters is the point
 const CONTROL_RE = /[\u0000-\u001f\u007f]/
 
 export const TEAM_SIZES = ['1-10', '11-50', '51-200', '201-1000', '1000+'] as const

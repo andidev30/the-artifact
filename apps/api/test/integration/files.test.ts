@@ -43,11 +43,24 @@ async function publishError(owner: TestUser, files: unknown[]) {
 describe('publishing files', () => {
   it('refuses paths that leave the page or look odd', async () => {
     const owner = await createUser()
-    for (const path of ['../secret.css', 'a/../../b.css', '/etc/passwd.txt', 'C:\\x.css', 'http://evil.test/x.js', 'a//b.css', '.env.txt', 'a/.git/x.txt', 'sp ace.css', 'q?.css', 'a%2e%2e.css', '']) {
+    for (const path of [
+      '../secret.css',
+      'a/../../b.css',
+      '/etc/passwd.txt',
+      'C:\\x.css',
+      'http://evil.test/x.js',
+      'a//b.css',
+      '.env.txt',
+      'a/.git/x.txt',
+      'sp ace.css',
+      'q?.css',
+      'a%2e%2e.css',
+      '',
+    ]) {
       const message = await publishError(owner, [{ path, content: 'x' }])
       expect(message, path).not.toBeNull()
     }
-    expect(await publishError(owner, [{ path: 'x'.repeat(197) + '.css', content: 'x' }])).toMatch(/longer than 200/)
+    expect(await publishError(owner, [{ path: `${'x'.repeat(197)}.css`, content: 'x' }])).toMatch(/longer than 200/)
     // A leading ./ is the same file
     expect(await publishError(owner, [{ path: './ok.css', content: 'x' }])).toBeNull()
     expect(await db.select().from(schema.artifactFiles)).toMatchObject([{ path: 'ok.css' }])
@@ -62,7 +75,12 @@ describe('publishing files', () => {
     expect(await publishError(owner, [{ path: 'logo.png', content: '@@@=', encoding: 'base64' }])).toMatch(/isn't valid base64/)
     expect(await publishError(owner, [{ path: 'x.css', content: 'x', encoding: 'hex' }])).toMatch(/unknown encoding/)
     expect(await publishError(owner, [{ path: 'index.html', content: 'x' }])).toMatch(/index.html is the page itself/)
-    expect(await publishError(owner, [{ path: 'a.css', content: 'x' }, { path: 'A.css', content: 'y' }])).toMatch(/Two files have the path/)
+    expect(
+      await publishError(owner, [
+        { path: 'a.css', content: 'x' },
+        { path: 'A.css', content: 'y' },
+      ]),
+    ).toMatch(/Two files have the path/)
     // Text types can come as base64 too, and other HTML pages are fine
     expect(await publishError(owner, [{ path: 'about.html', content: Buffer.from('<p>about</p>').toString('base64'), encoding: 'base64' }])).toBeNull()
   })

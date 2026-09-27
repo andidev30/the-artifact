@@ -116,7 +116,11 @@ test('a restricted multi-file page loads its CSS, JS and images in the viewer an
     '<!doctype html><link rel="stylesheet" href="css/site.css"><h1>Multi-file</h1><img id="dot" src="img/dot.png" width="40" height="40"><p id="data">…</p><script src="js/app.js"></script>'
   const files = [
     { path: 'css/site.css', content: 'body { background: rgb(10, 120, 90) }' },
-    { path: 'js/app.js', content: 'document.body.dataset.ran = "yes"; fetch("data.json").then((r) => r.json()).then((d) => { document.getElementById("data").textContent = d.word })' },
+    {
+      path: 'js/app.js',
+      content:
+        'document.body.dataset.ran = "yes"; fetch("data.json").then((r) => r.json()).then((d) => { document.getElementById("data").textContent = d.word })',
+    },
     { path: 'data.json', content: '{"word":"loaded"}' },
     { path: 'img/dot.png', content: RED_PNG, encoding: 'base64' as const },
   ]

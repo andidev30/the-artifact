@@ -116,7 +116,10 @@ describe('magic link sign-in', () => {
 
   it('rejects an expired link', async () => {
     const { link } = await requestLink('late@example.com')
-    await db.update(schema.emailTokens).set({ expiresAt: new Date(Date.now() - 1000) }).where(eq(schema.emailTokens.id, hashToken(tokenOf(link))))
+    await db
+      .update(schema.emailTokens)
+      .set({ expiresAt: new Date(Date.now() - 1000) })
+      .where(eq(schema.emailTokens.id, hashToken(tokenOf(link))))
 
     const lookup = await call(`/api/auth/email/confirm?token=${encodeURIComponent(tokenOf(link))}`)
     expect(lookup.status).toBe(200)

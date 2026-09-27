@@ -53,8 +53,24 @@ describe('object storage', () => {
     const kept = unique()
     const gone = unique()
     const shared = `/* ${crypto.randomUUID()} */`
-    await publish({ userId: owner.id, email: owner.email, organizationId: null, clientName: 'test', title: 'Kept', html: kept, files: [{ path: 'a.css', content: shared }] })
-    const doomed = await publish({ userId: owner.id, email: owner.email, organizationId: null, clientName: 'test', title: 'Gone', html: gone, files: [{ path: 'a.css', content: shared }] })
+    await publish({
+      userId: owner.id,
+      email: owner.email,
+      organizationId: null,
+      clientName: 'test',
+      title: 'Kept',
+      html: kept,
+      files: [{ path: 'a.css', content: shared }],
+    })
+    const doomed = await publish({
+      userId: owner.id,
+      email: owner.email,
+      organizationId: null,
+      clientName: 'test',
+      title: 'Gone',
+      html: gone,
+      files: [{ path: 'a.css', content: shared }],
+    })
 
     expect((await call(`/api/artifacts/${doomed.slug}`, { method: 'DELETE', cookie: owner.cookie })).status).toBe(204)
     // Recent blobs are left alone, in case a publish is still on its way to committing them

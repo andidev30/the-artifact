@@ -34,7 +34,15 @@ describe('deleting an account', () => {
     await addMember(org.id, author, 'member')
 
     const orgPage = await createPage(author, { organizationId: org.id, visibility: 'organization', title: 'Team chart' })
-    await publish({ userId: author.id, email: author.email, organizationId: org.id, clientName: 'test-client', title: 'Team chart', html: '<p>v2</p>', slug: orgPage.slug })
+    await publish({
+      userId: author.id,
+      email: author.email,
+      organizationId: org.id,
+      clientName: 'test-client',
+      title: 'Team chart',
+      html: '<p>v2</p>',
+      slug: orgPage.slug,
+    })
     const privateOrgPage = await createPage(author, { organizationId: org.id, visibility: 'private', title: 'Draft' })
     const personal = await createPage(author, { title: 'Mine' })
 
@@ -184,7 +192,10 @@ describe('deleting an account', () => {
     expect((await call('/api/me', { cookie: author.cookie })).status).toBe(401)
     expect(await db.select().from(schema.artifactShares).where(eq(schema.artifactShares.email, author.email))).toHaveLength(0)
     expect(
-      await db.select().from(schema.memberships).where(and(eq(schema.memberships.organizationId, org.id), eq(schema.memberships.userId, author.id))),
+      await db
+        .select()
+        .from(schema.memberships)
+        .where(and(eq(schema.memberships.organizationId, org.id), eq(schema.memberships.userId, author.id))),
     ).toHaveLength(0)
   })
 

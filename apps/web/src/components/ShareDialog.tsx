@@ -1,14 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import {
-  getSharing,
-  removePerson,
-  setPersonRole,
-  setVisibility,
-  sharePeople,
-  type ShareRole,
-  type Sharing,
-  type Visibility,
-} from '../api'
+import { getSharing, removePerson, setPersonRole, setVisibility, sharePeople, type ShareRole, type Sharing, type Visibility } from '../api'
 import { useConfig } from '../useConfig'
 import './ShareDialog.css'
 
@@ -30,7 +21,11 @@ function generalAccess(v: Visibility, orgName: string | null) {
 
 function Avatar({ name, email, src }: { name: string | null; email: string; src: string | null }) {
   if (src) return <img className="share-avatar" src={src} alt="" referrerPolicy="no-referrer" />
-  return <span className="share-avatar" aria-hidden="true">{(name ?? email).charAt(0).toUpperCase()}</span>
+  return (
+    <span className="share-avatar" aria-hidden="true">
+      {(name ?? email).charAt(0).toUpperCase()}
+    </span>
+  )
 }
 
 function AccessIcon({ v }: { v: Visibility }) {
@@ -64,7 +59,9 @@ export function ShareDialog({ slug, title, currentUserEmail, onClose, onVisibili
 
   useEffect(() => {
     dialog.current?.showModal()
-    getSharing(slug).then(setSharing).catch(() => setLoadError(true))
+    getSharing(slug)
+      .then(setSharing)
+      .catch(() => setLoadError(true))
   }, [slug])
 
   async function run<T>(action: () => Promise<T>, after: (r: T) => void) {
@@ -132,21 +129,20 @@ export function ShareDialog({ slug, title, currentUserEmail, onClose, onVisibili
       <h2 id="share-title">Share “{title}”</h2>
 
       <form className="share-invite" onSubmit={onInvite}>
-        <label className="visually-hidden" htmlFor="share-emails">Add people by email</label>
-        <input
-          id="share-emails"
-          value={emails}
-          onChange={(e) => setEmails(e.target.value)}
-          placeholder="Add people by email"
-          autoComplete="email"
-          autoFocus
-        />
-        <label className="visually-hidden" htmlFor="share-role">Role for people you add</label>
+        <label className="visually-hidden" htmlFor="share-emails">
+          Add people by email
+        </label>
+        <input id="share-emails" value={emails} onChange={(e) => setEmails(e.target.value)} placeholder="Add people by email" autoComplete="email" autoFocus />
+        <label className="visually-hidden" htmlFor="share-role">
+          Role for people you add
+        </label>
         <select id="share-role" value={role} onChange={(e) => setRole(e.target.value as ShareRole)}>
           <option value="viewer">Viewer</option>
           <option value="editor">Editor</option>
         </select>
-        <button type="submit" className="button" disabled={!typing || busy}>Share</button>
+        <button type="submit" className="button" disabled={!typing || busy}>
+          Share
+        </button>
       </form>
 
       {typing && canEmail && (
@@ -155,16 +151,26 @@ export function ShareDialog({ slug, title, currentUserEmail, onClose, onVisibili
             <input type="checkbox" checked={notifyChoice} onChange={(e) => setNotify(e.target.checked)} />
             Notify people by email
           </label>
-          {notify && (
-            <textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Message (optional)" rows={2} maxLength={500} />
-          )}
+          {notify && <textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Message (optional)" rows={2} maxLength={500} />}
         </div>
       )}
 
-      {error && <p className="share-message share-error" role="alert">{error}</p>}
-      {notice && <p className="share-message" role="status">{notice}</p>}
+      {error && (
+        <p className="share-message share-error" role="alert">
+          {error}
+        </p>
+      )}
+      {notice && (
+        <p className="share-message" role="status">
+          {notice}
+        </p>
+      )}
 
-      {loadError && <p className="share-message share-error" role="alert">Sharing settings could not be loaded. Close and try again.</p>}
+      {loadError && (
+        <p className="share-message share-error" role="alert">
+          Sharing settings could not be loaded. Close and try again.
+        </p>
+      )}
 
       {sharing && access && (
         <>
@@ -173,7 +179,10 @@ export function ShareDialog({ slug, title, currentUserEmail, onClose, onVisibili
             <li>
               <Avatar name={sharing.owner.name} email={sharing.owner.email} src={sharing.owner.avatarUrl} />
               <span className="share-person">
-                <strong>{sharing.owner.name ?? sharing.owner.email}{sharing.owner.email === currentUserEmail ? ' (you)' : ''}</strong>
+                <strong>
+                  {sharing.owner.name ?? sharing.owner.email}
+                  {sharing.owner.email === currentUserEmail ? ' (you)' : ''}
+                </strong>
                 {sharing.owner.name && <span>{sharing.owner.email}</span>}
               </span>
               <span className="share-owner">Owner</span>
@@ -182,10 +191,15 @@ export function ShareDialog({ slug, title, currentUserEmail, onClose, onVisibili
               <li key={p.email}>
                 <Avatar name={p.name} email={p.email} src={p.avatarUrl} />
                 <span className="share-person">
-                  <strong>{p.name ?? p.email}{p.email === currentUserEmail ? ' (you)' : ''}</strong>
+                  <strong>
+                    {p.name ?? p.email}
+                    {p.email === currentUserEmail ? ' (you)' : ''}
+                  </strong>
                   <span>{p.pending ? `${p.name ? `${p.email}, ` : ''}invited, no account yet` : p.name ? p.email : ''}</span>
                 </span>
-                <label className="visually-hidden" htmlFor={`role-${p.email}`}>Role for {p.email}</label>
+                <label className="visually-hidden" htmlFor={`role-${p.email}`}>
+                  Role for {p.email}
+                </label>
                 <select className="share-quiet" id={`role-${p.email}`} value={p.role} onChange={(e) => onRole(p.email, e.target.value)} disabled={busy}>
                   <option value="viewer">{ROLE_LABEL.viewer}</option>
                   <option value="editor">{ROLE_LABEL.editor}</option>
@@ -199,10 +213,20 @@ export function ShareDialog({ slug, title, currentUserEmail, onClose, onVisibili
           <div className="share-general">
             <AccessIcon v={sharing.visibility} />
             <div>
-              <label className="visually-hidden" htmlFor="share-general">Who can open with the link</label>
-              <select className="share-quiet" id="share-general" value={sharing.visibility} onChange={(e) => onGeneral(e.target.value as Visibility)} disabled={busy}>
+              <label className="visually-hidden" htmlFor="share-general">
+                Who can open with the link
+              </label>
+              <select
+                className="share-quiet"
+                id="share-general"
+                value={sharing.visibility}
+                onChange={(e) => onGeneral(e.target.value as Visibility)}
+                disabled={busy}
+              >
                 {generalOptions.map((v) => (
-                  <option key={v} value={v}>{generalAccess(v, sharing.organizationName).label}</option>
+                  <option key={v} value={v}>
+                    {generalAccess(v, sharing.organizationName).label}
+                  </option>
                 ))}
               </select>
               <p>{access.detail}</p>
@@ -212,8 +236,12 @@ export function ShareDialog({ slug, title, currentUserEmail, onClose, onVisibili
       )}
 
       <div className="share-footer">
-        <button type="button" className="button button-quiet" onClick={copyLink}>{copied ? 'Link copied' : 'Copy link'}</button>
-        <button type="button" className="button" onClick={() => dialog.current?.close()}>Done</button>
+        <button type="button" className="button button-quiet" onClick={copyLink}>
+          {copied ? 'Link copied' : 'Copy link'}
+        </button>
+        <button type="button" className="button" onClick={() => dialog.current?.close()}>
+          Done
+        </button>
       </div>
     </dialog>
   )

@@ -1,13 +1,13 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { serveStatic } from '@hono/node-server/serve-static'
-import type { Hono } from 'hono'
+import type { Env, Hono } from 'hono'
 
 // Paths the API owns; everything else is the single-page app
 const API_PREFIXES = ['/api/', '/mcp', '/oauth/', '/.well-known/']
 
 // Serves the built web app next to the API, so a self-hosted install is one process on one port
-export function mountWeb(app: Hono<any>, dir: string) {
+export function mountWeb<E extends Env>(app: Hono<E>, dir: string) {
   const index = readFileSync(join(dir, 'index.html'), 'utf8')
 
   // Hashed build assets never change; the HTML shell always revalidates

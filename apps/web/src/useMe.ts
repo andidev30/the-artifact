@@ -9,7 +9,7 @@ export type MeState = { kind: 'loading' } | { kind: 'ready'; me: Me } | { kind: 
 const reloaders = new Set<() => void>()
 
 export function refreshMe() {
-  reloaders.forEach((reload) => reload())
+  for (const reload of reloaders) reload()
 }
 
 // Loads the signed-in user and sends anyone signed out to the login page
@@ -21,9 +21,12 @@ export function useMe(): MeState {
   useEffect(() => {
     const reload = () => setVersion((v) => v + 1)
     reloaders.add(reload)
-    return () => { reloaders.delete(reload) }
+    return () => {
+      reloaders.delete(reload)
+    }
   }, [])
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshMe() bumps version to load the account again
   useEffect(() => {
     let active = true
     fetchMe()
@@ -33,7 +36,9 @@ export function useMe(): MeState {
         else navigate(LOGIN_URL, { replace: true })
       })
       .catch(() => active && setState({ kind: 'error' }))
-    return () => { active = false }
+    return () => {
+      active = false
+    }
   }, [navigate, version])
 
   return state

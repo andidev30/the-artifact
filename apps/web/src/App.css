@@ -65,7 +65,9 @@ main,
   border: 1.5px solid var(--ink);
   border-radius: 3px;
   box-shadow: 4px 4px 0 var(--ink);
-  transition: transform 120ms ease, box-shadow 120ms ease;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease;
 }
 
 .button:hover {
@@ -252,10 +254,13 @@ main,
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* Reduced motion has to win over every component's own transitions and animations */
   *,
   *::before,
   *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: see above */
     transition-duration: 0ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: see above */
     animation: none !important;
   }
 }

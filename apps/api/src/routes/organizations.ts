@@ -6,8 +6,25 @@ import { db, schema } from '../db/index.js'
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$/
 // Paths the web app already uses, so an organization can't take them
 const RESERVED = new Set([
-  'a', 'admin', 'api', 'app', 'auth', 'billing', 'contact-sales', 'docs', 'help', 'login', 'logout',
-  'mcp', 'new', 'onboarding', 'pricing', 'settings', 'signup', 'support', 'www',
+  'a',
+  'admin',
+  'api',
+  'app',
+  'auth',
+  'billing',
+  'contact-sales',
+  'docs',
+  'help',
+  'login',
+  'logout',
+  'mcp',
+  'new',
+  'onboarding',
+  'pricing',
+  'settings',
+  'signup',
+  'support',
+  'www',
 ])
 
 export function slugProblem(slug: string): string | null {
@@ -65,9 +82,6 @@ onboarding.use(requireUser)
 
 onboarding.post('/personal', async (c) => {
   const user = c.get('user')!
-  await db
-    .update(schema.users)
-    .set({ onboardedAt: new Date() })
-    .where(eq(schema.users.id, user.id))
+  await db.update(schema.users).set({ onboardedAt: new Date() }).where(eq(schema.users.id, user.id))
   return c.body(null, 204)
 })

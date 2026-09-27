@@ -18,9 +18,12 @@ if (env.migrateOnStart) {
 await ensureBucket()
 scheduleSweeps()
 
-serve({
-  fetch: app.fetch,
-  port: env.port
-}, (info) => {
-  console.log(`Server is running on http://localhost:${info.port}`)
-})
+serve(
+  {
+    fetch: app.fetch,
+    port: env.port,
+  },
+  (info) => {
+    console.log(`Server is running on http://localhost:${info.port}`)
+  },
+)

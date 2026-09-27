@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AccountSuspendedError, canSignUp, findOrCreateUser } from '../../src/auth/users.js'
+import { AccountSuspendedError, findOrCreateUser } from '../../src/auth/users.js'
 import { hashToken } from '../../src/auth/session.js'
 import { db, schema } from '../../src/db/index.js'
 import { env } from '../../src/env.js'

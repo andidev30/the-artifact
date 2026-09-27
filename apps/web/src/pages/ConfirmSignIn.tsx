@@ -22,7 +22,7 @@ export function ConfirmSignIn() {
   const token = params.get('token') ?? ''
   const plan = params.get('plan')
   const nextParam = params.get('next')
-  const next = nextParam && nextParam.startsWith('/') && !nextParam.startsWith('//') ? nextParam : null
+  const next = nextParam?.startsWith('/') && !nextParam.startsWith('//') ? nextParam : null
   const [state, setState] = useState<State>(token ? { kind: 'loading' } : { kind: 'invalid' })
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
@@ -30,7 +30,9 @@ export function ConfirmSignIn() {
 
   useEffect(() => {
     document.title = 'Sign in | The Artifact'
-    return () => { document.title = 'The Artifact' }
+    return () => {
+      document.title = 'The Artifact'
+    }
   }, [])
 
   useEffect(() => {
@@ -42,7 +44,9 @@ export function ConfirmSignIn() {
         setState(link.expired ? { kind: 'expired', email: link.email, newAccount: link.newAccount, canResend: link.emailEnabled } : { kind: 'ready', link })
       })
       .catch((err) => active && setState(err instanceof ApiError && err.status === 404 ? { kind: 'invalid' } : { kind: 'error' }))
-    return () => { active = false }
+    return () => {
+      active = false
+    }
   }, [token])
 
   async function onContinue(link: SignInLink, form?: HTMLFormElement) {
@@ -60,7 +64,8 @@ export function ConfirmSignIn() {
     } catch (err) {
       setBusy(false)
       if (err instanceof ApiError && err.field === 'password') return setProblem(err.message)
-      if (err instanceof ApiError && err.code === 'link_expired') return setState({ kind: 'expired', email: link.email, newAccount: link.newAccount, canResend: link.emailEnabled })
+      if (err instanceof ApiError && err.code === 'link_expired')
+        return setState({ kind: 'expired', email: link.email, newAccount: link.newAccount, canResend: link.emailEnabled })
       if (err instanceof ApiError && err.code === 'link_invalid') return setState({ kind: 'invalid' })
       if (err instanceof ApiError && err.code === 'signup_closed') return setState({ kind: 'closed', message: err.message })
       if (err instanceof ApiError && err.code === 'account_suspended') return setState({ kind: 'closed', message: err.message, suspended: true })
@@ -87,7 +92,11 @@ export function ConfirmSignIn() {
       </header>
       <main id="main" className="auth-main">
         <section className="auth-box confirm" aria-labelledby="confirm-title" aria-busy={state.kind === 'loading'}>
-          {state.kind === 'loading' && <p className="auth-lede" role="status">Checking your sign-in link</p>}
+          {state.kind === 'loading' && (
+            <p className="auth-lede" role="status">
+              Checking your sign-in link
+            </p>
+          )}
 
           {state.kind === 'ready' && (
             <>
@@ -107,18 +116,36 @@ export function ConfirmSignIn() {
                 >
                   <input type="email" name="username" autoComplete="username" value={state.link.email} readOnly hidden />
                   <label htmlFor="confirm-password">{state.link.newAccount ? 'Choose a password' : 'New password'}</label>
-                  <input id="confirm-password" name="password" type="password" autoComplete="new-password" minLength={8} required aria-describedby="confirm-password-hint" />
-                  <p id="confirm-password-hint" className="field-hint">At least 8 characters. You will log in with it from now on.</p>
+                  <input
+                    id="confirm-password"
+                    name="password"
+                    type="password"
+                    autoComplete="new-password"
+                    minLength={8}
+                    required
+                    aria-describedby="confirm-password-hint"
+                  />
+                  <p id="confirm-password-hint" className="field-hint">
+                    At least 8 characters. You will log in with it from now on.
+                  </p>
                   <label htmlFor="confirm-password-again">Confirm password</label>
                   <input id="confirm-password-again" name="confirm" type="password" autoComplete="new-password" required />
-                  {problem && <p className="auth-error" role="alert">{problem}</p>}
+                  {problem && (
+                    <p className="auth-error" role="alert">
+                      {problem}
+                    </p>
+                  )}
                   <button type="submit" className="button confirm-continue" disabled={busy}>
                     {busy ? 'Signing in' : state.link.newAccount ? 'Create my account' : 'Set password and log in'}
                   </button>
                 </form>
               ) : (
                 <>
-                  {problem && <p className="auth-notice" role="alert">{problem}</p>}
+                  {problem && (
+                    <p className="auth-notice" role="alert">
+                      {problem}
+                    </p>
+                  )}
                   <button type="button" className="button confirm-continue" onClick={() => onContinue(state.link)} disabled={busy}>
                     {busy ? 'Signing in' : `Continue as ${state.link.email}`}
                   </button>
@@ -136,27 +163,35 @@ export function ConfirmSignIn() {
                   Ask an admin of this server for a new link for <strong className="confirm-email">{state.email}</strong>.
                 </p>
               ) : (
-              <>
-              <p className="auth-lede">
-                Links work for 15 minutes. Get a new one for <strong className="confirm-email">{state.email}</strong>.
-              </p>
-              {resend.kind === 'sent' ? (
-                <p className="confirm-sent" role="status">We sent a new link. Check your inbox.</p>
-              ) : (
                 <>
-                  {resend.kind === 'failed' && <p className="auth-notice" role="alert">{resend.message}</p>}
-                  <button
-                    type="button"
-                    className="button confirm-continue"
-                    onClick={() => onResend(state.email, state.newAccount)}
-                    disabled={resend.kind === 'sending'}
-                  >
-                    {resend.kind === 'sending' ? 'Sending link' : 'Email me a new link'}
-                  </button>
+                  <p className="auth-lede">
+                    Links work for 15 minutes. Get a new one for <strong className="confirm-email">{state.email}</strong>.
+                  </p>
+                  {resend.kind === 'sent' ? (
+                    <p className="confirm-sent" role="status">
+                      We sent a new link. Check your inbox.
+                    </p>
+                  ) : (
+                    <>
+                      {resend.kind === 'failed' && (
+                        <p className="auth-notice" role="alert">
+                          {resend.message}
+                        </p>
+                      )}
+                      <button
+                        type="button"
+                        className="button confirm-continue"
+                        onClick={() => onResend(state.email, state.newAccount)}
+                        disabled={resend.kind === 'sending'}
+                      >
+                        {resend.kind === 'sending' ? 'Sending link' : 'Email me a new link'}
+                      </button>
+                    </>
+                  )}
+                  <Link className="auth-reset" to={loginAgain}>
+                    Use a different email
+                  </Link>
                 </>
-              )}
-              <Link className="auth-reset" to={loginAgain}>Use a different email</Link>
-              </>
               )}
             </>
           )}
@@ -165,10 +200,11 @@ export function ConfirmSignIn() {
             <>
               <h1 id="confirm-title">This sign-in link can't be used</h1>
               <p className="auth-lede">
-                It has already been used or is not valid. Each link works once. If you already pressed Continue in another
-                tab, you are signed in there.
+                It has already been used or is not valid. Each link works once. If you already pressed Continue in another tab, you are signed in there.
               </p>
-              <Link className="button" to={loginAgain}>Request a new link</Link>
+              <Link className="button" to={loginAgain}>
+                Request a new link
+              </Link>
             </>
           )}
 

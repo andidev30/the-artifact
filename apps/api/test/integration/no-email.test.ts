@@ -23,7 +23,10 @@ const config = async () => (await call('/api/config')).json()
 const login = (email: string, password: string) => call('/api/auth/password/login', { json: { email, password } })
 
 async function withPassword(user: TestUser, password: string) {
-  await db.update(schema.users).set({ passwordHash: await hashPassword(password) }).where(eq(schema.users.id, user.id))
+  await db
+    .update(schema.users)
+    .set({ passwordHash: await hashPassword(password) })
+    .where(eq(schema.users.id, user.id))
 }
 
 describe('first run', () => {
@@ -100,7 +103,10 @@ describe('password login', () => {
 describe('signing up with a password', () => {
   const signUp = (email: string, password = 'long enough') => call('/api/auth/password/sign-up', { json: { email, password, name: 'Sam' } })
   const policy = (signupPolicy: 'open' | 'domains' | 'invite-only', allowedDomains: string[] = []) =>
-    db.insert(schema.instanceSettings).values({ signupPolicy, allowedDomains }).onConflictDoUpdate({ target: schema.instanceSettings.id, set: { signupPolicy, allowedDomains } })
+    db
+      .insert(schema.instanceSettings)
+      .values({ signupPolicy, allowedDomains })
+      .onConflictDoUpdate({ target: schema.instanceSettings.id, set: { signupPolicy, allowedDomains } })
 
   beforeEach(async () => {
     await createUser({ admin: true })
@@ -228,7 +234,9 @@ describe('organization invitations', () => {
     const org = await createOrg(owner)
     const existing = await createUser({ email: 'taken@example.com' })
     await withPassword(existing, 'their password')
-    const body = await (await call(`/api/organizations/${org.id}/invitations`, { cookie: owner.cookie, json: { email: 'taken@example.com', role: 'member' } })).json()
+    const body = await (
+      await call(`/api/organizations/${org.id}/invitations`, { cookie: owner.cookie, json: { email: 'taken@example.com', role: 'member' } })
+    ).json()
     const token = new URL(body.link).pathname.split('/').pop()!
 
     const res = await call(`/api/invitations/${token}/sign-up`, { json: { password: 'attacker password' } })
@@ -241,7 +249,10 @@ describe('sharing and settings', () => {
   it('shares without trying to email', async () => {
     const owner = await createUser()
     const page = await createPage(owner)
-    const res = await call(`/api/artifacts/${page.slug}/sharing/people`, { cookie: owner.cookie, json: { emails: 'reader@example.com', role: 'viewer', notify: true } })
+    const res = await call(`/api/artifacts/${page.slug}/sharing/people`, {
+      cookie: owner.cookie,
+      json: { emails: 'reader@example.com', role: 'viewer', notify: true },
+    })
     expect(res.status).toBe(200)
     expect(sendShareNotice).not.toHaveBeenCalled()
   })

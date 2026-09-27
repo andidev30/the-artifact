@@ -75,7 +75,24 @@ describe('without a browser', () => {
 
 describe('address checks for CDN requests', () => {
   it('only public addresses count', () => {
-    for (const ip of ['127.0.0.1', '10.1.2.3', '172.16.0.1', '192.168.1.1', '169.254.169.254', '100.64.0.1', '0.0.0.0', '224.0.0.1', '::1', '::', 'fe80::1', 'fd00::1', '::ffff:127.0.0.1', '::ffff:169.254.169.254', '64:ff9b::a9fe:a9fe', 'not an ip']) {
+    for (const ip of [
+      '127.0.0.1',
+      '10.1.2.3',
+      '172.16.0.1',
+      '192.168.1.1',
+      '169.254.169.254',
+      '100.64.0.1',
+      '0.0.0.0',
+      '224.0.0.1',
+      '::1',
+      '::',
+      'fe80::1',
+      'fd00::1',
+      '::ffff:127.0.0.1',
+      '::ffff:169.254.169.254',
+      '64:ff9b::a9fe:a9fe',
+      'not an ip',
+    ]) {
       expect(isPublicAddress(ip), ip).toBe(false)
     }
     for (const ip of ['104.16.85.20', '151.101.1.229', '8.8.8.8', '2606:4700::6810:5514']) expect(isPublicAddress(ip), ip).toBe(true)
@@ -156,7 +173,9 @@ describe.skipIf(!hasChrome)('rendering in headless Chrome', { timeout: 30_000 },
     expect((await call(`/api/artifacts/${page.slug}/thumbnails/2`, { cookie: owner.cookie })).status).toBe(404)
 
     // Old versions' thumbnails are for editors; restoring reuses the screenshot
-    await publishSite(owner, '<h1>v2</h1>').then(() => publish({ userId: owner.id, email: owner.email, organizationId: null, clientName: 't', title: 'Site', html: '<h1>v2</h1>', slug: page.slug }))
+    await publishSite(owner, '<h1>v2</h1>').then(() =>
+      publish({ userId: owner.id, email: owner.email, organizationId: null, clientName: 't', title: 'Site', html: '<h1>v2</h1>', slug: page.slug }),
+    )
     await thumbnailQueueIdle()
     expect((await call(url, { cookie: viewer.cookie })).status).toBe(404)
     expect((await call(url, { cookie: owner.cookie })).status).toBe(200)
@@ -214,7 +233,14 @@ describe.skipIf(!hasChrome)('rendering in headless Chrome', { timeout: 30_000 },
     expect(connections).toBe(0)
     // The page's own data file was served from memory and its script ran
     expect(result.blocked).toContain(`${local}/own-file-said-hello`)
-    for (const url of [`${local}/css`, `${local}/img`, `${local}/script`, `${local}/fetch`, 'http://169.254.169.254/latest/meta-data/', 'http://169.254.169.254/latest/meta-data/iam/security-credentials/']) {
+    for (const url of [
+      `${local}/css`,
+      `${local}/img`,
+      `${local}/script`,
+      `${local}/fetch`,
+      'http://169.254.169.254/latest/meta-data/',
+      'http://169.254.169.254/latest/meta-data/iam/security-credentials/',
+    ]) {
       expect(result.blocked).toContain(url)
     }
   })
@@ -236,7 +262,10 @@ describe.skipIf(!hasChrome)('rendering in headless Chrome', { timeout: 30_000 },
   it('each render starts from a clean browser context', async () => {
     enable()
     await renderPage({ html: '<script>localStorage.setItem("x", "1"); document.cookie = "a=1"</script>', files: [] })
-    const second = await renderPage({ html: `<script>if (localStorage.getItem('x') || document.cookie) fetch('http://127.0.0.1:${port}/leaked')</script>`, files: [] })
+    const second = await renderPage({
+      html: `<script>if (localStorage.getItem('x') || document.cookie) fetch('http://127.0.0.1:${port}/leaked')</script>`,
+      files: [],
+    })
     expect(second.blocked).toEqual([])
   })
 

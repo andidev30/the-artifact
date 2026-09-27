@@ -100,7 +100,10 @@ export function parseSettings(body: unknown): { ok: true; value: SettingsInput }
 
 export async function saveSettings(value: SettingsInput, updatedBy: string) {
   const row = { ...value, updatedBy, updatedAt: new Date() }
-  await db.insert(schema.instanceSettings).values({ id: 1, ...row }).onConflictDoUpdate({ target: schema.instanceSettings.id, set: row })
+  await db
+    .insert(schema.instanceSettings)
+    .values({ id: 1, ...row })
+    .onConflictDoUpdate({ target: schema.instanceSettings.id, set: row })
 }
 
 // Everything a suspended person could still act through: web sessions, agent tokens, grants

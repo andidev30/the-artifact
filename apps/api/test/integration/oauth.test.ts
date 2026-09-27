@@ -76,7 +76,7 @@ describe('client registration', () => {
 
 describe('authorization', () => {
   it('shows errors on the web app when the client or redirect is not trusted', async () => {
-    const unknown = await call('/oauth/authorize?client_id=nope&redirect_uri=' + encodeURIComponent(REDIRECT_URI))
+    const unknown = await call(`/oauth/authorize?client_id=nope&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`)
     expect(unknown.headers.get('location')).toBe('http://localhost:5177/authorize?error=unknown_client')
 
     const client = await registerClient()
@@ -94,7 +94,9 @@ describe('authorization', () => {
     expect(noCodeUrl.searchParams.get('error')).toBe('unsupported_response_type')
     expect(noCodeUrl.searchParams.get('state')).toBe('xyz')
 
-    const plain = await call(`/oauth/authorize?${new URLSearchParams({ ...base, response_type: 'code', code_challenge: 'abc', code_challenge_method: 'plain' })}`)
+    const plain = await call(
+      `/oauth/authorize?${new URLSearchParams({ ...base, response_type: 'code', code_challenge: 'abc', code_challenge_method: 'plain' })}`,
+    )
     expect(new URL(plain.headers.get('location')!).searchParams.get('error')).toBe('invalid_request')
 
     const none = await call(`/oauth/authorize?${new URLSearchParams({ ...base, response_type: 'code' })}`)
@@ -119,7 +121,10 @@ describe('authorization', () => {
     expect(await res.json()).toEqual({
       clientName: 'Claude Code',
       redirectHost: '127.0.0.1:43123',
-      workspaces: [{ id: org.id, name: 'Acme' }, { id: null, name: 'Personal' }],
+      workspaces: [
+        { id: org.id, name: 'Acme' },
+        { id: null, name: 'Personal' },
+      ],
     })
     expect((await call('/api/oauth/requests/unknown', { cookie: user.cookie })).status).toBe(404)
   })
@@ -222,7 +227,12 @@ describe('full MCP OAuth flow', () => {
 
     const b = pkcePair()
     const { code: codeB } = await approve(user, await startAuthorize(client.client_id, b.challenge))
-    const wrongRedirect = await token({ grant_type: 'authorization_code', code: codeB, code_verifier: b.verifier, redirect_uri: 'http://127.0.0.1:43123/other' })
+    const wrongRedirect = await token({
+      grant_type: 'authorization_code',
+      code: codeB,
+      code_verifier: b.verifier,
+      redirect_uri: 'http://127.0.0.1:43123/other',
+    })
     expect((await wrongRedirect.json()).error).toBe('invalid_grant')
   })
 

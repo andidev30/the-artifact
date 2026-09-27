@@ -24,7 +24,10 @@ describe('gallery', () => {
     await createPage(me, { title: 'Newer', visibility: 'link' })
     await createPage(me, { title: 'In org', organizationId: org.id })
     await createPage(other, { title: 'Not mine', visibility: 'link' })
-    await db.update(schema.artifacts).set({ updatedAt: new Date(Date.now() - 60_000) }).where(eq(schema.artifacts.id, older.id))
+    await db
+      .update(schema.artifacts)
+      .set({ updatedAt: new Date(Date.now() - 60_000) })
+      .where(eq(schema.artifacts.id, older.id))
 
     const rows = await list(me)
     expect(titles(rows)).toEqual(['Newer', 'Older'])
@@ -69,9 +72,7 @@ describe('gallery', () => {
     await call(`/api/artifacts/${other.slug}/sharing/people`, { cookie: owner.cookie, json: { emails: 'else@example.com', notify: false } })
 
     const rows = await list(me, 'shared')
-    expect(rows).toEqual([
-      expect.objectContaining({ slug: page.slug, title: 'For me', owner: 'Olivia', mine: false, role: 'editor' }),
-    ])
+    expect(rows).toEqual([expect.objectContaining({ slug: page.slug, title: 'For me', owner: 'Olivia', mine: false, role: 'editor' })])
     // Sharing doesn't add pages to your own workspace
     expect(await list(me)).toEqual([])
     expect(await list(owner, 'shared')).toEqual([])

@@ -7,16 +7,7 @@ import type { User } from '../db/schema.js'
 import { likeTerm } from '../artifacts.js'
 import { createAdminLink } from '../auth/email.js'
 import { mailEnabled } from '../env.js'
-import {
-  activeAdminCount,
-  adminCondition,
-  instanceSettings,
-  isInstanceAdmin,
-  lockAdmins,
-  parseSettings,
-  revokeAccess,
-  saveSettings,
-} from '../instance.js'
+import { activeAdminCount, adminCondition, instanceSettings, isInstanceAdmin, lockAdmins, parseSettings, revokeAccess, saveSettings } from '../instance.js'
 import { deleteAccountData, ownedAlone } from './settings.js'
 
 // The instance admin area, mounted at /api/admin. Only instance admins get past requireAdmin.
@@ -149,7 +140,10 @@ async function findUser(id: string) {
 }
 
 class Conflict extends Error {
-  constructor(message: string, readonly code: string) {
+  constructor(
+    message: string,
+    readonly code: string,
+  ) {
     super(message)
   }
 }
@@ -170,7 +164,11 @@ admin.patch('/users/:id', async (c) => {
       // Checked again under the lock: another admin may have just removed this one
       const [self] = await tx.select().from(schema.users).where(eq(schema.users.id, actor.id))
       if (!self || !isInstanceAdmin(self)) throw new Conflict('Only instance admins can open this.', 'not_admin')
-      const [target] = await tx.select().from(schema.users).where(eq(schema.users.id, c.req.param('id'))).for('update')
+      const [target] = await tx
+        .select()
+        .from(schema.users)
+        .where(eq(schema.users.id, c.req.param('id')))
+        .for('update')
       if (!target) throw new Conflict('This person no longer has an account.', 'not_found')
       const set: Partial<User> = {}
 
@@ -196,7 +194,10 @@ admin.patch('/users/:id', async (c) => {
     throw err
   }
 
-  const [row] = await db.select(userColumns).from(schema.users).where(eq(schema.users.id, c.req.param('id')))
+  const [row] = await db
+    .select(userColumns)
+    .from(schema.users)
+    .where(eq(schema.users.id, c.req.param('id')))
   const [described] = await describeUsers([row], actor.id)
   return c.json(described)
 })
@@ -206,7 +207,9 @@ admin.get('/users/:id/deletion', async (c) => {
   const target = await findUser(c.req.param('id'))
   if (!target) return c.json({ error: 'This person no longer has an account.' }, 404)
   const { blocked, empty } = await ownedAlone(target.id)
-  const names = empty.length ? await db.select({ name: schema.organizations.name }).from(schema.organizations).where(inArray(schema.organizations.id, empty)) : []
+  const names = empty.length
+    ? await db.select({ name: schema.organizations.name }).from(schema.organizations).where(inArray(schema.organizations.id, empty))
+    : []
   const [pages] = await db.select({ n: count() }).from(schema.artifacts).where(eq(schema.artifacts.ownerId, target.id))
   return c.json({ blockedBy: blocked, deletesOrganizations: names.map((n) => n.name), pageCount: pages.n })
 })
@@ -312,7 +315,8 @@ admin.put('/settings', async (c) => {
 // creates their account whatever the sign-up policy says; for an existing account it sets a new
 // password. Either way the person chooses the password when they open it.
 admin.post('/sign-up-links', async (c) => {
-  if (mailEnabled()) return c.json({ error: 'This server sends sign-in links by email. Invite people from an organization instead.', code: 'email_enabled' }, 409)
+  if (mailEnabled())
+    return c.json({ error: 'This server sends sign-in links by email. Invite people from an organization instead.', code: 'email_enabled' }, 409)
   const body = (await c.req.json().catch(() => null)) as { email?: unknown } | null
   const result = await createAdminLink(typeof body?.email === 'string' ? body.email : '', c.get('user')!.id)
   if (!result.ok) return c.json({ error: result.error, field: 'email' }, 400)

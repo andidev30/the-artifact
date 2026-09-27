@@ -41,7 +41,9 @@ export function CopyCommand({ command, label = 'Copy command', file, plain }: Pr
           <span>{file}</span>
           {button}
         </div>
-        <pre><code>{command}</code></pre>
+        <pre>
+          <code>{command}</code>
+        </pre>
         {status}
       </div>
     )
@@ -50,7 +52,11 @@ export function CopyCommand({ command, label = 'Copy command', file, plain }: Pr
   return (
     <div className="command">
       <code>
-        {!plain && <span className="command-prompt" aria-hidden="true">$</span>}
+        {!plain && (
+          <span className="command-prompt" aria-hidden="true">
+            $
+          </span>
+        )}
         {command}
       </code>
       {button}

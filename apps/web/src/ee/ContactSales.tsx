@@ -6,11 +6,7 @@ import '../pages/Auth.css'
 import './ContactSales.css'
 
 type Field = 'name' | 'email' | 'company' | 'teamSize' | 'message'
-type Status =
-  | { kind: 'idle' }
-  | { kind: 'sending' }
-  | { kind: 'sent'; email: string }
-  | { kind: 'error'; message: string; field?: Field }
+type Status = { kind: 'idle' } | { kind: 'sending' } | { kind: 'sent'; email: string } | { kind: 'error'; message: string; field?: Field }
 
 // Keep in sync with TEAM_SIZES in apps/api/src/ee/contact.ts
 const TEAM_SIZES = [
@@ -30,7 +26,9 @@ export function ContactSales() {
 
   useEffect(() => {
     document.title = 'Contact sales | The Artifact'
-    return () => { document.title = 'The Artifact' }
+    return () => {
+      document.title = 'The Artifact'
+    }
   }, [])
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
@@ -57,8 +55,7 @@ export function ContactSales() {
 
   const error = status.kind === 'error' ? status : null
   // Props that tie a field to the error the server named
-  const invalid = (field: Field) =>
-    error?.field === field ? { 'aria-invalid': true as const, 'aria-describedby': 'contact-error' } : {}
+  const invalid = (field: Field) => (error?.field === field ? { 'aria-invalid': true as const, 'aria-describedby': 'contact-error' } : {})
 
   return (
     <div className="auth">
@@ -74,15 +71,23 @@ export function ContactSales() {
           <p className="contact-eyebrow">{topic === 'self-hosted-enterprise' ? 'Self-hosted Enterprise' : 'Enterprise'}</p>
           <h1 id="contact-title">Bring The Artifact to your whole company.</h1>
           <p className="contact-lede">
-            The self-hosted version is free and has every feature. When your company needs more
-            than that, tell us what you are working with and we will reply by email.
+            The self-hosted version is free and has every feature. When your company needs more than that, tell us what you are working with and we will reply
+            by email.
           </p>
           <h2>Talk to us about</h2>
           <ul>
-            <li><strong>Running it yourself, with support.</strong> Help when something breaks, and an agreed response time.</li>
-            <li><strong>Single sign-on.</strong> SSO with SAML through your identity provider.</li>
-            <li><strong>Custom terms.</strong> Contracts, invoices, an SLA, and your security review.</li>
-            <li><strong>Rolling it out.</strong> Getting your teams and their agents set up.</li>
+            <li>
+              <strong>Running it yourself, with support.</strong> Help when something breaks, and an agreed response time.
+            </li>
+            <li>
+              <strong>Single sign-on.</strong> SSO with SAML through your identity provider.
+            </li>
+            <li>
+              <strong>Custom terms.</strong> Contracts, invoices, an SLA, and your security review.
+            </li>
+            <li>
+              <strong>Rolling it out.</strong> Getting your teams and their agents set up.
+            </li>
           </ul>
         </section>
 
@@ -92,7 +97,9 @@ export function ContactSales() {
             <p>
               We will reply to <strong>{status.email}</strong> by email.
             </p>
-            <Link className="auth-reset" to="/">Back to the home page</Link>
+            <Link className="auth-reset" to="/">
+              Back to the home page
+            </Link>
           </section>
         ) : (
           <section className="auth-box contact-box" aria-labelledby="contact-form-title">
@@ -102,16 +109,29 @@ export function ContactSales() {
               <input id="contact-name" name="name" autoComplete="name" required maxLength={100} {...invalid('name')} />
 
               <label htmlFor="contact-email">Work email</label>
-              <input id="contact-email" name="email" type="email" autoComplete="email" placeholder="you@company.com" required maxLength={254} {...invalid('email')} />
+              <input
+                id="contact-email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                placeholder="you@company.com"
+                required
+                maxLength={254}
+                {...invalid('email')}
+              />
 
               <label htmlFor="contact-company">Company</label>
               <input id="contact-company" name="company" autoComplete="organization" required maxLength={120} {...invalid('company')} />
 
               <label htmlFor="contact-team">Team size</label>
               <select id="contact-team" name="teamSize" required defaultValue="" {...invalid('teamSize')}>
-                <option value="" disabled>Choose one</option>
+                <option value="" disabled>
+                  Choose one
+                </option>
                 {TEAM_SIZES.map((s) => (
-                  <option key={s.value} value={s.value}>{s.label}</option>
+                  <option key={s.value} value={s.value}>
+                    {s.label}
+                  </option>
                 ))}
               </select>
 
@@ -133,7 +153,11 @@ export function ContactSales() {
                 <input id="contact-website" name="website" tabIndex={-1} autoComplete="off" />
               </div>
 
-              {error && <p id="contact-error" className="auth-error" role="alert">{error.message}</p>}
+              {error && (
+                <p id="contact-error" className="auth-error" role="alert">
+                  {error.message}
+                </p>
+              )}
               <button type="submit" className="button" disabled={status.kind === 'sending'}>
                 {status.kind === 'sending' ? 'Sending' : 'Send message'}
               </button>

@@ -24,7 +24,8 @@ cp apps/api/.env.example apps/api/.env
 pnpm db:migrate
 pnpm dev                       # API :3000, web :5173 (proxies /api, /mcp, /oauth, /.well-known)
 
-pnpm lint                      # eslint (web) + tsc over the API and its tests
+pnpm lint                      # Biome (lint + format check) + tsc over the API, its tests and the web app
+pnpm format                    # Biome: format and apply safe fixes
 pnpm test                      # unit + integration; integration needs `pnpm services` and the artifact_test db
 pnpm test:e2e                  # Playwright on ports 3004/5177, needs Google Chrome and Mailpit
 pnpm db:generate               # new migration from apps/api/src/db/schema.ts
@@ -44,7 +45,8 @@ Everything is AGPL-3.0 (`LICENSE`) except folders named `ee/`, which are under `
 
 ## Conventions
 
-- TypeScript, ESM, no semicolons, single quotes, 2-space indent, long lines are fine. No formatter runs, so match the file you are in.
+- Node 26, TypeScript 7, ESM. Biome (`biome.json`) formats and lints everything: no semicolons, single quotes, 2-space indent, 160 columns. Run `pnpm format` before committing; `pnpm lint` fails on unformatted code.
+- Silence a Biome rule only at the line, with `// biome-ignore <rule>: <why>`; the reason is required.
 - The API imports local files with a `.js` suffix; the web app imports without one (`.tsx` in `main.tsx`).
 - Comments say why, or state a rule that isn't visible in the code (security, races, compatibility). Don't add comments that restate the code, section labels, or change logs.
 - Product copy says "page", not "artifact"; "artifact" is the internal name (tables, MCP tool names, URLs under `/api/artifacts`). Copy is plain, short sentences, no exclamation marks.

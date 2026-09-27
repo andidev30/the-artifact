@@ -18,9 +18,7 @@ const SCRYPT: ScryptOptions = { N: 16384, r: 8, p: 1 }
 const KEY_LENGTH = 32
 
 function derive(password: string, salt: Buffer): Promise<Buffer> {
-  return new Promise((resolve, reject) =>
-    scrypt(password.normalize('NFKC'), salt, KEY_LENGTH, SCRYPT, (err, key) => (err ? reject(err) : resolve(key))),
-  )
+  return new Promise((resolve, reject) => scrypt(password.normalize('NFKC'), salt, KEY_LENGTH, SCRYPT, (err, key) => (err ? reject(err) : resolve(key))))
 }
 
 // Stored as scrypt$N$r$p$salt$hash so the cost can be raised later without breaking old hashes
@@ -85,7 +83,10 @@ password.post('/login', async (c) => {
   if (!EMAIL_RE.test(email)) return c.json({ error: 'Enter a valid email address.', field: 'email' }, 400)
   if (!given) return c.json({ error: 'Enter your password.', field: 'password' }, 400)
   if (lockedOut(email)) {
-    return c.json({ error: 'Too many wrong passwords for this address. Wait 15 minutes, or ask an admin for a new sign-in link.', code: 'too_many_attempts' }, 429)
+    return c.json(
+      { error: 'Too many wrong passwords for this address. Wait 15 minutes, or ask an admin for a new sign-in link.', code: 'too_many_attempts' },
+      429,
+    )
   }
 
   const [user] = await db.select().from(schema.users).where(eq(schema.users.email, email))
@@ -116,7 +117,10 @@ password.post('/setup', async (c) => {
   const created = await db.transaction(async (tx) => {
     await lockAdmins(tx)
     if (await hasAccounts(tx)) return null
-    const [user] = await tx.insert(schema.users).values({ email, name, passwordHash, ...(await newAccountFields(tx)) }).returning()
+    const [user] = await tx
+      .insert(schema.users)
+      .values({ email, name, passwordHash, ...(await newAccountFields(tx)) })
+      .returning()
     return user
   })
   if (!created) return c.json({ error: 'This server is already set up. Log in instead.', code: 'already_set_up' }, 409)
@@ -147,12 +151,16 @@ password.post('/sign-up', async (c) => {
     return c.json({ error: 'This server only accepts invited people. Ask an admin for a sign-up link.', code: 'signup_closed' }, 403)
   }
   if (signupPolicy === 'domains' && !allowedDomains.includes(email.split('@')[1] ?? '')) {
-    return c.json({ error: 'This server only accepts addresses at certain domains. Ask an admin for a sign-up link.', code: 'signup_closed', field: 'email' }, 403)
+    return c.json(
+      { error: 'This server only accepts addresses at certain domains. Ask an admin for a sign-up link.', code: 'signup_closed', field: 'email' },
+      403,
+    )
   }
   if (await waitingForAccess(email)) {
     return c.json(
       {
-        error: 'Someone invited this address or shared a page with it. Open the invitation link you were sent, or ask an admin of this server for a sign-up link.',
+        error:
+          'Someone invited this address or shared a page with it. Open the invitation link you were sent, or ask an admin of this server for a sign-up link.',
         code: 'use_invitation',
         field: 'email',
       },

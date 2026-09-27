@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
-import { type Me } from '../api'
+import type { Me } from '../api'
 import { AccountHeader } from '../components/AccountHeader'
 import { ConnectTabs } from '../components/ConnectTabs'
 import { Gallery } from '../components/Gallery'
@@ -50,11 +50,7 @@ function Home({ me }: { me: Me }) {
         <InvitationNotice me={me} />
         <div className="app-title">
           <h1>Pages</h1>
-          <p>
-            {org
-              ? `Everything published to ${org.name}. Your role: ${ROLE_LABEL[org.role]}.`
-              : 'Everything your agents publish for you.'}
-          </p>
+          <p>{org ? `Everything published to ${org.name}. Your role: ${ROLE_LABEL[org.role]}.` : 'Everything your agents publish for you.'}</p>
         </div>
 
         <Gallery
@@ -80,7 +76,11 @@ function Home({ me }: { me: Me }) {
                         <p>Add The Artifact once to the agent you use.</p>
                         <ConnectTabs />
                         <p className="field-hint">
-                          Stuck? <Link className="text-link" to="/docs/connect-your-agent">Connect your agent</Link> covers every client.
+                          Stuck?{' '}
+                          <Link className="text-link" to="/docs/connect-your-agent">
+                            Connect your agent
+                          </Link>{' '}
+                          covers every client.
                         </p>
                       </>
                     )}
@@ -89,7 +89,12 @@ function Home({ me }: { me: Me }) {
                     <h3>Publish your first page</h3>
                     <p>Ask your agent for a page in plain words, for example:</p>
                     <div className="transcript">
-                      <p><span className="caret" aria-hidden="true">&gt;</span>turn this CSV into a chart I can send to the team</p>
+                      <p>
+                        <span className="caret" aria-hidden="true">
+                          &gt;
+                        </span>
+                        turn this CSV into a chart I can send to the team
+                      </p>
                     </div>
                   </li>
                 </ol>

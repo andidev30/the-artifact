@@ -1,6 +1,7 @@
 import { and, eq, gt } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { db, schema } from '../db/index.js'
+import type { User } from '../db/schema.js'
 import { env, mailEnabled } from '../env.js'
 import { sendSignInLink } from '../mail.js'
 import { EMAIL_RE } from '../validation.js'
@@ -17,7 +18,7 @@ const RESEND_AFTER = 60 * 1000
 export const email = new Hono()
 
 email.post('/', async (c) => {
-  const body = await c.req.json().catch(() => null) as { email?: unknown; intent?: unknown; plan?: unknown; next?: unknown } | null
+  const body = (await c.req.json().catch(() => null)) as { email?: unknown; intent?: unknown; plan?: unknown; next?: unknown } | null
   const address = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : ''
   if (!mailEnabled()) {
     return c.json({ error: 'This server can’t send email. Log in with your password, or ask an admin for a sign-in link.', code: 'email_disabled' }, 503)
@@ -29,7 +30,10 @@ email.post('/', async (c) => {
     return c.json({ error: 'This account is suspended. Ask an admin of this server to restore it.', code: 'account_suspended' }, 403)
   }
   if (!existing && !(await canSignUp(address))) {
-    return c.json({ error: 'This server only accepts accounts from invited people and certain email domains. Ask an admin to invite you.', code: 'signup_closed' }, 403)
+    return c.json(
+      { error: 'This server only accepts accounts from invited people and certain email domains. Ask an admin to invite you.', code: 'signup_closed' },
+      403,
+    )
   }
   const intent = body?.intent === 'signup' ? 'signup' : 'login'
   const plan = typeof body?.plan === 'string' ? body.plan : null
@@ -37,10 +41,7 @@ email.post('/', async (c) => {
   const [recent] = await db
     .select({ id: schema.emailTokens.id })
     .from(schema.emailTokens)
-    .where(and(
-      eq(schema.emailTokens.email, address),
-      gt(schema.emailTokens.createdAt, new Date(Date.now() - RESEND_AFTER)),
-    ))
+    .where(and(eq(schema.emailTokens.email, address), gt(schema.emailTokens.createdAt, new Date(Date.now() - RESEND_AFTER))))
   if (recent) return c.body(null, 204)
 
   const token = randomToken()
@@ -66,10 +67,7 @@ export type AdminLink = { email: string; link: string; newAccount: boolean; expi
 
 // A sign-in link an instance admin passes on by hand, for servers that can't send email. Opening it
 // asks for a new password; for someone without an account it creates one whatever the sign-up policy.
-export async function createAdminLink(
-  rawEmail: string,
-  adminId: string,
-): Promise<{ ok: true; link: AdminLink } | { ok: false; error: string }> {
+export async function createAdminLink(rawEmail: string, adminId: string): Promise<{ ok: true; link: AdminLink } | { ok: false; error: string }> {
   const address = rawEmail.trim().toLowerCase()
   if (!EMAIL_RE.test(address)) return { ok: false, error: 'Enter a valid email address.' }
   const [existing] = await db.select({ suspendedAt: schema.users.suspendedAt }).from(schema.users).where(eq(schema.users.email, address))
@@ -99,7 +97,10 @@ function confirmUrl(token: string, plan: string | null | undefined, next: string
 }
 
 async function findToken(token: string) {
-  const [row] = await db.select().from(schema.emailTokens).where(eq(schema.emailTokens.id, hashToken(token)))
+  const [row] = await db
+    .select()
+    .from(schema.emailTokens)
+    .where(eq(schema.emailTokens.id, hashToken(token)))
   return row ?? null
 }
 
@@ -151,7 +152,7 @@ email.post('/confirm', async (c) => {
     return c.json({ error: 'This sign-in link has expired.', code: 'link_expired', email: row.email }, 410)
   }
 
-  let user
+  let user: User
   try {
     user = await findOrCreateUser({ email: row.email, passwordHash, approved: Boolean(row.createdBy) })
   } catch (err) {

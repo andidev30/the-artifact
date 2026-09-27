@@ -151,7 +151,9 @@
 .line-result {
   opacity: 0;
   transform: translateY(4px);
-  transition: opacity 300ms ease, transform 300ms ease;
+  transition:
+    opacity 300ms ease,
+    transform 300ms ease;
 }
 
 /* Wires between boxes */
@@ -237,7 +239,7 @@
   height: 24px;
   padding: 0 10px;
   overflow: hidden;
-  font: 0.75rem/24px var(--mono);
+  font: 0.75rem / 24px var(--mono);
   white-space: nowrap;
   text-overflow: ellipsis;
   color: var(--ink-soft);

@@ -120,7 +120,8 @@ export function prepareFiles(files: FileInput[] | undefined, htmlBytes: number):
 
     if (content.length > MAX_FILE_BYTES) throw new PublishError(`"${path}" is larger than ${MAX_FILE_BYTES / 1024 / 1024} MB.`)
     total += content.length
-    if (total > MAX_TOTAL_BYTES) throw new PublishError(`The page and its files add up to more than ${MAX_TOTAL_BYTES / 1024 / 1024} MB. Compress images or load large media from a URL.`)
+    if (total > MAX_TOTAL_BYTES)
+      throw new PublishError(`The page and its files add up to more than ${MAX_TOTAL_BYTES / 1024 / 1024} MB. Compress images or load large media from a URL.`)
     prepared.push({ path, content, contentType: type.type, size: content.length, sha256: sha256(content) })
   }
   return prepared

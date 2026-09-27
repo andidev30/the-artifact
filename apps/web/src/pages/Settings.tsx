@@ -27,7 +27,9 @@ export function Settings() {
 
   useEffect(() => {
     document.title = 'Account settings | The Artifact'
-    return () => { document.title = 'The Artifact' }
+    return () => {
+      document.title = 'The Artifact'
+    }
   }, [])
 
   if (state.kind === 'loading') return <Loading />
@@ -47,6 +49,7 @@ function SettingsPage({ initial }: { initial: Me }) {
 
   // Links like /settings#delete arrive before the sections exist. The organization section moved
   // to its own page, so older /settings#organization links go there.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only on arrival
   useEffect(() => {
     const id = window.location.hash.slice(1)
     if (id === 'organization') {
@@ -54,8 +57,6 @@ function SettingsPage({ initial }: { initial: Me }) {
       return
     }
     if (id) document.getElementById(id)?.scrollIntoView()
-    // Only on arrival
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const sections = [
@@ -75,7 +76,12 @@ function SettingsPage({ initial }: { initial: Me }) {
             Your profile{showPassword ? ', password' : ''} and the agents that publish for you, the same in every workspace.
             {org && (
               <>
-                {' '}For members and invitations, open <Link className="text-link" to={organizationSettingsPath(org)}>{org.name} settings</Link>.
+                {' '}
+                For members and invitations, open{' '}
+                <Link className="text-link" to={organizationSettingsPath(org)}>
+                  {org.name} settings
+                </Link>
+                .
               </>
             )}
           </p>
@@ -234,7 +240,9 @@ function AgentsSection() {
     listAgents()
       .then((data) => active && setAgents({ kind: 'ready', data }))
       .catch(() => active && setAgents({ kind: 'error' }))
-    return () => { active = false }
+    return () => {
+      active = false
+    }
   }, [])
 
   async function disconnect(agent: ConnectedAgent) {
@@ -255,34 +263,52 @@ function AgentsSection() {
         <p>Agents that can publish pages for you. Disconnecting one signs it out; it asks you to sign in again next time.</p>
       </header>
 
-      {agents.kind === 'loading' && <p className="settings-muted" role="status">Loading agents</p>}
-      {agents.kind === 'error' && <p className="auth-notice" role="alert">Your agents could not be loaded. Reload to try again.</p>}
-      {agents.kind === 'ready' && agents.data.length === 0 && (
-        <p className="settings-muted">
-          No agents are connected. <Link className="text-link" to="/app">Connect one from your pages</Link>.
+      {agents.kind === 'loading' && (
+        <p className="settings-muted" role="status">
+          Loading agents
         </p>
       )}
-      {problem && <p className="auth-notice" role="alert">{problem}</p>}
+      {agents.kind === 'error' && (
+        <p className="auth-notice" role="alert">
+          Your agents could not be loaded. Reload to try again.
+        </p>
+      )}
+      {agents.kind === 'ready' && agents.data.length === 0 && (
+        <p className="settings-muted">
+          No agents are connected.{' '}
+          <Link className="text-link" to="/app">
+            Connect one from your pages
+          </Link>
+          .
+        </p>
+      )}
+      {problem && (
+        <p className="auth-notice" role="alert">
+          {problem}
+        </p>
+      )}
 
       {agents.kind === 'ready' && agents.data.length > 0 && (
         <ul className="settings-list">
           {agents.data.map((a) => (
             <li key={a.clientId} className="settings-row">
-              <span className="settings-avatar settings-avatar-agent" aria-hidden="true">{a.name.slice(0, 1).toUpperCase()}</span>
+              <span className="settings-avatar settings-avatar-agent" aria-hidden="true">
+                {a.name.slice(0, 1).toUpperCase()}
+              </span>
               <span className="settings-who">
                 <strong>{a.name}</strong>
                 <span>Publishes to {a.workspaces.join(', ')}</span>
               </span>
-              <span className="settings-meta">
-                {a.lastUsedAt ? `Last used ${timeAgo(a.lastUsedAt)}` : `Connected ${timeAgo(a.connectedAt)}, not used yet`}
-              </span>
+              <span className="settings-meta">{a.lastUsedAt ? `Last used ${timeAgo(a.lastUsedAt)}` : `Connected ${timeAgo(a.connectedAt)}, not used yet`}</span>
               <span className="settings-actions">
                 {confirming === a.clientId ? (
                   <>
                     <button type="button" className="button button-small button-danger" onClick={() => disconnect(a)}>
                       Disconnect
                     </button>
-                    <button type="button" className="auth-reset" onClick={() => setConfirming(null)}>Cancel</button>
+                    <button type="button" className="auth-reset" onClick={() => setConfirming(null)}>
+                      Cancel
+                    </button>
                   </>
                 ) : (
                   <button type="button" className="button button-small button-quiet" onClick={() => setConfirming(a.clientId)}>
@@ -313,14 +339,15 @@ function DeletionSummary({ preview }: { preview: DeletionPreview }) {
       </li>
       {transfers.map((t) => (
         <li key={t.organization} data-kind="keep">
-          <strong>{pagesText(t.pages)} in {t.organization} {t.pages === 1 ? 'stays' : 'stay'}.</strong>{' '}
+          <strong>
+            {pagesText(t.pages)} in {t.organization} {t.pages === 1 ? 'stays' : 'stay'}.
+          </strong>{' '}
           {t.pages === 1 ? 'It moves' : 'They move'} to {t.to}, with {t.pages === 1 ? 'its' : 'their'} history and sharing.
         </li>
       ))}
       {orgs.length > 0 && (
         <li data-kind="delete">
-          <strong>{orgs.join(', ')} deleted.</strong> {orgs.length === 1 ? 'It has' : 'They have'} nobody else in{' '}
-          {orgs.length === 1 ? 'it' : 'them'}.
+          <strong>{orgs.join(', ')} deleted.</strong> {orgs.length === 1 ? 'It has' : 'They have'} nobody else in {orgs.length === 1 ? 'it' : 'them'}.
         </li>
       )}
     </ul>
@@ -337,8 +364,12 @@ function DeleteSection({ me }: { me: Me }) {
 
   useEffect(() => {
     let active = true
-    getDeletionPreview().then((p) => active && setPreview(p)).catch(() => {})
-    return () => { active = false }
+    getDeletionPreview()
+      .then((p) => active && setPreview(p))
+      .catch(() => {})
+    return () => {
+      active = false
+    }
   }, [])
 
   async function onSubmit(e: FormEvent) {
@@ -361,19 +392,15 @@ function DeleteSection({ me }: { me: Me }) {
     <section id="delete" className="settings-card settings-danger" aria-labelledby="delete-title">
       <header className="settings-card-head">
         <h2 id="delete-title">Delete account</h2>
-        <p>
-          Deletes your account, your personal pages and your agent connections. People you shared personal pages with
-          lose access. This can't be undone.
-        </p>
+        <p>Deletes your account, your personal pages and your agent connections. People you shared personal pages with lose access. This can't be undone.</p>
       </header>
 
       {preview && preview.blockedBy.length === 0 && <DeletionSummary preview={preview} />}
 
       {blocked.length > 0 ? (
         <div className="auth-notice" role="alert">
-          You are the only owner of {blocked.map((o) => o.name).join(', ')}, and other people are in{' '}
-          {blocked.length === 1 ? 'it' : 'them'}. Make someone else an owner, or remove the other members, before you delete
-          your account.
+          You are the only owner of {blocked.map((o) => o.name).join(', ')}, and other people are in {blocked.length === 1 ? 'it' : 'them'}. Make someone else
+          an owner, or remove the other members, before you delete your account.
         </div>
       ) : (
         <form className="settings-form" onSubmit={onSubmit}>
@@ -382,20 +409,17 @@ function DeleteSection({ me }: { me: Me }) {
               Type <strong>{me.email}</strong> to confirm
             </label>
             <div className="settings-inline">
-              <input
-                id="delete-confirm"
-                value={typed}
-                onChange={(e) => setTyped(e.target.value)}
-                autoComplete="off"
-                spellCheck={false}
-                autoCapitalize="none"
-              />
+              <input id="delete-confirm" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" spellCheck={false} autoCapitalize="none" />
               <button type="submit" className="button button-small button-danger" disabled={!matches || deleting}>
                 {deleting ? 'Deleting' : 'Delete account'}
               </button>
             </div>
           </div>
-          {problem && <p className="auth-notice" role="alert">{problem}</p>}
+          {problem && (
+            <p className="auth-notice" role="alert">
+              {problem}
+            </p>
+          )}
         </form>
       )}
     </section>
