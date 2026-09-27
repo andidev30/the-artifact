@@ -26,7 +26,7 @@ Then by what changed:
 
 ## Services
 
-Integration and e2e tests need `pnpm services` and the test database (once: `docker compose exec postgres createdb -U artifact artifact_test`). e2e also needs Google Chrome (or `PW_CHROMIUM=1` after `npx playwright install chromium`) and free ports 3004 and 5177. If a service isn't available, say which suites were skipped instead of reporting them as passing.
+Integration and e2e tests need `pnpm services` and the test database (once: `docker compose exec postgres createdb -U artifact artifact_test`). e2e also needs Google Chrome (or `PW_CHROMIUM=1` after `npx playwright install chromium`) and free ports 3004, 3005, 5177 and 5178. If a service isn't available, say which suites were skipped instead of reporting them as passing.
 
 ## New tests
 
