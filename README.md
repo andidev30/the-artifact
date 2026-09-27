@@ -79,8 +79,8 @@ You need Docker with Docker Compose.
 git clone https://github.com/andidev30/the-artifact
 cd the-artifact/deploy/docker-compose
 cp app.env.example app.env   # set APP_URL to the address people will use
-cp .env.example .env         # passwords for the bundled Postgres and MinIO
-docker compose up -d
+cp .env.example .env         # passwords for the bundled Postgres and MinIO, the version to run
+docker compose up -d         # pulls ghcr.io/andidev30/the-artifact at that version
 ```
 
 Open http://localhost:8080 and create the first account; it becomes the admin of the server. Then connect your agent:
@@ -89,7 +89,7 @@ Open http://localhost:8080 and create the first account; it becomes the admin of
 claude mcp add --transport http --scope user the-artifact http://localhost:8080/mcp
 ```
 
-Other clients, HTTPS, email and backups are covered in [Self-hosting](docs/self-hosting.md). For a cluster, see [Kubernetes](docs/kubernetes.md), which uses the published image `ghcr.io/andidev30/the-artifact`.
+Other clients, HTTPS, email and backups are covered in [Self-hosting](docs/self-hosting.md). To build the image from the checkout instead, see [Building the image yourself](docs/self-hosting.md#building-the-image-yourself). For a cluster, see [Kubernetes](docs/kubernetes.md), which uses the same published image.
 
 ## MCP tools
 

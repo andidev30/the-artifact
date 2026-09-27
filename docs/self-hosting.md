@@ -1,6 +1,6 @@
 # Self-hosting
 
-The Artifact runs as one Docker image next to a Postgres database and an S3-compatible object store. The compose file brings all three, with MinIO as the object store. It is free to self-host, with every feature included. This page uses Docker Compose; for a cluster, see [Kubernetes](/docs/kubernetes).
+The Artifact runs as one Docker image next to a Postgres database and an S3-compatible object store. The compose file brings all three, with MinIO as the object store. The app image is published as `ghcr.io/andidev30/the-artifact` for `linux/amd64` and `linux/arm64`, so nothing is built on your server unless you [build it yourself](#building-the-image-yourself). It is free to self-host, with every feature included. This page uses Docker Compose; for a cluster, see [Kubernetes](/docs/kubernetes).
 
 ## What you need
 
@@ -30,6 +30,7 @@ And `.env`, read by Docker Compose, before the first start (the database and Min
 | Setting | What to put there |
 | --- | --- |
 | `POSTGRES_PASSWORD`, `MINIO_ROOT_PASSWORD` | Passwords of the bundled Postgres and MinIO. Neither is reachable from outside the compose network. Without the file they default to `artifact` and `artifact-secret`. |
+| `ARTIFACT_VERSION` | Optional. The release to run, e.g. `0.1.0`. Without it, the compose file runs the release it was written for. Releases are listed at https://github.com/andidev30/the-artifact/releases. |
 | `ARTIFACT_PORT` | Optional. Port on the host, `8080` by default. |
 | `S3_*` | Optional. Object storage elsewhere; see [Using S3, R2 or your own MinIO](#using-s3-r2-or-your-own-minio). |
 
@@ -41,7 +42,7 @@ Put each setting in the file listed here: the compose file sets the `.env` ones 
 docker compose up -d
 ```
 
-The app listens on port 8080 (or `ARTIFACT_PORT`). It creates and updates its database tables on every start. Open `APP_URL` and create the first account: it becomes the instance admin (see [The instance admin](#the-instance-admin)). Without email, the first page you see is **Set up this server**, which asks for your email and a password. Do this before you share the address.
+The first start pulls the images. The app listens on port 8080 (or `ARTIFACT_PORT`). It creates and updates its database tables on every start. Open `APP_URL` and create the first account: it becomes the instance admin (see [The instance admin](#the-instance-admin)). Without email, the first page you see is **Set up this server**, which asks for your email and a password. Do this before you share the address.
 
 The image includes a headless Chromium for gallery thumbnails. The compose file runs the app with `deploy/seccomp-chromium.json` so Chromium can keep its sandbox on (see [Security](/docs/security)); keep that line if you write your own compose file, or the log will say thumbnails are off. On Kubernetes the profile goes on the nodes; see [Kubernetes](/docs/kubernetes#3-the-seccomp-profile).
 
@@ -147,16 +148,46 @@ In Google Cloud Console, create an OAuth client of type Web application. Add `AP
 
 ## Updating
 
+Set `ARTIFACT_VERSION` in `.env` to the new release, then get the matching compose file and start it:
+
 ```sh
 git pull
-docker compose up -d --build
+docker compose up -d
 ```
 
-Database changes apply automatically when the new version starts. Pages published before thumbnails existed get theirs the first time the gallery lists them; to render them all at once:
+`docker compose up -d` pulls the new image and restarts the app with it; your data stays in its volumes. Database changes apply automatically when the new version starts, and an older version may not run on them, so take a [backup](/docs/backups) first. Pages published before thumbnails existed get theirs the first time the gallery lists them; to render them all at once:
 
 ```sh
 docker compose exec app node dist/scripts/backfill-thumbnails.js
 ```
+
+### Building the image yourself
+
+To run your own changes, or a commit that isn't released yet, build the image from the checkout. Add this line to `.env`, so every `docker compose` command also reads `docker-compose.build.yml`:
+
+```sh
+COMPOSE_FILE=docker-compose.yml:docker-compose.build.yml
+```
+
+Then build and start, and do the same after every `git pull`:
+
+```sh
+docker compose up -d --build
+```
+
+The build is tagged `the-artifact:local`, and `ARTIFACT_VERSION` is ignored. Remove the line from `.env` to go back to the published image. The project and its volumes are the same either way, so your data stays.
+
+### Installs that built the image before
+
+The compose file of 0.1.0 and earlier built the image on your server. After `git pull` it runs the published image instead, with the same project name and volumes, so your data stays. Start it once, then remove the old build:
+
+```sh
+git pull
+docker compose up -d
+docker image rm the-artifact:latest
+```
+
+To keep building from the checkout, see [Building the image yourself](#building-the-image-yourself).
 
 ### Installs from before `deploy/docker-compose`
 
@@ -168,7 +199,7 @@ git pull
 mv .env.selfhost deploy/docker-compose/app.env
 mv .env deploy/docker-compose/.env                   # if you have one
 cd deploy/docker-compose
-docker compose up -d --build
+docker compose up -d
 ```
 
 Your data stays: the compose file keeps the project name `the-artifact`, so it finds the same volumes. If you cloned into a folder with another name, set `name:` at the top of `docker-compose.yml` to that folder's name first (`docker volume ls` shows it before `_artifact-data`).
