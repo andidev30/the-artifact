@@ -103,6 +103,10 @@ kubectl -n the-artifact exec deploy/the-artifact -c app -- node dist/scripts/mak
 kubectl -n the-artifact exec deploy/the-artifact -c app -- node dist/scripts/sweep-storage.js
 ```
 
+### Health checks and metrics
+
+The pod's startup and liveness probes call `/healthz`, which only says the process answers, and its readiness probe calls `/readyz`, which also checks Postgres and object storage. So while the database is down the pod leaves the service but isn't restarted. For Prometheus metrics, set `METRICS_TOKEN` in `app.env`, apply again, and scrape `http://the-artifact.the-artifact.svc/metrics` with the token as a bearer token; see [Health checks and metrics](/docs/self-hosting#health-checks-and-metrics).
+
 ### Updating
 
 With the published image, set `newTag` to the new version and run `kubectl apply -k deploy/kubernetes`. Database changes apply when the new version starts.
