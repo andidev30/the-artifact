@@ -26,6 +26,7 @@ Publishes a page and returns its link.
 | `files` | no | Other files of the page: a list of `{ path, content, encoding }` (see below) |
 | `artifact_id` | no | Id or link of an existing page. Publishes a new version at the same link. |
 | `visibility` | no | `private` (shown as **Restricted**), `organization` or `link` (see [Sharing](/docs/sharing)) |
+| `folder` | no | Name of a [folder](#folders) in the connected workspace, up to 80 characters. It is created if there is none by that name. An empty string takes the page out of its folder. Left out, a new page goes in no folder and an existing one stays where it is. |
 
 Each file in `files` has:
 
@@ -64,10 +65,31 @@ It answers with an `upload_id` and a link for each file that isn't stored yet. T
 | `files` | yes | The same list as for `prepare_upload` |
 | `artifact_id` | no | Id or link of an existing page. Publishes a new version at the same link. |
 | `visibility` | no | As for `publish_artifact` |
+| `folder` | no | As for `publish_artifact` |
 
 ### list_artifacts
 
-Lists the most recently updated pages in the connected workspace, with their ids and links.
+Lists the pages in the connected workspace, most recently updated first, with their ids, links and folders. It answers 25 at a time; when there are more, the answer ends with a `cursor` the agent passes back for the next ones.
+
+| Argument | Required | Meaning |
+| --- | --- | --- |
+| `query` | no | Only pages whose title contains this, ignoring case |
+| `folder` | no | Only pages in the folder with this name; an empty string for pages in no folder |
+| `limit` | no | How many to list, 1 to 100. 25 by default. |
+| `cursor` | no | From the end of the previous answer, for the next pages |
+
+### list_folders
+
+Lists the folders of the connected workspace, by name, with how many of the pages you can see are in each. It takes no arguments.
+
+### move_artifact
+
+Files a page into a folder of the connected workspace, or takes it out of its folder, without publishing a new version. For people who can edit the page, from the workspace the page is in. The link and who can open the page stay the same.
+
+| Argument | Required | Meaning |
+| --- | --- | --- |
+| `artifact_id` | yes | Id or link of the page |
+| `folder` | yes | Folder name, created if there is none by that name, or an empty string to take the page out of its folder |
 
 ### get_artifact
 
@@ -153,4 +175,18 @@ Ask for the change in the same conversation ("make the chart a line chart"). The
 
 ## Managing pages in the app
 
-In the gallery and the page viewer, the **…** menu lets anyone who can open a page **Download** it as a zip of `index.html` and its files, lets editors rename it and lets the owner delete it. In the viewer, **Download** saves the version you are looking at, including an older one picked in the history. Search above the gallery filters by title.
+In the gallery and the page viewer, the **…** menu lets anyone who can open a page **Download** it as a zip of `index.html` and its files, lets editors rename it and lets the owner delete it. In the viewer, **Download** saves the version you are looking at, including an older one picked in the history.
+
+The gallery shows the newest pages first and loads more as you scroll, so a workspace with thousands of pages opens as fast as one with ten. The search box above it filters by title, ignoring case, within the folder you are looking at.
+
+## Folders
+
+Folders group the pages of one workspace: your personal workspace, or an organization, where they are shared by everyone in it. They are one level deep, and each name is used once per workspace, whatever its case.
+
+- **Folders never change who can open a page.** A restricted page in a folder stays restricted, and people only see the pages they could open anyway. Folder counts only count those.
+- **Anyone who can publish in the workspace organizes its folders**: you in your personal workspace, and every member of an organization. They create folders with **New folder**, and pick one above the gallery to **Rename** it or **Delete folder**.
+- **To file a page**, choose **Move to folder** in its **…** menu, or ask your agent (it uses `move_artifact`, or `folder` when it publishes). Filing a page takes edit access to it, and doesn't change when it was last updated.
+- **Deleting a folder keeps its pages.** They stay in the workspace, in no folder.
+- **Pages shared with you** from someone else's workspace show without their folder: folders belong to the workspace that owns the page. You file only the pages of your own workspaces.
+
+Folders are the lighter answer to one company with several divisions: an [organization](/docs/organizations) can be a division, and folders sort pages within it.

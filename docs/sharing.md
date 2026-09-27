@@ -45,4 +45,4 @@ When you paste a page's link into Slack, WhatsApp, an email or anything else tha
 
 ## Pages shared with you
 
-The **Shared with you** tab in the gallery lists pages other people shared with your email address, with your role.
+The **Shared with you** tab in the gallery lists pages other people shared with your email address, with your role. It shows no [folders](/docs/publishing#folders): those belong to the workspace the page is in, so you don't see how its owner sorts their pages.
