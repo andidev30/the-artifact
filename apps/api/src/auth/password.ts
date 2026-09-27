@@ -5,13 +5,13 @@ import { db, schema } from '../db/index.js'
 import { mailEnabled } from '../env.js'
 import { firstAccountBecomesAdmin, hasAccounts, instanceSettings, lockAdmins } from '../instance.js'
 import { startSession } from './session.js'
+import { EMAIL_RE } from '../validation.js'
 import { afterSignInUrl, createPasswordAccount, waitingForAccess } from './users.js'
 
 // Passwords are for servers that can't send sign-in links by email. On those, people sign in with
 // a password (or Google); the first account is created from the setup form and later ones from a
 // link an admin passes on, or from an organization invitation link.
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const MIN_LENGTH = 8
 const MAX_LENGTH = 200
 const SCRYPT: ScryptOptions = { N: 16384, r: 8, p: 1 }

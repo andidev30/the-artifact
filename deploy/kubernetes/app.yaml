@@ -34,7 +34,7 @@ spec:
         runAsGroup: 1000
         # Docker's default profile plus the namespace calls Chromium's sandbox needs to render
         # thumbnails of untrusted pages safely. It has to be on every node that can run this pod,
-        # at /var/lib/kubelet/seccomp/profiles/the-artifact-chromium.json (see docs/self-hosting.md),
+        # at /var/lib/kubelet/seccomp/profiles/the-artifact-chromium.json (see docs/kubernetes.md),
         # or the pod doesn't start; patches/thumbnails-off.yaml runs without it.
         seccompProfile:
           type: Localhost

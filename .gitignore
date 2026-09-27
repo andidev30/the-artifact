@@ -9,7 +9,9 @@ dist-ssr
 .idea
 .vscode/*
 !.vscode/extensions.json
-.claude/
+# Claude Code: settings.json and skills/ are shared; these are per machine
+.claude/settings.local.json
+.claude/worktrees/
 
 # Playwright
 test-results

@@ -59,7 +59,6 @@ api.route('/oauth/requests', consent)
 api.route('/artifacts', artifacts)
 api.route('/contact-sales', contact)
 
-// Members, invitations and account settings
 api.route('/organizations/:orgId', members)
 api.route('/invitations', invitations)
 api.route('/me/invitations', myInvitations)

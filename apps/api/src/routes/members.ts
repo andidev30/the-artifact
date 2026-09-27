@@ -7,10 +7,10 @@ import { db, schema } from '../db/index.js'
 import type { InviteRole, Role, User } from '../db/schema.js'
 import { env, mailEnabled } from '../env.js'
 import { sendInvitation } from '../mail.js'
+import { EMAIL_RE } from '../validation.js'
 
 const DAY = 24 * 60 * 60 * 1000
 const INVITE_DAYS = 7
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const ROLES = new Set<Role>(['owner', 'admin', 'member'])
 const INVITE_ROLES = new Set<InviteRole>(['admin', 'member'])
 

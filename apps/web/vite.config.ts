@@ -4,7 +4,6 @@ import { defineConfig } from 'vite'
 // Where the API runs in development; override to run several copies side by side
 const api = process.env.API_URL ?? 'http://localhost:3000'
 
-// https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
   server: {

@@ -19,3 +19,5 @@ pnpm dev             # API on :3000, web on :5173
 ```
 
 `apps/api` is the Hono API, MCP server and OAuth server; `apps/web` is the React app. Docs pages live in `docs/` and are rendered at `/docs`.
+
+Working with Claude Code: `CLAUDE.md` files at the root and in `apps/api`, `apps/web`, `docs` and `deploy` describe the conventions, and `.claude/` holds shared settings, plugins and the project skills `run-app`, `verify`, `db-migration` and `docs-sync`.

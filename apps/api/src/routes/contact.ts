@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { sendSalesInquiry } from '../mail.js'
+import { EMAIL_RE } from '../validation.js'
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 // Control characters (newlines included) have no place in one-line fields that end up in a subject
 const CONTROL_RE = /[\u0000-\u001f\u007f]/
 
