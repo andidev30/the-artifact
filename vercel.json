@@ -1,0 +1,23 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "npm install -g pnpm@11.6.0 && pnpm install --frozen-lockfile",
+  "buildCommand": "pnpm --filter @the-artifact/web build && pnpm --filter @the-artifact/api build",
+  "outputDirectory": "apps/web/dist",
+  "regions": ["hnd1"],
+  "functions": {
+    "api/index.js": { "maxDuration": 60 }
+  },
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "/api" },
+    { "source": "/mcp", "destination": "/api" },
+    { "source": "/mcp/:path*", "destination": "/api" },
+    { "source": "/oauth/:path*", "destination": "/api" },
+    { "source": "/.well-known/:path*", "destination": "/api" },
+    { "source": "/((?!assets/).*)", "destination": "/index.html" }
+  ],
+  "headers": [
+    { "source": "/assets/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] },
+    { "source": "/index.html", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] }
+  ]
+}

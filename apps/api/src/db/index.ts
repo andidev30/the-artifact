@@ -4,7 +4,7 @@ import { env } from '../env.js'
 import * as schema from './schema.js'
 
 // Notices are informational (e.g. "already exists, skipping" from migrations)
-const client = postgres(env.databaseUrl, { onnotice: () => {} })
+const client = postgres(env.databaseUrl, { onnotice: () => {}, prepare: env.databasePrepare })
 
 export const db = drizzle(client, { schema })
 export { schema }
