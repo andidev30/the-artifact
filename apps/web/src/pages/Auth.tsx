@@ -173,8 +173,8 @@ function AuthForm({ mode, plan, next, lede, notice }: { mode: Mode; plan: string
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, intent: mode, plan, next }),
       })
-      // A refusal from the server (bad address, sign-ups closed) says why; show that
-      if (res.status === 400 || res.status === 403) {
+      // A refusal from the server (bad address, sign-ups closed, too many links) says why; show that
+      if (res.status === 400 || res.status === 403 || res.status === 429) {
         const data = await res.json().catch(() => ({}))
         if (data.error) return setStatus({ kind: 'error', message: data.error })
       }

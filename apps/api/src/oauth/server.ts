@@ -4,6 +4,7 @@ import { Hono, type Context } from 'hono'
 import { hashToken, randomToken } from '../auth/session.js'
 import { db, schema } from '../db/index.js'
 import { env } from '../env.js'
+import { clientIp, hit, tooManyRequests, waitText } from '../limits.js'
 
 // OAuth 2.1 authorization server for MCP clients, following the MCP authorization spec:
 // discovery (RFC 9728 + RFC 8414), dynamic client registration (RFC 7591), and
@@ -59,6 +60,13 @@ export function isAllowedRedirect(uri: string): boolean {
 }
 
 oauth.post('/oauth/register', async (c) => {
+  const ip = clientIp(c)
+  const wait = ip ? await hit('oauth-register-ip', ip) : null
+  if (wait) {
+    // error_description too, which is what OAuth clients show
+    const error = `Too many agents were connected from your network. Try again in ${waitText(wait)}.`
+    return tooManyRequests(c, error, wait, { error_description: error })
+  }
   const body = (await c.req.json().catch(() => null)) as { client_name?: unknown; redirect_uris?: unknown } | null
   const redirectUris = Array.isArray(body?.redirect_uris) ? body.redirect_uris.filter((u): u is string => typeof u === 'string') : []
   if (redirectUris.length === 0 || !redirectUris.every(isAllowedRedirect)) {

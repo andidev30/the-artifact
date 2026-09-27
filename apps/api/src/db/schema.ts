@@ -247,6 +247,22 @@ export const instanceSettings = pgTable('instance_settings', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
+// Counters for rate limits (see src/limits.ts): how often something happened for one key in the
+// current window, which starts at the first hit and ends at resets_at. Kept in Postgres so every
+// server process, or serverless instance, counts the same thing.
+export const rateLimits = pgTable(
+  'rate_limits',
+  {
+    // Which limit, e.g. "sign-in-link"
+    bucket: text('bucket').notNull(),
+    // SHA-256 of what is counted (an email address, an account id or an IP address), so no addresses are stored
+    key: text('key').notNull(),
+    hits: integer('hits').notNull(),
+    resetsAt: timestamp('resets_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.bucket, t.key] }), index('rate_limits_resets_at_idx').on(t.resetsAt)],
+)
+
 export type User = typeof users.$inferSelect
 export type SignupPolicy = (typeof signupPolicyEnum.enumValues)[number]
 export type ShareRole = (typeof shareRoleEnum.enumValues)[number]

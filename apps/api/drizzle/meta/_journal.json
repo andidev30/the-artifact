@@ -78,6 +78,13 @@
       "when": 1790513527794,
       "tag": "0010_passwords_and_admin_links",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790539211890,
+      "tag": "0011_rate_limits",
+      "breakpoints": true
     }
   ]
 }

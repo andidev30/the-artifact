@@ -1,31 +1,26 @@
-import { and, count, eq, isNull, sql } from 'drizzle-orm'
+import { sql } from 'drizzle-orm'
 import { Hono } from 'hono'
-import type { NewPageCheck } from '../artifacts.js'
 import { db, schema } from '../db/index.js'
 import { env } from '../env.js'
-import { PublishError } from '../files.js'
+import type { PlanQuota } from '../quota.js'
 import { requireCronSecret } from '../routes/cron.js'
 
 // The hosted service's free Personal plan: a personal workspace holds up to PERSONAL_PAGES pages and
-// keeps older versions for PERSONAL_HISTORY_DAYS. The pricing page (apps/web/src/ee/Pricing.tsx)
-// promises the same numbers. Organizations have no limits until they have billing (#34). None of
-// this applies to a self-hosted install.
+// PERSONAL_STORAGE_BYTES of versions (src/quota.ts says what counts), and keeps older versions for
+// PERSONAL_HISTORY_DAYS. The pricing page (apps/web/src/ee/Pricing.tsx) promises the same numbers.
+// Organizations have no limits until they have billing (#34). None of this applies to a self-hosted
+// install.
 export const PERSONAL_PAGES = 50
+export const PERSONAL_STORAGE_BYTES = 1024 ** 3
 export const PERSONAL_HISTORY_DAYS = 7
 
-export const personalPageLimit: NewPageCheck = async (tx, { userId, organizationId }) => {
-  if (env.selfHosted || organizationId) return
-  // Locks the owner, so two publishes at once can't both take the last free place
-  await tx.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.id, userId)).for('update')
-  const [{ pages }] = await tx
-    .select({ pages: count() })
-    .from(schema.artifacts)
-    .where(and(eq(schema.artifacts.ownerId, userId), isNull(schema.artifacts.organizationId)))
-  if (pages >= PERSONAL_PAGES) {
-    throw new PublishError(
-      `Your personal workspace has ${pages} pages, the most the free Personal plan allows. ` +
-        'Publish a new version of a page you have (pass its artifact_id), or delete one you no longer need in the gallery.',
-    )
+export const personalPlan: PlanQuota = ({ organizationId }) => {
+  if (env.selfHosted || organizationId) return null
+  return {
+    pages: PERSONAL_PAGES,
+    bytes: PERSONAL_STORAGE_BYTES,
+    by: 'the free Personal plan',
+    hint: `Versions older than ${PERSONAL_HISTORY_DAYS} days are removed every day, which frees space as well.`,
   }
 }
 

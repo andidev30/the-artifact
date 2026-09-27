@@ -1,19 +1,20 @@
 import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
-import { setNewPageCheck } from './artifacts.js'
 import { email } from './auth/email.js'
 import { google } from './auth/google.js'
 import { password, passwordSignUpOpen } from './auth/password.js'
 import { endSession, loadUser, requireUser, type AuthEnv } from './auth/session.js'
 import { db, schema } from './db/index.js'
 import { contact } from './ee/contact.js'
-import { historyCron, personalPageLimit } from './ee/plans.js'
+import { historyCron, personalPlan } from './ee/plans.js'
 import { env, mailEnabled } from './env.js'
 import { hasAccounts, instanceSettings, isInstanceAdmin } from './instance.js'
+import { checkRateLimits } from './limits.js'
 import { mcp } from './mcp.js'
 import { observeRequests } from './metrics.js'
 import { consent } from './oauth/consent.js'
 import { oauth } from './oauth/server.js'
+import { setPlanQuota } from './quota.js'
 import { admin } from './routes/admin.js'
 import { cron } from './routes/cron.js'
 import { health } from './routes/health.js'
@@ -29,8 +30,11 @@ export const app = new Hono<AuthEnv>()
 app.use(observeRequests)
 app.route('/', health)
 
-// The hosted service's plan limits; they check SELF_HOSTED themselves, so they do nothing on a self-hosted install
-setNewPageCheck(personalPageLimit)
+// The hosted service's plan limits. They check SELF_HOSTED themselves, so a self-hosted install gets
+// only its own WORKSPACE_MAX_* settings.
+setPlanQuota(personalPlan)
+// Every limit is defined by now, ee/ ones included; a mistake in RATE_LIMITS stops the start here
+checkRateLimits()
 
 if (!env.webDir) app.get('/', (c) => c.text('The Artifact API'))
 

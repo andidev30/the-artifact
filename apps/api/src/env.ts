@@ -10,6 +10,40 @@ function required(name: string): string {
   return value
 }
 
+// A whole number of at least 1, or null when unset
+function count(name: string): number | null {
+  const value = process.env[name]?.trim()
+  if (!value) return null
+  const n = Number(value)
+  if (!Number.isSafeInteger(n) || n < 1) throw new Error(`${name} must be a whole number of at least 1, e.g. ${name}=500.`)
+  return n
+}
+
+const SIZE_UNITS: Record<string, number> = { B: 1, KB: 1024, MB: 1024 ** 2, GB: 1024 ** 3, TB: 1024 ** 4 }
+
+// Bytes from a size like 500MB, 10GB or 1TB (powers of 1024), or null when unset
+export function parseSize(value: string | undefined, name: string): number | null {
+  const s = value?.trim()
+  if (!s) return null
+  const m = /^(\d+(?:\.\d+)?)\s*(B|KB|MB|GB|TB)?$/i.exec(s)
+  const bytes = m ? Math.floor(Number(m[1]) * SIZE_UNITS[(m[2] ?? 'B').toUpperCase()]) : 0
+  if (bytes < 1) throw new Error(`${name} must be a size like 500MB, 10GB or 1TB.`)
+  return bytes
+}
+
+// How many proxies in front of the app append the client's address to X-Forwarded-For. 0 trusts no
+// header, since anyone can send one, and uses the address of the connection. Vercel sets the header
+// itself (it replaces what the client sent), so there it is trusted.
+function trustProxy(): number {
+  const value = process.env.TRUST_PROXY?.trim().toLowerCase()
+  if (!value) return process.env.VERCEL ? 1 : 0
+  if (value === 'true') return 1
+  if (value === 'false') return 0
+  const n = Number(value)
+  if (!Number.isSafeInteger(n) || n < 0) throw new Error('TRUST_PROXY must be true, false or the number of proxies in front of the app, e.g. TRUST_PROXY=1.')
+  return n
+}
+
 export const env = {
   port: Number(process.env.PORT ?? 3000),
   appUrl: required('APP_URL').replace(/\/$/, ''),
@@ -39,6 +73,15 @@ export const env = {
   migrateOnStart: process.env.MIGRATE_ON_START === 'true',
   // Bearer token for GET /api/cron/*, for hosts that run scheduled jobs from outside (Vercel Cron)
   cronSecret: process.env.CRON_SECRET ?? '',
+  trustProxy: trustProxy(),
+  // "off", or changes to the built-in rate limits such as "sign-in-link=20/1h,mcp=off"; read by src/limits.ts
+  rateLimits: process.env.RATE_LIMITS ?? '',
+  // What one workspace (a personal workspace or an organization) may hold; no limit when unset
+  workspaceQuota: {
+    pages: count('WORKSPACE_MAX_PAGES'),
+    versions: count('WORKSPACE_MAX_VERSIONS'),
+    bytes: parseSize(process.env.WORKSPACE_MAX_STORAGE, 'WORKSPACE_MAX_STORAGE'),
+  },
   // Bearer token Prometheus scrapes GET /metrics with; without it, /metrics doesn't exist
   metricsToken: process.env.METRICS_TOKEN ?? '',
   // Object storage (S3 API: MinIO, AWS S3, Cloudflare R2...) for page content and thumbnails.

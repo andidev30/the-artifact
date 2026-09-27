@@ -6,6 +6,7 @@ import { createPasswordAccount, userExists } from '../auth/users.js'
 import { db, schema } from '../db/index.js'
 import type { InviteRole, Role, User } from '../db/schema.js'
 import { env, mailEnabled } from '../env.js'
+import { limitInvites } from '../limits.js'
 import { log } from '../log.js'
 import { sendInvitation } from '../mail.js'
 import { EMAIL_RE } from '../validation.js'
@@ -159,6 +160,8 @@ members.post('/invitations', async (c) => {
     .innerJoin(schema.users, eq(schema.memberships.userId, schema.users.id))
     .where(and(eq(schema.memberships.organizationId, me.org.id), eq(schema.users.email, email)))
   if (existing) return c.json({ error: `${email} is already in ${me.org.name}.`, field: 'email' }, 409)
+  const busy = await limitInvites(c, user.id, 1)
+  if (busy) return busy
 
   // Inviting the same address again replaces the old link and restarts the 7 days
   const token = randomToken()

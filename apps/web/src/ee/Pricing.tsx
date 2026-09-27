@@ -15,14 +15,20 @@ type Plan = {
   comingSoon?: boolean
 }
 
-// The Personal plan's page and history limits are enforced by apps/api/src/ee/plans.ts; change both together
+// The Personal plan's page, storage and history limits are enforced by apps/api/src/ee/plans.ts; change both together
 const CLOUD_PLANS: Plan[] = [
   {
     name: 'Personal',
     price: '$0',
     per: 'forever',
     summary: 'For your own reports, prototypes and experiments.',
-    features: ['Publish from Claude Code, Cursor, Codex or any MCP client', 'Share any page by link', 'Up to 50 pages', 'Version history for 7 days'],
+    features: [
+      'Publish from Claude Code, Cursor, Codex or any MCP client',
+      'Share any page by link',
+      'Up to 50 pages',
+      '1 GB of storage',
+      'Version history for 7 days',
+    ],
     cta: 'Get started free',
     href: SIGNUP_URL,
     featured: true,
