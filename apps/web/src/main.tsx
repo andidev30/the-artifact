@@ -1,6 +1,7 @@
 import { lazy, StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
+import { Analytics } from '@vercel/analytics/react'
 import './index.css'
 import './App.css'
 import { AppHome } from './pages/AppHome.tsx'
@@ -75,5 +76,6 @@ createRoot(document.getElementById('root')!).render(
         <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>
+    <Analytics />
   </StrictMode>,
 )
