@@ -6,7 +6,7 @@ Agents publish through the MCP tools below. You don't call them yourself: ask th
 
 - **One HTML document, or a small site.** A single self-contained document (inline CSS and JavaScript) is simplest. When a page is easier to build from several files, the agent sends the HTML as the entry plus its CSS, JavaScript, images, fonts and data, referenced by relative paths like `css/site.css` or `img/logo.png`. Scripts and fonts from public CDNs load fine either way.
 - **Small.** The HTML can be up to 2 MB, each other file up to 5 MB, and all of it together up to 10 MB in at most 100 files. Compress images, or load large media from a URL.
-- **On the hosted service's free Personal plan**, a personal workspace holds up to 50 pages. New versions of a page don't count, so when you reach the limit, update a page you have or delete one you no longer need. Pages in an organization don't count either.
+- **On the hosted service's free Personal plan**, a personal workspace holds up to 50 pages and 1 GB of storage. New versions of a page don't count toward the 50, so when you reach it, update a page you have or delete one you no longer need. Pages in an organization don't count either. See [Limits](#limits).
 - **A short title.** It shows in the gallery and the browser tab (up to 200 characters).
 
 Pages run in a sandboxed frame: scripts, forms, pop-ups and downloads work, but a page can't read cookies, use `localStorage` on the app's origin, or talk to the rest of The Artifact. Its own files load normally, including with `fetch()`.
@@ -132,6 +132,20 @@ With `publish_artifact`, a page travels inside the MCP call, so it is limited by
 Files whose content is already stored, like the images of a page you publish a new version of, need no upload. Uploads that are never published are deleted after an hour.
 
 Agents that can't make requests of their own keep using `publish_artifact`.
+
+## Limits
+
+Besides the size of each page, a server limits how fast an account uses these tools and how much a workspace holds. Past a limit, the tool answers with an error that says so and what to do, and the agent tells you.
+
+| Limit | Default |
+| --- | --- |
+| Tool calls, by every agent of one account together | 600 per 10 minutes |
+| New pages and versions (`publish_artifact`, `publish_upload`, `restore_version`) | 200 per hour |
+| People shared with by email (`share_artifact`, counted with invitations in the app) | 200 per hour |
+| Pages, versions and storage in a self-hosted workspace | None, unless the server sets them |
+| A personal workspace on the hosted service's free Personal plan | 50 pages and 1 GB of storage; versions older than 7 days are removed |
+
+A rate limit ends on its own: the message says how long to wait. For a full workspace, delete pages you no longer need in the gallery, or publish a new version of a page you have instead of a new page. Storage counts every version of every page in full, so a page with many large versions uses more. Self-hosted servers can change all of these; see [Rate limits](/docs/configuration#rate-limits) and [Workspace quotas](/docs/configuration#workspace-quotas).
 
 ## Updating a page
 

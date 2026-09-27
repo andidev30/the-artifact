@@ -80,7 +80,7 @@ artifact.example.com {
 }
 ```
 
-Then set `APP_URL=https://artifact.example.com` and restart with `docker compose up -d`.
+Then set `APP_URL=https://artifact.example.com` and `TRUST_PROXY=true` in `app.env`, and restart with `docker compose up -d`. `TRUST_PROXY` tells the app to take each visitor's address from the `X-Forwarded-For` header the proxy adds; without it, every visitor has the proxy's address, and the [per-network rate limits](/docs/configuration#rate-limits) count them all together. Only set it when the app can't be reached except through the proxy, or anyone could claim any address.
 
 ## 4. Connect agents
 
