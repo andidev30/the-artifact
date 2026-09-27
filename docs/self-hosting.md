@@ -139,6 +139,7 @@ Leave `SMTP_HOST` empty and The Artifact sends no email:
 - **Organization invitations**: inviting someone gives you the invitation link to pass on. Someone without an account creates one from that page with a password.
 - **Forgotten passwords**: an admin opens the person under **People** and chooses **Password reset link**. Using it signs them out everywhere else.
 - **Sharing pages**: people are added without an email; send them the page link.
+- **Comments**: nobody is emailed about new ones. They show as new on gallery cards and on the page's **Comments** button.
 
 Anyone can change or set their password under **Account settings**, **Password**. Wrong passwords are limited to 10 per address every 15 minutes. Add SMTP later and sign-in links work as usual; existing passwords keep working too.
 

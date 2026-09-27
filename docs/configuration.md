@@ -17,7 +17,7 @@ Settings are environment variables. With Docker Compose they go in `deploy/docke
 | `DATABASE_PREPARE` | `true` | `false` when `DATABASE_URL` goes through a transaction-mode pooler (PgBouncer in transaction mode, Supabase's pooler on port 6543), which can't keep prepared statements |
 | `CRON_SECRET` | empty | For hosts without a long-running server, like Vercel: turns on `GET /api/cron/sweep`, which a scheduler calls with `Authorization: Bearer <CRON_SECRET>` to run the [storage sweep](/docs/self-hosting#where-content-is-stored). The Docker image doesn't need it; its server sweeps every 6 hours on its own. |
 | `METRICS_TOKEN` | empty | Turns on Prometheus metrics at `GET /metrics`, which answers only requests with `Authorization: Bearer <METRICS_TOKEN>`. Empty means there is no `/metrics`. See [Health checks and metrics](/docs/self-hosting#health-checks-and-metrics). |
-| `SMTP_HOST` | empty | Mail server for sign-in links, invitations and share emails. Empty runs without email: password sign-in, and links admins pass on themselves. See [Running without email](/docs/self-hosting#running-without-email). |
+| `SMTP_HOST` | empty | Mail server for sign-in links, invitations, share emails and emails about new comments. Empty runs without email: password sign-in, and links admins pass on themselves. See [Running without email](/docs/self-hosting#running-without-email). |
 | `SMTP_FROM` | `The Artifact <no-reply@localhost>` | Sender, e.g. `"The Artifact <artifact@example.com>"` |
 | `SMTP_PORT` | `587` | |
 | `SMTP_SECURE` | `false` | `true` for implicit TLS (usually port 465) |
@@ -81,6 +81,7 @@ Instance admins change these under **Server admin** (`/admin`); they are stored 
 | Folders | 500 per workspace, names up to 80 characters |
 | Gallery and `list_artifacts` | 50 and 25 pages at a time by default, at most 100 |
 | People per share | 20 at a time |
+| Comment | 5,000 characters of plain text; comments load 100 threads at a time in the app, 50 by default in `list_comments` |
 | Sign-in link | Works once, for 15 minutes, and is used when you press Continue on the page it opens (opening it alone uses nothing); a new one can be sent after 60 seconds |
 | Organization invitation | 7 days |
 | Browser session | 30 days, extended while you use it |
@@ -103,6 +104,8 @@ Each limit counts something for one key (an email address, an account, or a netw
 | `invite-ip` | The same, from one network | 500 per hour |
 | `mcp` | MCP tool calls by one account, all agents together | 600 per 10 minutes |
 | `publish` | New pages and versions one account publishes through agents (`publish_artifact`, `publish_upload`, `restore_version`), also counted in `mcp` | 200 per hour |
+| `comment` | Comments and replies one account writes, in the app or through agents (`add_comment`, `reply_comment`) | 120 per hour |
+| `comment-email` | Emails to one person about new comments on one page. Comments past it send nothing and show as new in the app, so a burst of comments is one email. | 1 per 15 minutes |
 
 A network is one IPv4 address, or one IPv6 `/64`. The app knows a visitor's address from the connection, or from `X-Forwarded-For` when `TRUST_PROXY` says a proxy sets it. The counters are kept in Postgres, so every replica of the app shares them; the storage sweep clears the ones that ran out.
 
