@@ -1,0 +1,12 @@
+name: The Artifact
+
+queries:
+  - uses: security-extended
+
+# Build output, dependencies and generated migrations aren't our source; scanning them only adds noise.
+paths-ignore:
+  - '**/node_modules'
+  - '**/dist'
+  - apps/api/drizzle
+  - test-results
+  - playwright-report
