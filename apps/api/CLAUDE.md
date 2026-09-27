@@ -15,6 +15,7 @@ Hono on Node 26, Drizzle ORM over `postgres`, S3 via `@aws-sdk/client-s3`, MCP v
 | `src/files.ts` | Multi-file page validation and size limits |
 | `src/storage.ts`, `src/gc.ts` | Content-addressed blobs in S3 and the sweep that deletes unreferenced ones |
 | `src/thumbnails.ts` | Gallery screenshots of untrusted HTML with no network of its own |
+| `src/previews.ts` | Link preview (Open Graph) tags in the HTML shell of `/a/<slug>`, for link-shared pages only; mounted by `src/web.ts` and by `api/index.js` on Vercel |
 | `src/sharing.ts` | Per-person shares by email |
 | `src/instance.ts` | Instance admins, sign-up policy and instance settings |
 | `src/mcp.ts` | The MCP tools (`publish_artifact`, `list_artifacts`, `get_artifact`, `rename_artifact`, `set_artifact_visibility`, `share_artifact`, and `prepare_upload`/`publish_upload` when `S3_PUBLIC_ENDPOINT` is set) |

@@ -29,7 +29,7 @@ Gallery cards show a screenshot of each page, taken on the server in headless Ch
 - **Chromium's own sandbox stays on.** Chromium runs with its sandbox and without the server's environment variables (no database URL or SMTP password). In Docker, the sandbox needs to create namespaces, which Docker's default seccomp profile forbids; `deploy/docker-compose/docker-compose.yml` runs the app with `deploy/seccomp-chromium.json`, which is Docker's default profile plus `clone`, `unshare` and `setns`. Without it, thumbnails are skipped and the log says why.
 - **Nothing blocks publishing.** Renders run one at a time in the background. If there is no browser, or a render fails, the card keeps its sketch.
 
-Screenshots are served with the same access rules as the page, from `/api/artifacts/<id>/thumbnails/<version>`.
+Screenshots are served with the same access rules as the page, from `/api/artifacts/<id>/thumbnails/<version>`. Only pages shared with **Anyone with the link** put their title and screenshot in the link preview tags of `/a/<id>`; every other page gets the same generic tags as a page that doesn't exist (see [Link previews](/docs/sharing#link-previews)).
 
 ## Private by default
 

@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { serveStatic } from '@hono/node-server/serve-static'
 import type { Env, Hono } from 'hono'
+import { servePagePreviews } from './previews.js'
 
 // Paths the API owns; everything else is the single-page app
 const API_PREFIXES = ['/api/', '/mcp', '/oauth/', '/.well-known/']
@@ -16,6 +17,7 @@ export function mountWeb<E extends Env>(app: Hono<E>, dir: string) {
     if (c.res.status === 200) c.header('Cache-Control', 'public, max-age=31536000, immutable')
   })
   app.use('/*', serveStatic({ root: dir }))
+  servePagePreviews(app, index)
 
   app.get('*', (c) => {
     // Missing API paths and build files are real 404s, not the app shell
