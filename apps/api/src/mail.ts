@@ -1,12 +1,27 @@
-import nodemailer from 'nodemailer'
-import { env } from './env.js'
+import nodemailer, { type SendMailOptions, type Transporter } from 'nodemailer'
+import { env, mailEnabled } from './env.js'
 
-const transport = nodemailer.createTransport({
-  host: env.smtp.host,
-  port: env.smtp.port,
-  secure: env.smtp.secure,
-  auth: env.smtp.user ? { user: env.smtp.user, pass: env.smtp.pass } : undefined,
-})
+export class MailDisabledError extends Error {
+  constructor() {
+    super('Email is not set up on this server (SMTP_HOST is empty).')
+  }
+}
+
+let smtp: Transporter | null = null
+
+// Every send fails with MailDisabledError when SMTP isn't configured; callers fall back to a link
+const transport = {
+  async sendMail(message: SendMailOptions) {
+    if (!mailEnabled()) throw new MailDisabledError()
+    smtp ??= nodemailer.createTransport({
+      host: env.smtp.host,
+      port: env.smtp.port,
+      secure: env.smtp.secure,
+      auth: env.smtp.user ? { user: env.smtp.user, pass: env.smtp.pass } : undefined,
+    })
+    return smtp.sendMail(message)
+  },
+}
 
 export async function sendSignInLink(to: string, link: string, intent: 'login' | 'signup') {
   const action = intent === 'signup' ? 'create your account' : 'log in'

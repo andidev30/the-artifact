@@ -28,6 +28,7 @@ export const DOC_GROUPS: DocGroup[] = [
     title: 'Self-hosting',
     pages: [
       { slug: 'self-hosting', title: 'Install' },
+      { slug: 'kubernetes', title: 'Kubernetes' },
       { slug: 'configuration', title: 'Configuration reference' },
       { slug: 'backups', title: 'Backup and restore' },
     ],
@@ -62,7 +63,7 @@ export function headingId(text: string) {
     .replace(/^-+|-+$/g, '')
 }
 
-const LANG_LABEL: Record<string, string> = { sh: 'Terminal', json: 'JSON', toml: 'TOML' }
+const LANG_LABEL: Record<string, string> = { sh: 'Terminal', json: 'JSON', toml: 'TOML', yaml: 'YAML' }
 
 const markdown = new Marked({
   gfm: true,

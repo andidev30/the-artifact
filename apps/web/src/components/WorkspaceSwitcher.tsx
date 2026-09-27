@@ -1,8 +1,8 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useLocation, useNavigate } from 'react-router'
 import type { Me } from '../api'
 import { usePendingInvitations } from '../invitations'
-import { useWorkspace } from '../workspace'
+import { organizationSettingsPath, useWorkspace } from '../workspace'
 import { InvitationRow } from './InvitationNotice'
 import './WorkspaceSwitcher.css'
 
@@ -16,6 +16,8 @@ export function WorkspaceSwitcher({ me }: { me: Me }) {
   const root = useRef<HTMLDivElement>(null)
   const button = useRef<HTMLButtonElement>(null)
   const menuId = useId()
+  const location = useLocation()
+  const navigate = useNavigate()
 
   useEffect(() => {
     if (!open) return
@@ -43,12 +45,17 @@ export function WorkspaceSwitcher({ me }: { me: Me }) {
 
   const current = org?.id ?? 'personal'
   const options = [
-    ...me.organizations.map((o) => ({ id: o.id, name: o.name, note: `Organization, ${ROLE_LABEL[o.role].toLowerCase()}` })),
-    { id: 'personal', name: 'Personal', note: 'Just you' },
+    ...me.organizations.map((o) => ({ id: o.id, name: o.name, note: `Organization, ${ROLE_LABEL[o.role].toLowerCase()}`, settings: organizationSettingsPath(o) })),
+    { id: 'personal', name: 'Personal', note: 'Just you', settings: null },
   ]
 
   function pick(id: string) {
     choose(id)
+    // On an organization's settings, switching shows the settings of the one picked instead
+    if (/^\/organizations\/[^/]+\/settings/.test(location.pathname)) {
+      const picked = me.organizations.find((o) => o.id === id)
+      navigate(picked ? organizationSettingsPath(picked) : '/app')
+    }
     setOpen(false)
     button.current?.focus()
   }
@@ -76,7 +83,7 @@ export function WorkspaceSwitcher({ me }: { me: Me }) {
           <p className="switcher-heading">Switch workspace</p>
           <ul>
             {options.map((o) => (
-              <li key={o.id}>
+              <li key={o.id} className="switcher-row">
                 <button type="button" aria-current={o.id === current} onClick={() => pick(o.id)}>
                   <span className="switcher-initial" aria-hidden="true">{o.name.slice(0, 1).toUpperCase()}</span>
                   <span className="switcher-option">
@@ -84,6 +91,11 @@ export function WorkspaceSwitcher({ me }: { me: Me }) {
                     <span>{o.note}</span>
                   </span>
                 </button>
+                {o.settings && (
+                  <Link className="switcher-settings" to={o.settings} onClick={() => setOpen(false)} aria-label={`${o.name} settings`} title={`${o.name} settings`}>
+                    <Gear />
+                  </Link>
+                )}
               </li>
             ))}
           </ul>
@@ -104,5 +116,14 @@ export function WorkspaceSwitcher({ me }: { me: Me }) {
         </div>
       )}
     </div>
+  )
+}
+
+function Gear() {
+  return (
+    <svg className="switcher-gear-icon" viewBox="0 0 20 20" aria-hidden="true">
+      <path d="M8.6 2h2.8l.4 2.3 1.6.9 2.2-.8 1.4 2.4-1.8 1.5v1.4l1.8 1.5-1.4 2.4-2.2-.8-1.6.9-.4 2.3H8.6l-.4-2.3-1.6-.9-2.2.8L3 12.6l1.8-1.5V9.7L3 8.2l1.4-2.4 2.2.8 1.6-.9z" />
+      <circle cx="10" cy="10.4" r="2.4" />
+    </svg>
   )
 }

@@ -2,7 +2,7 @@
 
 ## The agent says it needs to authenticate
 
-In Claude Code, run `/mcp`, pick `the-artifact` and choose **Authenticate**. In Codex, run `codex mcp login the-artifact`. If you disconnected the agent in Settings, it has to sign in again.
+In Claude Code, run `/mcp`, pick `the-artifact` and choose **Authenticate**. In Codex, run `codex mcp login the-artifact`. If you disconnected the agent in Account settings, it has to sign in again.
 
 ## "This sign-in link can't be used"
 
@@ -34,24 +34,34 @@ Screenshots are taken a few seconds after publishing; reload the gallery. On a s
 
 ## My agent publishes to the wrong workspace
 
-A connection is tied to the workspace you picked when you allowed it. Disconnect it in **Settings → Connected agents** and connect again, choosing the other workspace.
+A connection is tied to the workspace you picked when you allowed it. Disconnect it in **Account settings → Connected agents** and connect again, choosing the other workspace.
 
 ## Self-hosted: sign-in emails don't arrive
 
-Check the `SMTP_*` settings and the app logs:
+With `SMTP_HOST` empty nothing is emailed by design; see [Running without email](/docs/self-hosting#running-without-email). Otherwise check the `SMTP_*` settings and the app logs:
 
 ```sh
 docker compose -f docker-compose.selfhost.yml logs app
 ```
 
+## Kubernetes: the app pod doesn't start
+
+If `kubectl -n the-artifact describe pod` says the seccomp profile couldn't be loaded, the node running the pod lacks `/var/lib/kubelet/seccomp/profiles/the-artifact-chromium.json`. Copy it there, or run without thumbnails. See [The seccomp profile](/docs/kubernetes#3-the-seccomp-profile).
+
+If the pod waits in `Init`, the app can't reach the database or object storage yet: `kubectl -n the-artifact logs deploy/the-artifact -c wait-for-services` says which address it is waiting for.
+
 ## Self-hosted: "This server only accepts accounts from invited people"
 
-The sign-up policy doesn't let this address create an account: an admin chose email domains or invited people only under **Admin**, **Sign-up**, or `ALLOWED_EMAIL_DOMAINS` is set and nothing was saved there yet. Add the domain, or invite the person to an organization or a page first.
+The sign-up policy doesn't let this address create an account: an admin chose email domains or invited people only under **Server admin**, **Sign-up**. Add the domain, or invite the person to an organization or a page first. On a server without email, an admin can also make them a sign-up link under **People**.
 
 ## Self-hosted: "This account is suspended"
 
-An instance admin suspended the account. An admin can unsuspend it under **Admin**, **People**.
+An instance admin suspended the account. An admin can unsuspend it under **Server admin**, **People**.
 
 ## Self-hosted: nobody is an admin
 
-Add your address to `ADMIN_EMAILS` and restart. See [An existing install without an admin](/docs/self-hosting#an-existing-install-without-an-admin).
+Run the make-admin script on the server. See [An existing install without an admin](/docs/self-hosting#an-existing-install-without-an-admin).
+
+## Self-hosted: I forgot my password
+
+Ask an instance admin for a **Password reset link** (under **Server admin**, **People**). If you are the only admin, run the make-admin script with your address; on a server without email it prints a reset link.

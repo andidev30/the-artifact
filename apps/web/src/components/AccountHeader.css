@@ -14,13 +14,6 @@
   white-space: nowrap;
 }
 
-/* Phones: the switcher and Settings take the row; Log out lives on the Settings page */
-@media (max-width: 520px) {
-  .app-account:has(.app-account-link) .auth-reset {
-    display: none;
-  }
-}
-
 /* Set by the instance admin */
 .instance-name {
   overflow: hidden;
@@ -40,7 +33,7 @@
   }
 }
 
-/* Phones: with the Admin link as well, the links get a row of their own under the logo */
+/* Phones: with the Server admin link as well, the links get a row of their own under the logo */
 @media (max-width: 520px) {
   .nav:has(.app-account-link[href='/admin']) {
     flex-wrap: wrap;

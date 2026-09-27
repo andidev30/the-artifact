@@ -18,7 +18,7 @@ An organization always keeps at least one owner. The last owner can't leave, be 
 
 ## Inviting people
 
-In **Settings → Organization**, enter an email address and pick **Admin** or **Member**. The invitation link works for 7 days and only for someone signed in with that email address. Inviting the same address again sends a fresh link and cancels the old one. Pending invitations can be resent or revoked.
+Open the organization's settings (the gear next to it in the workspace menu, or *organization name* **settings** in the menu under your name), and under **Members** enter an email address and pick **Admin** or **Member**. The invitation link works for 7 days and only for someone signed in with that email address. Inviting the same address again sends a fresh link and cancels the old one. Pending invitations can be resent or revoked.
 
 You don't need the email to accept. When you are signed in with the invited address, pending invitations show at the top of your pages, in the workspace switcher and on the first step of onboarding, so a new account can join the team instead of creating its own organization. **Join** adds you with the invited role and switches to that workspace; **Decline** removes the invitation.
 
@@ -28,9 +28,9 @@ The chip next to the logo shows the current workspace. Click it to switch betwee
 
 ## Leaving or deleting
 
-Members can leave from **Settings → Organization**. Pages you published there stay in the organization.
+Members can leave from the organization's settings, under **Members**. Pages you published there stay in the organization.
 
-Deleting your account (**Settings → Delete account**) is blocked while you are the only owner of an organization that has other people in it. Otherwise, before you confirm, the page lists what will happen:
+Deleting your account (**Account settings → Delete account**) is blocked while you are the only owner of an organization that has other people in it. Otherwise, before you confirm, the page lists what will happen:
 
 - **Pages in organizations with other people stay.** Each one moves, with its version history, sharing and link, to the organization's longest-standing other owner (if an organization somehow had no other owner, its longest-standing admin, then member). This includes pages in organizations you left earlier. The new owner can then rename, share or delete them like their own.
 - **Personal pages are deleted,** with their history. People you shared them with lose access.

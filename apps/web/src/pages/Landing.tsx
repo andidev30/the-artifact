@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, Navigate } from 'react-router'
 import { fetchMe, type Me } from '../api'
 import { useConfig } from '../useConfig'
+import { ServerUnreachable } from './Status'
 import { ConnectTabs } from '../components/ConnectTabs'
 import { FlowDemo } from '../components/FlowDemo'
 import { Pricing } from '../components/Pricing'
@@ -23,8 +24,11 @@ export function Landing() {
   const signedIn = Boolean(me)
   const firstName = me?.name?.split(' ')[0]
 
-  // A self-hosted install is the product itself, not its marketing site
-  if (config?.selfHosted) return <Navigate to="/app" replace />
+  // Nothing until the config says which kind of install this is, so a self-hosted one never
+  // flashes the marketing site. A self-hosted install is the product itself.
+  if (!config) return null
+  if (config.unreachable) return <ServerUnreachable />
+  if (config.selfHosted) return <Navigate to="/app" replace />
 
   return (
     <>

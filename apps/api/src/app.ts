@@ -2,10 +2,11 @@ import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { email } from './auth/email.js'
 import { google } from './auth/google.js'
+import { password } from './auth/password.js'
 import { endSession, loadUser, requireUser, type AuthEnv } from './auth/session.js'
 import { db, schema } from './db/index.js'
-import { env } from './env.js'
-import { instanceSettings, isInstanceAdmin } from './instance.js'
+import { env, mailEnabled } from './env.js'
+import { hasAccounts, instanceSettings, isInstanceAdmin } from './instance.js'
 import { mcp } from './mcp.js'
 import { consent } from './oauth/consent.js'
 import { oauth } from './oauth/server.js'
@@ -33,12 +34,17 @@ api.get('/config', async (c) =>
   c.json({
     selfHosted: env.selfHosted,
     googleSignIn: Boolean(env.google.clientId && env.google.clientSecret),
+    // Without SMTP, people sign in with a password and admins pass links on by hand
+    emailSignIn: mailEnabled(),
+    // No accounts yet on a server without email: the web app shows the setup form
+    needsSetup: !mailEnabled() && !(await hasAccounts()),
     instanceName: (await instanceSettings()).instanceName,
   }),
 )
 
 api.route('/auth/google', google)
 api.route('/auth/email', email)
+api.route('/auth/password', password)
 
 api.post('/auth/logout', async (c) => {
   await endSession(c)
@@ -81,6 +87,7 @@ api.get('/me', requireUser, async (c) => {
     email: user.email,
     name: user.name,
     avatarUrl: user.avatarUrl,
+    hasPassword: Boolean(user.passwordHash),
     onboarded: user.onboardedAt !== null,
     organizations: orgs,
     agentConnected: Boolean(token),

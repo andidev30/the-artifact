@@ -13,6 +13,7 @@ import { Onboarding } from './pages/Onboarding.tsx'
 import { Viewer } from './pages/Viewer.tsx'
 import { Invite } from './pages/Invite.tsx'
 import { NewOrganization } from './pages/NewOrganization.tsx'
+import { OrganizationSettings } from './pages/OrganizationSettings.tsx'
 import { Settings } from './pages/Settings.tsx'
 import { Admin } from './pages/Admin.tsx'
 import { ConfirmSignIn } from './pages/ConfirmSignIn.tsx'
@@ -34,6 +35,7 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/settings" element={<Settings />} />
         <Route path="/admin" element={<Admin />} />
         <Route path="/organizations/new" element={<NewOrganization />} />
+        <Route path="/organizations/:slug/settings" element={<OrganizationSettings />} />
         <Route path="/invite/:token" element={<Invite />} />
         <Route path="/docs" element={<Navigate to="/docs/introduction" replace />} />
         <Route path="/docs/:slug" element={<Docs />} />

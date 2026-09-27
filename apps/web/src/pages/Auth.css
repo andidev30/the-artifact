@@ -185,7 +185,7 @@
   font-weight: 600;
 }
 
-.app-account span {
+.app-account > span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

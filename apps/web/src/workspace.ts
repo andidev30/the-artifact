@@ -48,3 +48,6 @@ export function useWorkspace(me: Me) {
   const choose = useCallback((id: string) => chooseWorkspace(id), [])
   return { org, name: org ? org.name : 'Personal', choose }
 }
+
+// Where an organization's settings live (members, invitations, its name)
+export const organizationSettingsPath = (org: Pick<Organization, 'slug'>) => `/organizations/${encodeURIComponent(org.slug)}/settings`

@@ -18,30 +18,22 @@ export const env = {
     clientId: process.env.GOOGLE_CLIENT_ID ?? '',
     clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
   },
+  // Optional: without SMTP_HOST nothing is emailed. People sign in with a password (or Google)
+  // and admins pass sign-up and invitation links on themselves.
   smtp: {
-    host: required('SMTP_HOST'),
+    host: process.env.SMTP_HOST ?? '',
     port: Number(process.env.SMTP_PORT ?? 587),
     secure: process.env.SMTP_SECURE === 'true',
     user: process.env.SMTP_USER ?? '',
     pass: process.env.SMTP_PASS ?? '',
-    from: required('SMTP_FROM'),
+    from: process.env.SMTP_FROM || 'The Artifact <no-reply@localhost>',
   },
   // Self-hosted installs skip the marketing pages and go straight to the app, and their first
-  // account becomes the instance admin
-  selfHosted: process.env.SELF_HOSTED === 'true',
+  // account becomes the instance admin. On unless SELF_HOSTED=false, which the hosted service sets.
+  selfHosted: process.env.SELF_HOSTED !== 'false',
   // Built web app to serve from this process (the Docker image sets it); empty in development
   webDir: process.env.WEB_DIR ?? '',
   migrateOnStart: process.env.MIGRATE_ON_START === 'true',
-  // Only these email domains may create accounts (comma separated); empty means anyone
-  allowedEmailDomains: (process.env.ALLOWED_EMAIL_DOMAINS ?? '')
-    .split(',')
-    .map((d) => d.trim().toLowerCase().replace(/^@/, ''))
-    .filter(Boolean),
-  // These addresses are always instance admins (comma separated), e.g. to recover an install
-  adminEmails: (process.env.ADMIN_EMAILS ?? '')
-    .split(',')
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean),
   // Object storage (S3 API: MinIO, AWS S3, Cloudflare R2...) for page content and thumbnails.
   // Without keys, the AWS SDK's usual credential chain applies (e.g. an IAM role).
   storage: {
@@ -58,5 +50,8 @@ export const env = {
     cdnHosts: process.env.THUMBNAIL_CDN_HOSTS,
   },
 }
+
+// Read on every call, so tests can switch email off by changing env
+export const mailEnabled = () => Boolean(env.smtp.host)
 
 export const isProduction = env.appUrl.startsWith('https://')

@@ -1,7 +1,8 @@
 import { and, asc, count, eq, gt, inArray, max, ne, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { deleteCookie } from 'hono/cookie'
-import { requireUser, type AuthEnv } from '../auth/session.js'
+import { hashPassword, passwordProblem, verifyPassword } from '../auth/password.js'
+import { requireUser, startSession, type AuthEnv } from '../auth/session.js'
 import { db, schema } from '../db/index.js'
 import { isLastAdmin, lastAdminError } from '../instance.js'
 
@@ -16,6 +17,26 @@ settings.patch('/', async (c) => {
   if (name.length < 1 || name.length > 80) return c.json({ error: 'Use 1 to 80 characters for your name.', field: 'name' }, 400)
   await db.update(schema.users).set({ name }).where(eq(schema.users.id, user.id))
   return c.json({ name })
+})
+
+// { currentPassword, password }. The current one is needed only when the account has a password.
+// Other devices are signed out; this one gets a fresh session.
+settings.put('/password', async (c) => {
+  const user = c.get('user')!
+  const body = (await c.req.json().catch(() => null)) as { currentPassword?: unknown; password?: unknown } | null
+  if (user.passwordHash) {
+    const current = typeof body?.currentPassword === 'string' ? body.currentPassword : ''
+    if (!(await verifyPassword(current, user.passwordHash))) return c.json({ error: 'Your current password is wrong.', field: 'currentPassword' }, 400)
+  }
+  const problem = passwordProblem(body?.password)
+  if (problem) return c.json({ error: problem, field: 'password' }, 400)
+  const passwordHash = await hashPassword(body!.password as string)
+  await db.transaction(async (tx) => {
+    await tx.update(schema.users).set({ passwordHash }).where(eq(schema.users.id, user.id))
+    await tx.delete(schema.sessions).where(eq(schema.sessions.userId, user.id))
+  })
+  await startSession(c, user.id)
+  return c.body(null, 204)
 })
 
 // MCP clients that still hold a live token for this person, with the workspaces they publish to

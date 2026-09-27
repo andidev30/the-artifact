@@ -6,9 +6,11 @@ export const users = pgTable('users', {
   name: text('name'),
   avatarUrl: text('avatar_url'),
   googleSub: text('google_sub').unique(),
+  // scrypt hash (see src/auth/password.ts); only set on installs without email, or once someone chooses one
+  passwordHash: text('password_hash'),
   // Set once the person finishes choosing a personal or organization workspace
   onboardedAt: timestamp('onboarded_at', { withTimezone: true }),
-  // Instance administrator (see src/instance.ts); ADMIN_EMAILS grants it too, without this flag
+  // Instance administrator (see src/instance.ts)
   isAdmin: boolean('is_admin').notNull().default(false),
   // Suspended people can't sign in or use their agents; their pages stay
   suspendedAt: timestamp('suspended_at', { withTimezone: true }),
@@ -31,10 +33,13 @@ export const sessions = pgTable(
   (t) => [index('sessions_user_id_idx').on(t.userId)],
 )
 
-// One-time sign-in links sent by email; stored hashed like sessions
+// One-time sign-in links sent by email, or made by an instance admin to pass on when the server
+// can't send email; stored hashed like sessions
 export const emailTokens = pgTable('email_tokens', {
   id: text('id').primaryKey(),
   email: text('email').notNull(),
+  // The admin who made the link; such links create an account whatever the sign-up policy says
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'cascade' }),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
@@ -231,8 +236,8 @@ export const artifactShares = pgTable(
 
 export const signupPolicyEnum = pgEnum('signup_policy', ['open', 'domains', 'invite-only'])
 
-// Settings the instance admin edits in the web app. At most one row (id 1); without it the
-// environment (ALLOWED_EMAIL_DOMAINS) decides.
+// Settings the instance admin edits in the web app. At most one row (id 1); without it anyone
+// can sign up.
 export const instanceSettings = pgTable('instance_settings', {
   id: integer('id').primaryKey().default(1),
   signupPolicy: signupPolicyEnum('signup_policy').notNull(),

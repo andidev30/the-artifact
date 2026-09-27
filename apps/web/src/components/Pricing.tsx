@@ -77,7 +77,7 @@ const SELF_HOSTED_PLANS: Plan[] = [
       'Every feature: organizations, sharing, version history',
       'Unlimited pages and members',
       'One Docker image plus Postgres',
-      'Uses your SMTP server, and your Google sign-in if you want it',
+      'Email through your SMTP server and Google sign-in, both optional',
       'Pages and data never leave your network',
     ],
     cta: 'Read the install guide',

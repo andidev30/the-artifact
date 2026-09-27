@@ -1,9 +1,11 @@
 import { and, asc, count, eq, gt, notExists } from 'drizzle-orm'
 import { Hono, type Context } from 'hono'
-import { hashToken, randomToken, requireUser, type AuthEnv } from '../auth/session.js'
+import { hashPassword, passwordProblem } from '../auth/password.js'
+import { hashToken, randomToken, requireUser, startSession, type AuthEnv } from '../auth/session.js'
+import { createPasswordAccount, userExists } from '../auth/users.js'
 import { db, schema } from '../db/index.js'
 import type { InviteRole, Role, User } from '../db/schema.js'
-import { env } from '../env.js'
+import { env, mailEnabled } from '../env.js'
 import { sendInvitation } from '../mail.js'
 
 const DAY = 24 * 60 * 60 * 1000
@@ -169,12 +171,15 @@ members.post('/invitations', async (c) => {
     })
 
   const link = inviteUrl(token)
-  let emailed = true
-  try {
-    await sendInvitation(email, { from: user.name ?? user.email, organization: me.org.name, role, link, expiresInDays: INVITE_DAYS })
-  } catch (err) {
-    console.error('Sending invitation email failed', err)
-    emailed = false
+  // Without email, the person who invited passes the link on
+  let emailed = mailEnabled()
+  if (emailed) {
+    try {
+      await sendInvitation(email, { from: user.name ?? user.email, organization: me.org.name, role, link, expiresInDays: INVITE_DAYS })
+    } catch (err) {
+      console.error('Sending invitation email failed', err)
+      emailed = false
+    }
   }
   // The link is only returned when the email could not be sent, so it can be passed on another way
   return c.json({ emailed, link: emailed ? undefined : link, organization: await details(me.org.id, me.role) }, 201)
@@ -319,7 +324,30 @@ invitations.get('/:token', async (c) => {
     expired: row.invitation.expiresAt.getTime() < Date.now(),
     signedInAs: user?.email ?? null,
     alreadyMember: Boolean(member),
+    // On a server without email, someone new creates their account right here with a password
+    canSignUpHere: !mailEnabled() && !(await userExists(row.invitation.email)),
   })
+})
+
+// { password, name? }: creates the invited person's account, signs them in and joins the
+// organization. Only on servers without email, where the invitation link is how they get in.
+invitations.post('/:token/sign-up', async (c) => {
+  if (mailEnabled()) return c.json({ error: 'Sign up with your email to accept.', code: 'email_enabled' }, 409)
+  const row = await findInvitation(c.req.param('token'))
+  if (!row) return c.json({ error: 'This invitation is not valid. It may have been revoked or already accepted.' }, 404)
+  if (row.invitation.expiresAt.getTime() < Date.now()) return c.json({ error: 'This invitation has expired. Ask for a new one.' }, 410)
+  if (await userExists(row.invitation.email)) {
+    return c.json({ error: `${row.invitation.email} already has an account. Log in to accept.`, code: 'account_exists' }, 409)
+  }
+  const body = (await c.req.json().catch(() => null)) as { password?: unknown; name?: unknown } | null
+  const problem = passwordProblem(body?.password)
+  if (problem) return c.json({ error: problem, field: 'password' }, 400)
+  const name = typeof body?.name === 'string' ? body.name.trim().replace(/\s+/g, ' ').slice(0, 80) || null : null
+
+  const user = await createPasswordAccount(row.invitation.email, name, await hashPassword(body!.password as string))
+  if (!user) return c.json({ error: `${row.invitation.email} already has an account. Log in to accept.`, code: 'account_exists' }, 409)
+  await startSession(c, user.id)
+  return c.json(await join(user, row.invitation, row.org), 201)
 })
 
 invitations.post('/:token/accept', requireUser, async (c) => {

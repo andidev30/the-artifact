@@ -53,8 +53,8 @@ Any client that supports MCP over streamable HTTP with OAuth can connect with th
 
 ## Choosing a workspace
 
-A connection publishes to one workspace: your personal workspace or one of your organizations. To publish somewhere else, disconnect the agent in **Settings → Connected agents** and connect it again.
+A connection publishes to one workspace: your personal workspace or one of your organizations. To publish somewhere else, disconnect the agent in **Account settings → Connected agents** and connect it again.
 
 ## Disconnecting
 
-**Settings → Connected agents** lists every agent with access, the workspace it publishes to, and when it was last used. **Disconnect** revokes its access at once; the agent has to sign in again to publish.
+**Account settings → Connected agents** lists every agent with access, the workspace it publishes to, and when it was last used. **Disconnect** revokes its access at once; the agent has to sign in again to publish.

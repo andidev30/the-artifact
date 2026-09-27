@@ -9,6 +9,7 @@ import {
   type Sharing,
   type Visibility,
 } from '../api'
+import { useConfig } from '../useConfig'
 import './ShareDialog.css'
 
 type Props = {
@@ -51,7 +52,10 @@ export function ShareDialog({ slug, title, currentUserEmail, onClose, onVisibili
   const [loadError, setLoadError] = useState(false)
   const [emails, setEmails] = useState('')
   const [role, setRole] = useState<ShareRole>('viewer')
-  const [notify, setNotify] = useState(true)
+  // Servers without email can't notify anyone; the sharer sends the link
+  const canEmail = useConfig()?.emailSignIn !== false
+  const [notifyChoice, setNotify] = useState(true)
+  const notify = canEmail && notifyChoice
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -88,7 +92,7 @@ export function ShareDialog({ slug, title, currentUserEmail, onClose, onVisibili
         setNotice(
           r.notifyFailed.length
             ? `Shared with ${who}. The email to ${r.notifyFailed.join(', ')} could not be sent; send them the link.`
-            : `Shared with ${who}.${notify ? ' They will get an email with the link.' : ''}`,
+            : `Shared with ${who}.${notify ? ' They will get an email with the link.' : canEmail ? '' : ' Send them the link; this server doesn’t send email.'}`,
         )
       },
     )
@@ -145,10 +149,10 @@ export function ShareDialog({ slug, title, currentUserEmail, onClose, onVisibili
         <button type="submit" className="button" disabled={!typing || busy}>Share</button>
       </form>
 
-      {typing && (
+      {typing && canEmail && (
         <div className="share-notify">
           <label>
-            <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} />
+            <input type="checkbox" checked={notifyChoice} onChange={(e) => setNotify(e.target.checked)} />
             Notify people by email
           </label>
           {notify && (

@@ -12,8 +12,6 @@ const env = {
   GOOGLE_CLIENT_SECRET: '',
   // Tests that need these change the env object instead
   SELF_HOSTED: 'false',
-  ALLOWED_EMAIL_DOMAINS: '',
-  ADMIN_EMAILS: '',
   // A bucket of its own on the MinIO from docker-compose, created on first use
   S3_ENDPOINT: process.env.TEST_S3_ENDPOINT ?? 'http://localhost:9000',
   S3_REGION: 'us-east-1',

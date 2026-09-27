@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
-import { fetchMe } from '../api'
+import { ApiError, fetchMe, logInWithPassword, setUpServer } from '../api'
 import { useConfig } from '../useConfig'
+import { ServerUnreachable } from './Status'
 import { Wordmark } from '../components/Wordmark'
 import { APP_HOST, AUTH_EMAIL_URL, AUTH_GOOGLE_URL, LOGIN_URL, SIGNUP_URL } from '../config'
 import './Auth.css'
@@ -50,6 +51,8 @@ export function Auth({ mode }: { mode: Mode }) {
   const copy = COPY[mode]
   const signInError = SIGN_IN_ERRORS[params.get('error') ?? '']
   const navigate = useNavigate()
+  const config = useConfig()
+  const settingUp = Boolean(config && !config.emailSignIn && config.needsSetup)
 
   // Someone already signed in has nothing to do here
   useEffect(() => {
@@ -61,22 +64,30 @@ export function Auth({ mode }: { mode: Mode }) {
     return () => { document.title = 'The Artifact' }
   }, [mode])
 
+  if (config?.unreachable) return <ServerUnreachable />
+
   const switchParams = new URLSearchParams({ ...(isOrg ? { plan: 'organization' } : {}), ...(next ? { next } : {}) }).toString()
   const switchQuery = switchParams ? `?${switchParams}` : ''
 
   const header = (
     <header className="nav">
       <Wordmark />
-      <p className="auth-switch">
-        <span className="auth-switch-text">{copy.switchText} </span>
-        <Link to={copy.switchTo + switchQuery}>{copy.switchLink}</Link>
-      </p>
+      {!settingUp && (
+        <p className="auth-switch">
+          <span className="auth-switch-text">{copy.switchText} </span>
+          <Link to={copy.switchTo + switchQuery}>{copy.switchLink}</Link>
+        </p>
+      )}
     </header>
   )
 
-  const form = <AuthForm mode={mode} plan={plan} next={next} notice={signInError} lede={isOrg ? 'You will set up your organization and invite your team after this step.' : copy.lede} />
+  const form = settingUp ? (
+    <SetupForm />
+  ) : (
+    <AuthForm mode={mode} plan={plan} next={next} notice={signInError} lede={isOrg ? 'You will set up your organization and invite your team after this step.' : copy.lede} />
+  )
 
-  if (mode === 'login') {
+  if (mode === 'login' || settingUp) {
     return (
       <div className="auth auth-login">
         {header}
@@ -103,6 +114,20 @@ function AuthForm({ mode, plan, next, lede, notice }: { mode: Mode; plan: string
   const google = config?.googleSignIn ?? true
   const [status, setStatus] = useState<Status>({ kind: 'idle' })
   const query = new URLSearchParams({ intent: mode, ...(plan ? { plan } : {}), ...(next ? { next } : {}) }).toString()
+  // Servers without email: log in with a password; new people need a link from an admin
+  const withPassword = config?.emailSignIn === false
+
+  async function onPasswordSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const data = new FormData(e.currentTarget)
+    setStatus({ kind: 'sending' })
+    try {
+      const { redirect } = await logInWithPassword(String(data.get('email') ?? '').trim(), String(data.get('password') ?? ''), plan, next)
+      window.location.assign(redirect)
+    } catch (err) {
+      setStatus({ kind: 'error', message: err instanceof ApiError ? err.message : 'You could not be logged in. Check your connection and try again.' })
+    }
+  }
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -141,14 +166,10 @@ function AuthForm({ mode, plan, next, lede, notice }: { mode: Mode; plan: string
     )
   }
 
-  return (
-    <section className="auth-box" aria-labelledby="auth-title">
-      <h1 id="auth-title">{copy.title}</h1>
-      <p className="auth-lede">{lede}</p>
-      {notice && <p className="auth-notice" role="alert">{notice}</p>}
+  // Until the config arrives, nothing: the form differs between servers with and without email
+  if (!config) return <section className="auth-box" aria-busy="true" aria-label="Loading" />
 
-      {google && (
-      <>
+  const googleButton = (
       <a className="button button-quiet auth-provider" href={`${AUTH_GOOGLE_URL}?${query}`}>
         <svg viewBox="0 0 48 48" aria-hidden="true">
           <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z" />
@@ -158,9 +179,70 @@ function AuthForm({ mode, plan, next, lede, notice }: { mode: Mode; plan: string
         </svg>
         Continue with Google
       </a>
+  )
 
-      <div className="auth-divider"><span>or use your email</span></div>
-      </>
+  if (withPassword && mode === 'signup') {
+    return (
+      <section className="auth-box" aria-labelledby="auth-title">
+        <h1 id="auth-title">{copy.title}</h1>
+        {notice && <p className="auth-notice" role="alert">{notice}</p>}
+        {google && googleButton}
+        <p className="auth-lede">
+          {google ? 'Or ask' : 'Ask'} an admin of this server for a sign-up link. This server doesn’t send email, so they pass it on
+          to you themselves. If you were invited to an organization, open the invitation link instead.
+        </p>
+      </section>
+    )
+  }
+
+  if (withPassword) {
+    return (
+      <section className="auth-box" aria-labelledby="auth-title">
+        <h1 id="auth-title">{copy.title}</h1>
+        <p className="auth-lede">{lede}</p>
+        {notice && <p className="auth-notice" role="alert">{notice}</p>}
+        {google && (
+          <>
+            {googleButton}
+            <div className="auth-divider"><span>or use your password</span></div>
+          </>
+        )}
+        <form className="auth-form" onSubmit={onPasswordSubmit}>
+          <label htmlFor="email">Email</label>
+          <input id="email" name="email" type="email" autoComplete="email" placeholder="you@company.com" required />
+          <label htmlFor="password">Password</label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            autoComplete="current-password"
+            required
+            aria-invalid={status.kind === 'error' || undefined}
+            aria-describedby={status.kind === 'error' ? 'auth-error' : 'password-hint'}
+          />
+          {status.kind === 'error' && (
+            <p id="auth-error" className="auth-error" role="alert">{status.message}</p>
+          )}
+          <button type="submit" className="button" disabled={status.kind === 'sending'}>
+            {status.kind === 'sending' ? 'Logging in' : 'Log in'}
+          </button>
+          <p id="password-hint" className="field-hint">Forgot your password? Ask an admin of this server for a reset link.</p>
+        </form>
+      </section>
+    )
+  }
+
+  return (
+    <section className="auth-box" aria-labelledby="auth-title">
+      <h1 id="auth-title">{copy.title}</h1>
+      <p className="auth-lede">{lede}</p>
+      {notice && <p className="auth-notice" role="alert">{notice}</p>}
+
+      {google && (
+        <>
+          {googleButton}
+          <div className="auth-divider"><span>or use your email</span></div>
+        </>
       )}
 
       <form className="auth-form" onSubmit={onSubmit}>
@@ -180,6 +262,55 @@ function AuthForm({ mode, plan, next, lede, notice }: { mode: Mode; plan: string
         )}
         <button type="submit" className="button" disabled={status.kind === 'sending'}>
           {status.kind === 'sending' ? 'Sending link' : copy.submit}
+        </button>
+      </form>
+    </section>
+  )
+}
+
+// First run on a server without email: the first account, which becomes the admin of this server
+function SetupForm() {
+  const [busy, setBusy] = useState(false)
+  const [problem, setProblem] = useState<{ message: string; field?: string } | null>(null)
+
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const data = new FormData(e.currentTarget)
+    const password = String(data.get('password') ?? '')
+    if (password !== String(data.get('confirm') ?? '')) return setProblem({ message: 'The passwords don’t match.', field: 'confirm' })
+    setBusy(true)
+    setProblem(null)
+    try {
+      const { redirect } = await setUpServer(String(data.get('email') ?? '').trim(), password, String(data.get('name') ?? '').trim())
+      window.location.assign(redirect)
+    } catch (err) {
+      setBusy(false)
+      if (err instanceof ApiError && err.code === 'already_set_up') return window.location.assign(LOGIN_URL)
+      setProblem({ message: err instanceof ApiError ? err.message : 'The account could not be created. Check your connection and try again.', field: err instanceof ApiError ? err.field : undefined })
+    }
+  }
+
+  const invalid = (field: string) => (problem?.field === field ? true : undefined)
+
+  return (
+    <section className="auth-box" aria-labelledby="auth-title">
+      <h1 id="auth-title">Set up this server</h1>
+      <p className="auth-lede">
+        Create the first account. It becomes the admin of this server, so you can add people and choose who may sign up.
+      </p>
+      <form className="auth-form" onSubmit={onSubmit} noValidate>
+        <label htmlFor="setup-name">Your name</label>
+        <input id="setup-name" name="name" autoComplete="name" maxLength={80} />
+        <label htmlFor="setup-email">Email</label>
+        <input id="setup-email" name="email" type="email" autoComplete="email" placeholder="you@company.com" required aria-invalid={invalid('email')} />
+        <label htmlFor="setup-password">Password</label>
+        <input id="setup-password" name="password" type="password" autoComplete="new-password" minLength={8} required aria-invalid={invalid('password')} aria-describedby="setup-password-hint" />
+        <p id="setup-password-hint" className="field-hint">At least 8 characters.</p>
+        <label htmlFor="setup-confirm">Confirm password</label>
+        <input id="setup-confirm" name="confirm" type="password" autoComplete="new-password" required aria-invalid={invalid('confirm')} />
+        {problem && <p className="auth-error" role="alert">{problem.message}</p>}
+        <button type="submit" className="button" disabled={busy}>
+          {busy ? 'Creating your account' : 'Create admin account'}
         </button>
       </form>
     </section>

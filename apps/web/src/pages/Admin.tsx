@@ -9,18 +9,21 @@ import {
   getUserDeletion,
   listOrganizations,
   listUsers,
-  resetSettings,
+  createSignUpLink,
   saveSettings,
   updateUser,
   type AdminOrganization,
   type AdminOverview,
   type AdminUser,
   type InstanceSettings,
+  type SignUpLink,
   type SignupPolicy,
   type UserDeletionPreview,
   type UserFilter,
 } from '../adminApi'
 import { AccountHeader } from '../components/AccountHeader'
+import { CopyCommand } from '../components/CopyCommand'
+import { useConfig } from '../useConfig'
 import { timeAgo } from '../time'
 import { useMe } from '../useMe'
 import { useWorkspace } from '../workspace'
@@ -38,7 +41,7 @@ export function Admin() {
   const state = useMe()
 
   useEffect(() => {
-    document.title = 'Admin | The Artifact'
+    document.title = 'Server admin | The Artifact'
     return () => { document.title = 'The Artifact' }
   }, [])
 
@@ -54,8 +57,8 @@ function NotAdmin({ me }: { me: Me }) {
       <AccountHeader me={me} workspace={name} />
       <main id="main" className="app-main">
         <div className="app-title">
-          <h1>Admin</h1>
-          <p className="app-note">Only the admins of this instance can open this page.</p>
+          <h1>Server admin</h1>
+          <p className="app-note">Only the admins of this server can open this page.</p>
         </div>
         <p className="app-note">
           <Link className="text-link" to="/app">Back to your pages</Link>
@@ -88,7 +91,7 @@ function AdminPage({ me }: { me: Me }) {
       <AccountHeader me={me} workspace={name} />
       <main id="main" className="app-main settings admin">
         <div className="app-title">
-          <h1>Admin</h1>
+          <h1>Server admin</h1>
           <p>Everyone on this instance, their organizations, and who can create an account.</p>
         </div>
 
@@ -187,6 +190,8 @@ function useSearch() {
 type List<T> = { items: T[]; total: number; pageSize: number }
 
 function PeopleSection({ onChanged }: { onChanged: () => void }) {
+  const config = useConfig()
+  const noEmail = config?.emailSignIn === false
   const search = useSearch()
   const [filter, setFilter] = useState<UserFilter>('all')
   const [list, setList] = useState<Loadable<List<AdminUser>>>({ kind: 'loading' })
@@ -236,6 +241,8 @@ function PeopleSection({ onChanged }: { onChanged: () => void }) {
         <h2 id="people-title">People</h2>
         <p>Make people admins, suspend them, or delete their accounts. Suspended people can’t sign in and their agents stop working; their pages stay.</p>
       </header>
+
+      {noEmail && <AddPerson />}
 
       <div className="admin-toolbar">
         <label className="visually-hidden" htmlFor="people-search">Search people</label>
@@ -291,6 +298,72 @@ function PeopleSection({ onChanged }: { onChanged: () => void }) {
   )
 }
 
+// A link that stays on screen once made, to copy and send however you like
+function LinkResult({ link }: { link: SignUpLink }) {
+  const until = new Date(link.expiresAt).toLocaleDateString('en', { dateStyle: 'medium' })
+  return (
+    <div className="admin-link-result" role="status">
+      <p className="field-hint">
+        {link.newAccount
+          ? `Send this to ${link.email}. Opening it creates their account and asks them to choose a password.`
+          : `Send this to ${link.email}. Opening it signs them in and asks for a new password.`}{' '}
+        It works once, until {until}.
+      </p>
+      <CopyCommand command={link.link} label="Copy link" plain />
+    </div>
+  )
+}
+
+// On a server without email, how new people get an account: an admin makes a link and passes it on
+function AddPerson() {
+  const [email, setEmail] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [problem, setProblem] = useState<string | null>(null)
+  const [made, setMade] = useState<SignUpLink | null>(null)
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault()
+    setBusy(true)
+    setProblem(null)
+    try {
+      setMade(await createSignUpLink(email))
+      setEmail('')
+    } catch (err) {
+      setProblem(errorText(err, 'The link could not be made. Try again.'))
+    }
+    setBusy(false)
+  }
+
+  return (
+    <div className="admin-add-person">
+      <form className="admin-add-form" onSubmit={onSubmit} noValidate>
+        <div className="field">
+          <label htmlFor="add-person-email">Add someone</label>
+          <input
+            id="add-person-email"
+            className="admin-input"
+            type="email"
+            value={email}
+            onChange={(e) => { setEmail(e.target.value); setProblem(null) }}
+            placeholder="name@example.com"
+            autoComplete="off"
+            aria-invalid={Boolean(problem) || undefined}
+            aria-describedby="add-person-hint"
+          />
+        </div>
+        <button type="submit" className="button button-small" disabled={busy || !email.trim()}>
+          {busy ? 'Making link' : 'Make sign-up link'}
+        </button>
+      </form>
+      <p id="add-person-hint" className="field-hint">
+        This server doesn’t send email, so you pass the link on yourself. They can sign up whatever the sign-up policy says.
+      </p>
+      {problem && <p className="auth-notice" role="alert">{problem}</p>}
+      {made && <LinkResult link={made} />}
+    </div>
+  )
+}
+
 function Badges({ user }: { user: AdminUser }) {
   return (
     <>
@@ -338,6 +411,8 @@ function UserRow({ user: u, open, onToggle, onUpdated, onDeleted }: {
 }
 
 function UserPanel({ id, user: u, onUpdated, onDeleted }: { id: string; user: AdminUser; onUpdated: (u: AdminUser) => void; onDeleted: () => void }) {
+  const config = useConfig()
+  const [resetLink, setResetLink] = useState<SignUpLink | null>(null)
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
   const [confirm, setConfirm] = useState<'suspend' | 'delete' | 'demote' | null>(null)
@@ -350,6 +425,17 @@ function UserPanel({ id, user: u, onUpdated, onDeleted }: { id: string; user: Ad
       setConfirm(null)
     } catch (err) {
       setProblem(errorText(err, fallback))
+    }
+    setBusy(false)
+  }
+
+  async function makeResetLink() {
+    setBusy(true)
+    setProblem(null)
+    try {
+      setResetLink(await createSignUpLink(u.email))
+    } catch (err) {
+      setProblem(errorText(err, 'The link could not be made. Try again.'))
     }
     setBusy(false)
   }
@@ -379,9 +465,7 @@ function UserPanel({ id, user: u, onUpdated, onDeleted }: { id: string; user: Ad
 
       {confirm === null && (
         <div className="admin-panel-actions">
-          {u.adminFromEnvironment ? (
-            <p className="field-hint">Admin through ADMIN_EMAILS in the server’s environment.</p>
-          ) : u.isAdmin ? (
+          {u.isAdmin ? (
             <button type="button" className="button button-small button-quiet" disabled={busy} onClick={() => setConfirm('demote')}>
               Remove admin
             </button>
@@ -400,14 +484,21 @@ function UserPanel({ id, user: u, onUpdated, onDeleted }: { id: string; user: Ad
                 Suspend
               </button>
             ))}
+          {config?.emailSignIn === false && !u.suspended && (
+            <button type="button" className="button button-small button-quiet" disabled={busy} onClick={makeResetLink}>
+              Password reset link
+            </button>
+          )}
           {!u.isYou && (
             <button type="button" className="auth-reset admin-delete-link" onClick={() => setConfirm('delete')}>
               Delete account
             </button>
           )}
-          {u.isYou && <p className="field-hint">To delete your own account, use <Link className="text-link" to="/settings#delete">Settings</Link>.</p>}
+          {u.isYou && <p className="field-hint">To delete your own account, use <Link className="text-link" to="/settings#delete">Account settings</Link>.</p>}
         </div>
       )}
+
+      {resetLink && confirm === null && <LinkResult link={resetLink} />}
 
       {confirm === 'demote' && (
         <Confirm
@@ -719,13 +810,7 @@ function SignupSection({ onChanged }: { onChanged: () => void }) {
       {settings.kind === 'error' && <p className="auth-notice" role="alert">The settings could not be loaded. Reload to try again.</p>}
       {settings.kind === 'ready' && (
         <form className="settings-form" onSubmit={onSubmit} noValidate>
-          {settings.data.source === 'environment' && (
-            <p className="admin-source">
-              {settings.data.environment.allowedEmailDomains.length
-                ? `Set by ALLOWED_EMAIL_DOMAINS in the server’s environment. Saving here replaces it.`
-                : 'Not set yet, so anyone can sign up. Saving here takes precedence over ALLOWED_EMAIL_DOMAINS.'}
-            </p>
-          )}
+          {!settings.data.updatedAt && <p className="admin-source">Not saved yet, so anyone who can reach this server can sign up.</p>}
 
           <fieldset className="admin-policies">
             <legend className="settings-label">Who can sign up</legend>
@@ -773,24 +858,10 @@ function SignupSection({ onChanged }: { onChanged: () => void }) {
             <p id="instance-name-hint" className="field-hint">Optional. Shown next to the logo for everyone who signs in.</p>
           </div>
 
-          {settings.data.environment.adminEmails.length > 0 && (
-            <p className="field-hint">ADMIN_EMAILS also makes {settings.data.environment.adminEmails.join(', ')} admins, and lets them sign up whatever you choose here.</p>
-          )}
-
           <div className="admin-panel-actions">
             <button type="submit" className="button button-small" disabled={saving}>
               {saving ? 'Saving' : 'Save'}
             </button>
-            {settings.data.source === 'settings' && (
-              <button
-                type="button"
-                className="auth-reset"
-                disabled={saving}
-                onClick={() => run(resetSettings, 'Back to the server’s environment settings.')}
-              >
-                Use the environment instead
-              </button>
-            )}
           </div>
           <p className="field-hint" data-tone={status?.tone} aria-live="polite" role={status?.tone === 'bad' ? 'alert' : undefined}>
             {status?.text ?? (settings.data.updatedAt ? `Last saved ${timeAgo(settings.data.updatedAt)}.` : '')}

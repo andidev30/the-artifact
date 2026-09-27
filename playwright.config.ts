@@ -38,8 +38,6 @@ export default defineConfig({
         SMTP_FROM: 'The Artifact <e2e@example.com>',
         // Pin settings a developer's apps/api/.env might set, so they can't change e2e behaviour
         SELF_HOSTED: 'false',
-        ADMIN_EMAILS: '',
-        ALLOWED_EMAIL_DOMAINS: '',
         GOOGLE_CLIENT_ID: '',
         GOOGLE_CLIENT_SECRET: '',
         // The MinIO from docker-compose, in the bucket the API tests use

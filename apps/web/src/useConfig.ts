@@ -3,8 +3,14 @@ import { useEffect, useState } from 'react'
 export type AppConfig = {
   selfHosted: boolean
   googleSignIn: boolean
+  // False when the server can't send email: people sign in with a password instead of a link
+  emailSignIn: boolean
+  // No accounts yet on a server without email; the sign-up page shows the setup form
+  needsSetup: boolean
   // Set by the instance admin; shown in the signed-in header
   instanceName?: string | null
+  // The API didn't answer (restarting, or down); the other fields are guesses
+  unreachable?: boolean
 }
 
 // Fetched once per page load and shared by every component that asks
@@ -15,8 +21,8 @@ function loadConfig(): Promise<AppConfig> {
     .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
     .catch(() => {
       pending = null
-      // Without an answer, assume the defaults of the hosted site
-      return { selfHosted: false, googleSignIn: true }
+      // Without an answer, assume the server's own default: a self-hosted install
+      return { selfHosted: true, googleSignIn: false, emailSignIn: true, needsSetup: false, unreachable: true }
     })
   return pending
 }

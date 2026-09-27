@@ -215,3 +215,42 @@
     margin-top: 10px;
   }
 }
+
+/* An organization row: switch to it, or open its settings */
+.switcher-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.switcher-row > button {
+  flex: 1;
+  min-width: 0;
+}
+
+.switcher-settings {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  color: var(--ink-soft);
+  border: 1.5px solid transparent;
+  border-radius: 3px;
+}
+
+.switcher-settings:hover,
+.switcher-settings:focus-visible {
+  color: var(--ink);
+  background: var(--paper);
+  border-color: var(--grid);
+}
+
+.switcher-gear-icon {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}

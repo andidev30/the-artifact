@@ -2,6 +2,7 @@ import { and, eq, inArray } from 'drizzle-orm'
 import { artifactUrl } from './artifacts.js'
 import { db, schema } from './db/index.js'
 import type { Artifact, ShareRole } from './db/schema.js'
+import { mailEnabled } from './env.js'
 import { sendShareNotice } from './mail.js'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -65,7 +66,8 @@ export async function sharePeople(artifact: Artifact, inviter: Inviter, emails: 
     .values(targets.map((email) => ({ artifactId: artifact.id, email, role, invitedBy: inviter.id })))
     .onConflictDoUpdate({ target: [schema.artifactShares.artifactId, schema.artifactShares.email], set: { role } })
 
-  if (notify) {
+  // Without email there is nothing to send; the sharer passes the link on
+  if (notify && mailEnabled()) {
     const from = inviter.name ?? inviter.email
     // One failed address shouldn't undo the share; report it instead
     const results = await Promise.allSettled(

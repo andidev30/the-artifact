@@ -516,7 +516,7 @@
     display: none;
   }
 
-  .app-account span {
+  .app-account > span {
     display: none;
   }
 }

@@ -1,0 +1,18 @@
+# For clusters where the seccomp profile can't be put on the nodes: no gallery thumbnails (the
+# gallery shows sketches), and the pod runs under the runtime's default seccomp profile.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: the-artifact
+spec:
+  template:
+    spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+          localhostProfile: null
+      containers:
+        - name: app
+          env:
+            - name: CHROME_PATH
+              value: ''

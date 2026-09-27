@@ -65,7 +65,7 @@ describe('magic link sign-in', () => {
     for (let i = 0; i < 3; i++) {
       const res = await call(path)
       expect(res.status).toBe(200)
-      expect(await res.json()).toEqual({ email: 'scanner@example.com', expired: false, newAccount: true })
+      expect(await res.json()).toEqual({ email: 'scanner@example.com', expired: false, newAccount: true, setPassword: false, emailEnabled: true })
       expect(sessionCookie(res)).toBeNull()
     }
     expect(await db.select().from(schema.emailTokens)).toHaveLength(1)
@@ -120,7 +120,7 @@ describe('magic link sign-in', () => {
 
     const lookup = await call(`/api/auth/email/confirm?token=${encodeURIComponent(tokenOf(link))}`)
     expect(lookup.status).toBe(200)
-    expect(await lookup.json()).toEqual({ email: 'late@example.com', expired: true, newAccount: true })
+    expect(await lookup.json()).toEqual({ email: 'late@example.com', expired: true, newAccount: true, setPassword: false, emailEnabled: true })
 
     const res = await confirm(link)
     expect(res.status).toBe(410)
@@ -227,6 +227,7 @@ describe('sessions', () => {
       email: 'me@example.com',
       name: 'Me Myself',
       avatarUrl: null,
+      hasPassword: false,
       onboarded: true,
       organizations: [],
       agentConnected: false,
