@@ -4,26 +4,21 @@ import { latestMail, uniqueEmail } from './helpers'
 test('landing page renders and the pricing toggle switches plans', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByRole('heading', { level: 1, name: 'Your agent writes the page. You send the link.' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Get started free' }).first()).toHaveAttribute('href', '/signup')
   await expect(page.getByRole('link', { name: 'Self-host for free' })).toHaveAttribute('href', '/docs/self-hosting')
 
   const pricing = page.locator('#pricing')
   await expect(pricing.getByRole('heading', { name: 'Pricing' })).toBeVisible()
 
-  // Self-hosted is what's available today, so it comes first and is selected
+  // The cloud comes first and is selected: Personal is available, the paid plans are not yet
   const radios = pricing.getByRole('radio')
-  await expect(radios.first()).toHaveText('Self-hosted')
+  await expect(radios.first()).toHaveText('Cloud')
   const selfHosted = pricing.getByRole('radio', { name: 'Self-hosted' })
   const cloud = pricing.getByRole('radio', { name: 'Cloud' })
-  await expect(selfHosted).toHaveAttribute('aria-checked', 'true')
-  await expect(pricing.getByRole('heading', { name: 'Self-hosted', exact: true })).toBeVisible()
-  await expect(pricing.getByRole('heading', { name: 'Self-hosted Enterprise' })).toBeVisible()
-  await expect(pricing.getByRole('link', { name: 'Read the install guide' })).toHaveAttribute('href', '/docs/self-hosting')
-  await expect(pricing.getByRole('link', { name: 'Contact sales' })).toBeVisible()
-
-  // Cloud plans are shown but not available yet
-  await cloud.click()
   await expect(cloud).toHaveAttribute('aria-checked', 'true')
-  for (const name of ['Personal', 'Organization', 'Enterprise']) {
+  await expect(pricing.getByRole('heading', { name: 'Personal', exact: true })).toBeVisible()
+  await expect(pricing.getByRole('link', { name: 'Get started free' })).toHaveAttribute('href', '/signup')
+  for (const name of ['Organization', 'Enterprise']) {
     await expect(pricing.getByRole('heading', { name: `${name} Coming soon` })).toBeVisible()
   }
   await expect(
@@ -32,15 +27,21 @@ test('landing page renders and the pricing toggle switches plans', async ({ page
       .filter({ has: page.getByRole('heading', { name: 'Organization Coming soon' }) })
       .locator('.plan-price'),
   ).toHaveText('$4per member / month')
-  await expect(pricing.locator('.plan[data-coming-soon]')).toHaveCount(3)
-  await expect(pricing.locator('.plans').getByRole('link')).toHaveCount(0)
+  await expect(pricing.locator('.plan[data-coming-soon]')).toHaveCount(2)
+  await expect(pricing.locator('.plans').getByRole('link')).toHaveCount(1)
 
   await selfHosted.click()
+  await expect(selfHosted).toHaveAttribute('aria-checked', 'true')
   await expect(pricing.getByRole('heading', { name: 'Self-hosted', exact: true })).toBeVisible()
+  await expect(pricing.getByRole('heading', { name: 'Self-hosted Enterprise' })).toBeVisible()
+  await expect(pricing.getByRole('link', { name: 'Read the install guide' })).toHaveAttribute('href', '/docs/self-hosting')
+  await expect(pricing.getByRole('link', { name: 'Contact sales' })).toBeVisible()
 })
 
 test('the Enterprise button leads to a contact form that emails sales', async ({ page }) => {
   await page.goto('/#pricing')
+  // Cloud Enterprise isn't available yet; the self-hosted one is
+  await page.locator('#pricing').getByRole('radio', { name: 'Self-hosted' }).click()
   await page.locator('#pricing').getByRole('link', { name: 'Contact sales' }).click()
   await expect(page).toHaveURL(/\/contact-sales\?topic=self-hosted-enterprise$/)
   await expect(page.getByRole('heading', { level: 1, name: 'Bring The Artifact to your whole company.' })).toBeVisible()

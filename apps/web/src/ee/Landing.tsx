@@ -4,7 +4,7 @@ import { fetchMe, type Me } from '../api'
 import { ConnectTabs } from '../components/ConnectTabs'
 import { CopyCommand } from '../components/CopyCommand'
 import { Wordmark } from '../components/Wordmark'
-import { APP_HOST, DOCS_URL, LOGIN_URL, SELF_HOSTING_URL } from '../config'
+import { APP_HOST, DOCS_URL, LOGIN_URL, SELF_HOSTING_URL, SIGNUP_URL } from '../config'
 import { FlowDemo } from './FlowDemo'
 import { Pricing } from './Pricing'
 import './Landing.css'
@@ -58,7 +58,7 @@ export function Landing() {
           ) : (
             <>
               <Link to={LOGIN_URL}>Log in</Link>
-              <Link className="button button-small" to={SELF_HOSTING_URL}>
+              <Link className="button button-small" to={SIGNUP_URL}>
                 Get started
               </Link>
             </>
@@ -80,15 +80,17 @@ export function Landing() {
                   Go to your pages
                 </Link>
               ) : (
-                <Link className="button" to={SELF_HOSTING_URL}>
-                  Self-host for free
+                <Link className="button" to={SIGNUP_URL}>
+                  Get started free
                 </Link>
               )}
               <a className="text-link" href="#how">
                 See how it works
               </a>
             </div>
-            <p className="hint">Works with Claude Code, Cursor, Codex, and any MCP client. The hosted cloud version is coming soon.</p>
+            <p className="hint">
+              Works with Claude Code, Cursor, Codex, and any MCP client. Prefer your own servers? <Link to={SELF_HOSTING_URL}>Self-host for free</Link>.
+            </p>
           </div>
           <FlowDemo />
         </section>

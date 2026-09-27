@@ -25,7 +25,7 @@ const CLOUD_PLANS: Plan[] = [
     features: ['Publish from Claude Code, Cursor, Codex or any MCP client', 'Share any page by link', 'Up to 50 pages', 'Version history for 7 days'],
     cta: 'Get started free',
     href: SIGNUP_URL,
-    comingSoon: true,
+    featured: true,
   },
   {
     name: 'Organization',
@@ -41,7 +41,7 @@ const CLOUD_PLANS: Plan[] = [
     ],
     cta: 'Start with your team',
     href: `${SIGNUP_URL}?plan=organization`,
-    featured: true,
+    // Needs billing (#34)
     comingSoon: true,
   },
   {
@@ -100,18 +100,18 @@ type Hosting = 'cloud' | 'self-hosted'
 
 const LEDE: Record<Hosting, string> = {
   'self-hosted': 'Free to run on your own servers. Talk to us when your company needs SSO, audit logs or support.',
-  cloud: 'We host it for you. The cloud version is coming soon; until then, self-host it for free.',
+  cloud: 'We host it for you. Personal is free today; Organization and Enterprise are coming soon.',
 }
 
 export function Pricing() {
-  const [hosting, setHosting] = useState<Hosting>('self-hosted')
+  const [hosting, setHosting] = useState<Hosting>('cloud')
   const plans = hosting === 'self-hosted' ? SELF_HOSTED_PLANS : CLOUD_PLANS
 
   return (
     <>
       <p className="section-lede">{LEDE[hosting]}</p>
       <div className="hosting-toggle" role="radiogroup" aria-label="Where The Artifact runs">
-        {(['self-hosted', 'cloud'] as const).map((h) => (
+        {(['cloud', 'self-hosted'] as const).map((h) => (
           <button key={h} type="button" role="radio" aria-checked={hosting === h} onClick={() => setHosting(h)}>
             {h === 'cloud' ? 'Cloud' : 'Self-hosted'}
           </button>
