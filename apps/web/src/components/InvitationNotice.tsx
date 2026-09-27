@@ -16,7 +16,12 @@ export function InvitationNotice({ me }: { me: Me }) {
   )
 }
 
-export function InvitationRow({ me, invitation, compact = false, onJoined }: {
+export function InvitationRow({
+  me,
+  invitation,
+  compact = false,
+  onJoined,
+}: {
   me: Me
   invitation: MyInvitation
   compact?: boolean
@@ -45,10 +50,11 @@ export function InvitationRow({ me, invitation, compact = false, onJoined }: {
 
   return (
     <div className="invitation-row" data-compact={compact || undefined}>
-      <span className="invitation-initial" aria-hidden="true">{org.slice(0, 1).toUpperCase()}</span>
+      <span className="invitation-initial" aria-hidden="true">
+        {org.slice(0, 1).toUpperCase()}
+      </span>
       <p className="invitation-text">
-        <strong>{invitation.invitedBy ?? 'Someone'}</strong> invited you to join <strong>{org}</strong> as{' '}
-        {INVITE_ROLE_TEXT[invitation.role]}.
+        <strong>{invitation.invitedBy ?? 'Someone'}</strong> invited you to join <strong>{org}</strong> as {INVITE_ROLE_TEXT[invitation.role]}.
       </p>
       <div className="invitation-actions">
         <button type="button" className="button button-small" onClick={() => run('join')} disabled={busy !== null} aria-label={`Join ${org}`}>
@@ -58,7 +64,11 @@ export function InvitationRow({ me, invitation, compact = false, onJoined }: {
           {busy === 'decline' ? 'Declining' : 'Decline'}
         </button>
       </div>
-      {problem && <p className="invitation-problem" role="alert">{problem}</p>}
+      {problem && (
+        <p className="invitation-problem" role="alert">
+          {problem}
+        </p>
+      )}
     </div>
   )
 }

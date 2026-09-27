@@ -22,12 +22,7 @@ const CLOUD_PLANS: Plan[] = [
     price: '$0',
     per: 'forever',
     summary: 'For your own reports, prototypes and experiments.',
-    features: [
-      'Publish from Claude Code, Cursor, Codex or any MCP client',
-      'Share any page by link',
-      'Up to 50 pages',
-      'Version history for 7 days',
-    ],
+    features: ['Publish from Claude Code, Cursor, Codex or any MCP client', 'Share any page by link', 'Up to 50 pages', 'Version history for 7 days'],
     cta: 'Get started free',
     href: SIGNUP_URL,
     comingSoon: true,
@@ -117,13 +112,7 @@ export function Pricing() {
       <p className="section-lede">{LEDE[hosting]}</p>
       <div className="hosting-toggle" role="radiogroup" aria-label="Where The Artifact runs">
         {(['self-hosted', 'cloud'] as const).map((h) => (
-          <button
-            key={h}
-            type="button"
-            role="radio"
-            aria-checked={hosting === h}
-            onClick={() => setHosting(h)}
-          >
+          <button key={h} type="button" role="radio" aria-checked={hosting === h} onClick={() => setHosting(h)}>
             {h === 'cloud' ? 'Cloud' : 'Self-hosted'}
           </button>
         ))}
@@ -150,7 +139,9 @@ export function Pricing() {
               ))}
             </ul>
             {plan.comingSoon ? (
-              <span className="button button-quiet button-disabled" aria-disabled="true">Coming soon</span>
+              <span className="button button-quiet button-disabled" aria-disabled="true">
+                Coming soon
+              </span>
             ) : (
               <Link className={plan.featured ? 'button' : 'button button-quiet'} to={plan.href}>
                 {plan.cta}

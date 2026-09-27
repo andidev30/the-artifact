@@ -37,7 +37,10 @@ function StartPersonal() {
   const navigate = useNavigate()
   const [failed, setFailed] = useState(false)
   useEffect(() => {
-    finishPersonalOnboarding().then(() => navigate('/app', { replace: true }), () => setFailed(true))
+    finishPersonalOnboarding().then(
+      () => navigate('/app', { replace: true }),
+      () => setFailed(true),
+    )
   }, [navigate])
   return failed ? <LoadError /> : <Loading />
 }
@@ -163,7 +166,9 @@ export function OrganizationStep({
     if (effectiveSlug.length < 3) return
     const controller = new AbortController()
     const timer = setTimeout(() => {
-      checkSlug(effectiveSlug, controller.signal).then((r) => setCheck({ ...r, slug: effectiveSlug })).catch(() => {})
+      checkSlug(effectiveSlug, controller.signal)
+        .then((r) => setCheck({ ...r, slug: effectiveSlug }))
+        .catch(() => {})
     }, 300)
     return () => {
       clearTimeout(timer)
@@ -230,12 +235,18 @@ export function OrganizationStep({
         </p>
       </div>
 
-      {(error || notice) && <p className="auth-notice" role="alert">{error?.message ?? notice}</p>}
+      {(error || notice) && (
+        <p className="auth-notice" role="alert">
+          {error?.message ?? notice}
+        </p>
+      )}
       <div className="onboarding-actions">
         <button type="submit" className="button" disabled={saving || shownCheck?.available === false}>
           {saving ? 'Creating organization' : 'Create organization'}
         </button>
-        <button type="button" className="auth-reset" onClick={onBack}>{backLabel}</button>
+        <button type="button" className="auth-reset" onClick={onBack}>
+          {backLabel}
+        </button>
       </div>
     </form>
   )
@@ -246,12 +257,14 @@ function AgentStep({ workspace }: { workspace: string }) {
     <div className="onboarding-step">
       <h1>Connect your agent</h1>
       <p className="auth-lede">
-        {workspace === 'Personal' ? 'Your workspace is ready.' : `${workspace} is ready.`} Add The Artifact to the
-        agent you use. The first time it publishes, it opens a browser window so you can sign in.
+        {workspace === 'Personal' ? 'Your workspace is ready.' : `${workspace} is ready.`} Add The Artifact to the agent you use. The first time it publishes,
+        it opens a browser window so you can sign in.
       </p>
       <ConnectTabs />
       <div className="onboarding-actions">
-        <Link className="button" to="/app">Go to your pages</Link>
+        <Link className="button" to="/app">
+          Go to your pages
+        </Link>
         <span className="field-hint">You can find this setup again on your pages.</span>
       </div>
     </div>

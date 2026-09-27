@@ -45,7 +45,12 @@ export function WorkspaceSwitcher({ me }: { me: Me }) {
 
   const current = org?.id ?? 'personal'
   const options = [
-    ...me.organizations.map((o) => ({ id: o.id, name: o.name, note: `Organization, ${ROLE_LABEL[o.role].toLowerCase()}`, settings: organizationSettingsPath(o) })),
+    ...me.organizations.map((o) => ({
+      id: o.id,
+      name: o.name,
+      note: `Organization, ${ROLE_LABEL[o.role].toLowerCase()}`,
+      settings: organizationSettingsPath(o),
+    })),
     { id: 'personal', name: 'Personal', note: 'Just you', settings: null },
   ]
 
@@ -72,7 +77,11 @@ export function WorkspaceSwitcher({ me }: { me: Me }) {
         onClick={() => setOpen((v) => !v)}
       >
         <span className="switcher-name">{name}</span>
-        {invitations.length > 0 && <span className="switcher-badge" aria-hidden="true">{invitations.length}</span>}
+        {invitations.length > 0 && (
+          <span className="switcher-badge" aria-hidden="true">
+            {invitations.length}
+          </span>
+        )}
         <svg className="switcher-caret" viewBox="0 0 10 6" aria-hidden="true">
           <path d="M1 1l4 4 4-4" />
         </svg>
@@ -85,14 +94,22 @@ export function WorkspaceSwitcher({ me }: { me: Me }) {
             {options.map((o) => (
               <li key={o.id} className="switcher-row">
                 <button type="button" aria-current={o.id === current} onClick={() => pick(o.id)}>
-                  <span className="switcher-initial" aria-hidden="true">{o.name.slice(0, 1).toUpperCase()}</span>
+                  <span className="switcher-initial" aria-hidden="true">
+                    {o.name.slice(0, 1).toUpperCase()}
+                  </span>
                   <span className="switcher-option">
                     <strong>{o.name}</strong>
                     <span>{o.note}</span>
                   </span>
                 </button>
                 {o.settings && (
-                  <Link className="switcher-settings" to={o.settings} onClick={() => setOpen(false)} aria-label={`${o.name} settings`} title={`${o.name} settings`}>
+                  <Link
+                    className="switcher-settings"
+                    to={o.settings}
+                    onClick={() => setOpen(false)}
+                    aria-label={`${o.name} settings`}
+                    title={`${o.name} settings`}
+                  >
                     <Gear />
                   </Link>
                 )}
@@ -109,7 +126,9 @@ export function WorkspaceSwitcher({ me }: { me: Me }) {
           )}
           <div className="switcher-footer">
             <Link to="/organizations/new" onClick={() => setOpen(false)}>
-              <span className="switcher-plus" aria-hidden="true">+</span>
+              <span className="switcher-plus" aria-hidden="true">
+                +
+              </span>
               Create an organization
             </Link>
           </div>

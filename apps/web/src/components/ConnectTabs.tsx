@@ -54,11 +54,19 @@ export function ConnectTabs() {
   function onKeyDown(e: KeyboardEvent) {
     const last = AGENTS.length - 1
     const next =
-      e.key === 'ArrowRight' ? (active === last ? 0 : active + 1)
-      : e.key === 'ArrowLeft' ? (active === 0 ? last : active - 1)
-      : e.key === 'Home' ? 0
-      : e.key === 'End' ? last
-      : null
+      e.key === 'ArrowRight'
+        ? active === last
+          ? 0
+          : active + 1
+        : e.key === 'ArrowLeft'
+          ? active === 0
+            ? last
+            : active - 1
+          : e.key === 'Home'
+            ? 0
+            : e.key === 'End'
+              ? last
+              : null
     if (next === null) return
     e.preventDefault()
     setActive(next)
@@ -71,7 +79,9 @@ export function ConnectTabs() {
         {AGENTS.map((a, i) => (
           <button
             key={a.id}
-            ref={(el) => { tabs.current[i] = el }}
+            ref={(el) => {
+              tabs.current[i] = el
+            }}
             type="button"
             role="tab"
             id={`tab-${a.id}`}

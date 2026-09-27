@@ -122,7 +122,11 @@ describe('withFreshThumbnails', () => {
 
   it('takes only the thumbnail from the refetch, keeping order and local edits', () => {
     const items = [card('a', { title: 'Renamed here' }), card('b'), card('c')]
-    const fresh = [card('c', { thumbnail: true, thumbnailState: 'ready' }), card('a', { thumbnail: true, thumbnailState: 'ready' }), card('b', { thumbnailState: 'none' })]
+    const fresh = [
+      card('c', { thumbnail: true, thumbnailState: 'ready' }),
+      card('a', { thumbnail: true, thumbnailState: 'ready' }),
+      card('b', { thumbnailState: 'none' }),
+    ]
     const next = withFreshThumbnails(items, fresh)
     expect(next.map((a) => [a.slug, a.title, a.thumbnail, a.thumbnailState])).toEqual([
       ['a', 'Renamed here', true, 'ready'],

@@ -33,24 +33,27 @@ artifacts.get('/', requireUser, async (c) => {
 
   if (workspace === 'shared') {
     const rows = (await listSharedWith(user, 50, query)).filter(({ artifact }) => artifact.ownerId !== user.id)
-    const editable = await editableIds(user, rows.map((r) => r.artifact))
+    const editable = await editableIds(
+      user,
+      rows.map((r) => r.artifact),
+    )
     const thumbs = await currentThumbnails(rows.map((r) => r.artifact))
     return c.json(
       rows.map(({ artifact: a, ownerName, ownerEmail, role }) => ({
-          slug: a.slug,
-          title: a.title,
-          visibility: a.visibility,
-          version: a.currentVersion,
-          publishedWith: a.publishedWith,
-          updatedAt: a.updatedAt,
-          owner: ownerName ?? ownerEmail,
-          mine: false,
-          canEdit: editable.has(a.id),
-          // thumbnail is kept for older clients; thumbnailState says whether one is still coming
-          thumbnail: thumbs.get(a.id) === 'ready',
-          thumbnailState: thumbs.get(a.id) ?? 'none',
-          role,
-        })),
+        slug: a.slug,
+        title: a.title,
+        visibility: a.visibility,
+        version: a.currentVersion,
+        publishedWith: a.publishedWith,
+        updatedAt: a.updatedAt,
+        owner: ownerName ?? ownerEmail,
+        mine: false,
+        canEdit: editable.has(a.id),
+        // thumbnail is kept for older clients; thumbnailState says whether one is still coming
+        thumbnail: thumbs.get(a.id) === 'ready',
+        thumbnailState: thumbs.get(a.id) ?? 'none',
+        role,
+      })),
     )
   }
 
@@ -63,7 +66,10 @@ artifacts.get('/', requireUser, async (c) => {
     if (!member) return c.json({ error: 'Not found' }, 404)
   }
   const rows = await listForWorkspace(user.id, organizationId, 50, query)
-  const editable = await editableIds(user, rows.map((r) => r.artifact))
+  const editable = await editableIds(
+    user,
+    rows.map((r) => r.artifact),
+  )
   const thumbs = await currentThumbnails(rows.map((r) => r.artifact))
   return c.json(
     rows.map(({ artifact: a, ownerName, ownerEmail }) => ({

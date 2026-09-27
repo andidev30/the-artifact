@@ -103,9 +103,7 @@ function authorizeError(message: string) {
 
 oauth.get('/oauth/authorize', async (c) => {
   const q = c.req.query()
-  const [client] = q.client_id
-    ? await db.select().from(schema.oauthClients).where(eq(schema.oauthClients.id, q.client_id))
-    : []
+  const [client] = q.client_id ? await db.select().from(schema.oauthClients).where(eq(schema.oauthClients.id, q.client_id)) : []
   // Without a trusted redirect URI we can't send errors back to the client, so show them here
   if (!client) return c.redirect(authorizeError('unknown_client'))
   if (!q.redirect_uri || !redirectMatches(client.redirectUris, q.redirect_uri)) return c.redirect(authorizeError('bad_redirect'))
@@ -170,8 +168,11 @@ oauth.post('/oauth/token', async (c) => {
   if (params.grant_type === 'authorization_code') {
     if (!params.code || !params.code_verifier) return tokenError(c, 'invalid_request', 'code and code_verifier are required.')
     // Codes work once: remove the grant as it is read
-    const [grant] = await db.delete(schema.oauthGrants).where(eq(schema.oauthGrants.code, hashToken(params.code))).returning()
-    if (!grant || !grant.userId || grant.expiresAt.getTime() < Date.now()) return tokenError(c, 'invalid_grant', 'The authorization code is invalid or expired.')
+    const [grant] = await db
+      .delete(schema.oauthGrants)
+      .where(eq(schema.oauthGrants.code, hashToken(params.code)))
+      .returning()
+    if (!grant?.userId || grant.expiresAt.getTime() < Date.now()) return tokenError(c, 'invalid_grant', 'The authorization code is invalid or expired.')
     if (params.client_id && params.client_id !== grant.clientId) return tokenError(c, 'invalid_grant', 'The code was issued to another client.')
     if (params.redirect_uri && params.redirect_uri !== grant.redirectUri) return tokenError(c, 'invalid_grant', 'redirect_uri does not match.')
     if (!pkceMatches(params.code_verifier, grant.codeChallenge)) return tokenError(c, 'invalid_grant', 'PKCE verification failed.')

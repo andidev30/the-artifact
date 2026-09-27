@@ -36,7 +36,7 @@ React 19, React Router 8, Vite 8, TypeScript. No UI or state library: plain comp
 ## Checks
 
 ```sh
-pnpm --filter @the-artifact/web lint    # eslint
+pnpm --filter @the-artifact/web lint    # tsc -b (TypeScript 7); Biome runs from the root with pnpm lint
 pnpm --filter @the-artifact/web build   # tsc -b + vite build
 pnpm --filter @the-artifact/web test    # vitest, for pure modules next to their *.test.ts
 ```

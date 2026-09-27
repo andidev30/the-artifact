@@ -113,9 +113,9 @@ async function insertVersion(tx: Tx, values: Omit<typeof schema.artifactVersions
     .values({ ...values, htmlSha256: content.htmlSha256, htmlSize: content.htmlSize })
     .returning({ id: schema.artifactVersions.id })
   if (content.files.length) {
-    await tx.insert(schema.artifactFiles).values(
-      content.files.map((f) => ({ versionId: row.id, path: f.path, contentType: f.contentType, size: f.size, sha256: f.sha256 })),
-    )
+    await tx
+      .insert(schema.artifactFiles)
+      .values(content.files.map((f) => ({ versionId: row.id, path: f.path, contentType: f.contentType, size: f.size, sha256: f.sha256 })))
   }
   return row.id
 }
@@ -140,11 +140,7 @@ export async function publish(input: PublishInput): Promise<Artifact> {
       // Lock the page so two publishes (or a publish and a restore) can't pick the same number
       const [locked] = await tx.select().from(schema.artifacts).where(eq(schema.artifacts.id, existing.id)).for('update')
       const version = locked.currentVersion + 1
-      const versionId = await insertVersion(
-        tx,
-        { artifactId: existing.id, version, publishedWith: input.clientName, publishedBy: input.userId },
-        content,
-      )
+      const versionId = await insertVersion(tx, { artifactId: existing.id, version, publishedWith: input.clientName, publishedBy: input.userId }, content)
       const [updated] = await tx
         .update(schema.artifacts)
         .set({
@@ -178,11 +174,7 @@ export async function publish(input: PublishInput): Promise<Artifact> {
         publishedWith: input.clientName,
       })
       .returning()
-    const versionId = await insertVersion(
-      tx,
-      { artifactId: created.id, version: 1, publishedWith: input.clientName, publishedBy: input.userId },
-      content,
-    )
+    const versionId = await insertVersion(tx, { artifactId: created.id, version: 1, publishedWith: input.clientName, publishedBy: input.userId }, content)
     return { created, versionId }
   })
   queueThumbnail(versionId)
@@ -208,7 +200,10 @@ async function withContent<T extends { sha256: string }>(file: T): Promise<T & {
 }
 
 export async function getFile(versionId: string, path: string) {
-  const [file] = await db.select(FILE_META).from(f).where(and(eq(f.versionId, versionId), eq(f.path, path)))
+  const [file] = await db
+    .select(FILE_META)
+    .from(f)
+    .where(and(eq(f.versionId, versionId), eq(f.path, path)))
   return file ? withContent(file) : null
 }
 
@@ -302,7 +297,10 @@ export async function editableIds(viewer: Viewer, artifacts: Artifact[]): Promis
     .from(schema.artifactShares)
     .where(
       and(
-        inArray(schema.artifactShares.artifactId, rest.map((a) => a.id)),
+        inArray(
+          schema.artifactShares.artifactId,
+          rest.map((a) => a.id),
+        ),
         eq(schema.artifactShares.email, viewer.email.toLowerCase()),
         eq(schema.artifactShares.role, 'editor'),
       ),
@@ -315,11 +313,7 @@ export async function editableIds(viewer: Viewer, artifacts: Artifact[]): Promis
       .select({ organizationId: schema.memberships.organizationId })
       .from(schema.memberships)
       .where(
-        and(
-          eq(schema.memberships.userId, viewer.id),
-          inArray(schema.memberships.organizationId, orgIds),
-          inArray(schema.memberships.role, ['owner', 'admin']),
-        ),
+        and(eq(schema.memberships.userId, viewer.id), inArray(schema.memberships.organizationId, orgIds), inArray(schema.memberships.role, ['owner', 'admin'])),
       )
     const adminOf = new Set(admin.map((m) => m.organizationId))
     for (const a of rest) if (a.organizationId && adminOf.has(a.organizationId)) ids.add(a.id)
@@ -328,11 +322,7 @@ export async function editableIds(viewer: Viewer, artifacts: Artifact[]): Promis
 }
 
 export async function rename(artifact: Artifact, title: string): Promise<Artifact> {
-  const [updated] = await db
-    .update(schema.artifacts)
-    .set({ title, updatedAt: new Date() })
-    .where(eq(schema.artifacts.id, artifact.id))
-    .returning()
+  const [updated] = await db.update(schema.artifacts).set({ title, updatedAt: new Date() }).where(eq(schema.artifacts.id, artifact.id)).returning()
   return updated
 }
 

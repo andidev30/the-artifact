@@ -28,6 +28,7 @@ export function FlowDemo() {
   const agent = AGENTS[run % AGENTS.length]
   const nextAgent = AGENTS[(run + 1) % AGENTS.length]
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: each replay starts the timeline over
   useEffect(() => {
     if (reduced) return
 
@@ -55,11 +56,13 @@ export function FlowDemo() {
   return (
     <figure className="flow" data-step={step}>
       <div className="flow-grid">
-        <div className="box terminal" aria-label={`${agent.name} session`}>
+        <div className="box terminal" role="group" aria-label={`${agent.name} session`}>
           <div className="box-title">{agent.name}</div>
           <div className="terminal-body">
             <p className="line line-prompt">
-              <span className="caret" aria-hidden="true">&gt;</span>
+              <span className="caret" aria-hidden="true">
+                &gt;
+              </span>
               {PROMPT.slice(0, typed)}
               {step <= 1 && <span className="cursor" aria-hidden="true" />}
             </p>
@@ -75,15 +78,19 @@ export function FlowDemo() {
 
         <div className="wire wire-a" aria-hidden="true" />
 
-        <div className="node" aria-label="publish_artifact tool call">
-          <span>Write<br />artifact</span>
+        <div className="node" role="group" aria-label="publish_artifact tool call">
+          <span>
+            Write
+            <br />
+            artifact
+          </span>
         </div>
 
         <div className="wire wire-b" aria-hidden="true">
           <span className="wire-label">Upload file</span>
         </div>
 
-        <div className="box browser" aria-label="Published page in a browser">
+        <div className="box browser" role="group" aria-label="Published page in a browser">
           <div className="browser-bar">
             <span className="browser-url">{step >= 3 ? URL : ''}</span>
           </div>
@@ -92,6 +99,7 @@ export function FlowDemo() {
             <p>p95 in milliseconds. Friday's spike lines up with the cache deploy.</p>
             <svg viewBox="0 0 140 70" role="img" aria-label="Bar chart of daily p95 latency, peaking on Friday at 90 ms">
               {BARS.map((h, i) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: a fixed list of bars that never reorders
                 <g key={i}>
                   <rect
                     className={i === 4 ? 'bar bar-peak' : 'bar'}
@@ -102,7 +110,9 @@ export function FlowDemo() {
                     rx="1.5"
                     style={{ transitionDelay: `${i * 60}ms` }}
                   />
-                  <text x={i * 20 + 10} y="69" textAnchor="middle">{DAYS[i]}</text>
+                  <text x={i * 20 + 10} y="69" textAnchor="middle">
+                    {DAYS[i]}
+                  </text>
                 </g>
               ))}
             </svg>

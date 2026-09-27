@@ -32,6 +32,7 @@ export function HistoryPanel({ slug, currentVersion, selected, onSelect, onClose
     heading.current?.focus()
   }, [])
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new current version means the list changed
   useEffect(() => {
     let active = true
     listVersions(slug)
@@ -51,23 +52,30 @@ export function HistoryPanel({ slug, currentVersion, selected, onSelect, onClose
   return (
     <aside id="history-panel" className="history-panel" aria-labelledby="history-title" onKeyDown={(e) => e.key === 'Escape' && onClose()}>
       <div className="history-head">
-        <h2 id="history-title" ref={heading} tabIndex={-1}>Version history</h2>
+        <h2 id="history-title" ref={heading} tabIndex={-1}>
+          Version history
+        </h2>
         <button type="button" className="history-close" onClick={onClose} aria-label="Close version history">
-          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15" /></svg>
+          <svg viewBox="0 0 20 20" aria-hidden="true">
+            <path d="M5 5l10 10M15 5L5 15" />
+          </svg>
         </button>
       </div>
-      {error && <p className="history-error" role="alert">{error}</p>}
-      {!versions && !error && <p className="history-note" role="status">Loading versions</p>}
+      {error && (
+        <p className="history-error" role="alert">
+          {error}
+        </p>
+      )}
+      {!versions && !error && (
+        <p className="history-note" role="status">
+          Loading versions
+        </p>
+      )}
       {versions && (
         <ol className="history-list">
           {versions.map((v) => (
             <li key={v.version}>
-              <button
-                type="button"
-                className="history-item"
-                aria-current={v.version === selected ? 'true' : undefined}
-                onClick={() => pick(v)}
-              >
+              <button type="button" className="history-item" aria-current={v.version === selected ? 'true' : undefined} onClick={() => pick(v)}>
                 <span className="history-item-top">
                   <strong>Version {v.version}</strong>
                   {v.current && <span className="history-current">Current</span>}
@@ -111,10 +119,18 @@ export function OldVersionBar({ slug, viewing, onBack, onRestored }: { slug: str
         <span>, published {timeAgo(viewing.createdAt)}. This isn't what people see at the link.</span>
       </p>
       <div className="old-version-actions">
-        <button type="button" className="button button-quiet" onClick={onBack}>Back to latest</button>
-        <button type="button" className="button" onClick={restore} disabled={busy}>{busy ? 'Restoring' : 'Restore this version'}</button>
+        <button type="button" className="button button-quiet" onClick={onBack}>
+          Back to latest
+        </button>
+        <button type="button" className="button" onClick={restore} disabled={busy}>
+          {busy ? 'Restoring' : 'Restore this version'}
+        </button>
       </div>
-      {error && <p className="old-version-error" role="alert">{error}</p>}
+      {error && (
+        <p className="old-version-error" role="alert">
+          {error}
+        </p>
+      )}
     </div>
   )
 }

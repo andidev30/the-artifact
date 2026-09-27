@@ -55,7 +55,9 @@ export function OrganizationSettings() {
 function NotAMember({ me }: { me: Me }) {
   useEffect(() => {
     document.title = 'Organization not found | The Artifact'
-    return () => { document.title = 'The Artifact' }
+    return () => {
+      document.title = 'The Artifact'
+    }
   }, [])
   return (
     <div className="auth">
@@ -65,7 +67,9 @@ function NotAMember({ me }: { me: Me }) {
           <h1>Organization not found</h1>
           <p>You are not in an organization at this address. Ask one of its owners to invite you.</p>
         </div>
-        <Link className="button button-small button-quiet" to="/app">Go to your pages</Link>
+        <Link className="button button-small button-quiet" to="/app">
+          Go to your pages
+        </Link>
       </main>
     </div>
   )
@@ -78,7 +82,10 @@ function Page({ initial, org }: { initial: Me; org: Organization }) {
   const [problem, setProblem] = useState<string | null>(null)
   const [confirming, setConfirming] = useState<string | null>(null)
   const current = me.organizations.find((o) => o.id === org.id) ?? org
-  const refreshMe = () => fetchMe().then((m) => m && setMe(m)).catch(() => {})
+  const refreshMe = () =>
+    fetchMe()
+      .then((m) => m && setMe(m))
+      .catch(() => {})
 
   // Opening an organization's settings also switches to it, so the header says where you are
   useEffect(() => {
@@ -87,7 +94,9 @@ function Page({ initial, org }: { initial: Me; org: Organization }) {
 
   useEffect(() => {
     document.title = `${current.name} settings | The Artifact`
-    return () => { document.title = 'The Artifact' }
+    return () => {
+      document.title = 'The Artifact'
+    }
   }, [current.name])
 
   useEffect(() => {
@@ -95,7 +104,9 @@ function Page({ initial, org }: { initial: Me; org: Organization }) {
     getOrganization(org.id)
       .then((data) => active && setDetails({ kind: 'ready', data }))
       .catch(() => active && setDetails({ kind: 'error' }))
-    return () => { active = false }
+    return () => {
+      active = false
+    }
   }, [org.id])
 
   async function run(action: () => Promise<OrganizationDetails | null>, fallback: string) {
@@ -139,7 +150,10 @@ function Page({ initial, org }: { initial: Me; org: Organization }) {
           <h1>{current.name} settings</h1>
           <p>
             The organization’s name and who is in it. Your role: {ROLE_LABEL[current.role]}.{' '}
-            <Link className="text-link" to="/settings">Account settings</Link> are separate.
+            <Link className="text-link" to="/settings">
+              Account settings
+            </Link>{' '}
+            are separate.
           </p>
         </div>
 
@@ -158,9 +172,13 @@ function Page({ initial, org }: { initial: Me; org: Organization }) {
             {details.kind !== 'ready' ? (
               <section className="settings-card">
                 {details.kind === 'loading' ? (
-                  <p className="settings-muted" role="status">Loading {current.name}</p>
+                  <p className="settings-muted" role="status">
+                    Loading {current.name}
+                  </p>
                 ) : (
-                  <p className="auth-notice" role="alert">The organization could not be loaded. Reload to try again.</p>
+                  <p className="auth-notice" role="alert">
+                    The organization could not be loaded. Reload to try again.
+                  </p>
                 )}
               </section>
             ) : (
@@ -185,7 +203,16 @@ function Page({ initial, org }: { initial: Me; org: Organization }) {
   )
 }
 
-function Sections({ me, d, problem, confirming, setConfirming, run, leave, onDetails }: {
+function Sections({
+  me,
+  d,
+  problem,
+  confirming,
+  setConfirming,
+  run,
+  leave,
+  onDetails,
+}: {
   me: Me
   d: OrganizationDetails
   problem: string | null
@@ -216,7 +243,9 @@ function Sections({ me, d, problem, confirming, setConfirming, run, leave, onDet
         )}
         <div className="field">
           <span className="settings-label">Address</span>
-          <p className="settings-value">{APP_HOST}/{d.slug}</p>
+          <p className="settings-value">
+            {APP_HOST}/{d.slug}
+          </p>
         </div>
       </section>
 
@@ -226,11 +255,17 @@ function Sections({ me, d, problem, confirming, setConfirming, run, leave, onDet
           <p>
             {d.members.length === 1 ? '1 member' : `${d.members.length} members`}.
             {manager ? ' Owners and admins can invite people and change roles.' : ' Owners and admins manage who is in it.'}{' '}
-            <Link className="text-link" to="/docs/organizations#roles">What each role can do</Link>
+            <Link className="text-link" to="/docs/organizations#roles">
+              What each role can do
+            </Link>
           </p>
         </header>
 
-        {problem && <p className="auth-notice" role="alert">{problem}</p>}
+        {problem && (
+          <p className="auth-notice" role="alert">
+            {problem}
+          </p>
+        )}
         <ul className="settings-list">
           {d.members.map((m) => (
             <MemberRow
@@ -246,9 +281,7 @@ function Sections({ me, d, problem, confirming, setConfirming, run, leave, onDet
             />
           ))}
         </ul>
-        {soleOwner && d.members.length > 1 && (
-          <p className="field-hint">You are the only owner. To leave, make someone else an owner first.</p>
-        )}
+        {soleOwner && d.members.length > 1 && <p className="field-hint">You are the only owner. To leave, make someone else an owner first.</p>}
 
         {manager && (
           <>
@@ -260,7 +293,9 @@ function Sections({ me, d, problem, confirming, setConfirming, run, leave, onDet
                 <ul className="settings-list">
                   {d.invitations.map((i) => (
                     <li key={i.id} className="settings-row">
-                      <span className="settings-avatar settings-avatar-pending" aria-hidden="true">{i.email.slice(0, 1).toUpperCase()}</span>
+                      <span className="settings-avatar settings-avatar-pending" aria-hidden="true">
+                        {i.email.slice(0, 1).toUpperCase()}
+                      </span>
                       <span className="settings-who">
                         <strong>{i.email}</strong>
                         <span>
@@ -299,7 +334,16 @@ function Sections({ me, d, problem, confirming, setConfirming, run, leave, onDet
   )
 }
 
-function MemberRow({ member: m, self, myRole, lastOwner, confirming, onConfirm, onRole, onRemove }: {
+function MemberRow({
+  member: m,
+  self,
+  myRole,
+  lastOwner,
+  confirming,
+  onConfirm,
+  onRole,
+  onRemove,
+}: {
   member: OrganizationMember
   self: boolean
   myRole: Role
@@ -318,7 +362,9 @@ function MemberRow({ member: m, self, myRole, lastOwner, confirming, onConfirm, 
       {m.avatarUrl ? (
         <img className="settings-avatar" src={m.avatarUrl} alt="" referrerPolicy="no-referrer" />
       ) : (
-        <span className="settings-avatar" aria-hidden="true">{display.slice(0, 1).toUpperCase()}</span>
+        <span className="settings-avatar" aria-hidden="true">
+          {display.slice(0, 1).toUpperCase()}
+        </span>
       )}
       <span className="settings-who">
         <strong>
@@ -329,14 +375,11 @@ function MemberRow({ member: m, self, myRole, lastOwner, confirming, onConfirm, 
       </span>
       <span className="settings-meta">
         {editable ? (
-          <select
-            className="settings-select"
-            value={m.role}
-            aria-label={`Role for ${display}`}
-            onChange={(e) => onRole(e.target.value as Role)}
-          >
+          <select className="settings-select" value={m.role} aria-label={`Role for ${display}`} onChange={(e) => onRole(e.target.value as Role)}>
             {assignable(myRole).map((r) => (
-              <option key={r} value={r}>{ROLE_LABEL[r]}</option>
+              <option key={r} value={r}>
+                {ROLE_LABEL[r]}
+              </option>
             ))}
           </select>
         ) : (
@@ -350,7 +393,9 @@ function MemberRow({ member: m, self, myRole, lastOwner, confirming, onConfirm, 
               <button type="button" className="button button-small button-danger" onClick={onRemove}>
                 {self ? 'Leave' : 'Remove'}
               </button>
-              <button type="button" className="auth-reset" onClick={() => onConfirm(false)}>Cancel</button>
+              <button type="button" className="auth-reset" onClick={() => onConfirm(false)}>
+                Cancel
+              </button>
             </>
           ) : (
             <button type="button" className="button button-small button-quiet" onClick={() => onConfirm(true)}>
@@ -386,12 +431,25 @@ function RenameForm({ details, onRenamed }: { details: OrganizationDetails; onRe
       <div className="field">
         <label htmlFor="org-rename">Organization name</label>
         <div className="settings-inline">
-          <input id="org-rename" value={value} onChange={(e) => { setValue(e.target.value); setStatus(null) }} minLength={2} maxLength={60} required aria-describedby="org-rename-status" />
+          <input
+            id="org-rename"
+            value={value}
+            onChange={(e) => {
+              setValue(e.target.value)
+              setStatus(null)
+            }}
+            minLength={2}
+            maxLength={60}
+            required
+            aria-describedby="org-rename-status"
+          />
           <button type="submit" className="button button-small" disabled={saving || value.trim() === details.name || value.trim().length < 2}>
             {saving ? 'Saving' : 'Rename'}
           </button>
         </div>
-        <p id="org-rename-status" className="field-hint" data-tone={status?.tone} aria-live="polite">{status?.text ?? ''}</p>
+        <p id="org-rename-status" className="field-hint" data-tone={status?.tone} aria-live="polite">
+          {status?.text ?? ''}
+        </p>
       </div>
     </form>
   )
@@ -428,7 +486,9 @@ function InviteForm({ details, myRole, onInvited }: { details: OrganizationDetai
 
   return (
     <form className="settings-invite" onSubmit={onSubmit}>
-      <label className="visually-hidden" htmlFor="invite-email">Email address</label>
+      <label className="visually-hidden" htmlFor="invite-email">
+        Email address
+      </label>
       <input
         id="invite-email"
         type="email"
@@ -438,10 +498,14 @@ function InviteForm({ details, myRole, onInvited }: { details: OrganizationDetai
         autoComplete="off"
         required
       />
-      <label className="visually-hidden" htmlFor="invite-role">Role</label>
+      <label className="visually-hidden" htmlFor="invite-role">
+        Role
+      </label>
       <select id="invite-role" className="settings-select" value={role} onChange={(e) => setRole(e.target.value as InviteRole)}>
         {roles.map((r) => (
-          <option key={r} value={r}>{ROLE_LABEL[r]}</option>
+          <option key={r} value={r}>
+            {ROLE_LABEL[r]}
+          </option>
         ))}
       </select>
       <button type="submit" className="button button-small" disabled={sending || !email.trim()}>

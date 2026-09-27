@@ -7,12 +7,7 @@ export type Choice = 'personal' | 'team'
 
 // The first onboarding step on the hosted service: a personal workspace or an organization. Self-hosted
 // installs skip it; their people start in a personal workspace and join organizations by invitation.
-export function WorkspaceChoice({ me, choice, onChoice, onDone }: {
-  me: Me
-  choice: Choice
-  onChoice: (c: Choice) => void
-  onDone: () => void
-}) {
+export function WorkspaceChoice({ me, choice, onChoice, onDone }: { me: Me; choice: Choice; onChoice: (c: Choice) => void; onDone: () => void }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const firstName = me.name?.split(' ')[0]
@@ -48,7 +43,9 @@ export function WorkspaceChoice({ me, choice, onChoice, onDone }: {
           {invitations.map((inv) => (
             <InvitationRow key={inv.id} me={me} invitation={inv} />
           ))}
-          <p className="onboarding-or"><span>or set up your own</span></p>
+          <p className="onboarding-or">
+            <span>or set up your own</span>
+          </p>
         </section>
       )}
 
@@ -72,7 +69,11 @@ export function WorkspaceChoice({ me, choice, onChoice, onDone }: {
         </label>
       </fieldset>
 
-      {error && <p className="auth-notice" role="alert">{error}</p>}
+      {error && (
+        <p className="auth-notice" role="alert">
+          {error}
+        </p>
+      )}
       <div className="onboarding-actions">
         <button type="submit" className="button" disabled={saving}>
           {saving ? 'Saving' : 'Continue'}

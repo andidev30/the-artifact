@@ -20,7 +20,9 @@ export function Docs() {
   const [signedIn, setSignedIn] = useState<boolean | undefined>(undefined)
 
   useEffect(() => {
-    fetchMe().then((me) => setSignedIn(Boolean(me))).catch(() => setSignedIn(false))
+    fetchMe()
+      .then((me) => setSignedIn(Boolean(me)))
+      .catch(() => setSignedIn(false))
   }, [])
 
   const source = docSource(slug)
@@ -33,10 +35,13 @@ export function Docs() {
   useEffect(() => {
     if (!page) return
     document.title = `${page.title} | The Artifact docs`
-    return () => { document.title = 'The Artifact' }
+    return () => {
+      document.title = 'The Artifact'
+    }
   }, [page])
 
   // Land on the linked section, or at the top of a new page
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new page without a hash still starts at the top
   useEffect(() => {
     const target = hash ? document.getElementById(decodeURIComponent(hash.slice(1))) : null
     if (target) target.scrollIntoView()
@@ -54,7 +59,9 @@ export function Docs() {
       try {
         await navigator.clipboard.writeText(code)
         copy.textContent = 'Copied'
-        setTimeout(() => { copy.textContent = 'Copy' }, 1800)
+        setTimeout(() => {
+          copy.textContent = 'Copy'
+        }, 1800)
       } catch {
         copy.textContent = 'Copy'
       }
@@ -73,19 +80,29 @@ export function Docs() {
       <header className="nav">
         <div className="nav-start">
           <Wordmark />
-          <Link className="docs-home" to="/docs">Docs</Link>
+          <Link className="docs-home" to="/docs">
+            Docs
+          </Link>
         </div>
         <nav aria-label="Primary">
           {selfHosted === undefined ? null : selfHosted ? (
             signedIn === undefined ? null : signedIn ? (
-              <Link className="button button-small" to="/app">Back to your pages</Link>
+              <Link className="button button-small" to="/app">
+                Back to your pages
+              </Link>
             ) : (
-              <Link className="button button-small" to={LOGIN_URL}>Log in</Link>
+              <Link className="button button-small" to={LOGIN_URL}>
+                Log in
+              </Link>
             )
           ) : (
             <>
-              <Link className="nav-section" to="/#pricing">Pricing</Link>
-              <Link className="button button-small" to="/docs/self-hosting">Self-host it</Link>
+              <Link className="nav-section" to="/#pricing">
+                Pricing
+              </Link>
+              <Link className="button button-small" to="/docs/self-hosting">
+                Self-host it
+              </Link>
             </>
           )}
         </nav>
@@ -98,7 +115,11 @@ export function Docs() {
             <select value={slug} onChange={(e) => navigate(`/docs/${e.target.value}`)}>
               {groups.map((g) => (
                 <optgroup key={g.title} label={g.title}>
-                  {g.pages.map((p) => <option key={p.slug} value={p.slug}>{p.title}</option>)}
+                  {g.pages.map((p) => (
+                    <option key={p.slug} value={p.slug}>
+                      {p.title}
+                    </option>
+                  ))}
                 </optgroup>
               ))}
             </select>
@@ -109,7 +130,9 @@ export function Docs() {
                 <h2>{g.title}</h2>
                 <ul>
                   {g.pages.map((p) => (
-                    <li key={p.slug}><NavLink to={`/docs/${p.slug}`}>{p.title}</NavLink></li>
+                    <li key={p.slug}>
+                      <NavLink to={`/docs/${p.slug}`}>{p.title}</NavLink>
+                    </li>
                   ))}
                 </ul>
               </div>
@@ -119,13 +142,23 @@ export function Docs() {
 
         <main id="main" className="docs-main">
           {selfHosted && slug === 'introduction' && <ServerNote />}
+          {/* biome-ignore lint/security/noDangerouslySetInnerHtml: the docs are this repository's own Markdown, with code escaped */}
+          {/* biome-ignore lint/a11y/useKeyWithClickEvents: routes clicks on the links and copy buttons inside, which handle keys themselves */}
           <article ref={article} className="doc" onClick={onClick} dangerouslySetInnerHTML={{ __html: html }} />
           <nav className="doc-pager" aria-label="Previous and next page">
             {prev ? (
-              <Link to={`/docs/${prev.slug}`} rel="prev"><span>Previous</span>{prev.title}</Link>
-            ) : <span />}
+              <Link to={`/docs/${prev.slug}`} rel="prev">
+                <span>Previous</span>
+                {prev.title}
+              </Link>
+            ) : (
+              <span />
+            )}
             {next && (
-              <Link to={`/docs/${next.slug}`} rel="next" className="doc-pager-next"><span>Next</span>{next.title}</Link>
+              <Link to={`/docs/${next.slug}`} rel="next" className="doc-pager-next">
+                <span>Next</span>
+                {next.title}
+              </Link>
             )}
           </nav>
         </main>
@@ -139,13 +172,12 @@ function ServerNote() {
   return (
     <aside className="doc-note" aria-label="About this server">
       <p>
-        <strong>These are the docs of your team’s own server, {APP_HOST}.</strong> Commands and links on these pages already
-        use its address, so you can copy them as they are.
+        <strong>These are the docs of your team’s own server, {APP_HOST}.</strong> Commands and links on these pages already use its address, so you can copy
+        them as they are.
       </p>
       <p>
-        New here? <Link to="/docs/connect-your-agent">Connect your agent</Link> first, then ask it for a page. For an
-        account, access to an organization or a forgotten password, ask an admin of this server. Admins will find setup
-        and upkeep under <strong>Running this server</strong>.
+        New here? <Link to="/docs/connect-your-agent">Connect your agent</Link> first, then ask it for a page. For an account, access to an organization or a
+        forgotten password, ask an admin of this server. Admins will find setup and upkeep under <strong>Running this server</strong>.
       </p>
     </aside>
   )

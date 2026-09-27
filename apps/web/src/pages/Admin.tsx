@@ -42,7 +42,9 @@ export function Admin() {
 
   useEffect(() => {
     document.title = 'Server admin | The Artifact'
-    return () => { document.title = 'The Artifact' }
+    return () => {
+      document.title = 'The Artifact'
+    }
   }, [])
 
   if (state.kind === 'loading') return <Loading />
@@ -61,7 +63,9 @@ function NotAdmin({ me }: { me: Me }) {
           <p className="app-note">Only the admins of this server can open this page.</p>
         </div>
         <p className="app-note">
-          <Link className="text-link" to="/app">Back to your pages</Link>
+          <Link className="text-link" to="/app">
+            Back to your pages
+          </Link>
         </p>
       </main>
     </div>
@@ -93,8 +97,11 @@ function AdminPage({ me }: { me: Me }) {
         <div className="app-title">
           <h1>Server admin</h1>
           <p>
-            Everyone on this server, their organizations, and who can create an account. Setup, backups and updates are
-            in <Link className="text-link" to="/docs/self-hosting">Running this server</Link>.
+            Everyone on this server, their organizations, and who can create an account. Setup, backups and updates are in{' '}
+            <Link className="text-link" to="/docs/self-hosting">
+              Running this server
+            </Link>
+            .
           </p>
         </div>
 
@@ -130,12 +137,15 @@ const POLICY_LABEL: Record<SignupPolicy, string> = {
 function OverviewSection({ version }: { version: number }) {
   const [overview, setOverview] = useState<Loadable<AdminOverview>>({ kind: 'loading' })
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: version goes up after any change, so the counts load again
   useEffect(() => {
     let active = true
     getOverview()
       .then((data) => active && setOverview({ kind: 'ready', data }))
       .catch(() => active && setOverview((o) => (o.kind === 'ready' ? o : { kind: 'error' })))
-    return () => { active = false }
+    return () => {
+      active = false
+    }
   }, [version])
 
   return (
@@ -145,18 +155,31 @@ function OverviewSection({ version }: { version: number }) {
         {overview.kind === 'ready' && (
           <p>
             {POLICY_LABEL[overview.data.signupPolicy]}
-            {overview.data.signupPolicy === 'domains' && overview.data.allowedDomains.length > 0 && ` (${overview.data.allowedDomains.join(', ')})`}.
-            {' '}
-            <a className="text-link" href="#signup">Change</a>
+            {overview.data.signupPolicy === 'domains' && overview.data.allowedDomains.length > 0 && ` (${overview.data.allowedDomains.join(', ')})`}.{' '}
+            <a className="text-link" href="#signup">
+              Change
+            </a>
           </p>
         )}
       </header>
-      {overview.kind === 'loading' && <p className="settings-muted" role="status">Loading counts</p>}
-      {overview.kind === 'error' && <p className="auth-notice" role="alert">The counts could not be loaded. Reload to try again.</p>}
+      {overview.kind === 'loading' && (
+        <p className="settings-muted" role="status">
+          Loading counts
+        </p>
+      )}
+      {overview.kind === 'error' && (
+        <p className="auth-notice" role="alert">
+          The counts could not be loaded. Reload to try again.
+        </p>
+      )}
       {overview.kind === 'ready' && (
         <dl className="admin-stats">
           <Stat label="People" value={overview.data.users} note={`${overview.data.newThisWeek.toLocaleString('en')} new this week`} />
-          <Stat label="Active this week" value={overview.data.activeThisWeek} note={`${overview.data.peopleWithAgents.toLocaleString('en')} with an agent connected`} />
+          <Stat
+            label="Active this week"
+            value={overview.data.activeThisWeek}
+            note={`${overview.data.peopleWithAgents.toLocaleString('en')} with an agent connected`}
+          />
           <Stat label="Organizations" value={overview.data.organizations} />
           <Stat label="Pages" value={overview.data.pages} />
           <Stat label="Admins" value={overview.data.admins} />
@@ -248,7 +271,9 @@ function PeopleSection({ onChanged }: { onChanged: () => void }) {
       {noEmail && <AddPerson />}
 
       <div className="admin-toolbar">
-        <label className="visually-hidden" htmlFor="people-search">Search people</label>
+        <label className="visually-hidden" htmlFor="people-search">
+          Search people
+        </label>
         <input
           id="people-search"
           className="admin-search"
@@ -267,12 +292,22 @@ function PeopleSection({ onChanged }: { onChanged: () => void }) {
         </div>
       </div>
 
-      {list.kind === 'loading' && <p className="settings-muted" role="status">Loading people</p>}
-      {list.kind === 'error' && <p className="auth-notice" role="alert">People could not be loaded. Reload to try again.</p>}
+      {list.kind === 'loading' && (
+        <p className="settings-muted" role="status">
+          Loading people
+        </p>
+      )}
+      {list.kind === 'error' && (
+        <p className="auth-notice" role="alert">
+          People could not be loaded. Reload to try again.
+        </p>
+      )}
       {list.kind === 'ready' && (
         <>
           <p className="settings-muted admin-count" aria-live="polite">
-            {list.data.total === 0 ? 'Nobody matches.' : `Showing ${list.data.items.length.toLocaleString('en')} of ${plural(list.data.total, 'person', 'people')}`}
+            {list.data.total === 0
+              ? 'Nobody matches.'
+              : `Showing ${list.data.items.length.toLocaleString('en')} of ${plural(list.data.total, 'person', 'people')}`}
           </p>
           {list.data.items.length > 0 && (
             <ul className="settings-list">
@@ -347,7 +382,10 @@ function AddPerson() {
             className="admin-input"
             type="email"
             value={email}
-            onChange={(e) => { setEmail(e.target.value); setProblem(null) }}
+            onChange={(e) => {
+              setEmail(e.target.value)
+              setProblem(null)
+            }}
             placeholder="name@example.com"
             autoComplete="off"
             aria-invalid={Boolean(problem) || undefined}
@@ -360,9 +398,15 @@ function AddPerson() {
       </form>
       <p id="add-person-hint" className="field-hint">
         This server doesn’t send email, so you pass the link on yourself. They can sign up whatever the sign-up policy says.{' '}
-        <Link className="text-link" to="/docs/self-hosting#running-without-email">Running without email</Link>
+        <Link className="text-link" to="/docs/self-hosting#running-without-email">
+          Running without email
+        </Link>
       </p>
-      {problem && <p className="auth-notice" role="alert">{problem}</p>}
+      {problem && (
+        <p className="auth-notice" role="alert">
+          {problem}
+        </p>
+      )}
       {made && <LinkResult link={made} />}
     </div>
   )
@@ -378,7 +422,13 @@ function Badges({ user }: { user: AdminUser }) {
   )
 }
 
-function UserRow({ user: u, open, onToggle, onUpdated, onDeleted }: {
+function UserRow({
+  user: u,
+  open,
+  onToggle,
+  onUpdated,
+  onDeleted,
+}: {
   user: AdminUser
   open: boolean
   onToggle: () => void
@@ -392,7 +442,9 @@ function UserRow({ user: u, open, onToggle, onUpdated, onDeleted }: {
       {u.avatarUrl ? (
         <img className="settings-avatar" src={u.avatarUrl} alt="" referrerPolicy="no-referrer" />
       ) : (
-        <span className="settings-avatar" aria-hidden="true">{display.slice(0, 1).toUpperCase()}</span>
+        <span className="settings-avatar" aria-hidden="true">
+          {display.slice(0, 1).toUpperCase()}
+        </span>
       )}
       <span className="settings-who">
         <strong>
@@ -465,7 +517,11 @@ function UserPanel({ id, user: u, onUpdated, onDeleted }: { id: string; user: Ad
         </div>
       </dl>
 
-      {problem && <p className="auth-notice" role="alert">{problem}</p>}
+      {problem && (
+        <p className="auth-notice" role="alert">
+          {problem}
+        </p>
+      )}
 
       {confirm === null && (
         <div className="admin-panel-actions">
@@ -474,13 +530,23 @@ function UserPanel({ id, user: u, onUpdated, onDeleted }: { id: string; user: Ad
               Remove admin
             </button>
           ) : (
-            <button type="button" className="button button-small button-quiet" disabled={busy || u.suspended} onClick={() => change({ admin: true }, 'They could not be made an admin.')}>
+            <button
+              type="button"
+              className="button button-small button-quiet"
+              disabled={busy || u.suspended}
+              onClick={() => change({ admin: true }, 'They could not be made an admin.')}
+            >
               Make admin
             </button>
           )}
           {!u.isYou &&
             (u.suspended ? (
-              <button type="button" className="button button-small button-quiet" disabled={busy} onClick={() => change({ suspended: false }, 'They could not be unsuspended.')}>
+              <button
+                type="button"
+                className="button button-small button-quiet"
+                disabled={busy}
+                onClick={() => change({ suspended: false }, 'They could not be unsuspended.')}
+              >
                 Unsuspend
               </button>
             ) : (
@@ -498,7 +564,15 @@ function UserPanel({ id, user: u, onUpdated, onDeleted }: { id: string; user: Ad
               Delete account
             </button>
           )}
-          {u.isYou && <p className="field-hint">To delete your own account, use <Link className="text-link" to="/settings#delete">Account settings</Link>.</p>}
+          {u.isYou && (
+            <p className="field-hint">
+              To delete your own account, use{' '}
+              <Link className="text-link" to="/settings#delete">
+                Account settings
+              </Link>
+              .
+            </p>
+          )}
         </div>
       )}
 
@@ -535,7 +609,9 @@ function Confirm({ text, action, busy, onConfirm, onCancel }: { text: ReactNode;
         <button type="button" className="button button-small button-danger" disabled={busy} onClick={onConfirm}>
           {busy ? 'Working' : action}
         </button>
-        <button type="button" className="auth-reset" onClick={onCancel}>Cancel</button>
+        <button type="button" className="auth-reset" onClick={onCancel}>
+          Cancel
+        </button>
       </div>
     </div>
   )
@@ -554,7 +630,9 @@ function DeleteUser({ user: u, onDeleted, onCancel }: { user: AdminUser; onDelet
     getUserDeletion(u.id)
       .then((data) => active && setPreview({ kind: 'ready', data }))
       .catch(() => active && setPreview({ kind: 'error' }))
-    return () => { active = false }
+    return () => {
+      active = false
+    }
   }, [u.id])
 
   async function onSubmit(e: FormEvent) {
@@ -570,8 +648,18 @@ function DeleteUser({ user: u, onDeleted, onCancel }: { user: AdminUser; onDelet
     }
   }
 
-  if (preview.kind === 'loading') return <p className="settings-muted" role="status">Checking what would be deleted</p>
-  if (preview.kind === 'error') return <p className="auth-notice" role="alert">This could not be checked. Close and try again.</p>
+  if (preview.kind === 'loading')
+    return (
+      <p className="settings-muted" role="status">
+        Checking what would be deleted
+      </p>
+    )
+  if (preview.kind === 'error')
+    return (
+      <p className="auth-notice" role="alert">
+        This could not be checked. Close and try again.
+      </p>
+    )
   const p = preview.data
 
   if (p.blockedBy.length) {
@@ -582,7 +670,9 @@ function DeleteUser({ user: u, onDeleted, onCancel }: { user: AdminUser; onDelet
           {p.blockedBy.length === 1 ? ' that organization' : ' those organizations'} below, then try again.
         </p>
         <div className="admin-panel-actions">
-          <button type="button" className="auth-reset" onClick={onCancel}>Back</button>
+          <button type="button" className="auth-reset" onClick={onCancel}>
+            Back
+          </button>
         </div>
       </div>
     )
@@ -601,12 +691,18 @@ function DeleteUser({ user: u, onDeleted, onCancel }: { user: AdminUser; onDelet
         </label>
         <input id={inputId} value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" spellCheck={false} />
       </div>
-      {problem && <p className="auth-notice" role="alert">{problem}</p>}
+      {problem && (
+        <p className="auth-notice" role="alert">
+          {problem}
+        </p>
+      )}
       <div className="admin-panel-actions">
         <button type="submit" className="button button-small button-danger" disabled={!matches || busy}>
           {busy ? 'Deleting' : 'Delete account'}
         </button>
-        <button type="button" className="auth-reset" onClick={onCancel}>Cancel</button>
+        <button type="button" className="auth-reset" onClick={onCancel}>
+          Cancel
+        </button>
       </div>
     </form>
   )
@@ -652,7 +748,9 @@ function OrganizationsSection({ onChanged }: { onChanged: () => void }) {
       </header>
 
       <div className="admin-toolbar">
-        <label className="visually-hidden" htmlFor="orgs-search">Search organizations</label>
+        <label className="visually-hidden" htmlFor="orgs-search">
+          Search organizations
+        </label>
         <input
           id="orgs-search"
           className="admin-search"
@@ -664,8 +762,16 @@ function OrganizationsSection({ onChanged }: { onChanged: () => void }) {
         />
       </div>
 
-      {list.kind === 'loading' && <p className="settings-muted" role="status">Loading organizations</p>}
-      {list.kind === 'error' && <p className="auth-notice" role="alert">Organizations could not be loaded. Reload to try again.</p>}
+      {list.kind === 'loading' && (
+        <p className="settings-muted" role="status">
+          Loading organizations
+        </p>
+      )}
+      {list.kind === 'error' && (
+        <p className="auth-notice" role="alert">
+          Organizations could not be loaded. Reload to try again.
+        </p>
+      )}
       {list.kind === 'ready' && list.data.total === 0 && (
         <p className="settings-muted">{search.query ? 'Nothing matches.' : 'Nobody has created an organization yet.'}</p>
       )}
@@ -673,7 +779,9 @@ function OrganizationsSection({ onChanged }: { onChanged: () => void }) {
         <ul className="settings-list">
           {list.data.items.map((o) => (
             <li key={o.id} className="settings-row admin-row" data-open={open === o.id || undefined}>
-              <span className="settings-avatar settings-avatar-agent" aria-hidden="true">{o.name.slice(0, 1).toUpperCase()}</span>
+              <span className="settings-avatar settings-avatar-agent" aria-hidden="true">
+                {o.name.slice(0, 1).toUpperCase()}
+              </span>
               <span className="settings-who">
                 <strong>
                   <span className="admin-name">{o.name}</span>
@@ -734,8 +842,8 @@ function DeleteOrganization({ org, onDeleted, onCancel }: { org: AdminOrganizati
   return (
     <form className="admin-panel admin-confirm" onSubmit={onSubmit}>
       <p>
-        This deletes {org.name}{org.pageCount ? ` and its ${plural(org.pageCount, 'page')}` : ''}. The people in it keep their accounts and personal pages. It
-        can’t be undone.
+        This deletes {org.name}
+        {org.pageCount ? ` and its ${plural(org.pageCount, 'page')}` : ''}. The people in it keep their accounts and personal pages. It can’t be undone.
       </p>
       <div className="field">
         <label htmlFor={inputId}>
@@ -743,12 +851,18 @@ function DeleteOrganization({ org, onDeleted, onCancel }: { org: AdminOrganizati
         </label>
         <input id={inputId} value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" spellCheck={false} />
       </div>
-      {problem && <p className="auth-notice" role="alert">{problem}</p>}
+      {problem && (
+        <p className="auth-notice" role="alert">
+          {problem}
+        </p>
+      )}
       <div className="admin-panel-actions">
         <button type="submit" className="button button-small button-danger" disabled={typed.trim().toLowerCase() !== org.slug || busy}>
           {busy ? 'Deleting' : 'Delete organization'}
         </button>
-        <button type="button" className="auth-reset" onClick={onCancel}>Cancel</button>
+        <button type="button" className="auth-reset" onClick={onCancel}>
+          Cancel
+        </button>
       </div>
     </form>
   )
@@ -776,12 +890,15 @@ function SignupSection({ onChanged }: { onChanged: () => void }) {
     setInstanceName(data.instanceName ?? '')
   }
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: load only sets state; the settings load once
   useEffect(() => {
     let active = true
     getSettings()
       .then((data) => active && load(data))
       .catch(() => active && setSettings({ kind: 'error' }))
-    return () => { active = false }
+    return () => {
+      active = false
+    }
   }, [])
 
   async function run(action: () => Promise<InstanceSettings>, ok: string) {
@@ -809,13 +926,23 @@ function SignupSection({ onChanged }: { onChanged: () => void }) {
       <header className="settings-card-head">
         <h2 id="signup-title">Sign-up</h2>
         <p>
-          Who can create an account. People invited to an organization or a page can always join, and existing accounts can
-          always sign in. <Link className="text-link" to="/docs/self-hosting#sign-up-policy">How sign-up works</Link>
+          Who can create an account. People invited to an organization or a page can always join, and existing accounts can always sign in.{' '}
+          <Link className="text-link" to="/docs/self-hosting#sign-up-policy">
+            How sign-up works
+          </Link>
         </p>
       </header>
 
-      {settings.kind === 'loading' && <p className="settings-muted" role="status">Loading settings</p>}
-      {settings.kind === 'error' && <p className="auth-notice" role="alert">The settings could not be loaded. Reload to try again.</p>}
+      {settings.kind === 'loading' && (
+        <p className="settings-muted" role="status">
+          Loading settings
+        </p>
+      )}
+      {settings.kind === 'error' && (
+        <p className="auth-notice" role="alert">
+          The settings could not be loaded. Reload to try again.
+        </p>
+      )}
       {settings.kind === 'ready' && (
         <form className="settings-form" onSubmit={onSubmit} noValidate>
           {!settings.data.updatedAt && <p className="admin-source">Not saved yet, so anyone who can reach this server can sign up.</p>}
@@ -824,7 +951,16 @@ function SignupSection({ onChanged }: { onChanged: () => void }) {
             <legend className="settings-label">Who can sign up</legend>
             {POLICIES.map((p) => (
               <label key={p.id} className="admin-policy">
-                <input type="radio" name="signup-policy" value={p.id} checked={policy === p.id} onChange={() => { setPolicy(p.id); setStatus(null) }} />
+                <input
+                  type="radio"
+                  name="signup-policy"
+                  value={p.id}
+                  checked={policy === p.id}
+                  onChange={() => {
+                    setPolicy(p.id)
+                    setStatus(null)
+                  }}
+                />
                 <span>
                   <strong>{p.label}</strong>
                   <span>{p.hint}</span>
@@ -835,10 +971,9 @@ function SignupSection({ onChanged }: { onChanged: () => void }) {
 
           {noEmail && policy !== 'invite-only' && (
             <p className="admin-source" role="note">
-              This server doesn’t send email, so nobody checks that an address belongs to the person who types it: people
-              sign up with a password under any address{policy === 'domains' ? ' at these domains' : ''}. Addresses someone
-              invited or shared a page with stay reserved for their invitation link. If people you don’t trust can reach this
-              server, choose <strong>Invited people only</strong> and add people with sign-up links under People.
+              This server doesn’t send email, so nobody checks that an address belongs to the person who types it: people sign up with a password under any
+              address{policy === 'domains' ? ' at these domains' : ''}. Addresses someone invited or shared a page with stay reserved for their invitation link.
+              If people you don’t trust can reach this server, choose <strong>Invited people only</strong> and add people with sign-up links under People.
             </p>
           )}
 
@@ -850,13 +985,18 @@ function SignupSection({ onChanged }: { onChanged: () => void }) {
                 className="admin-textarea"
                 rows={3}
                 value={domains}
-                onChange={(e) => { setDomains(e.target.value); setStatus(null) }}
+                onChange={(e) => {
+                  setDomains(e.target.value)
+                  setStatus(null)
+                }}
                 placeholder={'example.com\nexample.org'}
                 spellCheck={false}
                 aria-invalid={status?.field === 'allowedDomains' || undefined}
                 aria-describedby="signup-domains-hint"
               />
-              <p id="signup-domains-hint" className="field-hint">One per line, or separated by commas. Subdomains need their own line.</p>
+              <p id="signup-domains-hint" className="field-hint">
+                One per line, or separated by commas. Subdomains need their own line.
+              </p>
             </div>
           )}
 
@@ -866,13 +1006,18 @@ function SignupSection({ onChanged }: { onChanged: () => void }) {
               id="instance-name"
               className="admin-input"
               value={instanceName}
-              onChange={(e) => { setInstanceName(e.target.value); setStatus(null) }}
+              onChange={(e) => {
+                setInstanceName(e.target.value)
+                setStatus(null)
+              }}
               maxLength={60}
               placeholder="Acme pages"
               aria-invalid={status?.field === 'instanceName' || undefined}
               aria-describedby="instance-name-hint"
             />
-            <p id="instance-name-hint" className="field-hint">Optional. Shown next to the logo for everyone who signs in.</p>
+            <p id="instance-name-hint" className="field-hint">
+              Optional. Shown next to the logo for everyone who signs in.
+            </p>
           </div>
 
           <div className="admin-panel-actions">

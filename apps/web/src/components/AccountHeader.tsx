@@ -23,7 +23,9 @@ export function AccountHeader({ me, workspace }: Props) {
         {workspace && (me.onboarded ? <WorkspaceSwitcher me={me} /> : <span className="workspace-chip">{workspace}</span>)}
       </div>
       <div className="app-account">
-        <NavLink className="app-account-link" to="/docs">Docs</NavLink>
+        <NavLink className="app-account-link" to="/docs">
+          Docs
+        </NavLink>
         <AccountMenu me={me} />
       </div>
     </header>

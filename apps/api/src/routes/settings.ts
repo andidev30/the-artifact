@@ -167,9 +167,7 @@ export async function deleteAccountData(user: { id: string; email: string }) {
     for (const t of transfers) {
       await tx.update(schema.artifacts).set({ ownerId: t.to.id }).where(inArray(schema.artifacts.id, t.pageIds))
       // The new owner no longer needs to be on the page's share list
-      await tx
-        .delete(schema.artifactShares)
-        .where(and(inArray(schema.artifactShares.artifactId, t.pageIds), eq(schema.artifactShares.email, t.to.email)))
+      await tx.delete(schema.artifactShares).where(and(inArray(schema.artifactShares.artifactId, t.pageIds), eq(schema.artifactShares.email, t.to.email)))
     }
     // Organizations with nobody else in them go too
     if (empty.length) await tx.delete(schema.organizations).where(inArray(schema.organizations.id, empty))

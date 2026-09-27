@@ -12,7 +12,9 @@
   color: var(--ink);
   cursor: pointer;
   box-shadow: 3px 3px 0 var(--grid);
-  transition: box-shadow 120ms ease, transform 120ms ease;
+  transition:
+    box-shadow 120ms ease,
+    transform 120ms ease;
 }
 
 .switcher-button:hover,

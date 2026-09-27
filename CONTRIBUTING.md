@@ -4,13 +4,13 @@ Thanks for helping. Bug reports, fixes, docs and features are all welcome. For a
 
 ## Getting set up
 
-Follow [Development](README.md#development) in the README, then [TESTING.md](TESTING.md) for the test database. You need Node 24, pnpm (via `corepack enable`), Docker and, for end-to-end tests, Google Chrome.
+Follow [Development](README.md#development) in the README, then [TESTING.md](TESTING.md) for the test database. You need Node 26 (see `.nvmrc`), pnpm 11 (`npm install -g pnpm`), Docker and, for end-to-end tests, Google Chrome.
 
 `CLAUDE.md` in the root and in each app describes how the code is laid out and the rules that aren't obvious from one file. They are written for coding agents but are the best map for people too.
 
 ## Making a change
 
-- Keep a pull request to one change. Match the style of the file you are in; there is no formatter.
+- Keep a pull request to one change. Run `pnpm format` before committing; Biome formats and lints the code, and CI fails on anything it would change. The Biome extension for your editor does the same on save.
 - Every change has to work on a self-hosted install and on the hosted service, with and without email (see "Modes every change has to work in" in `CLAUDE.md`).
 - Add or update tests: integration tests in `apps/api/test/integration` for API behaviour, Playwright specs in `e2e/` for flows in the browser.
 - Update `docs/` when behaviour changes. The docs ship inside the app.

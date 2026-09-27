@@ -23,9 +23,7 @@ const s3 = new S3Client({
   ...(env.storage.endpoint ? { endpoint: env.storage.endpoint } : {}),
   // A custom endpoint (MinIO and most other stores) wants bucket/key paths, not bucket.host names
   forcePathStyle: Boolean(env.storage.endpoint),
-  ...(env.storage.accessKeyId
-    ? { credentials: { accessKeyId: env.storage.accessKeyId, secretAccessKey: env.storage.secretAccessKey } }
-    : {}),
+  ...(env.storage.accessKeyId ? { credentials: { accessKeyId: env.storage.accessKeyId, secretAccessKey: env.storage.secretAccessKey } } : {}),
 })
 const Bucket = env.storage.bucket
 
@@ -108,9 +106,7 @@ export async function deleteBlobs(hashes: string[]) {
   for (let i = 0; i < hashes.length; i += 1000) {
     const batch = hashes.slice(i, i + 1000)
     batch.forEach(forget)
-    const res = await s3.send(
-      new DeleteObjectsCommand({ Bucket, Delete: { Objects: batch.map((h) => ({ Key: blobKey(h) })), Quiet: true } }),
-    )
+    const res = await s3.send(new DeleteObjectsCommand({ Bucket, Delete: { Objects: batch.map((h) => ({ Key: blobKey(h) })), Quiet: true } }))
     if (res.Errors?.length) throw new Error(`Could not delete ${res.Errors.length} blobs: ${res.Errors[0].Message}`)
   }
 }

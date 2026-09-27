@@ -46,7 +46,7 @@ export function Auth({ mode }: { mode: Mode }) {
   const plan = params.get('plan')
   // Where to go after signing in, e.g. back to an agent's connection request
   const nextParam = params.get('next')
-  const next = nextParam && nextParam.startsWith('/') && !nextParam.startsWith('//') ? nextParam : null
+  const next = nextParam?.startsWith('/') && !nextParam.startsWith('//') ? nextParam : null
   const isOrg = mode === 'signup' && plan === 'organization'
   const copy = COPY[mode]
   const signInError = SIGN_IN_ERRORS[params.get('error') ?? '']
@@ -56,12 +56,16 @@ export function Auth({ mode }: { mode: Mode }) {
 
   // Someone already signed in has nothing to do here
   useEffect(() => {
-    fetchMe().then((me) => me && navigate(next ?? '/app', { replace: true })).catch(() => {})
+    fetchMe()
+      .then((me) => me && navigate(next ?? '/app', { replace: true }))
+      .catch(() => {})
   }, [navigate, next])
 
   useEffect(() => {
     document.title = `${mode === 'login' ? 'Log in' : 'Sign up'} | The Artifact`
-    return () => { document.title = 'The Artifact' }
+    return () => {
+      document.title = 'The Artifact'
+    }
   }, [mode])
 
   if (config?.unreachable) return <ServerUnreachable />
@@ -84,14 +88,28 @@ export function Auth({ mode }: { mode: Mode }) {
   const form = settingUp ? (
     <SetupForm />
   ) : (
-    <AuthForm mode={mode} plan={plan} next={next} notice={signInError} lede={isOrg ? 'You will set up your organization and invite your team after this step.' : config?.selfHosted && mode === 'signup' ? 'Create an account on this server.' : copy.lede} />
+    <AuthForm
+      mode={mode}
+      plan={plan}
+      next={next}
+      notice={signInError}
+      lede={
+        isOrg
+          ? 'You will set up your organization and invite your team after this step.'
+          : config?.selfHosted && mode === 'signup'
+            ? 'Create an account on this server.'
+            : copy.lede
+      }
+    />
   )
 
   if (mode === 'login' || settingUp) {
     return (
       <div className="auth auth-login">
         {header}
-        <main id="main" className="auth-main">{form}</main>
+        <main id="main" className="auth-main">
+          {form}
+        </main>
       </div>
     )
   }
@@ -100,7 +118,9 @@ export function Auth({ mode }: { mode: Mode }) {
     <div className="auth-signup">
       <div className="auth auth-signup-form">
         {header}
-        <main id="main" className="auth-main">{form}</main>
+        <main id="main" className="auth-main">
+          {form}
+        </main>
       </div>
       <SignupPanel />
     </div>
@@ -170,8 +190,7 @@ function AuthForm({ mode, plan, next, lede, notice }: { mode: Mode; plan: string
       <section className="auth-box auth-sent" role="status" aria-labelledby="auth-title">
         <h1 id="auth-title">Check your inbox</h1>
         <p>
-          We sent a link to <strong>{status.email}</strong>. Open it on this device to
-          finish {mode === 'login' ? 'logging in' : 'creating your account'}.
+          We sent a link to <strong>{status.email}</strong>. Open it on this device to finish {mode === 'login' ? 'logging in' : 'creating your account'}.
         </p>
         <button type="button" className="auth-reset" onClick={() => setStatus({ kind: 'idle' })}>
           Use a different email
@@ -184,15 +203,18 @@ function AuthForm({ mode, plan, next, lede, notice }: { mode: Mode; plan: string
   if (!config) return <section className="auth-box" aria-busy="true" aria-label="Loading" />
 
   const googleButton = (
-      <a className="button button-quiet auth-provider" href={`${AUTH_GOOGLE_URL}?${query}`}>
-        <svg viewBox="0 0 48 48" aria-hidden="true">
-          <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z" />
-          <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z" />
-          <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z" />
-          <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z" />
-        </svg>
-        Continue with Google
-      </a>
+    <a className="button button-quiet auth-provider" href={`${AUTH_GOOGLE_URL}?${query}`}>
+      <svg viewBox="0 0 48 48" aria-hidden="true">
+        <path
+          fill="#FFC107"
+          d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"
+        />
+        <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z" />
+        <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z" />
+        <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z" />
+      </svg>
+      Continue with Google
+    </a>
   )
 
   if (withPassword && mode === 'signup' && config.passwordSignUp) {
@@ -200,11 +222,17 @@ function AuthForm({ mode, plan, next, lede, notice }: { mode: Mode; plan: string
       <section className="auth-box" aria-labelledby="auth-title">
         <h1 id="auth-title">{copy.title}</h1>
         <p className="auth-lede">{lede}</p>
-        {notice && <p className="auth-notice" role="alert">{notice}</p>}
+        {notice && (
+          <p className="auth-notice" role="alert">
+            {notice}
+          </p>
+        )}
         {google && (
           <>
             {googleButton}
-            <div className="auth-divider"><span>or choose a password</span></div>
+            <div className="auth-divider">
+              <span>or choose a password</span>
+            </div>
           </>
         )}
         <form className="auth-form" onSubmit={onPasswordSignUp} noValidate>
@@ -213,12 +241,24 @@ function AuthForm({ mode, plan, next, lede, notice }: { mode: Mode; plan: string
           <label htmlFor="email">Email</label>
           <input id="email" name="email" type="email" autoComplete="email" placeholder="you@company.com" required />
           <label htmlFor="signup-password">Password</label>
-          <input id="signup-password" name="password" type="password" autoComplete="new-password" minLength={8} required aria-describedby="signup-password-hint" />
-          <p id="signup-password-hint" className="field-hint">At least 8 characters.</p>
+          <input
+            id="signup-password"
+            name="password"
+            type="password"
+            autoComplete="new-password"
+            minLength={8}
+            required
+            aria-describedby="signup-password-hint"
+          />
+          <p id="signup-password-hint" className="field-hint">
+            At least 8 characters.
+          </p>
           <label htmlFor="signup-confirm">Confirm password</label>
           <input id="signup-confirm" name="confirm" type="password" autoComplete="new-password" required />
           {status.kind === 'error' && (
-            <p id="auth-error" className="auth-error" role="alert">{status.message}</p>
+            <p id="auth-error" className="auth-error" role="alert">
+              {status.message}
+            </p>
           )}
           <button type="submit" className="button" disabled={status.kind === 'sending'}>
             {status.kind === 'sending' ? 'Creating your account' : 'Create account'}
@@ -233,11 +273,15 @@ function AuthForm({ mode, plan, next, lede, notice }: { mode: Mode; plan: string
     return (
       <section className="auth-box" aria-labelledby="auth-title">
         <h1 id="auth-title">{copy.title}</h1>
-        {notice && <p className="auth-notice" role="alert">{notice}</p>}
+        {notice && (
+          <p className="auth-notice" role="alert">
+            {notice}
+          </p>
+        )}
         {google && googleButton}
         <p className="auth-lede">
-          {google ? 'Or ask' : 'Ask'} an admin of this server for a sign-up link. This server doesn’t send email, so they pass it on
-          to you themselves. If you were invited to an organization, open the invitation link instead.
+          {google ? 'Or ask' : 'Ask'} an admin of this server for a sign-up link. This server doesn’t send email, so they pass it on to you themselves. If you
+          were invited to an organization, open the invitation link instead.
         </p>
       </section>
     )
@@ -248,11 +292,17 @@ function AuthForm({ mode, plan, next, lede, notice }: { mode: Mode; plan: string
       <section className="auth-box" aria-labelledby="auth-title">
         <h1 id="auth-title">{copy.title}</h1>
         <p className="auth-lede">{lede}</p>
-        {notice && <p className="auth-notice" role="alert">{notice}</p>}
+        {notice && (
+          <p className="auth-notice" role="alert">
+            {notice}
+          </p>
+        )}
         {google && (
           <>
             {googleButton}
-            <div className="auth-divider"><span>or use your password</span></div>
+            <div className="auth-divider">
+              <span>or use your password</span>
+            </div>
           </>
         )}
         <form className="auth-form" onSubmit={onPasswordSubmit}>
@@ -269,12 +319,16 @@ function AuthForm({ mode, plan, next, lede, notice }: { mode: Mode; plan: string
             aria-describedby={status.kind === 'error' ? 'auth-error' : 'password-hint'}
           />
           {status.kind === 'error' && (
-            <p id="auth-error" className="auth-error" role="alert">{status.message}</p>
+            <p id="auth-error" className="auth-error" role="alert">
+              {status.message}
+            </p>
           )}
           <button type="submit" className="button" disabled={status.kind === 'sending'}>
             {status.kind === 'sending' ? 'Logging in' : 'Log in'}
           </button>
-          <p id="password-hint" className="field-hint">Forgot your password? Ask an admin of this server for a reset link.</p>
+          <p id="password-hint" className="field-hint">
+            Forgot your password? Ask an admin of this server for a reset link.
+          </p>
         </form>
       </section>
     )
@@ -284,12 +338,18 @@ function AuthForm({ mode, plan, next, lede, notice }: { mode: Mode; plan: string
     <section className="auth-box" aria-labelledby="auth-title">
       <h1 id="auth-title">{copy.title}</h1>
       <p className="auth-lede">{lede}</p>
-      {notice && <p className="auth-notice" role="alert">{notice}</p>}
+      {notice && (
+        <p className="auth-notice" role="alert">
+          {notice}
+        </p>
+      )}
 
       {google && (
         <>
           {googleButton}
-          <div className="auth-divider"><span>or use your email</span></div>
+          <div className="auth-divider">
+            <span>or use your email</span>
+          </div>
         </>
       )}
 
@@ -306,7 +366,9 @@ function AuthForm({ mode, plan, next, lede, notice }: { mode: Mode; plan: string
           aria-describedby={status.kind === 'error' ? 'auth-error' : undefined}
         />
         {status.kind === 'error' && (
-          <p id="auth-error" className="auth-error" role="alert">{status.message}</p>
+          <p id="auth-error" className="auth-error" role="alert">
+            {status.message}
+          </p>
         )}
         <button type="submit" className="button" disabled={status.kind === 'sending'}>
           {status.kind === 'sending' ? 'Sending link' : copy.submit}
@@ -334,7 +396,10 @@ function SetupForm() {
     } catch (err) {
       setBusy(false)
       if (err instanceof ApiError && err.code === 'already_set_up') return window.location.assign(LOGIN_URL)
-      setProblem({ message: err instanceof ApiError ? err.message : 'The account could not be created. Check your connection and try again.', field: err instanceof ApiError ? err.field : undefined })
+      setProblem({
+        message: err instanceof ApiError ? err.message : 'The account could not be created. Check your connection and try again.',
+        field: err instanceof ApiError ? err.field : undefined,
+      })
     }
   }
 
@@ -343,20 +408,33 @@ function SetupForm() {
   return (
     <section className="auth-box" aria-labelledby="auth-title">
       <h1 id="auth-title">Set up this server</h1>
-      <p className="auth-lede">
-        Create the first account. It becomes the admin of this server, so you can add people and choose who may sign up.
-      </p>
+      <p className="auth-lede">Create the first account. It becomes the admin of this server, so you can add people and choose who may sign up.</p>
       <form className="auth-form" onSubmit={onSubmit} noValidate>
         <label htmlFor="setup-name">Your name</label>
         <input id="setup-name" name="name" autoComplete="name" maxLength={80} />
         <label htmlFor="setup-email">Email</label>
         <input id="setup-email" name="email" type="email" autoComplete="email" placeholder="you@company.com" required aria-invalid={invalid('email')} />
         <label htmlFor="setup-password">Password</label>
-        <input id="setup-password" name="password" type="password" autoComplete="new-password" minLength={8} required aria-invalid={invalid('password')} aria-describedby="setup-password-hint" />
-        <p id="setup-password-hint" className="field-hint">At least 8 characters.</p>
+        <input
+          id="setup-password"
+          name="password"
+          type="password"
+          autoComplete="new-password"
+          minLength={8}
+          required
+          aria-invalid={invalid('password')}
+          aria-describedby="setup-password-hint"
+        />
+        <p id="setup-password-hint" className="field-hint">
+          At least 8 characters.
+        </p>
         <label htmlFor="setup-confirm">Confirm password</label>
         <input id="setup-confirm" name="confirm" type="password" autoComplete="new-password" required aria-invalid={invalid('confirm')} />
-        {problem && <p className="auth-error" role="alert">{problem.message}</p>}
+        {problem && (
+          <p className="auth-error" role="alert">
+            {problem.message}
+          </p>
+        )}
         <button type="submit" className="button" disabled={busy}>
           {busy ? 'Creating your account' : 'Create admin account'}
         </button>
@@ -372,9 +450,19 @@ function SignupPanel() {
       <div className="auth-panel-inner">
         <h2>Your first page is one prompt away.</h2>
         <div className="auth-panel-transcript">
-          <p><span className="auth-panel-caret" aria-hidden="true">&gt;</span>turn this CSV into a chart I can send to the team</p>
-          <p className="auth-panel-tool"><span className="auth-panel-dot" aria-hidden="true" />publish_artifact</p>
-          <p>Published. <mark>{APP_HOST}/a/signups-by-week</mark></p>
+          <p>
+            <span className="auth-panel-caret" aria-hidden="true">
+              &gt;
+            </span>
+            turn this CSV into a chart I can send to the team
+          </p>
+          <p className="auth-panel-tool">
+            <span className="auth-panel-dot" aria-hidden="true" />
+            publish_artifact
+          </p>
+          <p>
+            Published. <mark>{APP_HOST}/a/signups-by-week</mark>
+          </p>
         </div>
         <ul>
           <li>Works with Claude Code, Cursor, Codex and any MCP client</li>

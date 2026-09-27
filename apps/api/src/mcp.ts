@@ -28,9 +28,7 @@ import { authenticateBearer, RESOURCE_METADATA_URL, type McpAuth } from './oauth
 
 const visibility = z
   .enum(['private', 'organization', 'link'])
-  .describe(
-    'private (shown as "Restricted"): only you and people it is shared with. organization: everyone in your organization. link: anyone with the link.',
-  )
+  .describe('private (shown as "Restricted"): only you and people it is shared with. organization: everyone in your organization. link: anyone with the link.')
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`
@@ -142,7 +140,11 @@ function buildServer(auth: McpAuth) {
       if (path && path !== ENTRY_PATH) {
         const checked = checkPath(path)
         const file = 'path' in checked ? await getFile(current.id, checked.path) : null
-        if (!file) return text(`Version ${artifact.currentVersion} of "${artifact.title}" has no file "${path}". Call get_artifact without path to list its files.`, true)
+        if (!file)
+          return text(
+            `Version ${artifact.currentVersion} of "${artifact.title}" has no file "${path}". Call get_artifact without path to list its files.`,
+            true,
+          )
         const header = `Path: ${file.path}\nType: ${file.contentType}\nSize: ${formatBytes(file.size)}\n`
         if (isText(file.contentType)) return text(`${header}Encoding: utf8\n\n${file.content.toString('utf8')}`)
         return text(`${header}Encoding: base64\n\n${file.content.toString('base64')}`)
@@ -191,7 +193,8 @@ function buildServer(auth: McpAuth) {
     async ({ artifact_id, visibility }) => {
       const artifact = await findBySlug(parseArtifactRef(artifact_id))
       if (!artifact || !(await canEdit(artifact, viewer))) return text(`No page you can edit has the id "${artifact_id}".`, true)
-      if (visibility === 'organization' && !artifact.organizationId) return text('This page is in a personal workspace. Use private (restricted) or link.', true)
+      if (visibility === 'organization' && !artifact.organizationId)
+        return text('This page is in a personal workspace. Use private (restricted) or link.', true)
       await db.update(schema.artifacts).set({ visibility }).where(eq(schema.artifacts.id, artifact.id))
       return text(`"${artifact.title}" is now ${describeVisibility(visibility)}.\nLink: ${artifactUrl(artifact.slug)}`)
     },
@@ -214,7 +217,14 @@ function buildServer(auth: McpAuth) {
       if (!artifact || !(await canEdit(artifact, viewer))) return text(`No page you can edit has the id "${artifact_id}".`, true)
       const [me] = await db.select({ name: schema.users.name }).from(schema.users).where(eq(schema.users.id, auth.userId))
       try {
-        const { shared, notifyFailed } = await sharePeople(artifact, { id: auth.userId, email: auth.email, name: me?.name ?? null }, parseEmails(emails), role, true, message)
+        const { shared, notifyFailed } = await sharePeople(
+          artifact,
+          { id: auth.userId, email: auth.email, name: me?.name ?? null },
+          parseEmails(emails),
+          role,
+          true,
+          message,
+        )
         return text(
           `Shared "${artifact.title}" with ${shared.join(', ')} as ${role}.` +
             (notifyFailed.length ? `\nThe email could not be sent to ${notifyFailed.join(', ')}; send them the link yourself.` : '') +

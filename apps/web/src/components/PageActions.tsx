@@ -43,14 +43,14 @@ export function PageMenu({ label, items, className }: { label: string; items: Me
     e.preventDefault()
     const all = Array.from(root.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])
     const at = all.indexOf(document.activeElement as HTMLElement)
-    const next =
-      e.key === 'Home' ? 0 : e.key === 'End' ? all.length - 1 : (at + (e.key === 'ArrowDown' ? 1 : -1) + all.length) % all.length
+    const next = e.key === 'Home' ? 0 : e.key === 'End' ? all.length - 1 : (at + (e.key === 'ArrowDown' ? 1 : -1) + all.length) % all.length
     all[next]?.focus()
   }
 
   if (items.length === 0) return null
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: arrow keys move between the menu's items, which are buttons
     <div className={`page-menu ${className ?? ''}`} ref={root} onKeyDown={onKeyDown}>
       <button
         ref={button}
@@ -136,7 +136,9 @@ export function RenameDialog({ slug, title, onClose, onRenamed }: { slug: string
     <PageDialog labelledBy="rename-title" onClose={onClose}>
       <form onSubmit={onSubmit}>
         <h2 id="rename-title">Rename page</h2>
-        <label className="page-dialog-label" htmlFor="rename-input">Name</label>
+        <label className="page-dialog-label" htmlFor="rename-input">
+          Name
+        </label>
         <input
           id="rename-input"
           className="page-dialog-input"
@@ -150,10 +152,18 @@ export function RenameDialog({ slug, title, onClose, onRenamed }: { slug: string
         <p id="rename-hint" className="page-dialog-hint" data-over={tooLong || undefined}>
           {tooLong ? `${trimmed.length - MAX_TITLE} characters over the ${MAX_TITLE} limit.` : 'The link stays the same.'}
         </p>
-        {error && <p className="page-dialog-error" role="alert">{error}</p>}
+        {error && (
+          <p className="page-dialog-error" role="alert">
+            {error}
+          </p>
+        )}
         <div className="page-dialog-actions">
-          <button type="button" className="button button-quiet" onClick={onClose}>Cancel</button>
-          <button type="submit" className="button" disabled={busy || !trimmed || tooLong}>{busy ? 'Saving' : 'Save'}</button>
+          <button type="button" className="button button-quiet" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" className="button" disabled={busy || !trimmed || tooLong}>
+            {busy ? 'Saving' : 'Save'}
+          </button>
         </div>
       </form>
     </PageDialog>
@@ -182,10 +192,18 @@ export function DeleteDialog({ slug, title, onClose, onDeleted }: { slug: string
       <p className="page-dialog-text">
         The link stops working for everyone, including people you shared it with, and every version is deleted. This can't be undone.
       </p>
-      {error && <p className="page-dialog-error" role="alert">{error}</p>}
+      {error && (
+        <p className="page-dialog-error" role="alert">
+          {error}
+        </p>
+      )}
       <div className="page-dialog-actions">
-        <button type="button" className="button button-quiet" onClick={onClose} autoFocus>Cancel</button>
-        <button type="button" className="button page-dialog-danger" onClick={onDelete} disabled={busy}>{busy ? 'Deleting' : 'Delete page'}</button>
+        <button type="button" className="button button-quiet" onClick={onClose} autoFocus>
+          Cancel
+        </button>
+        <button type="button" className="button page-dialog-danger" onClick={onDelete} disabled={busy}>
+          {busy ? 'Deleting' : 'Delete page'}
+        </button>
       </div>
     </PageDialog>
   )

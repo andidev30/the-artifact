@@ -35,7 +35,9 @@ export function useConfig(): AppConfig | null {
   useEffect(() => {
     let active = true
     loadConfig().then((c) => active && setConfig(c))
-    return () => { active = false }
+    return () => {
+      active = false
+    }
   }, [])
   return config
 }

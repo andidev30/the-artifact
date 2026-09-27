@@ -140,8 +140,12 @@ export function Gallery({ workspaceId, workspaceName, email, aside, onWorkspaceC
 
       {showSearch && (
         <div className="gallery-search" role="search">
-          <label className="visually-hidden" htmlFor="gallery-search">Search pages by title</label>
-          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8.5 3a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11zM12.5 12.5 17 17" /></svg>
+          <label className="visually-hidden" htmlFor="gallery-search">
+            Search pages by title
+          </label>
+          <svg viewBox="0 0 20 20" aria-hidden="true">
+            <path d="M8.5 3a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11zM12.5 12.5 17 17" />
+          </svg>
           <input
             id="gallery-search"
             type="search"
@@ -157,12 +161,18 @@ export function Gallery({ workspaceId, workspaceName, email, aside, onWorkspaceC
       <div className={withAside ? 'app-grid' : 'app-grid app-grid-full'}>
         {withAside}
 
-        {list.kind === 'error' && <p className="auth-notice" role="alert">These pages could not be loaded. Reload to try again.</p>}
+        {list.kind === 'error' && (
+          <p className="auth-notice" role="alert">
+            These pages could not be loaded. Reload to try again.
+          </p>
+        )}
 
         {list.kind === 'ready' && items.length === 0 && searching && (
           <div className="gallery-no-match">
             <p>No pages match “{search}”.</p>
-            <button type="button" className="text-link gallery-clear" onClick={() => setQuery('')}>Clear search</button>
+            <button type="button" className="text-link gallery-clear" onClick={() => setQuery('')}>
+              Clear search
+            </button>
           </div>
         )}
 
@@ -173,7 +183,9 @@ export function Gallery({ workspaceId, workspaceName, email, aside, onWorkspaceC
         {tab === 'workspace' && list.kind === 'ready' && items.length === 0 && !searching && (
           <section className="gallery-empty" aria-label="Your pages">
             <div className="ghost-grid" aria-hidden="true">
-              <div className="ghost ghost-first"><span>Your first page lands here</span></div>
+              <div className="ghost ghost-first">
+                <span>Your first page lands here</span>
+              </div>
               <div className="ghost" />
               <div className="ghost" />
               <div className="ghost" />
@@ -219,16 +231,13 @@ function Card({ page: a, onRename, onDelete }: { page: ArtifactSummary; onRename
         <strong>{a.title}</strong>
       </Link>
       <span className="page-card-meta">
-        {a.role ? `Shared by ${a.owner}, updated ` : 'Updated '}{timeAgo(a.updatedAt)}
+        {a.role ? `Shared by ${a.owner}, updated ` : 'Updated '}
+        {timeAgo(a.updatedAt)}
         {a.mine || a.role ? '' : ` by ${a.owner}`}
         {a.version > 1 ? `, version ${a.version}` : ''}
       </span>
       <span className="page-card-tags">
-        {a.role ? (
-          <span>{a.role === 'editor' ? 'Editor' : 'Viewer'}</span>
-        ) : (
-          <span data-visibility={a.visibility}>{VISIBILITY_LABEL[a.visibility]}</span>
-        )}
+        {a.role ? <span>{a.role === 'editor' ? 'Editor' : 'Viewer'}</span> : <span data-visibility={a.visibility}>{VISIBILITY_LABEL[a.visibility]}</span>}
         {a.publishedWith && <span>{a.publishedWith}</span>}
       </span>
       {/* Open alone is what clicking the card does, so people who can only view get no menu */}

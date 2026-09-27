@@ -12,12 +12,14 @@ const listeners = new Set<() => void>()
 
 function set(next: MyInvitation[]) {
   list = next
-  listeners.forEach((l) => l())
+  for (const l of listeners) l()
 }
 
 function subscribe(listener: () => void) {
   listeners.add(listener)
-  return () => { listeners.delete(listener) }
+  return () => {
+    listeners.delete(listener)
+  }
 }
 
 function load(userId: string) {
@@ -27,12 +29,18 @@ function load(userId: string) {
   listMyInvitations()
     .then((rows) => loadedFor === userId && set(rows))
     // Invitations are a convenience here; the email link still works if this fails
-    .catch(() => { if (loadedFor === userId) loadedFor = null })
+    .catch(() => {
+      if (loadedFor === userId) loadedFor = null
+    })
 }
 
 export function usePendingInvitations(userId: string) {
   useEffect(() => load(userId), [userId])
-  const invitations = useSyncExternalStore(subscribe, () => list, () => EMPTY)
+  const invitations = useSyncExternalStore(
+    subscribe,
+    () => list,
+    () => EMPTY,
+  )
 
   // Joins, switches to the organization and reloads the account so it shows up
   const accept = useCallback(async (invitation: MyInvitation): Promise<Organization> => {

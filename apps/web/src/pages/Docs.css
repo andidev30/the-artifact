@@ -212,7 +212,7 @@
   margin: 0;
   padding: 14px;
   overflow-x: auto;
-  font: 0.8125rem/1.6 var(--mono);
+  font: 0.8125rem / 1.6 var(--mono);
 }
 
 .doc-table {

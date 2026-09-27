@@ -8,6 +8,7 @@ description: Run the right checks for a change in this repo before calling it do
 Always:
 
 ```sh
+pnpm format      # Biome: format and safe fixes
 pnpm lint
 pnpm --filter @the-artifact/api test:unit
 pnpm --filter @the-artifact/web test

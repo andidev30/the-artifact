@@ -110,7 +110,8 @@
 .contact-form select {
   padding-right: 32px;
   appearance: none;
-  background: var(--paper) no-repeat right 12px center / 10px
+  background:
+    var(--paper) no-repeat right 12px center / 10px
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%231c2b4b' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   cursor: pointer;
 }

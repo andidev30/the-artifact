@@ -258,10 +258,8 @@
   color: var(--white);
   background-color: var(--ink);
   background-image:
-    linear-gradient(var(--bp-line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--bp-line) 1px, transparent 1px),
-    linear-gradient(var(--bp-line-fine) 1px, transparent 1px),
-    linear-gradient(90deg, var(--bp-line-fine) 1px, transparent 1px);
+    linear-gradient(var(--bp-line) 1px, transparent 1px), linear-gradient(90deg, var(--bp-line) 1px, transparent 1px),
+    linear-gradient(var(--bp-line-fine) 1px, transparent 1px), linear-gradient(90deg, var(--bp-line-fine) 1px, transparent 1px);
   background-size:
     calc(var(--cell) * 4) calc(var(--cell) * 4),
     calc(var(--cell) * 4) calc(var(--cell) * 4),

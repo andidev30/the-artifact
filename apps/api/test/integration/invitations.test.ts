@@ -9,7 +9,10 @@ const inviteMock = vi.mocked(sendInvitation)
 async function invite(from: TestUser, orgId: string, email: string, role: 'admin' | 'member' = 'member') {
   const res = await call(`/api/organizations/${orgId}/invitations`, { cookie: from.cookie, json: { email, role } })
   expect(res.status).toBe(201)
-  const [id] = (await db.select({ id: schema.invitations.id }).from(schema.invitations).where(and(eq(schema.invitations.email, email.toLowerCase()), eq(schema.invitations.organizationId, orgId))))
+  const [id] = await db
+    .select({ id: schema.invitations.id })
+    .from(schema.invitations)
+    .where(and(eq(schema.invitations.email, email.toLowerCase()), eq(schema.invitations.organizationId, orgId)))
   return id.id
 }
 
@@ -37,7 +40,10 @@ describe('pending invitations inside the app', () => {
     await invite(owner, beta.id, 'guest@example.com')
     const gammaInvite = await invite(owner, gamma.id, 'guest@example.com')
     await invite(owner, acme.id, 'someone-else@example.com')
-    await db.update(schema.invitations).set({ expiresAt: new Date(Date.now() - 1000) }).where(eq(schema.invitations.id, gammaInvite))
+    await db
+      .update(schema.invitations)
+      .set({ expiresAt: new Date(Date.now() - 1000) })
+      .where(eq(schema.invitations.id, gammaInvite))
     expect(inviteMock).toHaveBeenCalledTimes(4)
 
     const list = await pending(guest)

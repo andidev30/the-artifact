@@ -220,17 +220,11 @@ members.patch('/members/:userId', async (c) => {
       if (!target) throw new RuleError('That person is not in this organization.', 404)
       if (target.role === role) return
       if (!canManage(me.role, target.role) || !canManage(me.role, role)) {
-        throw new RuleError(
-          me.role === 'member'
-            ? 'Only owners and admins can change roles.'
-            : 'Only owners can change an owner or make someone an owner.',
-        )
+        throw new RuleError(me.role === 'member' ? 'Only owners and admins can change roles.' : 'Only owners can change an owner or make someone an owner.')
       }
       if (target.role === 'owner' && owners <= 1) {
         throw new RuleError(
-          targetId === user.id
-            ? 'You are the only owner. Make someone else an owner before changing your role.'
-            : 'An organization needs at least one owner.',
+          targetId === user.id ? 'You are the only owner. Make someone else an owner before changing your role.' : 'An organization needs at least one owner.',
           409,
         )
       }
@@ -268,20 +262,11 @@ members.delete('/members/:userId', async (c) => {
         throw new RuleError(me.role === 'member' ? 'Only owners and admins can remove people.' : 'Only owners can remove an owner.')
       }
       if (target.role === 'owner' && owners <= 1) {
-        throw new RuleError(
-          leaving
-            ? 'You are the only owner. Make someone else an owner before you leave.'
-            : 'An organization needs at least one owner.',
-          409,
-        )
+        throw new RuleError(leaving ? 'You are the only owner. Make someone else an owner before you leave.' : 'An organization needs at least one owner.', 409)
       }
-      await tx
-        .delete(schema.memberships)
-        .where(and(eq(schema.memberships.organizationId, me.org.id), eq(schema.memberships.userId, targetId)))
+      await tx.delete(schema.memberships).where(and(eq(schema.memberships.organizationId, me.org.id), eq(schema.memberships.userId, targetId)))
       // Agents connected to this organization stop publishing there
-      await tx
-        .delete(schema.oauthTokens)
-        .where(and(eq(schema.oauthTokens.organizationId, me.org.id), eq(schema.oauthTokens.userId, targetId)))
+      await tx.delete(schema.oauthTokens).where(and(eq(schema.oauthTokens.organizationId, me.org.id), eq(schema.oauthTokens.userId, targetId)))
     })
   } catch (err) {
     return fail(c, err)
@@ -307,14 +292,13 @@ invitations.get('/:token', async (c) => {
   const user = c.get('user')
   const row = await findInvitation(c.req.param('token'))
   if (!row) return c.json({ error: 'This invitation is not valid. It may have been revoked or already accepted.' }, 404)
-  const [member] = user ? await db
-    .select({ role: schema.memberships.role })
-    .from(schema.memberships)
-    .where(and(eq(schema.memberships.organizationId, row.org.id), eq(schema.memberships.userId, user.id))) : []
-  const [{ value: memberCount }] = await db
-    .select({ value: count() })
-    .from(schema.memberships)
-    .where(eq(schema.memberships.organizationId, row.org.id))
+  const [member] = user
+    ? await db
+        .select({ role: schema.memberships.role })
+        .from(schema.memberships)
+        .where(and(eq(schema.memberships.organizationId, row.org.id), eq(schema.memberships.userId, user.id)))
+    : []
+  const [{ value: memberCount }] = await db.select({ value: count() }).from(schema.memberships).where(eq(schema.memberships.organizationId, row.org.id))
   return c.json({
     organization: { id: row.org.id, name: row.org.name, slug: row.org.slug, memberCount },
     email: row.invitation.email,
@@ -371,10 +355,7 @@ type OrganizationRow = typeof schema.organizations.$inferSelect
 async function join(user: User, invitation: InvitationRow, org: OrganizationRow) {
   await db.transaction(async (tx) => {
     // Already a member (joined another way): keep the role they have
-    await tx
-      .insert(schema.memberships)
-      .values({ userId: user.id, organizationId: org.id, role: invitation.role })
-      .onConflictDoNothing()
+    await tx.insert(schema.memberships).values({ userId: user.id, organizationId: org.id, role: invitation.role }).onConflictDoNothing()
     await tx.delete(schema.invitations).where(eq(schema.invitations.id, invitation.id))
     // Joining a team counts as setting up a workspace
     if (!user.onboardedAt) await tx.update(schema.users).set({ onboardedAt: new Date() }).where(eq(schema.users.id, user.id))

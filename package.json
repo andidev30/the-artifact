@@ -9,14 +9,19 @@
     "dev:api": "pnpm --filter @the-artifact/api dev",
     "dev:web": "pnpm --filter @the-artifact/web dev",
     "build": "pnpm -r build",
-    "lint": "pnpm -r --if-present lint",
+    "lint": "biome check && pnpm -r --if-present lint",
     "services": "docker compose up -d",
     "db:generate": "pnpm --filter @the-artifact/api db:generate",
     "db:migrate": "pnpm --filter @the-artifact/api db:migrate",
     "test": "pnpm -r --if-present test",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "format": "biome check --write"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.14",
     "@playwright/test": "^1.63.0"
+  },
+  "engines": {
+    "node": ">=26"
   }
 }

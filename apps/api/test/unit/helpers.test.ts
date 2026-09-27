@@ -57,11 +57,7 @@ describe('parseArtifactRef', () => {
     expect(parseArtifactRef('  abc234  ')).toBe('abc234')
   })
 
-  it.each([
-    'http://localhost:5177/a/abc234',
-    'https://the-artifact.example/a/abc234/',
-    '/a/abc234',
-  ])('extracts the slug from %s', (link) => {
+  it.each(['http://localhost:5177/a/abc234', 'https://the-artifact.example/a/abc234/', '/a/abc234'])('extracts the slug from %s', (link) => {
     expect(parseArtifactRef(link)).toBe('abc234')
   })
 })
