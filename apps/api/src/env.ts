@@ -14,6 +14,9 @@ export const env = {
   port: Number(process.env.PORT ?? 3000),
   appUrl: required('APP_URL').replace(/\/$/, ''),
   databaseUrl: required('DATABASE_URL'),
+  // Transaction-mode poolers (PgBouncer, Supabase on port 6543) hand each query to any server
+  // connection, so prepared statements made on one aren't there on the next
+  databasePrepare: process.env.DATABASE_PREPARE !== 'false',
   google: {
     clientId: process.env.GOOGLE_CLIENT_ID ?? '',
     clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',

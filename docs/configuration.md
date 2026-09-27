@@ -14,6 +14,7 @@ Settings are environment variables. With Docker Compose they go in `deploy/docke
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
+| `DATABASE_PREPARE` | `true` | `false` when `DATABASE_URL` goes through a transaction-mode pooler (PgBouncer in transaction mode, Supabase's pooler on port 6543), which can't keep prepared statements |
 | `SMTP_HOST` | empty | Mail server for sign-in links, invitations and share emails. Empty runs without email: password sign-in, and links admins pass on themselves. See [Running without email](/docs/self-hosting#running-without-email). |
 | `SMTP_FROM` | `The Artifact <no-reply@localhost>` | Sender, e.g. `"The Artifact <artifact@example.com>"` |
 | `SMTP_PORT` | `587` | |

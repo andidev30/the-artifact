@@ -17,3 +17,6 @@ dist-ssr
 test-results
 playwright-report
 blob-report
+.vercel
+.supabase
+.mcp.json
