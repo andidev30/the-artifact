@@ -40,6 +40,7 @@ export default defineConfig({
         SELF_HOSTED: 'false',
         GOOGLE_CLIENT_ID: '',
         GOOGLE_CLIENT_SECRET: '',
+        SALES_EMAIL: '',
         // The MinIO from docker-compose, in the bucket the API tests use
         S3_ENDPOINT: 'http://localhost:9000',
         S3_REGION: 'us-east-1',

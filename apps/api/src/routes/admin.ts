@@ -4,6 +4,7 @@ import { createMiddleware } from 'hono/factory'
 import type { AuthEnv } from '../auth/session.js'
 import { db, schema } from '../db/index.js'
 import type { User } from '../db/schema.js'
+import { likeTerm } from '../artifacts.js'
 import { createAdminLink } from '../auth/email.js'
 import { mailEnabled } from '../env.js'
 import {
@@ -30,9 +31,6 @@ const requireAdmin = createMiddleware<AuthEnv>(async (c, next) => {
 admin.use(requireAdmin)
 
 const PAGE_SIZE = 50
-
-// Escapes LIKE wildcards so a search for "a_b" matches literally
-const likeTerm = (q: string) => `%${q.replace(/[\\%_]/g, (m) => `\\${m}`)}%`
 
 admin.get('/overview', async (c) => {
   const [users] = await db

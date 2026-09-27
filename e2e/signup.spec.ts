@@ -39,6 +39,7 @@ test('sign up with a magic link, create an organization, land in its workspace',
   await expect(page).toHaveURL(/\/app$/)
 
   // Log out and the gallery is gone
+  await page.getByRole('button', { name: /^Account:/ }).click()
   await page.getByRole('button', { name: 'Log out' }).click()
   await expect(page).toHaveURL(/\/$/)
   expect((await page.request.get('/api/me')).status()).toBe(401)

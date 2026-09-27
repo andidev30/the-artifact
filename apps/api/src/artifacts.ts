@@ -220,11 +220,12 @@ export async function loadVersionTree(versionId: string) {
   return { html: await versionHtml(v), files: await Promise.all(files.map(withContent)) }
 }
 
-// Case-insensitive "title contains", with % and _ taken literally
+// An ILIKE "contains" pattern, with %, _ and \ taken literally
+export const likeTerm = (q: string) => `%${q.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`
+
 function titleMatches(query: string | undefined): SQL | undefined {
   const q = query?.trim()
-  if (!q) return undefined
-  return ilike(schema.artifacts.title, `%${q.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`)
+  return q ? ilike(schema.artifacts.title, likeTerm(q)) : undefined
 }
 
 // Pages shown in a workspace: in an organization, shared pages plus your own private ones

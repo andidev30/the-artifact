@@ -3,6 +3,7 @@ import { Hono } from 'hono'
 import { db, schema } from '../db/index.js'
 import { env, mailEnabled } from '../env.js'
 import { sendSignInLink } from '../mail.js'
+import { EMAIL_RE } from '../validation.js'
 import { hashPassword, passwordProblem } from './password.js'
 import { hashToken, randomToken, startSession } from './session.js'
 import { afterSignInUrl, canSignUp, findOrCreateUser, safeNext, signInErrorUrl, SignupClosedError, userExists } from './users.js'
@@ -12,7 +13,6 @@ const LINK_TTL = 15 * 60 * 1000
 const ADMIN_LINK_DAYS = 7
 // Don't send another link to the same address within this window
 const RESEND_AFTER = 60 * 1000
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export const email = new Hono()
 

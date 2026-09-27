@@ -1,5 +1,5 @@
 # The Artifact on Kubernetes (k3s, k8s): the app, Postgres and MinIO in one namespace.
-# See docs/self-hosting.md, "Kubernetes". In short:
+# See docs/kubernetes.md. In short:
 #   cp deploy/kubernetes/app.env.example deploy/kubernetes/app.env   # then edit it
 #   kubectl apply -k deploy/kubernetes
 apiVersion: kustomize.config.k8s.io/v1beta1

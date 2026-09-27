@@ -8,7 +8,7 @@ import { env } from './env.js'
 import { scheduleSweeps } from './gc.js'
 import { ensureBucket } from './storage.js'
 
-// Self-hosted installs bring their database up to date on every start
+// The Docker image sets MIGRATE_ON_START, so installs bring their database up to date on every start
 if (env.migrateOnStart) {
   const migrationsFolder = process.env.MIGRATIONS_DIR ?? join(dirname(fileURLToPath(import.meta.url)), '..', 'drizzle')
   await migrate(db, { migrationsFolder })

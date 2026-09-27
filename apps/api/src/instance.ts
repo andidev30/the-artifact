@@ -42,8 +42,6 @@ export async function hasAccounts(tx: Tx | typeof db = db): Promise<boolean> {
   return Boolean(any)
 }
 
-// Settings
-
 export type EffectiveSettings = {
   signupPolicy: SignupPolicy
   allowedDomains: string[]

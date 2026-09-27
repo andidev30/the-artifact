@@ -4,8 +4,8 @@ import { db, schema } from './db/index.js'
 import type { Artifact, ShareRole } from './db/schema.js'
 import { mailEnabled } from './env.js'
 import { sendShareNotice } from './mail.js'
+import { EMAIL_RE } from './validation.js'
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 export const MAX_PEOPLE_PER_INVITE = 20
 
 export class SharingError extends Error {}

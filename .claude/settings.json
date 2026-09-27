@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "enabledPlugins": {
+    "frontend-design@claude-plugins-official": true,
+    "typescript-lsp@claude-plugins-official": true,
+    "playwright@claude-plugins-official": true,
+    "mcp-server-dev@claude-plugins-official": true,
+    "security-guidance@claude-plugins-official": true,
+    "claude-md-management@claude-plugins-official": true
+  },
+  "permissions": {
+    "allow": [
+      "Bash(pnpm lint)",
+      "Bash(pnpm test)",
+      "Bash(pnpm test:e2e *)",
+      "Bash(pnpm build)",
+      "Bash(pnpm services)",
+      "Bash(pnpm db:migrate)",
+      "Bash(pnpm db:generate)",
+      "Bash(pnpm --filter @the-artifact/api lint)",
+      "Bash(pnpm --filter @the-artifact/api test *)",
+      "Bash(pnpm --filter @the-artifact/api test:unit *)",
+      "Bash(pnpm --filter @the-artifact/api test:integration *)",
+      "Bash(pnpm --filter @the-artifact/web lint)",
+      "Bash(pnpm --filter @the-artifact/web test *)",
+      "Bash(pnpm --filter @the-artifact/web build)",
+      "Bash(docker compose ps)",
+      "Bash(docker compose logs *)"
+    ],
+    "deny": [
+      "Read(./apps/api/.env)",
+      "Read(./deploy/docker-compose/.env)",
+      "Read(./deploy/docker-compose/app.env)",
+      "Read(./deploy/kubernetes/app.env)"
+    ]
+  }
+}

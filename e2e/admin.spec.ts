@@ -11,15 +11,17 @@ test('an instance admin finds someone, suspends them and lets them back in', asy
 
   const adminEmail = uniqueEmail('admin')
   await signUpPersonal(page, adminEmail)
-  // Regular people see no Admin link and can't open the area
-  await expect(page.getByRole('link', { name: 'Admin', exact: true })).toHaveCount(0)
+  // Regular people see no Server admin link and can't open the area
+  await page.getByRole('button', { name: /^Account:/ }).click()
+  await expect(page.getByRole('link', { name: 'Server admin' })).toHaveCount(0)
   expect((await page.request.get('/api/admin/overview')).status()).toBe(403)
 
   await grantInstanceAdmin(adminEmail)
   await page.reload()
-  await page.getByRole('link', { name: 'Admin', exact: true }).click()
+  await page.getByRole('button', { name: /^Account:/ }).click()
+  await page.getByRole('link', { name: 'Server admin' }).click()
   await expect(page).toHaveURL(/\/admin$/)
-  await expect(page.getByRole('heading', { name: 'Admin', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Server admin', exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible()
 
   // Find the member and suspend them, confirming in the page
