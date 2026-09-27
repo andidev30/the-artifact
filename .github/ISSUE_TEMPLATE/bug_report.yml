@@ -1,0 +1,47 @@
+name: Bug report
+description: Something doesn't work as the docs say it should
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Publish a page with …
+        2. Open …
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Where
+      options:
+        - Self-hosted with Docker Compose
+        - Self-hosted on Kubernetes
+        - Local development
+        - Hosted service
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: v1.2.0, or the output of git rev-parse --short HEAD
+  - type: input
+    id: agent
+    attributes:
+      label: Agent or MCP client
+      placeholder: Claude Code 2.x, Cursor, Codex …
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: The app's log around the time it happened (docker compose logs app). Remove anything secret.
+      render: text

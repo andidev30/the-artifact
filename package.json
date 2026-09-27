@@ -1,6 +1,7 @@
 {
   "name": "the-artifact",
   "private": true,
+  "license": "SEE LICENSE IN LICENSE",
   "type": "module",
   "packageManager": "pnpm@11.6.0",
   "scripts": {

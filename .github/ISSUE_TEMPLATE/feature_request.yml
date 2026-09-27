@@ -1,0 +1,23 @@
+name: Feature request
+description: Something The Artifact should do
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you are trying to do
+      description: The problem, in your own words. What do you do today instead?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help
+  - type: dropdown
+    id: install
+    attributes:
+      label: Where you would use it
+      multiple: true
+      options:
+        - Self-hosted
+        - Hosted service

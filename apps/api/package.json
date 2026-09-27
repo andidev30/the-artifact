@@ -1,6 +1,7 @@
 {
   "name": "@the-artifact/api",
   "private": true,
+  "license": "SEE LICENSE IN ../../LICENSE",
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
