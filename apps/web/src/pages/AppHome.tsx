@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import { type Me } from '../api'
 import { AccountHeader } from '../components/AccountHeader'
 import { ConnectTabs } from '../components/ConnectTabs'
@@ -79,6 +79,9 @@ function Home({ me }: { me: Me }) {
                       <>
                         <p>Add The Artifact once to the agent you use.</p>
                         <ConnectTabs />
+                        <p className="field-hint">
+                          Stuck? <Link className="text-link" to="/docs/connect-your-agent">Connect your agent</Link> covers every client.
+                        </p>
                       </>
                     )}
                   </li>

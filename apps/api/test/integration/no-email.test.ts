@@ -97,6 +97,63 @@ describe('password login', () => {
   })
 })
 
+describe('signing up with a password', () => {
+  const signUp = (email: string, password = 'long enough') => call('/api/auth/password/sign-up', { json: { email, password, name: 'Sam' } })
+  const policy = (signupPolicy: 'open' | 'domains' | 'invite-only', allowedDomains: string[] = []) =>
+    db.insert(schema.instanceSettings).values({ signupPolicy, allowedDomains }).onConflictDoUpdate({ target: schema.instanceSettings.id, set: { signupPolicy, allowedDomains } })
+
+  beforeEach(async () => {
+    await createUser({ admin: true })
+  })
+
+  it('is open while anyone may sign up, and signs the person in', async () => {
+    expect(await config()).toMatchObject({ passwordSignUp: true })
+    const res = await signUp('Sam@Example.com')
+    expect(res.status).toBe(201)
+    expect(await (await call('/api/me', { cookie: sessionCookie(res)! })).json()).toMatchObject({ email: 'sam@example.com', name: 'Sam', isAdmin: false })
+    expect((await login('sam@example.com', 'long enough')).status).toBe(200)
+  })
+
+  it('follows the email domains policy', async () => {
+    await policy('domains', ['corp.test'])
+    expect((await signUp('a@elsewhere.com')).status).toBe(403)
+    expect((await signUp('a@corp.test')).status).toBe(201)
+  })
+
+  it('is closed when only invited people may sign up', async () => {
+    await policy('invite-only')
+    expect(await config()).toMatchObject({ passwordSignUp: false })
+    expect((await signUp('a@example.com')).status).toBe(403)
+  })
+
+  it('won’t let anyone claim an address someone invited or shared a page with', async () => {
+    const owner = await createUser()
+    const org = await createOrg(owner)
+    await call(`/api/organizations/${org.id}/invitations`, { cookie: owner.cookie, json: { email: 'invited@example.com', role: 'member' } })
+    const page = await createPage(owner)
+    await call(`/api/artifacts/${page.slug}/sharing/people`, { cookie: owner.cookie, json: { emails: 'reader@example.com', role: 'viewer' } })
+
+    for (const email of ['invited@example.com', 'reader@example.com']) {
+      const res = await signUp(email)
+      expect(res.status).toBe(409)
+      expect(await res.json()).toMatchObject({ code: 'use_invitation' })
+    }
+    expect(await db.select().from(schema.users).where(eq(schema.users.email, 'reader@example.com'))).toHaveLength(0)
+  })
+
+  it('never touches an existing account', async () => {
+    const existing = await createUser({ email: 'taken@example.com' })
+    await withPassword(existing, 'their password')
+    expect((await signUp('taken@example.com', 'someone else')).status).toBe(409)
+    expect((await login('taken@example.com', 'their password')).status).toBe(200)
+  })
+
+  it('is closed on a server that sends email', async () => {
+    env.smtp.host = 'localhost'
+    expect((await signUp('a@example.com')).status).toBe(409)
+  })
+})
+
 describe('sign-up links made by an admin', () => {
   let admin: TestUser
   beforeEach(async () => {

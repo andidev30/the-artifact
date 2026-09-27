@@ -31,6 +31,12 @@ export async function canSignUp(email: string): Promise<boolean> {
   if (signupPolicy === 'open') return true
   const address = email.toLowerCase()
   if (signupPolicy === 'domains' && allowedDomains.includes(address.split('@')[1] ?? '')) return true
+  return waitingForAccess(address)
+}
+
+// Whether an organization invitation or a page share is waiting for this address
+export async function waitingForAccess(email: string): Promise<boolean> {
+  const address = email.toLowerCase()
   const [invite] = await db
     .select({ id: schema.invitations.id })
     .from(schema.invitations)

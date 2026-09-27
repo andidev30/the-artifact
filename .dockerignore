@@ -4,7 +4,7 @@
 .claude
 .env
 **/.env
-.env.selfhost
+deploy/**/app.env
 test-results
 playwright-report
 blob-report

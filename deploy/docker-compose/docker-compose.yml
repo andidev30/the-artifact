@@ -1,19 +1,27 @@
 # Self-hosted The Artifact: the app, its Postgres database and MinIO for page content.
-# Passwords and other storage come from a .env file next to this one (see docs/self-hosting.md).
-# Setup: cp .env.selfhost.example .env.selfhost, edit it, then
-#   docker compose -f docker-compose.selfhost.yml up -d
+# From this folder (see docs/self-hosting.md):
+#   cp app.env.example app.env     # the app's settings
+#   cp .env.example .env           # passwords, port and storage, read by docker compose itself
+#   docker compose up -d
+#
+# The project keeps the name it had when this file lived at the repository root, so installs that
+# moved here keep their volumes. If you cloned into a folder other than the-artifact, set the name
+# to that folder's name (docker volume ls shows it before _artifact-data).
+name: the-artifact
+
 services:
   app:
-    build: .
+    build:
+      context: ../..
     image: the-artifact:latest
     restart: unless-stopped
     ports:
       - '${ARTIFACT_PORT:-8080}:3000'
-    env_file: .env.selfhost
+    env_file: app.env
     # Docker's default seccomp profile plus the namespace calls Chromium's sandbox needs to render
     # thumbnails of untrusted pages safely (see docs/security.md)
     security_opt:
-      - seccomp=./docker/seccomp-chromium.json
+      - seccomp=../seccomp-chromium.json
     environment:
       DATABASE_URL: postgres://artifact:${POSTGRES_PASSWORD:-artifact}@db:5432/artifact
       # The bundled MinIO unless .env points somewhere else (S3, R2, your own MinIO)

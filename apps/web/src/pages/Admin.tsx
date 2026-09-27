@@ -92,7 +92,10 @@ function AdminPage({ me }: { me: Me }) {
       <main id="main" className="app-main settings admin">
         <div className="app-title">
           <h1>Server admin</h1>
-          <p>Everyone on this instance, their organizations, and who can create an account.</p>
+          <p>
+            Everyone on this server, their organizations, and who can create an account. Setup, backups and updates are
+            in <Link className="text-link" to="/docs/self-hosting">Running this server</Link>.
+          </p>
         </div>
 
         <div className="settings-layout">
@@ -356,7 +359,8 @@ function AddPerson() {
         </button>
       </form>
       <p id="add-person-hint" className="field-hint">
-        This server doesn’t send email, so you pass the link on yourself. They can sign up whatever the sign-up policy says.
+        This server doesn’t send email, so you pass the link on yourself. They can sign up whatever the sign-up policy says.{' '}
+        <Link className="text-link" to="/docs/self-hosting#running-without-email">Running without email</Link>
       </p>
       {problem && <p className="auth-notice" role="alert">{problem}</p>}
       {made && <LinkResult link={made} />}
@@ -757,6 +761,7 @@ const POLICIES: { id: SignupPolicy; label: string; hint: string }[] = [
 ]
 
 function SignupSection({ onChanged }: { onChanged: () => void }) {
+  const noEmail = useConfig()?.emailSignIn === false
   const [settings, setSettings] = useState<Loadable<InstanceSettings>>({ kind: 'loading' })
   const [policy, setPolicy] = useState<SignupPolicy>('open')
   const [domains, setDomains] = useState('')
@@ -803,7 +808,10 @@ function SignupSection({ onChanged }: { onChanged: () => void }) {
     <section id="signup" className="settings-card" aria-labelledby="signup-title">
       <header className="settings-card-head">
         <h2 id="signup-title">Sign-up</h2>
-        <p>Who can create an account. People invited to an organization or a page can always join, and existing accounts can always sign in.</p>
+        <p>
+          Who can create an account. People invited to an organization or a page can always join, and existing accounts can
+          always sign in. <Link className="text-link" to="/docs/self-hosting#sign-up-policy">How sign-up works</Link>
+        </p>
       </header>
 
       {settings.kind === 'loading' && <p className="settings-muted" role="status">Loading settings</p>}
@@ -824,6 +832,15 @@ function SignupSection({ onChanged }: { onChanged: () => void }) {
               </label>
             ))}
           </fieldset>
+
+          {noEmail && policy !== 'invite-only' && (
+            <p className="admin-source" role="note">
+              This server doesn’t send email, so nobody checks that an address belongs to the person who types it: people
+              sign up with a password under any address{policy === 'domains' ? ' at these domains' : ''}. Addresses someone
+              invited or shared a page with stay reserved for their invitation link. If people you don’t trust can reach this
+              server, choose <strong>Invited people only</strong> and add people with sign-up links under People.
+            </p>
+          )}
 
           {policy === 'domains' && (
             <div className="field">

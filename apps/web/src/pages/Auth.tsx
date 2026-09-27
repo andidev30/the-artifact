@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
-import { ApiError, fetchMe, logInWithPassword, setUpServer } from '../api'
+import { ApiError, fetchMe, logInWithPassword, setUpServer, signUpWithPassword } from '../api'
 import { useConfig } from '../useConfig'
 import { ServerUnreachable } from './Status'
 import { Wordmark } from '../components/Wordmark'
@@ -84,7 +84,7 @@ export function Auth({ mode }: { mode: Mode }) {
   const form = settingUp ? (
     <SetupForm />
   ) : (
-    <AuthForm mode={mode} plan={plan} next={next} notice={signInError} lede={isOrg ? 'You will set up your organization and invite your team after this step.' : copy.lede} />
+    <AuthForm mode={mode} plan={plan} next={next} notice={signInError} lede={isOrg ? 'You will set up your organization and invite your team after this step.' : config?.selfHosted && mode === 'signup' ? 'Create an account on this server.' : copy.lede} />
   )
 
   if (mode === 'login' || settingUp) {
@@ -126,6 +126,20 @@ function AuthForm({ mode, plan, next, lede, notice }: { mode: Mode; plan: string
       window.location.assign(redirect)
     } catch (err) {
       setStatus({ kind: 'error', message: err instanceof ApiError ? err.message : 'You could not be logged in. Check your connection and try again.' })
+    }
+  }
+
+  async function onPasswordSignUp(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const data = new FormData(e.currentTarget)
+    const password = String(data.get('password') ?? '')
+    if (password !== String(data.get('confirm') ?? '')) return setStatus({ kind: 'error', message: 'The passwords don’t match.' })
+    setStatus({ kind: 'sending' })
+    try {
+      const { redirect } = await signUpWithPassword(String(data.get('email') ?? '').trim(), password, String(data.get('name') ?? '').trim(), plan, next)
+      window.location.assign(redirect)
+    } catch (err) {
+      setStatus({ kind: 'error', message: err instanceof ApiError ? err.message : 'Your account could not be created. Check your connection and try again.' })
     }
   }
 
@@ -180,6 +194,40 @@ function AuthForm({ mode, plan, next, lede, notice }: { mode: Mode; plan: string
         Continue with Google
       </a>
   )
+
+  if (withPassword && mode === 'signup' && config.passwordSignUp) {
+    return (
+      <section className="auth-box" aria-labelledby="auth-title">
+        <h1 id="auth-title">{copy.title}</h1>
+        <p className="auth-lede">{lede}</p>
+        {notice && <p className="auth-notice" role="alert">{notice}</p>}
+        {google && (
+          <>
+            {googleButton}
+            <div className="auth-divider"><span>or choose a password</span></div>
+          </>
+        )}
+        <form className="auth-form" onSubmit={onPasswordSignUp} noValidate>
+          <label htmlFor="signup-name">Your name</label>
+          <input id="signup-name" name="name" autoComplete="name" maxLength={80} />
+          <label htmlFor="email">Email</label>
+          <input id="email" name="email" type="email" autoComplete="email" placeholder="you@company.com" required />
+          <label htmlFor="signup-password">Password</label>
+          <input id="signup-password" name="password" type="password" autoComplete="new-password" minLength={8} required aria-describedby="signup-password-hint" />
+          <p id="signup-password-hint" className="field-hint">At least 8 characters.</p>
+          <label htmlFor="signup-confirm">Confirm password</label>
+          <input id="signup-confirm" name="confirm" type="password" autoComplete="new-password" required />
+          {status.kind === 'error' && (
+            <p id="auth-error" className="auth-error" role="alert">{status.message}</p>
+          )}
+          <button type="submit" className="button" disabled={status.kind === 'sending'}>
+            {status.kind === 'sending' ? 'Creating your account' : 'Create account'}
+          </button>
+          <p className="field-hint">Invited to an organization? Open the invitation link you were sent instead.</p>
+        </form>
+      </section>
+    )
+  }
 
   if (withPassword && mode === 'signup') {
     return (

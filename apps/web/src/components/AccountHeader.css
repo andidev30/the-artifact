@@ -32,16 +32,3 @@
     display: none;
   }
 }
-
-/* Phones: with the Server admin link as well, the links get a row of their own under the logo */
-@media (max-width: 520px) {
-  .nav:has(.app-account-link[href='/admin']) {
-    flex-wrap: wrap;
-    row-gap: 14px;
-  }
-
-  .nav:has(.app-account-link[href='/admin']) .app-account {
-    flex: 1 1 100%;
-    gap: 20px;
-  }
-}

@@ -443,6 +443,11 @@ export function logInWithPassword(email: string, password: string, plan: string 
   return request<{ redirect: string }>('/auth/password/login', { method: 'POST', json: { email, password, plan, next } })
 }
 
+// Servers without email whose sign-up policy lets people in
+export function signUpWithPassword(email: string, password: string, name: string, plan: string | null, next: string | null) {
+  return request<{ redirect: string }>('/auth/password/sign-up', { method: 'POST', json: { email, password, name, plan, next } })
+}
+
 // The first account on a server without email
 export function setUpServer(email: string, password: string, name: string) {
   return request<{ redirect: string }>('/auth/password/setup', { method: 'POST', json: { email, password, name } })

@@ -5,7 +5,7 @@ import { organizationSettingsPath, useWorkspace } from '../workspace'
 import './AccountMenu.css'
 
 // The person's name in the header; opens their account settings, the current organization's
-// settings and Log out. Server admin has its own link next to it.
+// settings, Server admin for instance admins, and Log out.
 export function AccountMenu({ me }: { me: Me }) {
   const navigate = useNavigate()
   const { org } = useWorkspace(me)
@@ -80,6 +80,11 @@ export function AccountMenu({ me }: { me: Me }) {
             {me.onboarded && org && (
               <li>
                 <Link to={organizationSettingsPath(org)} onClick={() => setOpen(false)}>{org.name} settings</Link>
+              </li>
+            )}
+            {me.isAdmin && (
+              <li className="account-admin">
+                <Link to="/admin" onClick={() => setOpen(false)}>Server admin</Link>
               </li>
             )}
             <li className="account-logout">

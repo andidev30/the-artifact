@@ -98,7 +98,7 @@ export function Landing() {
                   <Link className="button button-quiet" to="/app">Go to your pages</Link>
                 ) : (
                   <>
-                    <CopyCommand command="docker compose -f docker-compose.selfhost.yml up -d" label="Copy the install command" />
+                    <CopyCommand command="cd deploy/docker-compose && docker compose up -d" label="Copy the install command" />
                     <p className="step-link"><Link className="text-link" to={SELF_HOSTING_URL}>Read the install guide</Link></p>
                   </>
                 )}

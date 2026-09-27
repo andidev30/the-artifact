@@ -54,13 +54,13 @@ In `deploy/kubernetes/ingress.yaml`, set the host to the one in `APP_URL`. With 
 
 ## 3. The seccomp profile
 
-Gallery thumbnails are rendered by Chromium inside the app, with Chromium's sandbox on, because the pages are untrusted. The sandbox needs a few system calls the default seccomp profile forbids, so the pod runs with the profile from `docker/seccomp-chromium.json` (the runtime's default profile plus `clone`, `unshare` and `setns`; see [Security](/docs/security)).
+Gallery thumbnails are rendered by Chromium inside the app, with Chromium's sandbox on, because the pages are untrusted. The sandbox needs a few system calls the default seccomp profile forbids, so the pod runs with the profile from `deploy/seccomp-chromium.json` (the runtime's default profile plus `clone`, `unshare` and `setns`; see [Security](/docs/security)).
 
 Kubernetes loads it from each node, so copy it onto every node that can run the app:
 
 ```sh
 sudo mkdir -p /var/lib/kubelet/seccomp/profiles
-sudo cp docker/seccomp-chromium.json /var/lib/kubelet/seccomp/profiles/the-artifact-chromium.json
+sudo cp deploy/seccomp-chromium.json /var/lib/kubelet/seccomp/profiles/the-artifact-chromium.json
 ```
 
 Without the file, the pod doesn't start, and `kubectl describe pod` says it couldn't load the seccomp profile. When you can't put files on the nodes (a managed cluster, say), run without thumbnails instead: uncomment the `patches` lines in `kustomization.yaml`. The gallery then shows sketches, and the pod uses the runtime's default profile.

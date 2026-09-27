@@ -2,7 +2,7 @@
 // that has no admin left (or whose only admin forgot their password). Runs on the server with its
 // database credentials, so it gives nobody more than they already have.
 //   pnpm --filter @the-artifact/api admin:grant you@example.com
-//   docker compose -f docker-compose.selfhost.yml exec app node dist/scripts/make-admin.js you@example.com
+//   docker compose exec app node dist/scripts/make-admin.js you@example.com      (in deploy/docker-compose)
 // On a server without email it also prints a sign-in link that sets a new password.
 import { eq } from 'drizzle-orm'
 import { createAdminLink } from '../auth/email.js'

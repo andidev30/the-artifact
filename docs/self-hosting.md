@@ -12,12 +12,12 @@ The Artifact runs as one Docker image next to a Postgres database and an S3-comp
 
 ```sh
 git clone <repository-url> the-artifact
-cd the-artifact
-cp .env.selfhost.example .env.selfhost
-cp .env.compose.example .env
+cd the-artifact/deploy/docker-compose
+cp app.env.example app.env
+cp .env.example .env
 ```
 
-There are two files because Docker Compose reads some settings itself. Edit `.env.selfhost`, the app's settings:
+Everything for Docker Compose is in `deploy/docker-compose`, and every `docker compose` command in these docs runs there. There are two files because Docker Compose reads some settings itself. Edit `app.env`, the app's settings:
 
 | Setting | What to put there |
 | --- | --- |
@@ -33,31 +33,31 @@ And `.env`, read by Docker Compose, before the first start (the database and Min
 | `ARTIFACT_PORT` | Optional. Port on the host, `8080` by default. |
 | `S3_*` | Optional. Object storage elsewhere; see [Using S3, R2 or your own MinIO](#using-s3-r2-or-your-own-minio). |
 
-Put each setting in the file listed here: the compose file sets the `.env` ones for the app itself, so the same line in `.env.selfhost` would be ignored. Every setting is listed in the [configuration reference](/docs/configuration).
+Put each setting in the file listed here: the compose file sets the `.env` ones for the app itself, so the same line in `app.env` would be ignored. Every setting is listed in the [configuration reference](/docs/configuration).
 
 ## 2. Start it
 
 ```sh
-docker compose -f docker-compose.selfhost.yml up -d
+docker compose up -d
 ```
 
 The app listens on port 8080 (or `ARTIFACT_PORT`). It creates and updates its database tables on every start. Open `APP_URL` and create the first account: it becomes the instance admin (see [The instance admin](#the-instance-admin)). Without email, the first page you see is **Set up this server**, which asks for your email and a password. Do this before you share the address.
 
-The image includes a headless Chromium for gallery thumbnails. The compose file runs the app with `docker/seccomp-chromium.json` so Chromium can keep its sandbox on (see [Security](/docs/security)); keep that line if you write your own compose file, or the log will say thumbnails are off. On Kubernetes the profile goes on the nodes; see [Kubernetes](/docs/kubernetes#3-the-seccomp-profile).
+The image includes a headless Chromium for gallery thumbnails. The compose file runs the app with `deploy/seccomp-chromium.json` so Chromium can keep its sandbox on (see [Security](/docs/security)); keep that line if you write your own compose file, or the log will say thumbnails are off. On Kubernetes the profile goes on the nodes; see [Kubernetes](/docs/kubernetes#3-the-seccomp-profile).
 
 ## Where content is stored
 
 Postgres holds accounts, organizations, sharing and the list of versions. The content itself (every version's HTML, its files and its thumbnail) is in object storage, one object per distinct content under `blobs/<sha256>`. Versions that reuse a stylesheet or image, and restored versions, store nothing new. When pages or accounts are deleted, their objects are removed by a sweep that runs every few hours; to run it now:
 
 ```sh
-docker compose -f docker-compose.selfhost.yml exec app node dist/scripts/sweep-storage.js
+docker compose exec app node dist/scripts/sweep-storage.js
 ```
 
 Back up both; see [Backup and restore](/docs/backups).
 
 ### Using S3, R2 or your own MinIO
 
-Set these in `.env` (`.env.compose.example` has blocks for AWS S3, R2 and others), then remove the `minio` service and the app's `depends_on: minio` from the compose file:
+Set these in `.env` (`.env.example` has blocks for AWS S3, R2 and others), then remove the `minio` service and the app's `depends_on: minio` from the compose file:
 
 ```sh
 S3_ENDPOINT=https://<account>.r2.cloudflarestorage.com   # empty for AWS S3
@@ -79,7 +79,7 @@ artifact.example.com {
 }
 ```
 
-Then set `APP_URL=https://artifact.example.com` and restart with `docker compose -f docker-compose.selfhost.yml up -d`.
+Then set `APP_URL=https://artifact.example.com` and restart with `docker compose up -d`.
 
 ## 4. Connect agents
 
@@ -120,7 +120,7 @@ In every mode, people invited to an organization or a page can still create an a
 Installs created before instance admins existed, or ones whose admins have all left, have accounts but nobody to promote others. Make an existing account an admin from the server:
 
 ```sh
-docker compose -f docker-compose.selfhost.yml exec app node dist/scripts/make-admin.js you@example.com
+docker compose exec app node dist/scripts/make-admin.js you@example.com
 ```
 
 It also restores the account if it was suspended. On a server without email it prints a link that sets a new password, so it doubles as the way back in when the only admin forgot theirs. It needs a shell on the server, so it gives nobody more access than they already have.
@@ -133,6 +133,7 @@ Leave `SMTP_HOST` empty and The Artifact sends no email:
 
 - **First start**: the web app shows **Set up this server**. The account you create there, with a password, is the instance admin.
 - **Logging in**: with email and password, or with Google when it is configured.
+- **Signing up on their own**: under the **Anyone** or **Email domains** policy, the sign-up page asks for an email and a password. Nobody checks that the address belongs to the person typing it, so an address someone invited or shared a page with can't be taken there; that person uses their invitation link or a sign-up link. If people you don't trust can reach the server, choose **Invited people only**.
 - **Adding people**: under **Server admin**, **People**, enter their address and choose **Make sign-up link**. Send them the link however you like; it works once, for 7 days, and asks them to choose a password. It creates their account whatever the sign-up policy says.
 - **Organization invitations**: inviting someone gives you the invitation link to pass on. Someone without an account creates one from that page with a password.
 - **Forgotten passwords**: an admin opens the person under **People** and chooses **Password reset link**. Using it signs them out everywhere else.
@@ -142,20 +143,35 @@ Anyone can change or set their password under **Account settings**, **Password**
 
 ## Google sign-in (optional)
 
-In Google Cloud Console, create an OAuth client of type Web application. Add `APP_URL` as an authorized JavaScript origin and `APP_URL/api/auth/google/callback` as the redirect URI, then put the client ID and secret in `.env.selfhost` and restart.
+In Google Cloud Console, create an OAuth client of type Web application. Add `APP_URL` as an authorized JavaScript origin and `APP_URL/api/auth/google/callback` as the redirect URI, then put the client ID and secret in `app.env` and restart.
 
 ## Updating
 
 ```sh
 git pull
-docker compose -f docker-compose.selfhost.yml up -d --build
+docker compose up -d --build
 ```
 
 Database changes apply automatically when the new version starts. Pages published before thumbnails existed get theirs the first time the gallery lists them; to render them all at once:
 
 ```sh
-docker compose -f docker-compose.selfhost.yml exec app node dist/scripts/backfill-thumbnails.js
+docker compose exec app node dist/scripts/backfill-thumbnails.js
 ```
+
+### Installs from before `deploy/docker-compose`
+
+The compose file used to be `docker-compose.selfhost.yml` at the root of the repository, with `.env.selfhost` next to it. After `git pull`, stop the old one, move your settings, and start from the new folder:
+
+```sh
+docker compose -f docker-compose.selfhost.yml down   # before git pull, or from an older checkout
+git pull
+mv .env.selfhost deploy/docker-compose/app.env
+mv .env deploy/docker-compose/.env                   # if you have one
+cd deploy/docker-compose
+docker compose up -d --build
+```
+
+Your data stays: the compose file keeps the project name `the-artifact`, so it finds the same volumes. If you cloned into a folder with another name, set `name:` at the top of `docker-compose.yml` to that folder's name first (`docker volume ls` shows it before `_artifact-data`).
 
 ## Backups
 

@@ -225,7 +225,8 @@ function Sections({ me, d, problem, confirming, setConfirming, run, leave, onDet
           <h2 id="members-title">Members</h2>
           <p>
             {d.members.length === 1 ? '1 member' : `${d.members.length} members`}.
-            {manager ? ' Owners and admins can invite people and change roles.' : ' Owners and admins manage who is in it.'}
+            {manager ? ' Owners and admins can invite people and change roles.' : ' Owners and admins manage who is in it.'}{' '}
+            <Link className="text-link" to="/docs/organizations#roles">What each role can do</Link>
           </p>
         </header>
 

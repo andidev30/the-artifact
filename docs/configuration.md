@@ -1,14 +1,14 @@
 # Configuration reference
 
-Settings are environment variables. With Docker Compose they go in `.env.selfhost`, except the ones Compose reads itself (`ARTIFACT_PORT`, the passwords and `S3_*`), which go in `.env`. On Kubernetes they all go in `deploy/kubernetes/app.env`. The Docker image sets the ones marked "set by the image".
+Settings are environment variables. With Docker Compose they go in `deploy/docker-compose/app.env`, except the ones Compose reads itself (`ARTIFACT_PORT`, the passwords and `S3_*`), which go in `.env`. On Kubernetes they all go in `deploy/kubernetes/app.env`. The Docker image sets the ones marked "set by the image".
 
 ## Required
 
 | Variable | Meaning |
 | --- | --- |
 | `APP_URL` | Public address of the install, without a trailing slash, e.g. `https://artifact.example.com`. Sign-in links, page links, the MCP URL and OAuth metadata are built from it. Cookies are marked `Secure` when it starts with `https://`. |
-| `DATABASE_URL` | Postgres connection string. `docker-compose.selfhost.yml` sets it for its own database. |
-| `S3_BUCKET` | Bucket for page content and thumbnails. `docker-compose.selfhost.yml` sets it for its own MinIO. |
+| `DATABASE_URL` | Postgres connection string. `deploy/docker-compose/docker-compose.yml` sets it for its own database. |
+| `S3_BUCKET` | Bucket for page content and thumbnails. `deploy/docker-compose/docker-compose.yml` sets it for its own MinIO. |
 
 ## Optional
 
@@ -25,19 +25,19 @@ Settings are environment variables. With Docker Compose they go in `.env.selfhos
 | `THUMBNAIL_CDN_HOSTS` | a built-in list | Comma-separated hosts pages may load scripts, styles and fonts from while their thumbnail renders, e.g. `cdn.jsdelivr.net,fonts.gstatic.com`. `none` blocks every host (pages that need a CDN then render without it). The built-in list: `cdn.jsdelivr.net`, `unpkg.com`, `cdnjs.cloudflare.com`, `esm.sh`, `ga.jspm.io`, `cdn.skypack.dev`, `cdn.tailwindcss.com`, `code.jquery.com`, `d3js.org`, `cdn.plot.ly`, `fonts.googleapis.com`, `fonts.gstatic.com`, `rsms.me`. |
 | `SELF_HOSTED` | `true` | Skips the marketing pages; `/` opens the app. Also makes the first account the instance admin. Only the hosted service sets it to `false`. |
 | `PORT` | `3000` | Port inside the container |
-| `ARTIFACT_PORT` | `8080` | Host port in `docker-compose.selfhost.yml` |
-| `POSTGRES_PASSWORD` | `artifact` | Database password in `docker-compose.selfhost.yml`; set it in a `.env` file next to the compose file before the first start |
+| `ARTIFACT_PORT` | `8080` | Host port in `deploy/docker-compose/docker-compose.yml` |
+| `POSTGRES_PASSWORD` | `artifact` | Database password in `deploy/docker-compose/docker-compose.yml`; set it in a `.env` file next to the compose file before the first start |
 
 ## Object storage
 
-Any service with the S3 API works: MinIO, AWS S3, Cloudflare R2, Backblaze B2, Google Cloud Storage (interoperability keys). `docker-compose.selfhost.yml` points these at its bundled MinIO unless you set them in the `.env` next to it.
+Any service with the S3 API works: MinIO, AWS S3, Cloudflare R2, Backblaze B2, Google Cloud Storage (interoperability keys). `deploy/docker-compose/docker-compose.yml` points these at its bundled MinIO unless you set them in the `.env` next to it.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `S3_ENDPOINT` | empty (AWS S3) | e.g. `http://minio:9000` or `https://<account>.r2.cloudflarestorage.com` |
 | `S3_REGION` | `us-east-1` | `auto` for R2 |
 | `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | empty | Without them, the AWS SDK's usual credential chain applies (environment, IAM role) |
-| `MINIO_ROOT_PASSWORD` | `artifact-secret` | Password of the bundled MinIO in `docker-compose.selfhost.yml`; set it in the `.env` next to the compose file before the first start |
+| `MINIO_ROOT_PASSWORD` | `artifact-secret` | Password of the bundled MinIO in `deploy/docker-compose/docker-compose.yml`; set it in the `.env` next to the compose file before the first start |
 
 With `S3_ENDPOINT` set, the app uses `bucket/key` addresses (path style), which MinIO and most other stores need. It creates the bucket on start if it doesn't exist; without permission to do that, create it yourself. Besides that, the app only needs to read, write, list and delete objects in its bucket. Keep the bucket private.
 

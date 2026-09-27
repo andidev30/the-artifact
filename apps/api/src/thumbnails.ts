@@ -204,8 +204,8 @@ function launch(): Promise<Browser> {
       if (!explainedSandbox && /sandbox|namespace/i.test(String(err))) {
         explainedSandbox = true
         console.error(
-          'Thumbnails are off: Chromium could not start its sandbox. In Docker, run the app with the seccomp profile in ' +
-            'docker/seccomp-chromium.json (docker-compose.selfhost.yml does). See docs/security.md.',
+          'Thumbnails are off: Chromium could not start its sandbox. Run the app with the seccomp profile in ' +
+            'deploy/seccomp-chromium.json (deploy/docker-compose does; on Kubernetes see docs/kubernetes.md). See docs/security.md.',
         )
       }
       throw err

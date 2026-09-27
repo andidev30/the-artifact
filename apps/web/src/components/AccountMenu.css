@@ -133,6 +133,12 @@ img.account-avatar {
   border-color: var(--grid);
 }
 
+.account-admin {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1.5px dashed var(--grid);
+}
+
 .account-logout {
   margin-top: 6px;
   padding-top: 6px;

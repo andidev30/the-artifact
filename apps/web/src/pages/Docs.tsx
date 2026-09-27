@@ -1,7 +1,10 @@
-import { useEffect, useMemo, useRef, type MouseEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { Link, Navigate, NavLink, useLocation, useNavigate, useParams } from 'react-router'
+import { fetchMe } from '../api'
 import { Wordmark } from '../components/Wordmark'
-import { DOC_GROUPS, DOC_PAGES, docSource, renderDoc } from '../docs'
+import { APP_HOST, LOGIN_URL } from '../config'
+import { DOC_PAGES, docGroups, docSource, renderDoc } from '../docs'
+import { useConfig } from '../useConfig'
 import './Docs.css'
 
 export function Docs() {
@@ -9,6 +12,16 @@ export function Docs() {
   const navigate = useNavigate()
   const { hash } = useLocation()
   const article = useRef<HTMLElement>(null)
+  const config = useConfig()
+  // On a self-hosted install the docs are for its own people: no pricing, a way back into the app
+  const selfHosted = config?.selfHosted
+  const groups = docGroups(selfHosted ?? false)
+  // undefined while checking, then whether someone is signed in
+  const [signedIn, setSignedIn] = useState<boolean | undefined>(undefined)
+
+  useEffect(() => {
+    fetchMe().then((me) => setSignedIn(Boolean(me))).catch(() => setSignedIn(false))
+  }, [])
 
   const source = docSource(slug)
   const html = useMemo(() => (source ? renderDoc(source) : ''), [source])
@@ -63,8 +76,18 @@ export function Docs() {
           <Link className="docs-home" to="/docs">Docs</Link>
         </div>
         <nav aria-label="Primary">
-          <Link className="nav-section" to="/#pricing">Pricing</Link>
-          <Link className="button button-small" to="/docs/self-hosting">Self-host it</Link>
+          {selfHosted === undefined ? null : selfHosted ? (
+            signedIn === undefined ? null : signedIn ? (
+              <Link className="button button-small" to="/app">Back to your pages</Link>
+            ) : (
+              <Link className="button button-small" to={LOGIN_URL}>Log in</Link>
+            )
+          ) : (
+            <>
+              <Link className="nav-section" to="/#pricing">Pricing</Link>
+              <Link className="button button-small" to="/docs/self-hosting">Self-host it</Link>
+            </>
+          )}
         </nav>
       </header>
 
@@ -73,7 +96,7 @@ export function Docs() {
           <label className="docs-picker">
             <span className="visually-hidden">Go to a page</span>
             <select value={slug} onChange={(e) => navigate(`/docs/${e.target.value}`)}>
-              {DOC_GROUPS.map((g) => (
+              {groups.map((g) => (
                 <optgroup key={g.title} label={g.title}>
                   {g.pages.map((p) => <option key={p.slug} value={p.slug}>{p.title}</option>)}
                 </optgroup>
@@ -81,7 +104,7 @@ export function Docs() {
             </select>
           </label>
           <nav className="docs-tree">
-            {DOC_GROUPS.map((g) => (
+            {groups.map((g) => (
               <div key={g.title}>
                 <h2>{g.title}</h2>
                 <ul>
@@ -95,6 +118,7 @@ export function Docs() {
         </aside>
 
         <main id="main" className="docs-main">
+          {selfHosted && slug === 'introduction' && <ServerNote />}
           <article ref={article} className="doc" onClick={onClick} dangerouslySetInnerHTML={{ __html: html }} />
           <nav className="doc-pager" aria-label="Previous and next page">
             {prev ? (
@@ -107,5 +131,22 @@ export function Docs() {
         </main>
       </div>
     </div>
+  )
+}
+
+// The same note on every self-hosted install; admins don't write it
+function ServerNote() {
+  return (
+    <aside className="doc-note" aria-label="About this server">
+      <p>
+        <strong>These are the docs of your team’s own server, {APP_HOST}.</strong> Commands and links on these pages already
+        use its address, so you can copy them as they are.
+      </p>
+      <p>
+        New here? <Link to="/docs/connect-your-agent">Connect your agent</Link> first, then ask it for a page. For an
+        account, access to an organization or a forgotten password, ask an admin of this server. Admins will find setup
+        and upkeep under <strong>Running this server</strong>.
+      </p>
+    </aside>
   )
 }

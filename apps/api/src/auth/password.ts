@@ -3,9 +3,9 @@ import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { db, schema } from '../db/index.js'
 import { mailEnabled } from '../env.js'
-import { firstAccountBecomesAdmin, hasAccounts, lockAdmins } from '../instance.js'
+import { firstAccountBecomesAdmin, hasAccounts, instanceSettings, lockAdmins } from '../instance.js'
 import { startSession } from './session.js'
-import { afterSignInUrl } from './users.js'
+import { afterSignInUrl, createPasswordAccount, waitingForAccess } from './users.js'
 
 // Passwords are for servers that can't send sign-in links by email. On those, people sign in with
 // a password (or Google); the first account is created from the setup form and later ones from a
@@ -123,4 +123,48 @@ password.post('/setup', async (c) => {
   if (!created) return c.json({ error: 'This server is already set up. Log in instead.', code: 'already_set_up' }, 409)
   await startSession(c, created.id)
   return c.json({ redirect: afterSignInUrl(null, null) }, 201)
+})
+
+// Whether people may create a password account on their own: a server without email whose sign-up
+// policy lets people in. The address isn't verified, which is why invitations need their link.
+export async function passwordSignUpOpen(): Promise<boolean> {
+  if (mailEnabled()) return false
+  return (await instanceSettings()).signupPolicy !== 'invite-only'
+}
+
+// Signing up with a password on a server without email, under the Anyone or Email domains policy.
+// Nobody checks that the address belongs to the person typing it, so an address someone invited
+// or shared a page with can't be claimed here: that person uses their invitation link or an
+// admin's sign-up link, or the first to type the address would get what was meant for them.
+password.post('/sign-up', async (c) => {
+  if (mailEnabled()) return c.json({ error: 'This server sends sign-in links by email. Sign up with your email instead.', code: 'email_enabled' }, 409)
+  const body = (await c.req.json().catch(() => null)) as Body | null
+  const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : ''
+  const name = typeof body?.name === 'string' ? body.name.trim().replace(/\s+/g, ' ').slice(0, 80) || null : null
+  if (!EMAIL_RE.test(email)) return c.json({ error: 'Enter a valid email address.', field: 'email' }, 400)
+
+  const { signupPolicy, allowedDomains } = await instanceSettings()
+  if (signupPolicy === 'invite-only') {
+    return c.json({ error: 'This server only accepts invited people. Ask an admin for a sign-up link.', code: 'signup_closed' }, 403)
+  }
+  if (signupPolicy === 'domains' && !allowedDomains.includes(email.split('@')[1] ?? '')) {
+    return c.json({ error: 'This server only accepts addresses at certain domains. Ask an admin for a sign-up link.', code: 'signup_closed', field: 'email' }, 403)
+  }
+  if (await waitingForAccess(email)) {
+    return c.json(
+      {
+        error: 'Someone invited this address or shared a page with it. Open the invitation link you were sent, or ask an admin of this server for a sign-up link.',
+        code: 'use_invitation',
+        field: 'email',
+      },
+      409,
+    )
+  }
+  const problem = passwordProblem(body?.password)
+  if (problem) return c.json({ error: problem, field: 'password' }, 400)
+
+  const created = await createPasswordAccount(email, name, await hashPassword(body!.password as string))
+  if (!created) return c.json({ error: 'This address already has an account. Log in instead.', code: 'account_exists', field: 'email' }, 409)
+  await startSession(c, created.id)
+  return c.json({ redirect: afterSignInUrl(typeof body?.plan === 'string' ? body.plan : null, typeof body?.next === 'string' ? body.next : null) }, 201)
 })

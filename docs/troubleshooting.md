@@ -30,7 +30,7 @@ Files are found by their path relative to the page, exactly as published: `css/s
 
 ## Cards show a sketch instead of a screenshot
 
-Screenshots are taken a few seconds after publishing; reload the gallery. On a self-hosted install they need Chromium: the Docker image includes it, and the app log says so when it can't start (usually because the container runs without the seccomp profile from `docker-compose.selfhost.yml`). Pages published before an update get their screenshot the first time the gallery lists them.
+Screenshots are taken a few seconds after publishing; reload the gallery. On a self-hosted install they need Chromium: the Docker image includes it, and the app log says so when it can't start (usually because the container runs without the seccomp profile from `deploy/docker-compose/docker-compose.yml`). Pages published before an update get their screenshot the first time the gallery lists them.
 
 ## My agent publishes to the wrong workspace
 
@@ -41,7 +41,7 @@ A connection is tied to the workspace you picked when you allowed it. Disconnect
 With `SMTP_HOST` empty nothing is emailed by design; see [Running without email](/docs/self-hosting#running-without-email). Otherwise check the `SMTP_*` settings and the app logs:
 
 ```sh
-docker compose -f docker-compose.selfhost.yml logs app
+docker compose logs app
 ```
 
 ## Kubernetes: the app pod doesn't start

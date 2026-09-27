@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { email } from './auth/email.js'
 import { google } from './auth/google.js'
-import { password } from './auth/password.js'
+import { password, passwordSignUpOpen } from './auth/password.js'
 import { endSession, loadUser, requireUser, type AuthEnv } from './auth/session.js'
 import { db, schema } from './db/index.js'
 import { env, mailEnabled } from './env.js'
@@ -38,6 +38,8 @@ api.get('/config', async (c) =>
     emailSignIn: mailEnabled(),
     // No accounts yet on a server without email: the web app shows the setup form
     needsSetup: !mailEnabled() && !(await hasAccounts()),
+    // Without email, whether people can create a password account on their own
+    passwordSignUp: await passwordSignUpOpen(),
     instanceName: (await instanceSettings()).instanceName,
   }),
 )
