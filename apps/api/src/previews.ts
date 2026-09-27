@@ -1,6 +1,7 @@
 import type { Env, Hono } from 'hono'
 import { canView, findBySlug } from './artifacts.js'
 import { env } from './env.js'
+import { log } from './log.js'
 import { currentThumbnails } from './thumbnails.js'
 
 // Link previews: chat apps and mail clients don't run the app's JavaScript, so the Open Graph tags
@@ -73,7 +74,7 @@ export function servePagePreviews<E extends Env>(app: Hono<E>, index: string) {
       preview = await pagePreview(c.req.param('slug'))
     } catch (err) {
       // The app still has to load when the lookup fails; it only loses the preview
-      console.error(`Link preview for ${c.req.path} failed: ${err instanceof Error ? err.message : String(err)}`)
+      log.error('Link preview failed', { path: c.req.path, error: err instanceof Error ? err.message : String(err) })
     }
     c.header('Cache-Control', 'no-cache')
     return c.html(withPreview(index, preview))
