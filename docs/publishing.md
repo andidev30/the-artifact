@@ -11,7 +11,7 @@ Agents publish through the MCP tools below. You don't call them yourself: ask th
 
 Pages run in a sandboxed frame: scripts, forms, pop-ups and downloads work, but a page can't read cookies, use `localStorage` on the app's origin, or talk to the rest of The Artifact. Its own files load normally, including with `fetch()`.
 
-The gallery shows a screenshot of each page, taken on the server a few seconds after it is published (see [Security](/docs/security) for how). Until it exists, a card shows a sketch.
+The gallery shows a screenshot of each page, taken on the server a few seconds after it is published (see [Security](/docs/security) for how). Until it exists, a card shows a sketch. Pages shared with **Anyone with the link** also use it in [link previews](/docs/sharing#link-previews).
 
 ## Tools
 

@@ -37,6 +37,12 @@ In an organization, owners and admins can edit every page in it, even pages that
 
 When someone can't open a page, they see "This page isn't available", whether the page is private or doesn't exist. That way a link doesn't reveal that a private page exists.
 
+## Link previews
+
+When you paste a page's link into Slack, WhatsApp, an email or anything else that shows previews, a page set to **Anyone with the link** shows its title and its screenshot. Without a screenshot (it is still being taken, or the server doesn't take them), the preview shows the title only.
+
+**Restricted** and **Your organization** pages, and links to pages that don't exist, all preview as plain "The Artifact". The service that builds the preview isn't signed in, so it learns nothing about the page, not even that it exists. If you switch a page from **Anyone with the link** back to **Restricted**, new previews stop showing it, but apps that already fetched one may keep showing what they saw.
+
 ## Pages shared with you
 
 The **Shared with you** tab in the gallery lists pages other people shared with your email address, with your role.

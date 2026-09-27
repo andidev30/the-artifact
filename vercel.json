@@ -7,7 +7,8 @@
   "regions": ["hnd1"],
   "functions": {
     "api/index.js": {
-      "maxDuration": 60
+      "maxDuration": 60,
+      "includeFiles": "apps/web/dist/index.html"
     }
   },
   "rewrites": [
@@ -29,6 +30,10 @@
     },
     {
       "source": "/.well-known/:path*",
+      "destination": "/api"
+    },
+    {
+      "source": "/a/:slug",
       "destination": "/api"
     },
     {
