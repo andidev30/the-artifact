@@ -1,6 +1,6 @@
 # One image with the API and the built web app, served together on one port.
 
-FROM node:24-slim AS build
+FROM node:26-slim AS build
 WORKDIR /repo
 RUN corepack enable
 
@@ -16,7 +16,7 @@ RUN pnpm --filter @the-artifact/web build \
  && pnpm --filter @the-artifact/api build \
  && pnpm --filter @the-artifact/api deploy --prod --legacy /out
 
-FROM node:24-slim
+FROM node:26-slim
 
 # Headless Chromium renders gallery thumbnails, with no network of its own (see docs/security.md).
 # The headless shell needs no GTK, and it draws with its bundled SwiftShader, so the Mesa/LLVM
