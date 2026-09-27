@@ -14,7 +14,13 @@ export class PublishError extends Error {}
 
 export type FileInput = { path: string; content: string; encoding?: 'utf8' | 'base64' }
 
-export type PreparedFile = { path: string; content: Buffer; contentType: string; size: number; sha256: string }
+// A file as a version records it; its bytes are in storage under sha256
+export type FileMeta = { path: string; contentType: string; size: number; sha256: string }
+
+export type PreparedFile = FileMeta & { content: Buffer }
+
+// A file an agent is about to upload itself, described rather than sent
+export type ManifestEntry = { path: string; size: number; sha256: string }
 
 const TEXT = 'text'
 const BINARY = 'binary'
@@ -83,26 +89,46 @@ export function checkPath(raw: unknown): { path: string } | { error: string } {
   return { path }
 }
 
+// Path and type rules for one file next to the entry HTML, the same however it arrives
+function checkFile(raw: unknown, seen: Set<string>): { path: string; type: (typeof TYPES)[string] } {
+  const checked = checkPath(raw)
+  if ('error' in checked) throw new PublishError(checked.error)
+  const { path } = checked
+  if (path.toLowerCase() === ENTRY_PATH) throw new PublishError('index.html is the page itself: send it as html, not as a file.')
+  const key = path.toLowerCase()
+  if (seen.has(key)) throw new PublishError(`Two files have the path "${path}".`)
+  seen.add(key)
+  const type = TYPES[extension(path)]
+  if (!type) throw new PublishError(`"${path}" isn't a supported file type. Use one of: ${ALLOWED_EXTENSIONS.join(', ')}.`)
+  return { path, type }
+}
+
+function checkCount(n: number) {
+  if (n > MAX_FILES) throw new PublishError(`A page can have at most ${MAX_FILES} files besides the HTML; this one has ${n}.`)
+}
+
+function checkSize(path: string, size: number, total: number) {
+  if (size > MAX_FILE_BYTES) throw new PublishError(`"${path}" is larger than ${MAX_FILE_BYTES / 1024 / 1024} MB.`)
+  if (total > MAX_TOTAL_BYTES)
+    throw new PublishError(`The page and its files add up to more than ${MAX_TOTAL_BYTES / 1024 / 1024} MB. Compress images or load large media from a URL.`)
+}
+
+export function checkHtmlSize(bytes: number) {
+  if (bytes > MAX_HTML_BYTES) {
+    throw new PublishError(`The page is larger than ${MAX_HTML_BYTES / 1024 / 1024} MB. Move large assets into files or compress images.`)
+  }
+}
+
 // Validates and decodes the files an agent sent. htmlBytes counts towards the total.
 export function prepareFiles(files: FileInput[] | undefined, htmlBytes: number): PreparedFile[] {
   if (!files || files.length === 0) return []
-  if (files.length > MAX_FILES) throw new PublishError(`A page can have at most ${MAX_FILES} files besides the HTML; this one has ${files.length}.`)
+  checkCount(files.length)
 
   const seen = new Set<string>()
   let total = htmlBytes
   const prepared: PreparedFile[] = []
   for (const file of files) {
-    const checked = checkPath(file?.path)
-    if ('error' in checked) throw new PublishError(checked.error)
-    const { path } = checked
-    if (path.toLowerCase() === ENTRY_PATH) throw new PublishError('index.html is the page itself: send it as html, not as a file.')
-    const key = path.toLowerCase()
-    if (seen.has(key)) throw new PublishError(`Two files have the path "${path}".`)
-    seen.add(key)
-
-    const ext = extension(path)
-    const type = TYPES[ext]
-    if (!type) throw new PublishError(`"${path}" isn't a supported file type. Use one of: ${ALLOWED_EXTENSIONS.join(', ')}.`)
+    const { path, type } = checkFile(file?.path, seen)
     if (typeof file.content !== 'string') throw new PublishError(`"${path}" has no content.`)
 
     const encoding = file.encoding ?? 'utf8'
@@ -118,13 +144,45 @@ export function prepareFiles(files: FileInput[] | undefined, htmlBytes: number):
       throw new PublishError(`"${path}" has an unknown encoding; use "utf8" or "base64".`)
     }
 
-    if (content.length > MAX_FILE_BYTES) throw new PublishError(`"${path}" is larger than ${MAX_FILE_BYTES / 1024 / 1024} MB.`)
     total += content.length
-    if (total > MAX_TOTAL_BYTES)
-      throw new PublishError(`The page and its files add up to more than ${MAX_TOTAL_BYTES / 1024 / 1024} MB. Compress images or load large media from a URL.`)
+    checkSize(path, content.length, total)
     prepared.push({ path, content, contentType: type.type, size: content.length, sha256: sha256(content) })
   }
   return prepared
+}
+
+const SHA256 = /^[0-9a-f]{64}$/
+
+// Validates the files an agent is about to upload itself: index.html, which is the page, and the
+// files next to it. The same limits apply as when they are sent inline.
+export function checkManifest(entries: ManifestEntry[]): { html: FileMeta; files: FileMeta[] } {
+  const seen = new Set<string>()
+  let html: FileMeta | null = null
+  const files: FileMeta[] = []
+  let total = 0
+  for (const entry of entries) {
+    const hash = typeof entry?.sha256 === 'string' ? entry.sha256.toLowerCase() : ''
+    const size = entry?.size
+    const shown = typeof entry?.path === 'string' ? entry.path : '?'
+    if (!SHA256.test(hash)) throw new PublishError(`"${shown}" needs its sha256 as 64 hex characters, e.g. from sha256sum or shasum -a 256.`)
+    if (!Number.isSafeInteger(size) || size < 0) throw new PublishError(`"${shown}" needs its size in bytes, e.g. from wc -c.`)
+    total += size
+
+    if (typeof entry.path === 'string' && entry.path.replace(/^\.\//, '').toLowerCase() === ENTRY_PATH) {
+      if (html) throw new PublishError('Two files have the path "index.html".')
+      if (size === 0) throw new PublishError('index.html is empty.')
+      checkHtmlSize(size)
+      html = { path: ENTRY_PATH, contentType: TYPES.html.type, size, sha256: hash }
+      continue
+    }
+    const { path, type } = checkFile(entry.path, seen)
+    checkSize(path, size, total)
+    files.push({ path, contentType: type.type, size, sha256: hash })
+  }
+  if (!html) throw new PublishError('Include index.html, the page itself, in files.')
+  checkCount(files.length)
+  checkSize(ENTRY_PATH, 0, total)
+  return { html, files }
 }
 
 export function sha256(data: Buffer | string): string {

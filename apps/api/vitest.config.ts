@@ -18,6 +18,8 @@ const env = {
   S3_BUCKET: process.env.TEST_S3_BUCKET ?? 'artifact-test',
   S3_ACCESS_KEY_ID: process.env.TEST_S3_ACCESS_KEY_ID ?? 'artifact',
   S3_SECRET_ACCESS_KEY: process.env.TEST_S3_SECRET_ACCESS_KEY ?? 'artifact-secret',
+  // Direct uploads are on; test/integration/uploads.test.ts switches them off where it needs to
+  S3_PUBLIC_ENDPOINT: process.env.TEST_S3_ENDPOINT ?? 'http://localhost:9000',
   // Thumbnails are off unless a test turns them on (test/integration/thumbnails.test.ts)
   CHROME_PATH: '',
 }

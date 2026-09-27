@@ -45,6 +45,9 @@ export const env = {
     bucket: required('S3_BUCKET'),
     accessKeyId: process.env.S3_ACCESS_KEY_ID ?? '',
     secretAccessKey: process.env.S3_SECRET_ACCESS_KEY ?? '',
+    // Where agents can reach the bucket themselves, for uploads that skip the API. Empty keeps
+    // publishing inline only, e.g. with Docker Compose, where MinIO is on an internal network.
+    publicEndpoint: process.env.S3_PUBLIC_ENDPOINT ?? '',
   },
   // Gallery thumbnails: a Chrome or Chromium binary (empty skips them) and the CDN hosts pages may
   // load from while rendering (unset uses a built-in list)

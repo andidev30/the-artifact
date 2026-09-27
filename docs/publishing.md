@@ -1,6 +1,6 @@
 # Publishing pages
 
-Agents publish through six MCP tools. You don't call them yourself: ask the agent in plain words and it picks the right one.
+Agents publish through the MCP tools below. You don't call them yourself: ask the agent in plain words and it picks the right one.
 
 ## What makes a good page
 
@@ -42,6 +42,28 @@ Invalid files are rejected with a message the agent can act on, and nothing is p
 
 New pages are restricted in a personal workspace and visible to the organization in an organization workspace.
 
+### prepare_upload and publish_upload
+
+Publish a page in two steps, with the files going straight to storage. Available when the server has `S3_PUBLIC_ENDPOINT` set (see [Configuration](/docs/configuration#object-storage)). See [Publishing by direct upload](#publishing-by-direct-upload).
+
+`prepare_upload` takes `files`: every file of the page, **`index.html` included**, each as:
+
+| Field | Meaning |
+| --- | --- |
+| `path` | `index.html` for the page itself, or the path the HTML uses for the file, with the same rules as above |
+| `size` | Size in bytes |
+| `sha256` | SHA-256 of the file's bytes, as 64 hex characters |
+
+It answers with an `upload_id` and a link for each file that isn't stored yet. The agent sends each file's bytes to its link with an HTTP `PUT` within 15 minutes, then calls `publish_upload`:
+
+| Argument | Required | Meaning |
+| --- | --- | --- |
+| `title` | yes | Title for the gallery and tab |
+| `upload_id` | yes | From `prepare_upload` |
+| `files` | yes | The same list as for `prepare_upload` |
+| `artifact_id` | no | Id or link of an existing page. Publishes a new version at the same link. |
+| `visibility` | no | As for `publish_artifact` |
+
 ### list_artifacts
 
 Lists the most recently updated pages in the connected workspace, with their ids and links.
@@ -61,6 +83,18 @@ Changes who can open a page without publishing a new version.
 ### share_artifact
 
 Shares a page with people by email, as `viewer` or `editor`, with an optional message. They get an email with the link.
+
+## Publishing by direct upload
+
+With `publish_artifact`, a page travels inside the MCP call, so it is limited by what the agent and the server can send in one request. Hosts like Vercel refuse requests over about 4.5 MB. Agents that can run shell commands or make HTTP requests (Claude Code, Cursor, Codex and other coding agents) can use `prepare_upload` and `publish_upload` instead, and the files go straight to storage:
+
+1. The agent lists the files with their sizes and hashes. The server checks them against the same rules and limits as above, and nothing is published yet.
+2. The agent uploads each file to its link, for example with `curl -T`.
+3. On `publish_upload`, the server hashes every uploaded file itself. A file that is missing, or whose bytes don't match its size and hash, stops the publish with a message, and nothing is published.
+
+Files whose content is already stored, like the images of a page you publish a new version of, need no upload. Uploads that are never published are deleted after an hour.
+
+Agents that can't make requests of their own keep using `publish_artifact`.
 
 ## Updating a page
 

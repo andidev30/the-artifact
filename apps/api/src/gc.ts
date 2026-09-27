@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm'
 import { db } from './db/index.js'
-import { deleteBlobs, listBlobs } from './storage.js'
+import { deleteBlobs, deleteStaleUploads, listBlobs } from './storage.js'
 
 // Blobs are shared by every version that has the same content, so deleting a page or an account
 // deletes rows only. This removes the blobs no row refers to any more.
@@ -20,14 +20,16 @@ export async function holdStorageLock(tx: Tx) {
 const GRACE_MS = 60 * 60 * 1000
 const EVERY_MS = 6 * 60 * 60 * 1000
 
-export async function sweepStorage({ graceMs = GRACE_MS, now = Date.now() } = {}): Promise<{ checked: number; deleted: number }> {
+export async function sweepStorage({ graceMs = GRACE_MS, now = Date.now() } = {}): Promise<{ checked: number; deleted: number; uploads: number }> {
+  // Direct uploads nobody committed; their links expired long before the grace period is up
+  const uploads = await deleteStaleUploads(graceMs, now)
   const candidates: string[] = []
   let checked = 0
   for await (const blob of listBlobs()) {
     checked += 1
     if (now - blob.lastModified.getTime() >= graceMs) candidates.push(blob.hash)
   }
-  if (candidates.length === 0) return { checked, deleted: 0 }
+  if (candidates.length === 0) return { checked, deleted: 0, uploads }
 
   const deleted = await db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(${LOCK})`)
@@ -40,7 +42,7 @@ export async function sweepStorage({ graceMs = GRACE_MS, now = Date.now() } = {}
     await deleteBlobs(unused)
     return unused.length
   })
-  return { checked, deleted }
+  return { checked, deleted, uploads }
 }
 
 // Runs in the background every few hours while the server is up

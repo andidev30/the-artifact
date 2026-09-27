@@ -3,9 +3,10 @@ import { and, asc, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from 'd
 import { db, schema } from './db/index.js'
 import type { Artifact, Visibility } from './db/schema.js'
 import { env } from './env.js'
-import { MAX_HTML_BYTES, prepareFiles, PublishError, sha256, type FileInput, type PreparedFile } from './files.js'
+import { checkHtmlSize, checkManifest, MAX_HTML_BYTES, prepareFiles, PublishError, sha256, type FileInput, type FileMeta, type ManifestEntry } from './files.js'
 import { holdStorageLock } from './gc.js'
 import { getBlob, getText, putBlob } from './storage.js'
+import { checkUploadId, claimUploads } from './uploads.js'
 import { queueThumbnail } from './thumbnails.js'
 
 export { MAX_HTML_BYTES, PublishError }
@@ -86,28 +87,34 @@ export async function currentHtml(artifact: Artifact): Promise<string> {
   return v ? versionHtml(v) : ''
 }
 
-type PublishInput = {
+// Who publishes, and to which page (a new one without slug)
+type PublishTarget = {
   userId: string
   email: string
   organizationId: string | null
   clientName: string
   title: string
-  html: string
-  // Files next to the entry HTML, referenced by relative paths; each publish sends the full set
-  files?: FileInput[]
   slug?: string
   visibility?: Visibility
 }
 
+type PublishInput = PublishTarget & {
+  html: string
+  // Files next to the entry HTML, referenced by relative paths; each publish sends the full set
+  files?: FileInput[]
+}
+
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0]
 
-type Content = { html: string; htmlSha256: string; htmlSize: number; files: PreparedFile[] }
+// What a version records, and how its bytes get into storage: written by the API for an inline
+// publish, or taken over from where the agent uploaded them
+type Content = { htmlSha256: string; htmlSize: number; files: FileMeta[]; store: () => Promise<void> }
 
-// Uploads a version's content inside the transaction that records it, so the storage sweep can't
-// remove a blob between the upload and the commit
+// Stores a version's content inside the transaction that records it, so the storage sweep can't
+// remove a blob between storing it and the commit
 async function insertVersion(tx: Tx, values: Omit<typeof schema.artifactVersions.$inferInsert, 'htmlSha256' | 'htmlSize'>, content: Content) {
   await holdStorageLock(tx)
-  await Promise.all([putBlob(content.html, content.htmlSha256), ...content.files.map((f) => putBlob(f.content, f.sha256))])
+  await content.store()
   const [row] = await tx
     .insert(schema.artifactVersions)
     .values({ ...values, htmlSha256: content.htmlSha256, htmlSize: content.htmlSize })
@@ -122,10 +129,27 @@ async function insertVersion(tx: Tx, values: Omit<typeof schema.artifactVersions
 
 export async function publish(input: PublishInput): Promise<Artifact> {
   const htmlBytes = Buffer.byteLength(input.html, 'utf8')
-  if (htmlBytes > MAX_HTML_BYTES) {
-    throw new PublishError(`The page is larger than ${MAX_HTML_BYTES / 1024 / 1024} MB. Move large assets into files or compress images.`)
-  }
-  const content: Content = { html: input.html, htmlSha256: sha256(input.html), htmlSize: htmlBytes, files: prepareFiles(input.files, htmlBytes) }
+  checkHtmlSize(htmlBytes)
+  const files = prepareFiles(input.files, htmlBytes)
+  const htmlSha256 = sha256(input.html)
+  return publishContent(input, {
+    htmlSha256,
+    htmlSize: htmlBytes,
+    files,
+    store: async () => {
+      await Promise.all([putBlob(input.html, htmlSha256), ...files.map((f) => putBlob(f.content, f.sha256))])
+    },
+  })
+}
+
+// Publishes files the agent uploaded itself after prepare_upload, described again by the same manifest
+export async function publishUpload(input: PublishTarget & { uploadId: string; files: ManifestEntry[] }): Promise<Artifact> {
+  const { html, files } = checkManifest(input.files)
+  checkUploadId(input.uploadId)
+  return publishContent(input, { htmlSha256: html.sha256, htmlSize: html.size, files, store: () => claimUploads(input.uploadId, [html, ...files]) })
+}
+
+async function publishContent(input: PublishTarget, content: Content): Promise<Artifact> {
   const title = input.title.trim().slice(0, 200) || 'Untitled page'
 
   if (input.slug) {
