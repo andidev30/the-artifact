@@ -101,7 +101,7 @@ export function PageMenu({ label, items, className }: { label: string; items: Me
   )
 }
 
-function PageDialog({ labelledBy, onClose, children }: { labelledBy: string; onClose: () => void; children: ReactNode }) {
+export function PageDialog({ labelledBy, onClose, children }: { labelledBy: string; onClose: () => void; children: ReactNode }) {
   const dialog = useRef<HTMLDialogElement>(null)
   useEffect(() => {
     dialog.current?.showModal()

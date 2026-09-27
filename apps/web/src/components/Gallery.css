@@ -45,9 +45,74 @@
   margin-top: 20px;
 }
 
-.gallery[aria-busy] {
+.gallery[data-stale] {
   opacity: 0.6;
   transition: opacity 120ms ease;
+}
+
+.gallery-search + .folder-bar {
+  margin-top: 16px;
+}
+
+.folder-bar + .app-grid {
+  margin-top: 20px;
+}
+
+/* The end of a list that goes on: more pages load as it comes into view */
+.gallery-more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 16px;
+  min-height: 64px;
+  margin-top: 24px;
+  color: var(--ink-soft);
+  font-size: var(--step--1);
+}
+
+.gallery-loading {
+  font-weight: 600;
+}
+
+.gallery-loading::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 10px;
+  vertical-align: -1px;
+  background: var(--marker);
+  border: 1.5px solid var(--ink);
+  border-radius: 50%;
+  animation: gallery-pulse 900ms ease-in-out infinite alternate;
+}
+
+@keyframes gallery-pulse {
+  to {
+    transform: scale(0.6);
+    opacity: 0.5;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gallery-loading::before {
+    animation: none;
+  }
+}
+
+.page-card-tags .page-card-folder {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.page-card-folder .folder-icon {
+  width: 12px;
+  height: 12px;
 }
 
 .gallery-no-match {

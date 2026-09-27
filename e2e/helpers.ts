@@ -88,6 +88,7 @@ type PublishArgs = {
   html: string
   visibility?: string
   artifact_id?: string
+  folder?: string
   files?: { path: string; content: string; encoding?: 'utf8' | 'base64' }[]
 }
 

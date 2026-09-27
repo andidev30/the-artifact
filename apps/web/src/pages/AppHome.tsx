@@ -54,6 +54,7 @@ function Home({ me }: { me: Me }) {
         </div>
 
         <Gallery
+          key={org?.id ?? 'personal'}
           workspaceId={org?.id ?? 'personal'}
           workspaceName={workspace}
           email={me.email}
