@@ -19,6 +19,7 @@ import { admin } from './routes/admin.js'
 import { cron } from './routes/cron.js'
 import { health } from './routes/health.js'
 import { artifacts } from './routes/artifacts.js'
+import { folders } from './routes/folders.js'
 import { invitations, members, myInvitations } from './routes/members.js'
 import { onboarding, organizations } from './routes/organizations.js'
 import { settings } from './routes/settings.js'
@@ -73,6 +74,7 @@ api.route('/organizations', organizations)
 api.route('/onboarding', onboarding)
 api.route('/oauth/requests', consent)
 api.route('/artifacts', artifacts)
+api.route('/folders', folders)
 api.route('/contact-sales', contact)
 
 api.route('/organizations/:orgId', members)

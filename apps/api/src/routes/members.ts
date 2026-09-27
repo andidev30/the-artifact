@@ -9,7 +9,7 @@ import { env, mailEnabled } from '../env.js'
 import { limitInvites } from '../limits.js'
 import { log } from '../log.js'
 import { sendInvitation } from '../mail.js'
-import { EMAIL_RE } from '../validation.js'
+import { EMAIL_RE, UUID_RE } from '../validation.js'
 
 const DAY = 24 * 60 * 60 * 1000
 const INVITE_DAYS = 7
@@ -55,8 +55,6 @@ async function membershipOf(organizationId: string, userId: string) {
     .where(and(eq(schema.memberships.organizationId, organizationId), eq(schema.memberships.userId, userId)))
   return row ?? null
 }
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 // The caller's membership in :orgId; organizations they don't belong to look missing
 async function actor(c: Context<AuthEnv>) {
