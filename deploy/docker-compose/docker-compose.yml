@@ -4,6 +4,9 @@
 #   cp .env.example .env           # passwords, port and storage, read by docker compose itself
 #   docker compose up -d
 #
+# It runs the published image, pinned to ARTIFACT_VERSION in .env. To build the image from this
+# checkout instead, add docker-compose.build.yml (see its first lines).
+#
 # The project keeps the name it had when this file lived at the repository root, so installs that
 # moved here keep their volumes. If you cloned into a folder other than the-artifact, set the name
 # to that folder's name (docker volume ls shows it before _artifact-data).
@@ -11,9 +14,7 @@ name: the-artifact
 
 services:
   app:
-    build:
-      context: ../..
-    image: the-artifact:latest
+    image: ghcr.io/andidev30/the-artifact:${ARTIFACT_VERSION:-0.1.0}
     restart: unless-stopped
     ports:
       - '${ARTIFACT_PORT:-8080}:3000'

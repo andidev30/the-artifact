@@ -1,0 +1,11 @@
+# Builds the app image from this checkout instead of pulling the published one.
+# Turn it on with this line in .env, so every docker compose command picks it up:
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.build.yml
+# then build and start with docker compose up -d --build (after every git pull, too).
+services:
+  app:
+    build:
+      context: ../..
+    # A local name, so a build never passes for the published image and docker compose pull
+    # doesn't replace it
+    image: the-artifact:local

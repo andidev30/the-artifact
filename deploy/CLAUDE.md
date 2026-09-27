@@ -2,7 +2,7 @@
 
 Self-hosting manifests. Operators follow `docs/self-hosting.md` (Compose) and `docs/kubernetes.md`, so any change here needs the matching doc change. The repo-root `docker-compose.yml` is for development only.
 
-- `docker-compose/` — app + Postgres + MinIO. `app.env` holds the app's settings; `.env` holds what Compose itself reads (port, passwords, `S3_*`). The project `name: the-artifact` is kept so installs that moved here from the repo root keep their volumes; don't rename it or the volumes.
+- `docker-compose/` — app + Postgres + MinIO. `app.env` holds the app's settings; `.env` holds what Compose itself reads (`ARTIFACT_VERSION`, port, passwords, `S3_*`). The app runs the published `ghcr.io/andidev30/the-artifact` at `ARTIFACT_VERSION`; `docker-compose.build.yml` is the opt-in override (turned on with `COMPOSE_FILE` in `.env`) that builds from the checkout as `the-artifact:local`. On a release, bump the `ARTIFACT_VERSION` default in `docker-compose.yml` and `.env.example`. The project `name: the-artifact` is kept so installs that moved here from the repo root keep their volumes; don't rename it or the volumes.
 - `kubernetes/` — Kustomize base (`kubectl apply -k deploy/kubernetes`). Every setting goes into one Secret generated from `app.env`. `patches/thumbnails-off.yaml` is for clusters that can't install the seccomp profile.
 - `seccomp-chromium.json` — Docker's default seccomp profile plus the namespace calls Chromium's sandbox needs for thumbnails of untrusted pages. Used by both setups; don't replace it with `unconfined` or turn the Chromium sandbox off.
 
