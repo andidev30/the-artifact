@@ -6,6 +6,7 @@ Agents publish through the MCP tools below. You don't call them yourself: ask th
 
 - **One HTML document, or a small site.** A single self-contained document (inline CSS and JavaScript) is simplest. When a page is easier to build from several files, the agent sends the HTML as the entry plus its CSS, JavaScript, images, fonts and data, referenced by relative paths like `css/site.css` or `img/logo.png`. Scripts and fonts from public CDNs load fine either way.
 - **Small.** The HTML can be up to 2 MB, each other file up to 5 MB, and all of it together up to 10 MB in at most 100 files. Compress images, or load large media from a URL.
+- **On the hosted service's free Personal plan**, a personal workspace holds up to 50 pages. New versions of a page don't count, so when you reach the limit, update a page you have or delete one you no longer need. Pages in an organization don't count either.
 - **A short title.** It shows in the gallery and the browser tab (up to 200 characters).
 
 Pages run in a sandboxed frame: scripts, forms, pop-ups and downloads work, but a page can't read cookies, use `localStorage` on the app's origin, or talk to the rest of The Artifact. Its own files load normally, including with `fetch()`.

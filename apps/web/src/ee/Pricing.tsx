@@ -15,7 +15,7 @@ type Plan = {
   comingSoon?: boolean
 }
 
-// The Personal plan's page and history limits are placeholders; change them here once they are decided
+// The Personal plan's page and history limits are enforced by apps/api/src/ee/plans.ts; change both together
 const CLOUD_PLANS: Plan[] = [
   {
     name: 'Personal',
