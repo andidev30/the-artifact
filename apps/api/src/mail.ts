@@ -72,6 +72,29 @@ export async function sendShareNotice(to: string, n: ShareNotice) {
   })
 }
 
+type CommentNotice = { from: string; title: string; link: string; body: string; reply: boolean; version: number }
+
+export async function sendCommentNotice(to: string, n: CommentNotice) {
+  const what = n.reply ? 'replied to your comment on' : 'commented on'
+  const quote = n.body.length > 1000 ? `${n.body.slice(0, 1000)}…` : n.body
+  await transport.sendMail({
+    from: env.smtp.from,
+    to,
+    subject: `${n.from} ${what} "${n.title}"`,
+    text: `${n.from} ${what} "${n.title}" (version ${n.version}) on The Artifact:\n\n${quote}\n\nOpen the comments:\n${n.link}`,
+    html: `
+      <div style="font-family: -apple-system, 'Segoe UI', sans-serif; color: #1c2b4b; max-width: 480px">
+        <p style="font-size: 16px"><strong>${escapeHtml(n.from)}</strong> ${what} <strong>${escapeHtml(n.title)}</strong> (version ${n.version}).</p>
+        <p style="padding: 10px 14px; background: #f5f7fb; border-left: 3px solid #1c2b4b; white-space: pre-wrap">${escapeHtml(quote)}</p>
+        <p>
+          <a href="${n.link}" style="display: inline-block; padding: 12px 20px; background: #ffe066; color: #1c2b4b; border: 1.5px solid #1c2b4b; border-radius: 3px; font-weight: 700; text-decoration: none">
+            Open the comments
+          </a>
+        </p>
+      </div>`,
+  })
+}
+
 type InvitationNotice = { from: string; organization: string; role: 'admin' | 'member'; link: string; expiresInDays: number }
 
 export async function sendInvitation(to: string, n: InvitationNotice) {

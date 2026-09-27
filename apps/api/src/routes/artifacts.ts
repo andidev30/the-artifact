@@ -22,6 +22,7 @@ import {
   versionId,
 } from '../artifacts.js'
 import { requireUser, type AuthEnv } from '../auth/session.js'
+import { commentCounts, type CommentCount } from '../comments.js'
 import { belongsTo, canFile, fileInto, folderIn, workspaceOf } from '../folders.js'
 import { db, schema } from '../db/index.js'
 import { limitInvites } from '../limits.js'
@@ -51,16 +52,20 @@ artifacts.get('/', requireUser, async (c) => {
   try {
     if (workspace === 'shared') {
       const [{ rows, next }, total] = await Promise.all([listSharedWith(user, { query, cursor, limit }), cursor ? null : countSharedWith(user, query)])
-      const [editable, thumbs] = await Promise.all([
+      const [editable, thumbs, counts] = await Promise.all([
         editableIds(
           user,
           rows.map((r) => r.artifact),
         ),
         currentThumbnails(rows.map((r) => r.artifact)),
+        commentCounts(
+          user.id,
+          rows.map((r) => r.artifact.id),
+        ),
       ])
       return c.json(
         rows.map(({ artifact: a, ownerName, ownerEmail, role }) => ({
-          ...summary(a, ownerName ?? ownerEmail, thumbs.get(a.id)),
+          ...summary(a, ownerName ?? ownerEmail, thumbs.get(a.id), counts.get(a.id)),
           mine: false,
           canEdit: editable.has(a.id),
           role,
@@ -84,16 +89,20 @@ artifacts.get('/', requireUser, async (c) => {
       listForWorkspace(user.id, organizationId, { query, folder, cursor, limit }),
       cursor ? null : countForWorkspace(user.id, organizationId, { query, folder }),
     ])
-    const [editable, thumbs] = await Promise.all([
+    const [editable, thumbs, counts] = await Promise.all([
       editableIds(
         user,
         rows.map((r) => r.artifact),
       ),
       currentThumbnails(rows.map((r) => r.artifact)),
+      commentCounts(
+        user.id,
+        rows.map((r) => r.artifact.id),
+      ),
     ])
     return c.json(
       rows.map(({ artifact: a, ownerName, ownerEmail, folderName }) => ({
-        ...summary(a, ownerName ?? ownerEmail, thumbs.get(a.id)),
+        ...summary(a, ownerName ?? ownerEmail, thumbs.get(a.id), counts.get(a.id)),
         mine: a.ownerId === user.id,
         canEdit: editable.has(a.id),
         folder: a.folderId && folderName ? { id: a.folderId, name: folderName } : null,
@@ -107,7 +116,7 @@ artifacts.get('/', requireUser, async (c) => {
   }
 })
 
-function summary(a: Artifact, owner: string, thumb: ThumbnailState | undefined) {
+function summary(a: Artifact, owner: string, thumb: ThumbnailState | undefined, comments: CommentCount | undefined) {
   return {
     slug: a.slug,
     title: a.title,
@@ -119,6 +128,9 @@ function summary(a: Artifact, owner: string, thumb: ThumbnailState | undefined) 
     // thumbnail is kept for older clients; thumbnailState says whether one is still coming
     thumbnail: thumb === 'ready',
     thumbnailState: thumb ?? 'none',
+    comments: comments?.total ?? 0,
+    // Written by others since this person last opened the page's comments
+    unreadComments: comments?.unread ?? 0,
   }
 }
 
@@ -130,6 +142,8 @@ artifacts.get('/:slug', async (c) => {
   const access = artifact ? await accessLevel(artifact, user) : null
   if (!artifact || !access) return c.json({ error: 'Not found' }, 404)
   const [owner] = await db.select({ name: schema.users.name, email: schema.users.email }).from(schema.users).where(eq(schema.users.id, artifact.ownerId))
+  // Only signed-in people see comments (see routes/comments.ts)
+  const counts = user ? await commentCounts(user.id, [artifact.id]) : null
   return c.json({
     slug: artifact.slug,
     title: artifact.title,
@@ -140,6 +154,7 @@ artifacts.get('/:slug', async (c) => {
     inOrganization: artifact.organizationId !== null,
     canEdit: access === 'edit',
     isOwner: user?.id === artifact.ownerId,
+    comments: counts ? (counts.get(artifact.id) ?? { total: 0, unread: 0 }) : null,
     contentUrl: `/api/artifacts/${artifact.slug}/v/${artifact.currentVersion}/`,
   })
 })

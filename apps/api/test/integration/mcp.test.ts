@@ -34,10 +34,12 @@ describe('MCP over /mcp', () => {
     const { token } = await setup()
     const body = await (await mcpRequest(token, 'tools/list')).json()
     expect(body.result.tools.map((t: { name: string }) => t.name).sort()).toEqual([
+      'add_comment',
       'delete_artifact',
       'download_artifact',
       'get_artifact',
       'list_artifacts',
+      'list_comments',
       'list_folders',
       'list_versions',
       'move_artifact',
@@ -45,6 +47,8 @@ describe('MCP over /mcp', () => {
       'publish_artifact',
       'publish_upload',
       'rename_artifact',
+      'reply_comment',
+      'resolve_comment',
       'restore_version',
       'set_artifact_visibility',
       'share_artifact',
@@ -360,10 +364,12 @@ describe('MCP over /mcp for 2026-07-28 clients', () => {
 
     const { tools } = await client.listTools()
     expect(tools.map((t) => t.name).sort()).toEqual([
+      'add_comment',
       'delete_artifact',
       'download_artifact',
       'get_artifact',
       'list_artifacts',
+      'list_comments',
       'list_folders',
       'list_versions',
       'move_artifact',
@@ -371,6 +377,8 @@ describe('MCP over /mcp for 2026-07-28 clients', () => {
       'publish_artifact',
       'publish_upload',
       'rename_artifact',
+      'reply_comment',
+      'resolve_comment',
       'restore_version',
       'set_artifact_visibility',
       'share_artifact',
