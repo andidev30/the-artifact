@@ -12,6 +12,7 @@ import { mcp } from './mcp.js'
 import { consent } from './oauth/consent.js'
 import { oauth } from './oauth/server.js'
 import { admin } from './routes/admin.js'
+import { cron } from './routes/cron.js'
 import { artifacts } from './routes/artifacts.js'
 import { invitations, members, myInvitations } from './routes/members.js'
 import { onboarding, organizations } from './routes/organizations.js'
@@ -64,6 +65,7 @@ api.route('/invitations', invitations)
 api.route('/me/invitations', myInvitations)
 api.route('/me', settings)
 api.route('/admin', admin)
+api.route('/cron', cron)
 
 api.get('/me', requireUser, async (c) => {
   const user = c.get('user')!

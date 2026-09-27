@@ -37,6 +37,8 @@ export const env = {
   // Built web app to serve from this process (the Docker image sets it); empty in development
   webDir: process.env.WEB_DIR ?? '',
   migrateOnStart: process.env.MIGRATE_ON_START === 'true',
+  // Bearer token for GET /api/cron/*, for hosts that run scheduled jobs from outside (Vercel Cron)
+  cronSecret: process.env.CRON_SECRET ?? '',
   // Object storage (S3 API: MinIO, AWS S3, Cloudflare R2...) for page content and thumbnails.
   // Without keys, the AWS SDK's usual credential chain applies (e.g. an IAM role).
   storage: {
