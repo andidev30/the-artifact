@@ -1,0 +1,5 @@
+# Commits that only reformatted code. GitHub's blame view skips them; locally:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# chore: Biome instead of ESLint, TypeScript 7 in the web app, Node 26
+5bf326e1503bf5339d5c41b8ec3af26c393000c3

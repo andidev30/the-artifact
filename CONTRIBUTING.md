@@ -1,10 +1,12 @@
 # Contributing
 
-Thanks for helping. Bug reports, fixes, docs and features are all welcome. For anything larger than a small fix, open an issue first so we can agree on the approach before you write the code.
+Thanks for helping. Bug reports, fixes, docs and features are all welcome. For anything larger than a small fix, open an issue first so we can agree on the approach before you write the code. What's planned, and what is up next, is on the [project board](https://github.com/users/andidev30/projects/2); issues in **Todo** are good places to start.
 
 ## Getting set up
 
 Follow [Development](README.md#development) in the README, then [TESTING.md](TESTING.md) for the test database. You need Node 26 (see `.nvmrc`), pnpm 11 (`npm install -g pnpm`), Docker and, for end-to-end tests, Google Chrome.
+
+Run `git config blame.ignoreRevsFile .git-blame-ignore-revs` once, so `git blame` skips commits that only reformatted code (GitHub does this on its own). A commit that only reformats goes into that file.
 
 `CLAUDE.md` in the root and in each app describes how the code is laid out and the rules that aren't obvious from one file. They are written for coding agents but are the best map for people too.
 
