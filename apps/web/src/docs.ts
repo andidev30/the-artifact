@@ -14,6 +14,7 @@ const USING: DocPage[] = [
   { slug: 'sharing', title: 'Sharing and permissions' },
   { slug: 'organizations', title: 'Organizations and members' },
   { slug: 'version-history', title: 'Version history' },
+  { slug: 'comments', title: 'Comments' },
 ]
 
 const RUNNING: DocPage[] = [

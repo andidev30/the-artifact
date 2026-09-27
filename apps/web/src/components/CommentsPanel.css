@@ -1,0 +1,243 @@
+/* The close button, notes and errors come from HistoryPanel.css */
+
+.comments-panel {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: 360px;
+  min-height: 0;
+  background: var(--paper);
+  border-left: 1.5px solid var(--ink);
+}
+
+.comments-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 16px 12px;
+}
+
+.comments-head h2 {
+  font-size: var(--step-0);
+  font-weight: 700;
+}
+
+.comments-head h2:focus {
+  outline: none;
+}
+
+.comments-scroll {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  padding: 0 16px 16px;
+  overflow-y: auto;
+}
+
+.comments-list,
+.comment-replies {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.comment-thread {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--white);
+  border: 1.5px solid var(--grid);
+  border-radius: 3px;
+}
+
+.comment-thread[data-resolved] {
+  background: var(--paper);
+}
+
+.comment-replies {
+  padding-left: 12px;
+  border-left: 2px solid var(--grid);
+}
+
+.comment {
+  display: grid;
+  gap: 2px;
+}
+
+.comment-byline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: var(--step--1);
+}
+
+.comment-byline strong {
+  overflow-wrap: anywhere;
+}
+
+.comment-agent,
+.comment-new {
+  padding: 0 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 3px;
+}
+
+.comment-agent {
+  color: var(--ink-soft);
+  border: 1px solid var(--grid);
+}
+
+.comment-new {
+  background: var(--marker);
+  border: 1px solid var(--ink);
+}
+
+.comment-meta,
+.comment-left,
+.comment-resolved-note {
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
+}
+
+/* Plain text as written: line breaks kept, long words and links wrapped */
+.comment-body {
+  margin-top: 4px;
+  font-size: var(--step--1);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.comment-actions,
+.comment-confirm,
+.comment-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin-top: 4px;
+}
+
+.comment-confirm span {
+  font-size: var(--step--1);
+  font-weight: 600;
+}
+
+.comment-action {
+  padding: 2px 0;
+  font: 600 0.8125rem var(--sans);
+  color: var(--line);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.comment-action:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.comment-danger {
+  color: #b3261e;
+}
+
+.comment-resolved {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.comment-resolved p {
+  display: grid;
+  min-width: 0;
+  font-size: 0.8125rem;
+}
+
+.comment-resolved-label {
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.comment-snippet {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.comment-resolved-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+
+.comments-more {
+  align-self: center;
+  padding: 8px 14px;
+  font: 600 var(--step--1) var(--sans);
+  cursor: pointer;
+}
+
+.comments-compose {
+  padding: 12px 16px 16px;
+  border-top: 1.5px solid var(--grid);
+}
+
+.comment-form {
+  display: grid;
+  gap: 6px;
+}
+
+.comment-form textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  font: var(--step--1) / 1.45 var(--sans);
+  color: var(--ink);
+  background: var(--white);
+  border: 1.5px solid var(--ink);
+  border-radius: 3px;
+  resize: vertical;
+}
+
+.comment-form textarea:focus-visible {
+  outline: 2px solid var(--line);
+  outline-offset: 1px;
+}
+
+.comment-form-actions {
+  justify-content: flex-end;
+  margin-top: 0;
+}
+
+.comment-submit {
+  height: 34px;
+  padding: 0 14px;
+  font: 700 var(--step--1) var(--sans);
+  cursor: pointer;
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
+.comment-submit:disabled {
+  opacity: 0.6;
+  cursor: default;
+  box-shadow: none;
+}
+
+@media (max-width: 640px) {
+  .comments-panel {
+    position: absolute;
+    inset: 0;
+    width: auto;
+    border-left: 0;
+  }
+}

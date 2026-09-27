@@ -476,9 +476,23 @@ function Card({ page: a, showFolder, canMove, onRename, onDelete, onMove }: Card
         )}
         {a.role ? <span>{a.role === 'editor' ? 'Editor' : 'Viewer'}</span> : <span data-visibility={a.visibility}>{VISIBILITY_LABEL[a.visibility]}</span>}
         {a.publishedWith && <span>{a.publishedWith}</span>}
+        {a.comments ? <CommentCount total={a.comments} unread={a.unreadComments ?? 0} /> : null}
       </span>
       <PageMenu className="page-card-menu" label={`More actions for ${a.title}`} items={menu} />
     </div>
+  )
+}
+
+// New ones are those others wrote since you last opened the page's comments
+function CommentCount({ total, unread }: { total: number; unread: number }) {
+  return (
+    <span className="page-card-comments" data-unread={unread ? '' : undefined}>
+      <svg viewBox="0 0 20 20" aria-hidden="true">
+        <path d="M3 4.5h14v9H8l-4 3v-3H3z" />
+      </svg>
+      {unread ? `${unread} new` : total}
+      <span className="visually-hidden">{unread ? ` of ${total} ${total === 1 ? 'comment' : 'comments'}` : total === 1 ? ' comment' : ' comments'}</span>
+    </span>
   )
 }
 

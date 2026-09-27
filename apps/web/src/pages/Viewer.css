@@ -99,6 +99,29 @@
   box-shadow: inset 0 -3px 0 var(--marker);
 }
 
+.viewer-comments {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.viewer-count {
+  min-width: 20px;
+  padding: 0 5px;
+  font-size: 0.75rem;
+  line-height: 18px;
+  text-align: center;
+  color: var(--ink-soft);
+  border: 1px solid var(--grid);
+  border-radius: 9px;
+}
+
+.viewer-count[data-unread] {
+  color: var(--ink);
+  background: var(--marker);
+  border-color: var(--ink);
+}
+
 .viewer-body {
   position: relative;
   display: flex;
@@ -177,6 +200,7 @@
   }
 
   .viewer-actions {
+    flex-wrap: wrap;
     width: 100%;
   }
 
