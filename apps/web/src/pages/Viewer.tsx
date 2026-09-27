@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { fetchMe, getArtifact, logout, versionUrl, type ArtifactPage, type Visibility } from '../api'
+import { downloadUrl, fetchMe, getArtifact, logout, versionUrl, type ArtifactPage, type Visibility } from '../api'
 import { HistoryPanel, OldVersionBar, type Viewing } from '../components/HistoryPanel'
 import { DeleteDialog, PageMenu, RenameDialog, type MenuItem } from '../components/PageActions'
 import { ShareDialog } from '../components/ShareDialog'
@@ -130,7 +130,8 @@ function PageFrame({ page, email, onChange }: { page: ArtifactPage; email: strin
   const [dialog, setDialog] = useState<'rename' | 'delete' | null>(null)
   const [announce, setAnnounce] = useState('')
 
-  const menu: MenuItem[] = []
+  // Downloads what the frame shows, which can be an older version picked in the history
+  const menu: MenuItem[] = [{ label: 'Download', download: downloadUrl(page.slug, viewing?.version) }]
   if (page.canEdit) menu.push({ label: 'Rename', onSelect: () => setDialog('rename') })
   if (page.isOwner) menu.push({ label: 'Delete', onSelect: () => setDialog('delete'), danger: true })
 

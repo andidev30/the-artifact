@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import { expect, test } from '@playwright/test'
 import { connectAgent, latestMail, publishViaMcp, signUpPersonal, uniqueEmail } from './helpers'
 
@@ -140,6 +141,16 @@ test('a restricted multi-file page loads its CSS, JS and images in the viewer an
   await expect(frame.locator('#data')).toHaveText('loaded')
   await expect(frame.locator('body')).toHaveCSS('background-color', 'rgb(10, 120, 90)')
   await expect.poll(() => frame.locator('#dot').evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(4)
+
+  // Download saves the version being viewed, with all its files, as a zip
+  await page.getByRole('button', { name: 'More actions' }).click()
+  const downloading = page.waitForEvent('download')
+  await page.getByRole('menuitem', { name: 'Download' }).click()
+  const download = await downloading
+  expect(download.suggestedFilename()).toBe('site-v2-v1.zip')
+  const zip = await readFile((await download.path())!)
+  expect(zip.subarray(0, 4).toString('latin1')).toBe('PK\x03\x04')
+  for (const name of ['index.html', 'css/site.css', 'js/app.js', 'data.json', 'img/dot.png']) expect(zip.includes(name)).toBe(true)
 
   // Restoring brings the files back as version 3
   await page.getByRole('button', { name: 'Restore this version' }).click()

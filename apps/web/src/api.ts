@@ -410,6 +410,11 @@ export function deleteArtifact(slug: string) {
   return pageRequest<void>(slug, '', 'The page could not be deleted. Try again.', { method: 'DELETE' })
 }
 
+// A version and its files as one zip; the current version when none is given
+export function downloadUrl(slug: string, version?: number) {
+  return `/api/artifacts/${encodeURIComponent(slug)}/download${version ? `?version=${version}` : ''}`
+}
+
 // A version as its own sandboxed document; its CSS, JS and images load by relative paths from here
 export function versionUrl(slug: string, version: number) {
   return `/api/artifacts/${encodeURIComponent(slug)}/v/${version}/`
