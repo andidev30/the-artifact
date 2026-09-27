@@ -1,4 +1,6 @@
+import { eq } from 'drizzle-orm'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { findOrCreateUser } from '../../src/auth/users.js'
 import { hashToken } from '../../src/auth/session.js'
 import { db, schema } from '../../src/db/index.js'
 import { env } from '../../src/env.js'
@@ -15,3 +17,38 @@ describe('config for the web app', () => {
   })
 })
 
+describe('new accounts on a self-hosted install', () => {
+  const original = env.selfHosted
+  afterEach(() => {
+    env.selfHosted = original
+  })
+
+  async function onboarded(email: string) {
+    const [row] = await db.select({ onboardedAt: schema.users.onboardedAt }).from(schema.users).where(eq(schema.users.email, email))
+    return row.onboardedAt !== null
+  }
+
+  it('lets the first account set the server up, and starts everyone after it in a personal workspace', async () => {
+    env.selfHosted = true
+    const first = await findOrCreateUser({ email: 'first@example.com' })
+    const second = await findOrCreateUser({ email: 'second@example.com' })
+    expect(first.isAdmin).toBe(true)
+    expect(await onboarded('first@example.com')).toBe(false)
+    expect(second.isAdmin).toBe(false)
+    expect(await onboarded('second@example.com')).toBe(true)
+  })
+
+  it('lets everyone choose a workspace on the hosted service', async () => {
+    env.selfHosted = false
+    await findOrCreateUser({ email: 'first@example.com' })
+    await findOrCreateUser({ email: 'second@example.com' })
+    expect(await onboarded('first@example.com')).toBe(false)
+    expect(await onboarded('second@example.com')).toBe(false)
+  })
+
+  it('has no contact sales form', async () => {
+    env.selfHosted = true
+    const res = await call('/api/contact-sales', { json: { name: 'Dana', email: 'dana@acme.example' } })
+    expect(res.status).toBe(404)
+  })
+})

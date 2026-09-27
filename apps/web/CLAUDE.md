@@ -7,6 +7,7 @@ React 19, React Router 8, Vite 8, TypeScript. No UI or state library: plain comp
 | Path | What |
 | --- | --- |
 | `src/main.tsx` | Every route. Add new pages here |
+| `src/ee/` | Hosted-service-only pages (see `src/ee/CLAUDE.md`); `pages/Home.tsx` loads them |
 | `src/pages/` | One component per route, with its own `.css` when it needs styles |
 | `src/components/` | Shared pieces (header, gallery, share dialog, history panel, menus), each with its own `.css` |
 | `src/api.ts` | Typed `fetch` wrappers for `/api/*`; `src/adminApi.ts` for `/api/admin` |
@@ -22,7 +23,7 @@ React 19, React Router 8, Vite 8, TypeScript. No UI or state library: plain comp
 
 - API wrappers throw on non-OK responses; form endpoints throw `FieldError` with the field the server named so the page can mark it. Return `null` for "missing or no access" instead of throwing.
 - Every page must render correctly in all modes from `useConfig()`: self-hosted or hosted, with or without email. Render nothing until the config arrives where the two differ (e.g. `Landing`, `Auth`), so self-hosted installs never flash marketing pages.
-- Styles: design tokens (`--paper`, `--ink`, `--line`, `--marker`, `--step-*`, `--gutter`, …) live in `src/index.css`; use them instead of raw values. `src/App.css` holds the marketing site. Class names are plain and prefixed by component (`share-…`, `gallery-…`).
+- Styles: design tokens (`--paper`, `--ink`, `--line`, `--marker`, `--step-*`, `--gutter`, …) live in `src/index.css`; use them instead of raw values. `src/App.css` holds shared pieces (nav, buttons, commands, agent picker); the marketing site's styles are in `src/ee/Landing.css`. Class names are plain and prefixed by component (`share-…`, `gallery-…`).
 - The look is a blueprint on grid paper: ink-blue lines, numbered circles for steps, "wires" between boxes. Reuse existing patterns (settings rail, cards, `CopyCommand`) before inventing new ones.
 - Check phone widths: headers wrap, menus must open on screen, and there is no horizontal scroll.
 - Published pages render in a sandboxed `<iframe>` loaded from `/api/artifacts/<slug>/v/<n>/` (never `srcdoc`), so their relative files resolve and they can't reach the app.

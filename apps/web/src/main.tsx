@@ -7,7 +7,7 @@ import { AppHome } from './pages/AppHome.tsx'
 import { Auth } from './pages/Auth.tsx'
 import { Authorize } from './pages/Authorize.tsx'
 import { Docs } from './pages/Docs.tsx'
-import { Landing } from './pages/Landing.tsx'
+import { ContactSalesPage, Home } from './pages/Home.tsx'
 import { NotFound } from './pages/NotFound.tsx'
 import { Onboarding } from './pages/Onboarding.tsx'
 import { Viewer } from './pages/Viewer.tsx'
@@ -17,16 +17,15 @@ import { OrganizationSettings } from './pages/OrganizationSettings.tsx'
 import { Settings } from './pages/Settings.tsx'
 import { Admin } from './pages/Admin.tsx'
 import { ConfirmSignIn } from './pages/ConfirmSignIn.tsx'
-import { ContactSales } from './pages/ContactSales.tsx'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Landing />} />
+        <Route path="/" element={<Home />} />
         <Route path="/login" element={<Auth mode="login" />} />
         <Route path="/signup" element={<Auth mode="signup" />} />
-        <Route path="/contact-sales" element={<ContactSales />} />
+        <Route path="/contact-sales" element={<ContactSalesPage />} />
         <Route path="/auth/confirm" element={<ConfirmSignIn />} />
         <Route path="/app" element={<AppHome />} />
         <Route path="/onboarding" element={<Onboarding />} />

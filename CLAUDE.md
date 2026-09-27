@@ -10,6 +10,7 @@ Hosts the HTML pages coding agents build. An agent publishes through the MCP ser
 | `apps/web` | React 19 + Vite single-page app, including the in-app docs | see `apps/web/CLAUDE.md` |
 | `docs/` | User and operator docs, rendered at `/docs` and read on GitHub | see `docs/CLAUDE.md` |
 | `deploy/` | Docker Compose and Kubernetes manifests for self-hosting | see `deploy/CLAUDE.md` |
+| `apps/*/src/ee/` | Hosted-service-only code (marketing, contact sales, workspace choice), under `LICENSE-EE` | see `apps/*/src/ee/CLAUDE.md` |
 | `e2e/` | Playwright specs | setup in `TESTING.md` |
 | `docker-compose.yml` | Dev services only: Postgres, MinIO, Mailpit | not for deploying |
 | `Dockerfile` | Production image: API + built web app on one port | |
@@ -33,9 +34,13 @@ Create the test database once: `docker compose exec postgres createdb -U artifac
 
 ## Modes every change has to work in
 
-- **Self-hosted vs hosted.** `SELF_HOSTED` is on unless set to `false`. Self-hosted skips the marketing pages, and its first account becomes the instance admin. Only the hosted service sets `false`.
+- **Self-hosted vs hosted.** `SELF_HOSTED` is on unless set to `false`. Self-hosted skips the marketing pages; its first account becomes the instance admin and names the server's organization, and everyone after it starts in a personal workspace and joins organizations by invitation. On the hosted service everyone chooses **Just me** or **My team**. Only the hosted service sets `false`.
 - **With vs without email.** Without `SMTP_HOST` nothing is emailed: people sign in with a password, and admins and inviters pass links on by hand. Sign-in, invitations and sharing all have both paths; `apps/api/test/integration/no-email.test.ts` covers the no-email one.
 - **Thumbnails on vs off.** Without `CHROME_PATH` there are no screenshots and cards show a drawn sketch.
+
+## Licensing
+
+Everything is AGPL-3.0 (`LICENSE`) except folders named `ee/`, which are under `LICENSE-EE`. Hosted-service-only features go in `ee/`; anything a self-hosted install uses stays outside it. Don't copy code from `ee/` into core.
 
 ## Conventions
 

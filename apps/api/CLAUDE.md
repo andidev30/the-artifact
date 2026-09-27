@@ -21,7 +21,8 @@ Hono on Node 24, Drizzle ORM over `postgres`, S3 via `@aws-sdk/client-s3`, MCP v
 | `src/oauth/` | OAuth 2.1 server for MCP clients (discovery, dynamic registration, PKCE) and the consent API |
 | `src/auth/` | Sessions, email links, passwords, Google sign-in, account lookup/creation |
 | `src/routes/` | REST routers for the web app |
-| `src/mail.ts` | Every outgoing email. Throws `MailDisabledError` without SMTP |
+| `src/mail.ts` | Outgoing email. Throws `MailDisabledError` without SMTP |
+| `src/ee/` | Hosted-service-only routes (contact sales); see `src/ee/CLAUDE.md` |
 | `src/scripts/` | Operator CLIs (`admin:grant`, `storage:sweep`, `thumbnails:backfill`), also run as `node dist/scripts/*.js` in the image |
 
 ## Rules that aren't obvious from one file
@@ -31,7 +32,7 @@ Hono on Node 24, Drizzle ORM over `postgres`, S3 via `@aws-sdk/client-s3`, MCP v
 - **Version numbers.** Publish and restore lock the page row (`for update`) before picking the next number. Restore never rewrites history; it publishes the old content as a new version.
 - **Tokens are stored hashed** (`hashToken`): sessions, email links, invitations, OAuth codes and tokens. Links work once; delete the row as it is used.
 - **Email links must survive mail scanners.** Opening a sign-in link only shows a confirmation page; the POST on Continue uses it up.
-- **Serialized admin changes.** Creating accounts and changing admins take `lockAdmins(tx)` so there is always one admin and only the first account on a self-hosted install becomes admin.
+- **New accounts.** Creating accounts and changing admins take `lockAdmins(tx)`. Insert new users with `...(await newAccountFields(tx))`: on a self-hosted install the first account becomes admin and goes through onboarding, and later ones start onboarded in their personal workspace.
 - **Untrusted HTML.** Page content is served with `CONTENT_CSP` (sandbox, opaque origin) on every file, never with the app's cookies. Thumbnails intercept every request; see the header comment in `src/thumbnails.ts` before touching it.
 - Shared helpers: `EMAIL_RE` in `src/validation.ts`, `likeTerm` in `src/artifacts.ts` for escaped `ILIKE` searches, `checkTitle` for page names.
 
@@ -47,6 +48,6 @@ Hono on Node 24, Drizzle ORM over `postgres`, S3 via `@aws-sdk/client-s3`, MCP v
 - `test/unit/` — pure functions, no services.
 - `test/integration/` — calls `app.request()` in-process against `artifact_test` and the `artifact-test` bucket. Every table is truncated before each test and files run serially.
 - Use the helpers in `test/integration/helpers.ts` (`createUser`, `createOrg`, `createPage`, `connectAgent`, `callTool`, `call`) rather than building requests by hand.
-- `src/mail.ts` is replaced by a mock in `test/integration/setup.ts` that only has the send functions. Keep non-mail code out of `mail.ts`, and add any new send function to that mock.
+- `src/mail.ts` is replaced by a mock in `test/integration/setup.ts` that only has the send functions. Keep non-mail code out of `mail.ts`, and add any new send function to that mock (`src/ee/mail.ts` has a mock of its own).
 - `vitest.config.ts` pins `SELF_HOSTED=false` and SMTP on. Tests that need other modes change the `env` object and restore it in `afterEach` (see `admin.test.ts`, `no-email.test.ts`).
 - `pnpm --filter @the-artifact/api lint` type-checks `src` and `test` together.

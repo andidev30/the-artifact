@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { sendSalesInquiry } from '../../src/mail.js'
+import { sendSalesInquiry } from '../../src/ee/mail.js'
 import { call } from './helpers.js'
 
 const sendMock = vi.mocked(sendSalesInquiry)

@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { db, schema } from '../db/index.js'
 import { mailEnabled } from '../env.js'
-import { firstAccountBecomesAdmin, hasAccounts, instanceSettings, lockAdmins } from '../instance.js'
+import { hasAccounts, instanceSettings, lockAdmins, newAccountFields } from '../instance.js'
 import { startSession } from './session.js'
 import { EMAIL_RE } from '../validation.js'
 import { afterSignInUrl, createPasswordAccount, waitingForAccess } from './users.js'
@@ -116,8 +116,7 @@ password.post('/setup', async (c) => {
   const created = await db.transaction(async (tx) => {
     await lockAdmins(tx)
     if (await hasAccounts(tx)) return null
-    const isAdmin = await firstAccountBecomesAdmin(tx)
-    const [user] = await tx.insert(schema.users).values({ email, name, passwordHash, isAdmin }).returning()
+    const [user] = await tx.insert(schema.users).values({ email, name, passwordHash, ...(await newAccountFields(tx)) }).returning()
     return user
   })
   if (!created) return c.json({ error: 'This server is already set up. Log in instead.', code: 'already_set_up' }, 409)

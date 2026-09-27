@@ -2,7 +2,7 @@ import { and, eq, gt } from 'drizzle-orm'
 import { db, schema } from '../db/index.js'
 import type { User } from '../db/schema.js'
 import { env } from '../env.js'
-import { firstAccountBecomesAdmin, instanceSettings, lockAdmins } from '../instance.js'
+import { instanceSettings, lockAdmins, newAccountFields } from '../instance.js'
 
 type Profile = {
   email: string
@@ -94,10 +94,9 @@ export async function findOrCreateUser(profile: Profile): Promise<User> {
     await lockAdmins(tx)
     const [raced] = await tx.select().from(schema.users).where(eq(schema.users.email, email))
     if (raced) return raced
-    const isAdmin = await firstAccountBecomesAdmin(tx)
     const [created] = await tx
       .insert(schema.users)
-      .values({ email, name: profile.name, avatarUrl: profile.avatarUrl, googleSub: profile.googleSub, passwordHash: profile.passwordHash, isAdmin })
+      .values({ email, name: profile.name, avatarUrl: profile.avatarUrl, googleSub: profile.googleSub, passwordHash: profile.passwordHash, ...(await newAccountFields(tx)) })
       .returning()
     return created
   })
@@ -131,8 +130,7 @@ export async function createPasswordAccount(email: string, name: string | null, 
     await lockAdmins(tx)
     const [taken] = await tx.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, email))
     if (taken) return null
-    const isAdmin = await firstAccountBecomesAdmin(tx)
-    const [created] = await tx.insert(schema.users).values({ email, name, passwordHash, isAdmin }).returning()
+    const [created] = await tx.insert(schema.users).values({ email, name, passwordHash, ...(await newAccountFields(tx)) }).returning()
     return created
   })
 }
