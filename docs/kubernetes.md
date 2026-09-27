@@ -92,7 +92,7 @@ kubectl -n the-artifact port-forward svc/the-artifact 8080:80
 
 ## Running it
 
-The app runs as one pod, and updates replace it rather than rolling: it migrates the database on start, and keeps the wrong-password limits in memory. Keep `replicas: 1`.
+The app runs as one pod, and updates replace it rather than rolling: it migrates the database on start. Keep `replicas: 1`.
 
 Commands from the other pages run with `kubectl exec`:
 
