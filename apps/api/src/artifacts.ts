@@ -70,6 +70,16 @@ export async function canEdit(artifact: Artifact, viewer: Viewer): Promise<boole
   return (await accessLevel(artifact, viewer)) === 'edit'
 }
 
+// Only the owner deletes: editors and organization admins can't remove someone else's page
+export function canDelete(artifact: Artifact, viewer: Viewer): boolean {
+  return artifact.ownerId === viewer.id
+}
+
+// Its versions, files, shares and thumbnails go with it; the storage sweep removes blobs nothing uses any more
+export async function deleteArtifact(artifact: Artifact) {
+  await db.delete(schema.artifacts).where(eq(schema.artifacts.id, artifact.id))
+}
+
 export async function findBySlug(slug: string) {
   const [row] = await db.select().from(schema.artifacts).where(eq(schema.artifacts.slug, slug))
   return row ?? null

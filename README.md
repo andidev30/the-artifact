@@ -101,6 +101,10 @@ Other clients, HTTPS, email and backups are covered in [Self-hosting](docs/self-
 | `rename_artifact` | Renames a page |
 | `set_artifact_visibility` | Restricted, organization, or anyone with the link |
 | `share_artifact` | Shares a page with people by email |
+| `delete_artifact` | Deletes a page (owner only) |
+| `list_versions` | Lists a page's versions, as the history shows them |
+| `restore_version` | Makes an older version current again |
+| `download_artifact` | A link to download a page and its files as a zip |
 
 Arguments and limits are in [Publishing pages](docs/publishing.md).
 

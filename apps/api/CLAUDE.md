@@ -10,15 +10,16 @@ Hono on Node 26, Drizzle ORM over `postgres`, S3 via `@aws-sdk/client-s3`, MCP v
 | `src/app.ts` | Mounts every router; `GET /api/config` and `GET /api/me` |
 | `src/env.ts` | Environment variables. Add new settings here and read them from `env` |
 | `src/db/schema.ts` | Tables. `src/db/index.ts` exports `db`, `schema` and the `Tx` type |
-| `src/artifacts.ts` | Pages and versions: access rules (`accessLevel`, `canView`, `canEdit`), publish, restore, listing |
-| `src/content.ts` | Serves a version as a document tree at `/api/artifacts/<slug>/v/<n>/…`, link tokens for sandboxed frames |
+| `src/artifacts.ts` | Pages and versions: access rules (`accessLevel`, `canView`, `canEdit`, `canDelete`), publish, restore, delete, listing |
+| `src/content.ts` | Serves a version as a document tree at `/api/artifacts/<slug>/v/<n>/…` and as a zip at `/api/artifacts/<slug>/download`, link tokens for sandboxed frames and agents' download links |
+| `src/zip.ts` | Writes zip archives (no dependency) |
 | `src/files.ts` | Multi-file page validation and size limits |
 | `src/storage.ts`, `src/gc.ts` | Content-addressed blobs in S3 and the sweep that deletes unreferenced ones |
 | `src/thumbnails.ts` | Gallery screenshots of untrusted HTML with no network of its own |
 | `src/previews.ts` | Link preview (Open Graph) tags in the HTML shell of `/a/<slug>`, for link-shared pages only; mounted by `src/web.ts` and by `api/index.js` on Vercel |
 | `src/sharing.ts` | Per-person shares by email |
 | `src/instance.ts` | Instance admins, sign-up policy and instance settings |
-| `src/mcp.ts` | The MCP tools (`publish_artifact`, `list_artifacts`, `get_artifact`, `rename_artifact`, `set_artifact_visibility`, `share_artifact`, and `prepare_upload`/`publish_upload` when `S3_PUBLIC_ENDPOINT` is set) |
+| `src/mcp.ts` | The MCP tools (`publish_artifact`, `list_artifacts`, `get_artifact`, `rename_artifact`, `set_artifact_visibility`, `share_artifact`, `delete_artifact`, `list_versions`, `restore_version`, `download_artifact`, and `prepare_upload`/`publish_upload` when `S3_PUBLIC_ENDPOINT` is set) |
 | `src/uploads.ts` | Publishing by direct upload: upload links, then checking and claiming what arrived |
 | `src/oauth/` | OAuth 2.1 server for MCP clients (discovery, dynamic registration, PKCE) and the consent API |
 | `src/auth/` | Sessions, email links, passwords, Google sign-in, account lookup/creation |

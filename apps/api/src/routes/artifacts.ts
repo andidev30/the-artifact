@@ -2,8 +2,10 @@ import { and, eq } from 'drizzle-orm'
 import { Hono, type Context } from 'hono'
 import {
   accessLevel,
+  canDelete,
   canEdit,
   checkTitle,
+  deleteArtifact,
   editableIds,
   findBySlug,
   getVersion,
@@ -19,7 +21,7 @@ import { requireUser, type AuthEnv } from '../auth/session.js'
 import { db, schema } from '../db/index.js'
 import { currentThumbnails, getThumbnail, queueThumbnail, thumbnailsEnabled } from '../thumbnails.js'
 import type { ShareRole, Visibility } from '../db/schema.js'
-import { allowed, serveVersion } from '../content.js'
+import { allowed, downloadVersion, serveVersion } from '../content.js'
 import { getSharing, parseEmails, removePerson, setPersonRole, sharePeople, SharingError } from '../sharing.js'
 
 export const artifacts = new Hono<AuthEnv>()
@@ -114,6 +116,9 @@ artifacts.get('/:slug', async (c) => {
 // The entry and files of one version, with the same access as the page (older versions: editors)
 artifacts.get('/:slug/v/:version', (c) => c.redirect(`${new URL(c.req.url).pathname}/`, 301))
 artifacts.get('/:slug/v/:version/*', serveVersion)
+
+// A version and its files as one zip, with the same access as viewing it
+artifacts.get('/:slug/download', downloadVersion)
 
 // Older link to the current HTML, from before pages were served as a tree
 artifacts.get('/:slug/content', async (c) => {
@@ -223,11 +228,9 @@ artifacts.post('/:slug/versions/:version/restore', requireUser, async (c) => {
 })
 
 artifacts.delete('/:slug', requireUser, async (c) => {
-  const user = c.get('user')!
   const artifact = await findBySlug(c.req.param('slug'))
-  // Only the owner deletes; editors can't remove someone else's page
-  if (!artifact || artifact.ownerId !== user.id) return c.json({ error: 'Not found' }, 404)
-  await db.delete(schema.artifacts).where(eq(schema.artifacts.id, artifact.id))
+  if (!artifact || !canDelete(artifact, c.get('user')!)) return c.json({ error: 'Not found' }, 404)
+  await deleteArtifact(artifact)
   return c.body(null, 204)
 })
 

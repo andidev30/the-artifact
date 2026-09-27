@@ -54,10 +54,14 @@ async function access(slug: string, who: Who): Promise<Expected> {
   const cookie = who === 'anonymous' ? undefined : people[who].cookie
   const res = await call(`/api/artifacts/${slug}`, { cookie })
   const content = await call(`/api/artifacts/${slug}/v/1/`, { cookie })
+  const download = await call(`/api/artifacts/${slug}/download`, { cookie })
   if (res.status === 404) {
     expect(content.status).toBe(404)
+    expect(download.status).toBe(404)
     return 'none'
   }
+  expect(download.status).toBe(200)
+  expect(download.headers.get('content-type')).toBe('application/zip')
   expect(res.status).toBe(200)
   const body = await res.json()
   expect(body.contentUrl).toBe(`/api/artifacts/${slug}/v/1/`)

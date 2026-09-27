@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
-import { listArtifacts, thumbnailUrl, type ArtifactSummary, type Visibility } from '../api'
+import { downloadUrl, listArtifacts, thumbnailUrl, type ArtifactSummary, type Visibility } from '../api'
 import { pollThumbnails, withFreshThumbnails } from '../thumbnailPoll'
 import { timeAgo } from '../time'
 import { DeleteDialog, PageMenu, RenameDialog, type MenuItem } from './PageActions'
@@ -220,7 +220,10 @@ export function Gallery({ workspaceId, workspaceName, email, aside, onWorkspaceC
 }
 
 function Card({ page: a, onRename, onDelete }: { page: ArtifactSummary; onRename: () => void; onDelete: () => void }) {
-  const menu: MenuItem[] = [{ label: 'Open', to: `/a/${a.slug}` }]
+  const menu: MenuItem[] = [
+    { label: 'Open', to: `/a/${a.slug}` },
+    { label: 'Download', download: downloadUrl(a.slug) },
+  ]
   if (a.canEdit) menu.push({ label: 'Rename', onSelect: onRename })
   if (a.mine) menu.push({ label: 'Delete', onSelect: onDelete, danger: true })
 
@@ -240,8 +243,7 @@ function Card({ page: a, onRename, onDelete }: { page: ArtifactSummary; onRename
         {a.role ? <span>{a.role === 'editor' ? 'Editor' : 'Viewer'}</span> : <span data-visibility={a.visibility}>{VISIBILITY_LABEL[a.visibility]}</span>}
         {a.publishedWith && <span>{a.publishedWith}</span>}
       </span>
-      {/* Open alone is what clicking the card does, so people who can only view get no menu */}
-      {menu.length > 1 && <PageMenu className="page-card-menu" label={`More actions for ${a.title}`} items={menu} />}
+      <PageMenu className="page-card-menu" label={`More actions for ${a.title}`} items={menu} />
     </div>
   )
 }

@@ -85,6 +85,42 @@ Changes who can open a page without publishing a new version.
 
 Shares a page with people by email, as `viewer` or `editor`, with an optional message. They get an email with the link.
 
+### delete_artifact
+
+Deletes a page, like **Delete** in the app: the link stops working for everyone and every version is deleted. It can't be undone. Only the page's owner can delete it; editors and organization admins can't.
+
+| Argument | Required | Meaning |
+| --- | --- | --- |
+| `artifact_id` | yes | Id or link of the page |
+
+### list_versions
+
+Lists every version of a page, newest first, as the [version history](/docs/version-history) shows them: when each was published, by whom, with which agent, and which version a restore came from. Editors only.
+
+| Argument | Required | Meaning |
+| --- | --- | --- |
+| `artifact_id` | yes | Id or link of the page |
+
+### restore_version
+
+Makes an older version current again, like **Restore this version** in the history: its HTML and files are published again as a new version, and the link stays the same. Editors only.
+
+| Argument | Required | Meaning |
+| --- | --- | --- |
+| `artifact_id` | yes | Id or link of the page |
+| `version` | yes | The version number to restore, from `list_versions` |
+
+### download_artifact
+
+Returns a link that downloads a version of a page as a zip: `index.html` and every file, at the paths the page uses. The agent fetches it itself, for example with `curl`, so this is for agents that can run shell commands or make HTTP requests; others read the files one at a time with `get_artifact`.
+
+| Argument | Required | Meaning |
+| --- | --- | --- |
+| `artifact_id` | yes | Id or link of the page |
+| `version` | no | A version number from `list_versions`. Without it, the current version. Older versions are for editors only. |
+
+The link needs no sign-in, but it only works for the person the agent is connected as, for that version, and for 12 hours. Access is checked again each time it is used, so it stops working if that person loses access to the page.
+
 ## Publishing by direct upload
 
 With `publish_artifact`, a page travels inside the MCP call, so it is limited by what the agent and the server can send in one request. Hosts like Vercel refuse requests over about 4.5 MB. Agents that can run shell commands or make HTTP requests (Claude Code, Cursor, Codex and other coding agents) can use `prepare_upload` and `publish_upload` instead, and the files go straight to storage:
@@ -103,4 +139,4 @@ Ask for the change in the same conversation ("make the chart a line chart"). The
 
 ## Managing pages in the app
 
-In the gallery and the page viewer, the **…** menu lets editors rename a page and lets the owner delete it. Search above the gallery filters by title.
+In the gallery and the page viewer, the **…** menu lets anyone who can open a page **Download** it as a zip of `index.html` and its files, lets editors rename it and lets the owner delete it. In the viewer, **Download** saves the version you are looking at, including an older one picked in the history. Search above the gallery filters by title.

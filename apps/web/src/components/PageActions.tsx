@@ -5,7 +5,7 @@ import './PageActions.css'
 
 const MAX_TITLE = 200
 
-export type MenuItem = { label: string; onSelect: () => void; danger?: boolean } | { label: string; to: string }
+export type MenuItem = { label: string; onSelect: () => void; danger?: boolean } | { label: string; to: string } | { label: string; download: string }
 
 // A small "more" menu: opens on click, arrow keys move between items, Escape closes
 export function PageMenu({ label, items, className }: { label: string; items: MenuItem[]; className?: string }) {
@@ -75,6 +75,10 @@ export function PageMenu({ label, items, className }: { label: string; items: Me
               <Link key={item.label} role="menuitem" to={item.to} tabIndex={-1}>
                 {item.label}
               </Link>
+            ) : 'download' in item ? (
+              <a key={item.label} role="menuitem" href={item.download} download tabIndex={-1} onClick={() => close(false)}>
+                {item.label}
+              </a>
             ) : (
               <button
                 key={item.label}
