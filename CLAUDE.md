@@ -27,7 +27,7 @@ pnpm dev                       # API :3000, web :5173 (proxies /api, /mcp, /oaut
 pnpm lint                      # Biome (lint + format check) + tsc over the API, its tests and the web app
 pnpm format                    # Biome: format and apply safe fixes
 pnpm test                      # unit + integration; integration needs `pnpm services` and the artifact_test db
-pnpm test:e2e                  # Playwright on ports 3004/5177, needs Google Chrome and Mailpit
+pnpm test:e2e                  # Playwright: hosted on 3004/5177, self-hosted on 3005/5178; needs Google Chrome and Mailpit
 pnpm db:generate               # new migration from apps/api/src/db/schema.ts
 ```
 
