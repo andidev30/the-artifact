@@ -7,39 +7,42 @@ const files = import.meta.glob('../../../docs/*.md', { query: '?raw', import: 'd
 export type DocPage = { slug: string; title: string }
 export type DocGroup = { title: string; pages: DocPage[] }
 
-export const DOC_GROUPS: DocGroup[] = [
-  {
-    title: 'Getting started',
-    pages: [
-      { slug: 'introduction', title: 'Introduction' },
-      { slug: 'connect-your-agent', title: 'Connect your agent' },
-      { slug: 'publishing', title: 'Publishing pages' },
-    ],
-  },
-  {
-    title: 'Working together',
-    pages: [
-      { slug: 'sharing', title: 'Sharing and permissions' },
-      { slug: 'organizations', title: 'Organizations and members' },
-      { slug: 'version-history', title: 'Version history' },
-    ],
-  },
-  {
-    title: 'Self-hosting',
-    pages: [
-      { slug: 'self-hosting', title: 'Install' },
-      { slug: 'configuration', title: 'Configuration reference' },
-      { slug: 'backups', title: 'Backup and restore' },
-    ],
-  },
-  {
-    title: 'Reference',
-    pages: [
-      { slug: 'security', title: 'Security' },
-      { slug: 'troubleshooting', title: 'Troubleshooting' },
-    ],
-  },
+const USING: DocPage[] = [
+  { slug: 'introduction', title: 'Introduction' },
+  { slug: 'connect-your-agent', title: 'Connect your agent' },
+  { slug: 'publishing', title: 'Publishing pages' },
+  { slug: 'sharing', title: 'Sharing and permissions' },
+  { slug: 'organizations', title: 'Organizations and members' },
+  { slug: 'version-history', title: 'Version history' },
 ]
+
+const RUNNING: DocPage[] = [
+  { slug: 'self-hosting', title: 'Install' },
+  { slug: 'kubernetes', title: 'Kubernetes' },
+  { slug: 'configuration', title: 'Configuration reference' },
+  { slug: 'backups', title: 'Backup and restore' },
+]
+
+const REFERENCE: DocPage[] = [
+  { slug: 'security', title: 'Security' },
+  { slug: 'troubleshooting', title: 'Troubleshooting' },
+]
+
+// The hosted site, where self-hosting is one topic among others
+export const DOC_GROUPS: DocGroup[] = [
+  { title: 'Getting started', pages: USING.slice(0, 3) },
+  { title: 'Working together', pages: USING.slice(3) },
+  { title: 'Self-hosting', pages: RUNNING },
+  { title: 'Reference', pages: REFERENCE },
+]
+
+// A self-hosted install, read by its own people: using it first, running it after
+export const SELF_HOSTED_DOC_GROUPS: DocGroup[] = [
+  { title: 'Using The Artifact', pages: USING },
+  { title: 'Running this server', pages: [...RUNNING, ...REFERENCE] },
+]
+
+export const docGroups = (selfHosted: boolean) => (selfHosted ? SELF_HOSTED_DOC_GROUPS : DOC_GROUPS)
 
 export const DOC_PAGES = DOC_GROUPS.flatMap((g) => g.pages)
 
@@ -62,7 +65,7 @@ export function headingId(text: string) {
     .replace(/^-+|-+$/g, '')
 }
 
-const LANG_LABEL: Record<string, string> = { sh: 'Terminal', json: 'JSON', toml: 'TOML' }
+const LANG_LABEL: Record<string, string> = { sh: 'Terminal', json: 'JSON', toml: 'TOML', yaml: 'YAML' }
 
 const markdown = new Marked({
   gfm: true,

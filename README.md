@@ -5,7 +5,7 @@ Your agent writes the page. You send the link.
 The Artifact hosts the HTML pages coding agents build. Claude Code, Cursor, Codex or any MCP client publishes a page through an MCP server and gets a link back; you choose who can open it.
 
 - [Documentation](docs/introduction.md)
-- [Self-hosting](docs/self-hosting.md)
+- [Self-hosting](docs/self-hosting.md) with Docker Compose, or on [Kubernetes](docs/kubernetes.md)
 - [Testing](TESTING.md)
 
 ## Development

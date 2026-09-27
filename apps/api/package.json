@@ -14,7 +14,8 @@
     "test:integration": "vitest run --project integration",
     "lint": "tsc -p tsconfig.test.json",
     "thumbnails:backfill": "tsx src/scripts/backfill-thumbnails.ts",
-    "storage:sweep": "tsx src/scripts/sweep-storage.ts"
+    "storage:sweep": "tsx src/scripts/sweep-storage.ts",
+    "admin:grant": "tsx src/scripts/make-admin.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1140.0",

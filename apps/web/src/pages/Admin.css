@@ -237,6 +237,46 @@
   overflow-wrap: anywhere;
 }
 
+/* Adding people by link, on servers without email */
+.admin-add-person {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  /* A long link scrolls inside its box instead of widening the card */
+  min-width: 0;
+  padding: 14px;
+  border: 1.5px dashed var(--grid);
+  border-radius: 3px;
+}
+
+.admin-add-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.admin-add-form .field {
+  flex: 1 1 220px;
+  margin: 0;
+}
+
+.admin-add-form .admin-input {
+  width: 100%;
+}
+
+.admin-add-person .field-hint,
+.admin-link-result .field-hint {
+  margin: 0;
+}
+
+.admin-link-result {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  min-width: 0;
+}
+
 /* Sign-up policy */
 .admin-source {
   padding: 10px 12px;

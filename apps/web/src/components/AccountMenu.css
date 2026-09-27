@@ -1,0 +1,163 @@
+.account {
+  position: relative;
+  min-width: 0;
+}
+
+.account-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 14rem;
+  padding: 4px 6px 4px 4px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--ink);
+  background: none;
+  border: 1.5px solid transparent;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.account-button:hover,
+.account-button[aria-expanded='true'] {
+  border-color: var(--ink);
+  background: var(--white);
+}
+
+.account-avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  font-size: 0.8125rem;
+  font-weight: 800;
+  background: var(--marker);
+  border: 1.5px solid var(--ink);
+  border-radius: 50%;
+}
+
+img.account-avatar {
+  object-fit: cover;
+}
+
+.app-account .account-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-caret {
+  flex: none;
+  width: 10px;
+  height: 6px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 120ms ease;
+}
+
+.account-button[aria-expanded='true'] .account-caret {
+  transform: rotate(180deg);
+}
+
+.account-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 10px);
+  right: 0;
+  width: min(260px, calc(100vw - 32px));
+  padding: 8px;
+  font-weight: 500;
+  background: var(--white);
+  border: 1.5px solid var(--ink);
+  border-radius: 3px;
+  box-shadow: 6px 6px 0 var(--grid);
+}
+
+.account-who {
+  display: grid;
+  gap: 2px;
+  padding: 6px 8px 10px;
+  margin: 0 0 6px;
+  border-bottom: 1.5px dashed var(--grid);
+}
+
+.account-who strong,
+.account-who span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-who strong {
+  font-size: var(--step--1);
+}
+
+.app-account .account-who span {
+  display: block;
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
+}
+
+.account-menu ul {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.account-menu a,
+.account-menu button {
+  display: block;
+  width: 100%;
+  padding: 8px;
+  font: inherit;
+  font-size: var(--step--1);
+  font-weight: 600;
+  text-align: left;
+  color: var(--ink);
+  text-decoration: none;
+  background: none;
+  border: 1.5px solid transparent;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.account-menu a:hover,
+.account-menu button:hover {
+  background: var(--paper);
+  border-color: var(--grid);
+}
+
+.account-admin {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1.5px dashed var(--grid);
+}
+
+.account-logout {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1.5px dashed var(--grid);
+}
+
+.account-logout button {
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+
+/* Phones: just the avatar, at the right edge so the menu opens on screen when the header wraps */
+@media (max-width: 520px) {
+  .app-account .account-name,
+  .account-caret {
+    display: none;
+  }
+
+  .account {
+    margin-left: auto;
+  }
+}

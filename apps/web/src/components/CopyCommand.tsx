@@ -5,9 +5,11 @@ type Props = {
   label?: string
   // A file path shows the snippet as file contents instead of a shell command
   file?: string
+  // A link or other value to copy, shown without the shell prompt
+  plain?: boolean
 }
 
-export function CopyCommand({ command, label = 'Copy command', file }: Props) {
+export function CopyCommand({ command, label = 'Copy command', file, plain }: Props) {
   const [copied, setCopied] = useState(false)
 
   async function copy() {
@@ -48,7 +50,7 @@ export function CopyCommand({ command, label = 'Copy command', file }: Props) {
   return (
     <div className="command">
       <code>
-        <span className="command-prompt" aria-hidden="true">$</span>
+        {!plain && <span className="command-prompt" aria-hidden="true">$</span>}
         {command}
       </code>
       {button}

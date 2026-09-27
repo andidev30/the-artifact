@@ -330,3 +330,27 @@
     grid-column: auto;
   }
 }
+
+/* On self-hosted installs, above the introduction */
+.doc-note {
+  display: grid;
+  gap: 8px;
+  max-width: 72ch;
+  margin-bottom: 28px;
+  padding: 14px 16px;
+  font-size: var(--step--1);
+  line-height: 1.55;
+  background: #fff8d6;
+  border: 1.5px solid var(--ink);
+  border-radius: 3px;
+  box-shadow: 4px 4px 0 var(--grid);
+}
+
+.doc-note p {
+  margin: 0;
+}
+
+.doc-note a {
+  font-weight: 700;
+  color: var(--ink);
+}

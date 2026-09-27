@@ -1,53 +1,32 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import {
+  changePassword,
   deleteAccount,
   disconnectAgent,
-  fetchMe,
   getDeletionPreview,
-  getOrganization,
-  inviteMember,
   listAgents,
-  logout,
-  removeMember,
-  renameOrganization,
-  revokeInvitation,
-  setMemberRole,
   updateProfile,
   type ConnectedAgent,
   type DeletionPreview,
-  type InviteRole,
   type Me,
-  type Organization,
-  type OrganizationDetails,
-  type OrganizationMember,
-  type Role,
 } from '../api'
 import { AccountHeader } from '../components/AccountHeader'
 import { timeAgo } from '../time'
+import { useConfig } from '../useConfig'
 import { useMe } from '../useMe'
-import { chooseWorkspace, useWorkspace } from '../workspace'
+import { chooseWorkspace, organizationSettingsPath, useWorkspace } from '../workspace'
 import { LoadError, Loading } from './Status'
 import './Workspace.css'
 import './Settings.css'
 
-const ROLE_LABEL: Record<Role, string> = { owner: 'Owner', admin: 'Admin', member: 'Member' }
-
-// Roles a person with `actor` role may hand out, and whose holders they may manage
-function assignable(actor: Role): Role[] {
-  if (actor === 'owner') return ['owner', 'admin', 'member']
-  if (actor === 'admin') return ['admin', 'member']
-  return []
-}
-
-const canManage = (actor: Role, target: Role) => assignable(actor).includes(target)
 const errorText = (err: unknown, fallback: string) => (err instanceof Error ? err.message : fallback)
 
 export function Settings() {
   const state = useMe()
 
   useEffect(() => {
-    document.title = 'Settings | The Artifact'
+    document.title = 'Account settings | The Artifact'
     return () => { document.title = 'The Artifact' }
   }, [])
 
@@ -56,21 +35,33 @@ export function Settings() {
   return <SettingsPage initial={state.me} />
 }
 
+// Settings for you as a person, the same in every workspace. Organizations have their own
+// settings page, and the server has its admin area.
 function SettingsPage({ initial }: { initial: Me }) {
+  const navigate = useNavigate()
   const [me, setMe] = useState(initial)
   const { org, name } = useWorkspace(me)
-  const refreshMe = () => fetchMe().then((m) => m && setMe(m)).catch(() => {})
+  const config = useConfig()
+  // Passwords are for servers without email, and for anyone who already has one
+  const showPassword = me.hasPassword || config?.emailSignIn === false
 
-  // Links like /settings#organization arrive before the sections exist
+  // Links like /settings#delete arrive before the sections exist. The organization section moved
+  // to its own page, so older /settings#organization links go there.
   useEffect(() => {
     const id = window.location.hash.slice(1)
+    if (id === 'organization') {
+      navigate(org ? organizationSettingsPath(org) : '/settings', { replace: true })
+      return
+    }
     if (id) document.getElementById(id)?.scrollIntoView()
+    // Only on arrival
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const sections = [
     { id: 'profile', label: 'Profile' },
+    ...(showPassword ? [{ id: 'password', label: 'Password' }] : []),
     { id: 'agents', label: 'Connected agents' },
-    { id: 'organization', label: org ? org.name : 'Organization' },
     { id: 'delete', label: 'Delete account' },
   ]
 
@@ -79,8 +70,15 @@ function SettingsPage({ initial }: { initial: Me }) {
       <AccountHeader me={me} workspace={name} />
       <main id="main" className="app-main settings">
         <div className="app-title">
-          <h1>Settings</h1>
-          <p>Your profile, the agents that publish for you, and who is in {org ? org.name : 'your organizations'}.</p>
+          <h1>Account settings</h1>
+          <p>
+            Your profile{showPassword ? ', password' : ''} and the agents that publish for you, the same in every workspace.
+            {org && (
+              <>
+                {' '}For members and invitations, open <Link className="text-link" to={organizationSettingsPath(org)}>{org.name} settings</Link>.
+              </>
+            )}
+          </p>
         </div>
 
         <div className="settings-layout">
@@ -96,12 +94,8 @@ function SettingsPage({ initial }: { initial: Me }) {
 
           <div className="settings-sections">
             <ProfileSection me={me} onSaved={(n) => setMe({ ...me, name: n })} />
+            {showPassword && <PasswordSection me={me} onSaved={() => setMe({ ...me, hasPassword: true })} />}
             <AgentsSection />
-            {org ? (
-              <OrganizationSection key={org.id} me={me} org={org} onChanged={refreshMe} />
-            ) : (
-              <PersonalNote me={me} />
-            )}
             <DeleteSection me={me} />
           </div>
         </div>
@@ -111,7 +105,6 @@ function SettingsPage({ initial }: { initial: Me }) {
 }
 
 function ProfileSection({ me, onSaved }: { me: Me; onSaved: (name: string) => void }) {
-  const navigate = useNavigate()
   const [value, setValue] = useState(me.name ?? '')
   const [status, setStatus] = useState<{ tone: 'ok' | 'bad'; text: string } | null>(null)
   const [saving, setSaving] = useState(false)
@@ -167,18 +160,64 @@ function ProfileSection({ me, onSaved }: { me: Me; onSaved: (name: string) => vo
           <p className="settings-value">{me.email}</p>
         </div>
       </form>
-      <div className="settings-signout">
-        <button
-          type="button"
-          className="auth-reset"
-          onClick={async () => {
-            await logout()
-            navigate('/', { replace: true })
-          }}
-        >
-          Log out
-        </button>
-      </div>
+    </section>
+  )
+}
+
+function PasswordSection({ me, onSaved }: { me: Me; onSaved: () => void }) {
+  const [saving, setSaving] = useState(false)
+  const [status, setStatus] = useState<{ tone: 'ok' | 'bad'; text: string } | null>(null)
+
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const form = e.currentTarget
+    const data = new FormData(form)
+    const password = String(data.get('password') ?? '')
+    if (password !== String(data.get('confirm') ?? '')) return setStatus({ tone: 'bad', text: 'The new passwords don’t match.' })
+    setSaving(true)
+    setStatus(null)
+    try {
+      await changePassword(String(data.get('current') ?? ''), password)
+      form.reset()
+      onSaved()
+      setStatus({ tone: 'ok', text: 'Saved. Other devices were logged out.' })
+    } catch (err) {
+      setStatus({ tone: 'bad', text: errorText(err, 'Your password could not be changed. Try again.') })
+    }
+    setSaving(false)
+  }
+
+  return (
+    <section id="password" className="settings-card" aria-labelledby="password-title">
+      <header className="settings-card-head">
+        <h2 id="password-title">Password</h2>
+        <p>{me.hasPassword ? 'Change the password you log in with.' : 'You sign in with Google. Set a password to log in without it too.'}</p>
+      </header>
+      <form className="settings-form" onSubmit={onSubmit} noValidate>
+        <input type="email" name="username" autoComplete="username" value={me.email} readOnly hidden />
+        {me.hasPassword && (
+          <div className="field">
+            <label htmlFor="password-current">Current password</label>
+            <input id="password-current" name="current" type="password" autoComplete="current-password" required />
+          </div>
+        )}
+        <div className="field">
+          <label htmlFor="password-new">New password</label>
+          <input id="password-new" name="password" type="password" autoComplete="new-password" minLength={8} required aria-describedby="password-status" />
+        </div>
+        <div className="field">
+          <label htmlFor="password-confirm">Confirm new password</label>
+          <input id="password-confirm" name="confirm" type="password" autoComplete="new-password" required />
+        </div>
+        <div>
+          <button type="submit" className="button button-small" disabled={saving}>
+            {saving ? 'Saving' : me.hasPassword ? 'Change password' : 'Set password'}
+          </button>
+        </div>
+        <p id="password-status" className="field-hint" data-tone={status?.tone} aria-live="polite">
+          {status?.text ?? 'At least 8 characters.'}
+        </p>
+      </form>
     </section>
   )
 }
@@ -256,321 +295,6 @@ function AgentsSection() {
         </ul>
       )}
     </section>
-  )
-}
-
-function PersonalNote({ me }: { me: Me }) {
-  return (
-    <section id="organization" className="settings-card" aria-labelledby="org-title">
-      <header className="settings-card-head">
-        <h2 id="org-title">Organization</h2>
-        <p>
-          You are in your Personal workspace, which is just you.
-          {me.organizations.length > 0
-            ? ' Switch to an organization with the workspace menu at the top to manage its members.'
-            : ' Create an organization to give your team a shared gallery.'}
-        </p>
-      </header>
-      <div>
-        <Link className="button button-small button-quiet" to="/organizations/new">Create an organization</Link>
-      </div>
-    </section>
-  )
-}
-
-function OrganizationSection({ me, org, onChanged }: { me: Me; org: Organization; onChanged: () => void }) {
-  const navigate = useNavigate()
-  const [details, setDetails] = useState<Loadable<OrganizationDetails>>({ kind: 'loading' })
-  const [problem, setProblem] = useState<string | null>(null)
-  const [confirming, setConfirming] = useState<string | null>(null)
-
-  useEffect(() => {
-    let active = true
-    getOrganization(org.id)
-      .then((data) => active && setDetails({ kind: 'ready', data }))
-      .catch(() => active && setDetails({ kind: 'error' }))
-    return () => { active = false }
-  }, [org.id])
-
-  async function run(action: () => Promise<OrganizationDetails | null>, fallback: string) {
-    setProblem(null)
-    try {
-      const data = await action()
-      if (data) setDetails({ kind: 'ready', data })
-      onChanged()
-      return true
-    } catch (err) {
-      setProblem(errorText(err, fallback))
-      return false
-    } finally {
-      setConfirming(null)
-    }
-  }
-
-  async function leave() {
-    setProblem(null)
-    try {
-      await removeMember(org.id, me.id)
-      const next = me.organizations.find((o) => o.id !== org.id)
-      chooseWorkspace(next?.id ?? 'personal')
-      navigate('/app')
-    } catch (err) {
-      setProblem(errorText(err, 'You could not leave. Try again.'))
-      setConfirming(null)
-    }
-  }
-
-  if (details.kind !== 'ready') {
-    return (
-      <section id="organization" className="settings-card" aria-labelledby="org-title">
-        <header className="settings-card-head">
-          <h2 id="org-title">{org.name}</h2>
-        </header>
-        {details.kind === 'loading' ? (
-          <p className="settings-muted" role="status">Loading members</p>
-        ) : (
-          <p className="auth-notice" role="alert">The organization could not be loaded. Reload to try again.</p>
-        )}
-      </section>
-    )
-  }
-
-  const d = details.data
-  const manager = d.role !== 'member'
-  const owners = d.members.filter((m) => m.role === 'owner').length
-  const soleOwner = d.role === 'owner' && owners === 1
-
-  return (
-    <section id="organization" className="settings-card" aria-labelledby="org-title">
-      <header className="settings-card-head">
-        <h2 id="org-title">{d.name}</h2>
-        <p>
-          {d.members.length === 1 ? '1 member' : `${d.members.length} members`}. Your role: {ROLE_LABEL[d.role]}.
-          {manager ? ' Owners and admins can invite people and change roles.' : ' Owners and admins manage who is in it.'}
-        </p>
-      </header>
-
-      {manager && <RenameForm details={d} onRenamed={(data) => { setDetails({ kind: 'ready', data }); onChanged() }} />}
-
-      <h3 className="settings-subhead">Members</h3>
-      {problem && <p className="auth-notice" role="alert">{problem}</p>}
-      <ul className="settings-list">
-        {d.members.map((m) => (
-          <MemberRow
-            key={m.id}
-            member={m}
-            self={m.id === me.id}
-            myRole={d.role}
-            lastOwner={m.role === 'owner' && owners === 1}
-            confirming={confirming === m.id}
-            onConfirm={(v) => setConfirming(v ? m.id : null)}
-            onRole={(role) => run(() => setMemberRole(org.id, m.id, role), 'The role could not be changed. Try again.')}
-            onRemove={() => (m.id === me.id ? leave() : run(() => removeMember(org.id, m.id), 'They could not be removed. Try again.'))}
-          />
-        ))}
-      </ul>
-      {soleOwner && d.members.length > 1 && (
-        <p className="field-hint">You are the only owner. To leave, make someone else an owner first.</p>
-      )}
-
-      {manager && (
-        <>
-          <h3 className="settings-subhead">Invite people</h3>
-          <InviteForm details={d} myRole={d.role} onInvited={(data) => setDetails({ kind: 'ready', data })} />
-          {d.invitations.length > 0 && (
-            <>
-              <h3 className="settings-subhead">Pending invitations</h3>
-              <ul className="settings-list">
-                {d.invitations.map((i) => (
-                  <li key={i.id} className="settings-row">
-                    <span className="settings-avatar settings-avatar-pending" aria-hidden="true">{i.email.slice(0, 1).toUpperCase()}</span>
-                    <span className="settings-who">
-                      <strong>{i.email}</strong>
-                      <span>
-                        {ROLE_LABEL[i.role]}
-                        {i.invitedBy ? `, invited by ${i.invitedBy}` : ''}
-                      </span>
-                    </span>
-                    <span className="settings-meta" data-tone={i.expired ? 'bad' : undefined}>
-                      {i.expired ? `Expired ${timeAgo(i.expiresAt)}` : `Expires ${timeAgo(i.expiresAt)}`}
-                    </span>
-                    <span className="settings-actions">
-                      <button
-                        type="button"
-                        className="auth-reset"
-                        onClick={() => run(async () => (await inviteMember(org.id, i.email, i.role)).organization, 'The invitation could not be sent again.')}
-                      >
-                        Resend
-                      </button>
-                      <button
-                        type="button"
-                        className="button button-small button-quiet"
-                        onClick={() => run(() => revokeInvitation(org.id, i.id), 'The invitation could not be revoked. Try again.')}
-                      >
-                        Revoke
-                      </button>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </>
-      )}
-    </section>
-  )
-}
-
-function MemberRow({ member: m, self, myRole, lastOwner, confirming, onConfirm, onRole, onRemove }: {
-  member: OrganizationMember
-  self: boolean
-  myRole: Role
-  lastOwner: boolean
-  confirming: boolean
-  onConfirm: (v: boolean) => void
-  onRole: (role: Role) => void
-  onRemove: () => void
-}) {
-  const editable = canManage(myRole, m.role) && !lastOwner
-  const removable = self ? !lastOwner : canManage(myRole, m.role)
-  const display = m.name ?? m.email
-
-  return (
-    <li className="settings-row">
-      {m.avatarUrl ? (
-        <img className="settings-avatar" src={m.avatarUrl} alt="" referrerPolicy="no-referrer" />
-      ) : (
-        <span className="settings-avatar" aria-hidden="true">{display.slice(0, 1).toUpperCase()}</span>
-      )}
-      <span className="settings-who">
-        <strong>
-          {display}
-          {self && <span className="settings-you">You</span>}
-        </strong>
-        {m.name && <span>{m.email}</span>}
-      </span>
-      <span className="settings-meta">
-        {editable ? (
-          <select
-            className="settings-select"
-            value={m.role}
-            aria-label={`Role for ${display}`}
-            onChange={(e) => onRole(e.target.value as Role)}
-          >
-            {assignable(myRole).map((r) => (
-              <option key={r} value={r}>{ROLE_LABEL[r]}</option>
-            ))}
-          </select>
-        ) : (
-          <span className="settings-role">{ROLE_LABEL[m.role]}</span>
-        )}
-      </span>
-      <span className="settings-actions">
-        {removable &&
-          (confirming ? (
-            <>
-              <button type="button" className="button button-small button-danger" onClick={onRemove}>
-                {self ? 'Leave' : 'Remove'}
-              </button>
-              <button type="button" className="auth-reset" onClick={() => onConfirm(false)}>Cancel</button>
-            </>
-          ) : (
-            <button type="button" className="button button-small button-quiet" onClick={() => onConfirm(true)}>
-              {self ? 'Leave' : 'Remove'}
-            </button>
-          ))}
-      </span>
-    </li>
-  )
-}
-
-function RenameForm({ details, onRenamed }: { details: OrganizationDetails; onRenamed: (d: OrganizationDetails) => void }) {
-  const [value, setValue] = useState(details.name)
-  const [status, setStatus] = useState<{ tone: 'ok' | 'bad'; text: string } | null>(null)
-  const [saving, setSaving] = useState(false)
-
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault()
-    setSaving(true)
-    setStatus(null)
-    try {
-      const data = await renameOrganization(details.id, value)
-      onRenamed(data)
-      setStatus({ tone: 'ok', text: 'Saved.' })
-    } catch (err) {
-      setStatus({ tone: 'bad', text: errorText(err, 'The name could not be saved. Try again.') })
-    }
-    setSaving(false)
-  }
-
-  return (
-    <form className="settings-form" onSubmit={onSubmit}>
-      <div className="field">
-        <label htmlFor="org-rename">Organization name</label>
-        <div className="settings-inline">
-          <input id="org-rename" value={value} onChange={(e) => { setValue(e.target.value); setStatus(null) }} minLength={2} maxLength={60} required aria-describedby="org-rename-status" />
-          <button type="submit" className="button button-small" disabled={saving || value.trim() === details.name || value.trim().length < 2}>
-            {saving ? 'Saving' : 'Rename'}
-          </button>
-        </div>
-        <p id="org-rename-status" className="field-hint" data-tone={status?.tone} aria-live="polite">{status?.text ?? ''}</p>
-      </div>
-    </form>
-  )
-}
-
-function InviteForm({ details, myRole, onInvited }: { details: OrganizationDetails; myRole: Role; onInvited: (d: OrganizationDetails) => void }) {
-  const [email, setEmail] = useState('')
-  const [role, setRole] = useState<InviteRole>('member')
-  const [sending, setSending] = useState(false)
-  const [result, setResult] = useState<{ tone: 'ok' | 'bad'; text: string; link?: string } | null>(null)
-  const roles = assignable(myRole).filter((r): r is InviteRole => r !== 'owner')
-
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault()
-    setSending(true)
-    setResult(null)
-    try {
-      const sent = await inviteMember(details.id, email, role)
-      onInvited(sent.organization)
-      setResult(
-        sent.emailed
-          ? { tone: 'ok', text: `Invitation sent to ${email.trim().toLowerCase()}.` }
-          : { tone: 'bad', text: 'The email could not be sent. Share this link with them instead:', link: sent.link },
-      )
-      setEmail('')
-    } catch (err) {
-      setResult({ tone: 'bad', text: errorText(err, 'The invitation could not be sent. Try again.') })
-    }
-    setSending(false)
-  }
-
-  return (
-    <form className="settings-invite" onSubmit={onSubmit}>
-      <label className="visually-hidden" htmlFor="invite-email">Email address</label>
-      <input
-        id="invite-email"
-        type="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        placeholder="name@company.com"
-        autoComplete="off"
-        required
-      />
-      <label className="visually-hidden" htmlFor="invite-role">Role</label>
-      <select id="invite-role" className="settings-select" value={role} onChange={(e) => setRole(e.target.value as InviteRole)}>
-        {roles.map((r) => (
-          <option key={r} value={r}>{ROLE_LABEL[r]}</option>
-        ))}
-      </select>
-      <button type="submit" className="button button-small" disabled={sending || !email.trim()}>
-        {sending ? 'Sending' : 'Send invite'}
-      </button>
-      <p className="field-hint settings-invite-hint" data-tone={result?.tone} aria-live="polite">
-        {result ? result.text : `They get an email with a link to join ${details.name}. It works for 7 days.`}
-        {result?.link && <code className="settings-link">{result.link}</code>}
-      </p>
-    </form>
   )
 }
 

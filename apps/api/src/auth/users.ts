@@ -2,13 +2,17 @@ import { and, eq, gt } from 'drizzle-orm'
 import { db, schema } from '../db/index.js'
 import type { User } from '../db/schema.js'
 import { env } from '../env.js'
-import { adminFromEnvironment, firstAccountBecomesAdmin, instanceSettings, lockAdmins } from '../instance.js'
+import { firstAccountBecomesAdmin, instanceSettings, lockAdmins } from '../instance.js'
 
 type Profile = {
   email: string
   name?: string | null
   avatarUrl?: string | null
   googleSub?: string
+  // For accounts made from a link on servers without email: set as the password, replacing any old one
+  passwordHash?: string
+  // An instance admin made the link, so the sign-up policy doesn't apply
+  approved?: boolean
 }
 
 // `code` is the error the sign-in routes redirect to (/login?error=…)
@@ -20,15 +24,19 @@ export class AccountSuspendedError extends SignupClosedError {
   code = 'account_suspended'
 }
 
-// The sign-up policy comes from the admin area's settings, or ALLOWED_EMAIL_DOMAINS until they
-// are saved. In every mode people invited to an organization or a page can still join what they
-// were invited to, and addresses in ADMIN_EMAILS can always sign up.
+// The sign-up policy comes from the admin area's settings (anyone, until they are saved). In every
+// mode people invited to an organization or a page can still join what they were invited to.
 export async function canSignUp(email: string): Promise<boolean> {
   const { signupPolicy, allowedDomains } = await instanceSettings()
   if (signupPolicy === 'open') return true
   const address = email.toLowerCase()
-  if (adminFromEnvironment(address)) return true
   if (signupPolicy === 'domains' && allowedDomains.includes(address.split('@')[1] ?? '')) return true
+  return waitingForAccess(address)
+}
+
+// Whether an organization invitation or a page share is waiting for this address
+export async function waitingForAccess(email: string): Promise<boolean> {
+  const address = email.toLowerCase()
   const [invite] = await db
     .select({ id: schema.invitations.id })
     .from(schema.invitations)
@@ -59,6 +67,12 @@ export async function findOrCreateUser(profile: Profile): Promise<User> {
   const [byEmail] = await db.select().from(schema.users).where(eq(schema.users.email, email))
   if (byEmail) {
     if (byEmail.suspendedAt) throw new AccountSuspendedError()
+    if (profile.passwordHash) {
+      // A new password signs the person out everywhere else
+      await db.delete(schema.sessions).where(eq(schema.sessions.userId, byEmail.id))
+      const [updated] = await db.update(schema.users).set({ passwordHash: profile.passwordHash }).where(eq(schema.users.id, byEmail.id)).returning()
+      return updated
+    }
     if (profile.googleSub && !byEmail.googleSub) {
       const [linked] = await db
         .update(schema.users)
@@ -74,7 +88,7 @@ export async function findOrCreateUser(profile: Profile): Promise<User> {
     return byEmail
   }
 
-  if (!(await canSignUp(email))) throw new SignupClosedError()
+  if (!profile.approved && !(await canSignUp(email))) throw new SignupClosedError()
   return db.transaction(async (tx) => {
     // One account at a time, so only the very first one can become the instance admin
     await lockAdmins(tx)
@@ -83,7 +97,7 @@ export async function findOrCreateUser(profile: Profile): Promise<User> {
     const isAdmin = await firstAccountBecomesAdmin(tx)
     const [created] = await tx
       .insert(schema.users)
-      .values({ email, name: profile.name, avatarUrl: profile.avatarUrl, googleSub: profile.googleSub, isAdmin })
+      .values({ email, name: profile.name, avatarUrl: profile.avatarUrl, googleSub: profile.googleSub, passwordHash: profile.passwordHash, isAdmin })
       .returning()
     return created
   })
@@ -108,4 +122,17 @@ export function signInErrorUrl(error: string): string {
   const url = new URL('/login', env.appUrl)
   url.searchParams.set('error', error)
   return url.toString()
+}
+
+// A new account with a password, or null when the address already has one. Never touches an
+// existing account, unlike findOrCreateUser.
+export async function createPasswordAccount(email: string, name: string | null, passwordHash: string): Promise<User | null> {
+  return db.transaction(async (tx) => {
+    await lockAdmins(tx)
+    const [taken] = await tx.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, email))
+    if (taken) return null
+    const isAdmin = await firstAccountBecomesAdmin(tx)
+    const [created] = await tx.insert(schema.users).values({ email, name, passwordHash, isAdmin }).returning()
+    return created
+  })
 }

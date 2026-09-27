@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AccountSuspendedError, canSignUp, findOrCreateUser } from '../../src/auth/users.js'
 import { hashToken } from '../../src/auth/session.js'
 import { db, schema } from '../../src/db/index.js'
@@ -11,8 +11,6 @@ const original = { selfHosted: env.selfHosted }
 
 afterEach(() => {
   env.selfHosted = original.selfHosted
-  env.adminEmails.length = 0
-  env.allowedEmailDomains.length = 0
 })
 
 async function isAdminInDb(email: string) {
@@ -65,35 +63,6 @@ describe('first account becomes the instance admin', () => {
   })
 })
 
-describe('ADMIN_EMAILS', () => {
-  it('makes listed people admins without the flag, case-insensitively', async () => {
-    const boss = await createUser({ email: 'boss@example.com' })
-    expect((await me(boss)).body.isAdmin).toBe(false)
-    env.adminEmails.push('boss@example.com')
-    expect((await me(boss)).body.isAdmin).toBe(true)
-    expect((await call('/api/admin/overview', { cookie: boss.cookie })).status).toBe(200)
-  })
-
-  it('can’t be demoted or deleted from the admin area', async () => {
-    const admin = await createUser({ admin: true })
-    const boss = await createUser({ email: 'boss@example.com' })
-    env.adminEmails.push('boss@example.com')
-    const demote = await call(`/api/admin/users/${boss.id}`, { method: 'PATCH', cookie: admin.cookie, json: { admin: false } })
-    expect(demote.status).toBe(409)
-    expect(await demote.json()).toMatchObject({ code: 'admin_from_environment' })
-    const del = await call(`/api/admin/users/${boss.id}`, { method: 'DELETE', cookie: admin.cookie, json: { confirmEmail: boss.email } })
-    expect(del.status).toBe(409)
-  })
-
-  it('lets listed people sign up under any policy', async () => {
-    await createUser({ admin: true })
-    await db.insert(schema.instanceSettings).values({ signupPolicy: 'invite-only', allowedDomains: [] })
-    expect(await canSignUp('rescue@elsewhere.com')).toBe(false)
-    env.adminEmails.push('rescue@elsewhere.com')
-    expect(await canSignUp('rescue@elsewhere.com')).toBe(true)
-  })
-})
-
 describe('admin endpoints are for admins only', () => {
   const endpoints: [string, string, unknown?][] = [
     ['GET', '/api/admin/overview'],
@@ -105,7 +74,7 @@ describe('admin endpoints are for admins only', () => {
     ['DELETE', '/api/admin/organizations/00000000-0000-0000-0000-000000000000', { confirmSlug: 'acme' }],
     ['GET', '/api/admin/settings'],
     ['PUT', '/api/admin/settings', { signupPolicy: 'open' }],
-    ['DELETE', '/api/admin/settings'],
+    ['POST', '/api/admin/sign-up-links', { email: 'x@example.com' }],
   ]
 
   it.each(endpoints)('%s %s', async (method, path, json) => {
@@ -359,21 +328,24 @@ describe('sign-up policy', () => {
     })
   }
 
-  it('starts from ALLOWED_EMAIL_DOMAINS', async () => {
-    env.allowedEmailDomains.push('example.com')
+  it('starts open until an admin saves it', async () => {
     const res = await call('/api/admin/settings', { cookie: admin.cookie })
-    expect(await res.json()).toMatchObject({ signupPolicy: 'domains', allowedDomains: ['example.com'], source: 'environment' })
+    expect(await res.json()).toEqual({ signupPolicy: 'open', allowedDomains: [], instanceName: null, updatedAt: null })
+    expect((await request('anyone@elsewhere.com')).status).toBe(204)
   })
 
-  it('open lets anyone in, even when ALLOWED_EMAIL_DOMAINS says otherwise', async () => {
-    env.allowedEmailDomains.push('example.com')
-    expect((await put({ signupPolicy: 'open' })).status).toBe(200)
-    expect((await request('anyone@elsewhere.com')).status).toBe(204)
+  it('refuses a sign-in link opened after sign-ups were closed', async () => {
+    expect((await request('late@elsewhere.com')).status).toBe(204)
+    const link = new URL(vi.mocked(sendSignInLink).mock.calls[0][1])
+    await put({ signupPolicy: 'domains', allowedDomains: ['example.com'] })
+    const res = await call('/api/auth/email/confirm', { json: { token: link.searchParams.get('token') } })
+    expect(res.status).toBe(403)
+    expect(await res.json()).toMatchObject({ code: 'signup_closed' })
   })
 
   it('domains accepts listed domains and invited people', async () => {
     const res = await put({ signupPolicy: 'domains', allowedDomains: ['Corp.test', '@other.test', 'corp.test'] })
-    expect(await res.json()).toMatchObject({ signupPolicy: 'domains', allowedDomains: ['corp.test', 'other.test'], source: 'settings' })
+    expect(await res.json()).toMatchObject({ signupPolicy: 'domains', allowedDomains: ['corp.test', 'other.test'] })
     expect((await request('a@corp.test')).status).toBe(204)
     expect((await request('b@other.test')).status).toBe(204)
     expect((await request('c@example.com')).status).toBe(403)
@@ -401,12 +373,9 @@ describe('sign-up policy', () => {
     expect(await (await put({ signupPolicy: 'open', instanceName: 'x'.repeat(61) })).json()).toMatchObject({ field: 'instanceName' })
   })
 
-  it('shows the instance name in /api/config, and resets to the environment', async () => {
+  it('shows the instance name in /api/config', async () => {
     await put({ signupPolicy: 'invite-only', instanceName: '  Acme   pages ' })
     expect(await (await call('/api/config')).json()).toMatchObject({ instanceName: 'Acme pages' })
-    const reset = await call('/api/admin/settings', { method: 'DELETE', cookie: admin.cookie })
-    expect(await reset.json()).toMatchObject({ signupPolicy: 'open', source: 'environment', instanceName: null })
-    expect((await request('anyone@example.com')).status).toBe(204)
   })
 })
 

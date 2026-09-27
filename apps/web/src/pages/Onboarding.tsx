@@ -6,6 +6,7 @@ import { ConnectTabs } from '../components/ConnectTabs'
 import { InvitationRow } from '../components/InvitationNotice'
 import { usePendingInvitations } from '../invitations'
 import { APP_HOST } from '../config'
+import { useConfig } from '../useConfig'
 import { useMe } from '../useMe'
 import { LoadError, Loading } from './Status'
 import './Workspace.css'
@@ -22,20 +23,39 @@ export function Onboarding() {
     if (state.kind === 'ready' && state.me.onboarded) navigate('/app', { replace: true })
   }, [state, navigate])
 
-  if (state.kind === 'loading') return <Loading />
+  const config = useConfig()
+
+  if (state.kind === 'loading' || !config) return <Loading />
   if (state.kind === 'error') return <LoadError />
   if (state.me.onboarded) return null
-  return <Flow me={state.me} />
+  // Whoever set up a self-hosted server names the organization everyone there works in; no choice to make
+  const setUp = config.selfHosted && state.me.isAdmin
+  return <Flow me={state.me} selfHosted={config.selfHosted} setUp={setUp} />
 }
 
-function Flow({ me }: { me: Me }) {
+function Flow({ me, selfHosted, setUp }: { me: Me; selfHosted: boolean; setUp: boolean }) {
   const [params] = useSearchParams()
-  const [choice, setChoice] = useState<Choice>(params.get('plan') === 'organization' ? 'team' : 'personal')
-  const [step, setStep] = useState<Step>('workspace')
+  const [choice, setChoice] = useState<Choice>(setUp || params.get('plan') === 'organization' ? 'team' : 'personal')
+  const [step, setStep] = useState<Step>(setUp ? 'organization' : 'workspace')
   const [workspace, setWorkspace] = useState<string | undefined>()
+  const [skipError, setSkipError] = useState<string | null>(null)
+  const firstName = me.name?.split(' ')[0]
+
+  // The admin who skips naming an organization starts on their own
+  async function skipToPersonal() {
+    setSkipError(null)
+    try {
+      await finishPersonalOnboarding()
+      setWorkspace('Personal')
+      setChoice('personal')
+      setStep('agent')
+    } catch {
+      setSkipError('Your workspace could not be saved. Try again.')
+    }
+  }
 
   const steps: { id: Step; label: string }[] = [
-    { id: 'workspace', label: 'Choose a workspace' },
+    ...(setUp ? [] : [{ id: 'workspace' as const, label: 'Choose a workspace' }]),
     ...(choice === 'team' ? [{ id: 'organization' as const, label: 'Name your organization' }] : []),
     { id: 'agent', label: 'Connect your agent' },
   ]
@@ -57,6 +77,7 @@ function Flow({ me }: { me: Me }) {
           {step === 'workspace' && (
             <WorkspaceStep
               me={me}
+              selfHosted={selfHosted}
               choice={choice}
               onChoice={setChoice}
               onDone={() => {
@@ -71,7 +92,15 @@ function Flow({ me }: { me: Me }) {
           )}
           {step === 'organization' && (
             <OrganizationStep
-              onBack={() => setStep('workspace')}
+              {...(setUp
+                ? {
+                    title: `${firstName ? `Welcome, ${firstName}.` : 'Welcome.'} Name your organization`,
+                    lede: 'Everyone you add to this server works in it. You become its owner, and can invite people next.',
+                    backLabel: 'Skip, just me for now',
+                    notice: skipError,
+                  }
+                : {})}
+              onBack={setUp ? skipToPersonal : () => setStep('workspace')}
               onDone={(org) => {
                 setWorkspace(org.name)
                 setStep('agent')
@@ -85,8 +114,9 @@ function Flow({ me }: { me: Me }) {
   )
 }
 
-function WorkspaceStep({ me, choice, onChoice, onDone }: {
+function WorkspaceStep({ me, selfHosted, choice, onChoice, onDone }: {
   me: Me
+  selfHosted: boolean
   choice: Choice
   onChoice: (c: Choice) => void
   onDone: () => void
@@ -137,7 +167,7 @@ function WorkspaceStep({ me, choice, onChoice, onDone }: {
           <span className="choice-body">
             <strong>Just me</strong>
             <span>Pages you publish are yours. Share them by link when you want.</span>
-            <em>Personal, free</em>
+            <em>{selfHosted ? 'Personal' : 'Personal, free'}</em>
           </span>
         </label>
         <label className="choice">
@@ -145,7 +175,7 @@ function WorkspaceStep({ me, choice, onChoice, onDone }: {
           <span className="choice-body">
             <strong>My team</strong>
             <span>A shared gallery where everyone's agents publish, with pages only your team can open.</span>
-            <em>Organization, $12 per member / month</em>
+            <em>{selfHosted ? 'Organization' : 'Organization, $12 per member / month'}</em>
           </span>
         </label>
       </fieldset>
@@ -172,11 +202,20 @@ function toSlug(name: string): string {
 }
 
 // Also used on its own page to create another organization later
-export function OrganizationStep({ onBack, onDone, title = 'Name your organization', lede = 'This is what your teammates see when they join. You become its owner.' }: {
+export function OrganizationStep({
+  onBack,
+  onDone,
+  title = 'Name your organization',
+  lede = 'This is what your teammates see when they join. You become its owner.',
+  backLabel = 'Back',
+  notice,
+}: {
   onBack: () => void
   onDone: (org: Organization) => void
   title?: string
   lede?: string
+  backLabel?: string
+  notice?: string | null
 }) {
   const [name, setName] = useState('')
   const [slug, setSlug] = useState('')
@@ -259,12 +298,12 @@ export function OrganizationStep({ onBack, onDone, title = 'Name your organizati
         </p>
       </div>
 
-      {error && <p className="auth-notice" role="alert">{error.message}</p>}
+      {(error || notice) && <p className="auth-notice" role="alert">{error?.message ?? notice}</p>}
       <div className="onboarding-actions">
         <button type="submit" className="button" disabled={saving || shownCheck?.available === false}>
           {saving ? 'Creating organization' : 'Create organization'}
         </button>
-        <button type="button" className="auth-reset" onClick={onBack}>Back</button>
+        <button type="button" className="auth-reset" onClick={onBack}>{backLabel}</button>
       </div>
     </form>
   )

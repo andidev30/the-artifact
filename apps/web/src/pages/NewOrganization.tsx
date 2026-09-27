@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useNavigate } from 'react-router'
 import { AccountHeader } from '../components/AccountHeader'
 import { useMe } from '../useMe'
-import { chooseWorkspace, useWorkspace } from '../workspace'
+import { chooseWorkspace, organizationSettingsPath, useWorkspace } from '../workspace'
 import type { Me } from '../api'
 import { OrganizationStep } from './Onboarding'
 import { LoadError, Loading } from './Status'
@@ -41,7 +41,7 @@ function Page({ me }: { me: Me }) {
             onBack={() => navigate('/app')}
             onDone={(org) => {
               chooseWorkspace(org.id)
-              navigate('/settings#organization')
+              navigate(`${organizationSettingsPath(org)}#members`)
             }}
           />
         </div>

@@ -26,7 +26,7 @@ Gallery cards show a screenshot of each page, taken on the server in headless Ch
 - **No network of its own.** Every request the page makes is intercepted. The page's own files are answered from memory, never over the API or the network. Everything else is refused, except `GET` requests to a short list of public CDN hosts (jsDelivr, unpkg, cdnjs, esm.sh, Google Fonts and a few more; see `THUMBNAIL_CDN_HOSTS` in the [configuration reference](/docs/configuration)). The server fetches those itself, over HTTPS on port 443, only when every address the host resolves to is public, and connects to the address it checked, so a name can't be pointed at the server's own network in between. Private, loopback, link-local (including the cloud metadata address `169.254.169.254`), shared, multicast and reserved ranges are refused, and so are IPv6 forms that embed an IPv4 address. Redirects go through the same check.
 - **A backstop.** Chromium is pointed at a proxy that doesn't exist, localhost included, so traffic that interception might not see (WebSockets, workers) goes nowhere. WebRTC can't send UDP, and DNS prefetching is off.
 - **A clean, short-lived browser.** Each render gets a fresh browser context: fixed 1280×720 viewport, no downloads, no service workers, no storage carried over. It has 8 seconds to load and 20 to finish. A page that hangs is abandoned and the browser restarted.
-- **Chromium's own sandbox stays on.** Chromium runs with its sandbox and without the server's environment variables (no database URL or SMTP password). In Docker, the sandbox needs to create namespaces, which Docker's default seccomp profile forbids; `docker-compose.selfhost.yml` runs the app with `docker/seccomp-chromium.json`, which is Docker's default profile plus `clone`, `unshare` and `setns`. Without it, thumbnails are skipped and the log says why.
+- **Chromium's own sandbox stays on.** Chromium runs with its sandbox and without the server's environment variables (no database URL or SMTP password). In Docker, the sandbox needs to create namespaces, which Docker's default seccomp profile forbids; `deploy/docker-compose/docker-compose.yml` runs the app with `deploy/seccomp-chromium.json`, which is Docker's default profile plus `clone`, `unshare` and `setns`. Without it, thumbnails are skipped and the log says why.
 - **Nothing blocks publishing.** Renders run one at a time in the background. If there is no browser, or a render fails, the card keeps its sketch.
 
 Screenshots are served with the same access rules as the page, from `/api/artifacts/<id>/thumbnails/<version>`.
@@ -46,11 +46,11 @@ A page in a personal workspace is restricted until you share it. A page that som
 - Agents connect with OAuth 2.1: dynamic client registration, authorization code with PKCE (S256), and your explicit approval on a consent screen.
 - Redirects are limited to HTTPS, loopback addresses and app schemes.
 - Access tokens last an hour; refresh tokens rotate on every use. All tokens are stored as hashes.
-- An agent acts for one person in one workspace, and only with that person's permissions. Disconnect it in **Settings** to revoke it immediately.
+- An agent acts for one person in one workspace, and only with that person's permissions. Disconnect it in **Account settings** to revoke it immediately.
 
 ## Instance admins
 
-- On a self-hosted install the first account becomes the instance admin; more can be added from the admin area or with `ADMIN_EMAILS`. See [The instance admin](/docs/self-hosting#the-instance-admin).
+- On a self-hosted install the first account becomes the instance admin; more can be added from the admin area, or from the server with the make-admin script. See [The instance admin](/docs/self-hosting#the-instance-admin).
 - Admins manage accounts and organizations. They can't read private pages through the admin area: it shows counts, not page content.
 - Suspending someone deletes their sessions and agent tokens at once, and refuses their sign-in links, Google sign-in and MCP calls until they are unsuspended.
 - The last admin can't be removed, suspended or deleted, so an install always keeps a way in.

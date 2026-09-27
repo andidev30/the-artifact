@@ -1,0 +1,27 @@
+# HTTPS in front of the app. k3s ships Traefik, which serves this as is; other clusters need an
+# ingress controller. Set the host to the one in APP_URL.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: the-artifact
+  annotations:
+    # A page with its files can be 10 MB, more once encoded for an agent's request
+    nginx.ingress.kubernetes.io/proxy-body-size: 20m
+    # With cert-manager, name your issuer to get a certificate for the host below
+    # cert-manager.io/cluster-issuer: letsencrypt
+spec:
+  rules:
+    - host: artifact.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: the-artifact
+                port:
+                  number: 80
+  tls:
+    - hosts:
+        - artifact.example.com
+      secretName: the-artifact-tls

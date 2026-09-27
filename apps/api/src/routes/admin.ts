@@ -4,16 +4,15 @@ import { createMiddleware } from 'hono/factory'
 import type { AuthEnv } from '../auth/session.js'
 import { db, schema } from '../db/index.js'
 import type { User } from '../db/schema.js'
-import { env } from '../env.js'
+import { createAdminLink } from '../auth/email.js'
+import { mailEnabled } from '../env.js'
 import {
   activeAdminCount,
   adminCondition,
-  adminFromEnvironment,
   instanceSettings,
   isInstanceAdmin,
   lockAdmins,
   parseSettings,
-  resetSettings,
   revokeAccess,
   saveSettings,
 } from '../instance.js'
@@ -97,7 +96,6 @@ async function describeUsers(rows: UserRow[], viewerId: string) {
   return rows.map((u) => {
     const agentSeen = tokens.find((t) => t.userId === u.id)?.lastUsedAt
     const seen = [u.lastSeenAt, agentSeen ? new Date(agentSeen) : null].filter((d): d is Date => Boolean(d))
-    const fromEnvironment = adminFromEnvironment(u.email)
     return {
       id: u.id,
       email: u.email,
@@ -105,9 +103,7 @@ async function describeUsers(rows: UserRow[], viewerId: string) {
       avatarUrl: u.avatarUrl,
       createdAt: u.createdAt.toISOString(),
       lastSeenAt: seen.length ? new Date(Math.max(...seen.map((d) => d.getTime()))).toISOString() : null,
-      isAdmin: u.isAdmin || fromEnvironment,
-      // ADMIN_EMAILS admins can't be demoted here; the list lives in the server's environment
-      adminFromEnvironment: fromEnvironment,
+      isAdmin: u.isAdmin,
       suspended: Boolean(u.suspendedAt),
       suspendedAt: u.suspendedAt?.toISOString() ?? null,
       organizations: orgs.filter((o) => o.userId === u.id).map(({ id, name, role }) => ({ id, name, role })),
@@ -180,13 +176,8 @@ admin.patch('/users/:id', async (c) => {
       if (!target) throw new Conflict('This person no longer has an account.', 'not_found')
       const set: Partial<User> = {}
 
-      if (makeAdmin === false && (target.isAdmin || adminFromEnvironment(target.email))) {
-        if (adminFromEnvironment(target.email)) {
-          throw new Conflict(`${target.email} is an admin through ADMIN_EMAILS. Remove it there to take admin access away.`, 'admin_from_environment')
-        }
-        if (isInstanceAdmin(target) && (await activeAdminCount(tx)) <= 1) {
-          throw new Conflict('This is the only admin. Make someone else an admin first.', 'last_admin')
-        }
+      if (makeAdmin === false && isInstanceAdmin(target) && (await activeAdminCount(tx)) <= 1) {
+        throw new Conflict('This is the only admin. Make someone else an admin first.', 'last_admin')
       }
       if (makeAdmin !== undefined) set.isAdmin = makeAdmin
 
@@ -231,9 +222,6 @@ admin.delete('/users/:id', async (c) => {
   const body = (await c.req.json().catch(() => null)) as { confirmEmail?: unknown } | null
   const typed = typeof body?.confirmEmail === 'string' ? body.confirmEmail.trim().toLowerCase() : ''
   if (typed !== target.email) return c.json({ error: 'Type their email address exactly to confirm.', field: 'confirmEmail' }, 400)
-  if (adminFromEnvironment(target.email)) {
-    return c.json({ error: `${target.email} is an admin through ADMIN_EMAILS. Remove it there first.`, code: 'admin_from_environment' }, 409)
-  }
 
   const { blocked } = await ownedAlone(target.id)
   if (blocked.length) {
@@ -313,24 +301,22 @@ admin.delete('/organizations/:id', async (c) => {
   return c.body(null, 204)
 })
 
-function settingsResponse(s: Awaited<ReturnType<typeof instanceSettings>>) {
-  return {
-    ...s,
-    environment: { allowedEmailDomains: env.allowedEmailDomains, adminEmails: env.adminEmails },
-  }
-}
-
-admin.get('/settings', async (c) => c.json(settingsResponse(await instanceSettings())))
+admin.get('/settings', async (c) => c.json(await instanceSettings()))
 
 admin.put('/settings', async (c) => {
   const parsed = parseSettings(await c.req.json().catch(() => null))
   if (!parsed.ok) return c.json({ error: parsed.error, field: parsed.field }, 400)
   await saveSettings(parsed.value, c.get('user')!.id)
-  return c.json(settingsResponse(await instanceSettings()))
+  return c.json(await instanceSettings())
 })
 
-// Forget the saved settings and go back to ALLOWED_EMAIL_DOMAINS
-admin.delete('/settings', async (c) => {
-  await resetSettings()
-  return c.json(settingsResponse(await instanceSettings()))
+// { email } → a link to pass on yourself, for servers that can't send email. For someone new it
+// creates their account whatever the sign-up policy says; for an existing account it sets a new
+// password. Either way the person chooses the password when they open it.
+admin.post('/sign-up-links', async (c) => {
+  if (mailEnabled()) return c.json({ error: 'This server sends sign-in links by email. Invite people from an organization instead.', code: 'email_enabled' }, 409)
+  const body = (await c.req.json().catch(() => null)) as { email?: unknown } | null
+  const result = await createAdminLink(typeof body?.email === 'string' ? body.email : '', c.get('user')!.id)
+  if (!result.ok) return c.json({ error: result.error, field: 'email' }, 400)
+  return c.json(result.link, 201)
 })

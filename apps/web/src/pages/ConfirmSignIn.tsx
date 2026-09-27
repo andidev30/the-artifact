@@ -8,7 +8,7 @@ import './Auth.css'
 type State =
   | { kind: 'loading' }
   | { kind: 'ready'; link: SignInLink }
-  | { kind: 'expired'; email: string; newAccount: boolean }
+  | { kind: 'expired'; email: string; newAccount: boolean; canResend: boolean }
   | { kind: 'invalid' }
   | { kind: 'closed'; message: string; suspended?: boolean }
   | { kind: 'error' }
@@ -39,21 +39,28 @@ export function ConfirmSignIn() {
     getSignInLink(token)
       .then((link) => {
         if (!active) return
-        setState(link.expired ? { kind: 'expired', email: link.email, newAccount: link.newAccount } : { kind: 'ready', link })
+        setState(link.expired ? { kind: 'expired', email: link.email, newAccount: link.newAccount, canResend: link.emailEnabled } : { kind: 'ready', link })
       })
       .catch((err) => active && setState(err instanceof ApiError && err.status === 404 ? { kind: 'invalid' } : { kind: 'error' }))
     return () => { active = false }
   }, [token])
 
-  async function onContinue(link: SignInLink) {
+  async function onContinue(link: SignInLink, form?: HTMLFormElement) {
+    let password: string | undefined
+    if (link.setPassword && form) {
+      const data = new FormData(form)
+      password = String(data.get('password') ?? '')
+      if (password !== String(data.get('confirm') ?? '')) return setProblem('The passwords don’t match.')
+    }
     setBusy(true)
     setProblem(null)
     try {
-      const { redirect } = await confirmSignInLink(token, plan, next)
+      const { redirect } = await confirmSignInLink(token, plan, next, password)
       window.location.assign(redirect)
     } catch (err) {
       setBusy(false)
-      if (err instanceof ApiError && err.code === 'link_expired') return setState({ kind: 'expired', email: link.email, newAccount: link.newAccount })
+      if (err instanceof ApiError && err.field === 'password') return setProblem(err.message)
+      if (err instanceof ApiError && err.code === 'link_expired') return setState({ kind: 'expired', email: link.email, newAccount: link.newAccount, canResend: link.emailEnabled })
       if (err instanceof ApiError && err.code === 'link_invalid') return setState({ kind: 'invalid' })
       if (err instanceof ApiError && err.code === 'signup_closed') return setState({ kind: 'closed', message: err.message })
       if (err instanceof ApiError && err.code === 'account_suspended') return setState({ kind: 'closed', message: err.message, suspended: true })
@@ -89,17 +96,47 @@ export function ConfirmSignIn() {
                 {state.link.newAccount ? 'You are about to create an account as' : 'You are about to log in as'}{' '}
                 <strong className="confirm-email">{state.link.email}</strong>.
               </p>
-              {problem && <p className="auth-notice" role="alert">{problem}</p>}
-              <button type="button" className="button confirm-continue" onClick={() => onContinue(state.link)} disabled={busy}>
-                {busy ? 'Signing in' : `Continue as ${state.link.email}`}
-              </button>
-              <p className="field-hint">Didn't ask for this? Close this tab and nothing happens.</p>
+              {state.link.setPassword ? (
+                <form
+                  className="auth-form"
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    void onContinue(state.link, e.currentTarget)
+                  }}
+                  noValidate
+                >
+                  <input type="email" name="username" autoComplete="username" value={state.link.email} readOnly hidden />
+                  <label htmlFor="confirm-password">{state.link.newAccount ? 'Choose a password' : 'New password'}</label>
+                  <input id="confirm-password" name="password" type="password" autoComplete="new-password" minLength={8} required aria-describedby="confirm-password-hint" />
+                  <p id="confirm-password-hint" className="field-hint">At least 8 characters. You will log in with it from now on.</p>
+                  <label htmlFor="confirm-password-again">Confirm password</label>
+                  <input id="confirm-password-again" name="confirm" type="password" autoComplete="new-password" required />
+                  {problem && <p className="auth-error" role="alert">{problem}</p>}
+                  <button type="submit" className="button confirm-continue" disabled={busy}>
+                    {busy ? 'Signing in' : state.link.newAccount ? 'Create my account' : 'Set password and log in'}
+                  </button>
+                </form>
+              ) : (
+                <>
+                  {problem && <p className="auth-notice" role="alert">{problem}</p>}
+                  <button type="button" className="button confirm-continue" onClick={() => onContinue(state.link)} disabled={busy}>
+                    {busy ? 'Signing in' : `Continue as ${state.link.email}`}
+                  </button>
+                  <p className="field-hint">Didn't ask for this? Close this tab and nothing happens.</p>
+                </>
+              )}
             </>
           )}
 
           {state.kind === 'expired' && (
             <>
               <h1 id="confirm-title">This sign-in link has expired</h1>
+              {!state.canResend ? (
+                <p className="auth-lede">
+                  Ask an admin of this server for a new link for <strong className="confirm-email">{state.email}</strong>.
+                </p>
+              ) : (
+              <>
               <p className="auth-lede">
                 Links work for 15 minutes. Get a new one for <strong className="confirm-email">{state.email}</strong>.
               </p>
@@ -119,6 +156,8 @@ export function ConfirmSignIn() {
                 </>
               )}
               <Link className="auth-reset" to={loginAgain}>Use a different email</Link>
+              </>
+              )}
             </>
           )}
 

@@ -25,7 +25,6 @@ export type AdminUser = {
   createdAt: string
   lastSeenAt: string | null
   isAdmin: boolean
-  adminFromEnvironment: boolean
   suspended: boolean
   suspendedAt: string | null
   organizations: { id: string; name: string; role: Role }[]
@@ -51,10 +50,11 @@ export type InstanceSettings = {
   signupPolicy: SignupPolicy
   allowedDomains: string[]
   instanceName: string | null
-  source: 'settings' | 'environment'
   updatedAt: string | null
-  environment: { allowedEmailDomains: string[]; adminEmails: string[] }
 }
+
+// A link an admin passes on by hand on a server without email
+export type SignUpLink = { email: string; link: string; newAccount: boolean; expiresAt: string }
 
 export type UserDeletionPreview = {
   blockedBy: { id: string; name: string }[]
@@ -106,4 +106,4 @@ export const getSettings = () => adminRequest<InstanceSettings>('/settings')
 export const saveSettings = (value: { signupPolicy: SignupPolicy; allowedDomains: string[]; instanceName: string }) =>
   adminRequest<InstanceSettings>('/settings', { method: 'PUT', json: value })
 
-export const resetSettings = () => adminRequest<InstanceSettings>('/settings', { method: 'DELETE' })
+export const createSignUpLink = (email: string) => adminRequest<SignUpLink>('/sign-up-links', { method: 'POST', json: { email } })

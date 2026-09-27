@@ -1,0 +1,31 @@
+# The Artifact on Kubernetes (k3s, k8s): the app, Postgres and MinIO in one namespace.
+# See docs/self-hosting.md, "Kubernetes". In short:
+#   cp deploy/kubernetes/app.env.example deploy/kubernetes/app.env   # then edit it
+#   kubectl apply -k deploy/kubernetes
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: the-artifact
+
+resources:
+  - namespace.yaml
+  - postgres.yaml
+  - minio.yaml
+  - app.yaml
+  - ingress.yaml
+
+# Your image: build it from the repository's Dockerfile and push it where the cluster can pull it
+images:
+  - name: the-artifact
+    newName: the-artifact
+    newTag: latest
+
+# Every setting, in one Secret: the app reads all of it, Postgres and MinIO their passwords
+secretGenerator:
+  - name: the-artifact
+    envs:
+      - app.env
+
+# Uncomment when you can't install the seccomp profile on your nodes (see docs): the app then runs
+# without gallery thumbnails, under the runtime's default seccomp profile
+# patches:
+#   - path: patches/thumbnails-off.yaml

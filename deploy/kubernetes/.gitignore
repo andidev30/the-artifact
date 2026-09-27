@@ -1,0 +1,2 @@
+# Real settings and passwords; commit only app.env.example
+app.env

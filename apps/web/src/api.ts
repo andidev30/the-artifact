@@ -12,6 +12,8 @@ export type Me = {
   email: string
   name: string | null
   avatarUrl: string | null
+  // Whether they can log in with a password (servers without email)
+  hasPassword: boolean
   onboarded: boolean
   organizations: Organization[]
   agentConnected: boolean
@@ -286,10 +288,17 @@ export type Invitation = {
   expired: boolean
   signedInAs: string | null
   alreadyMember: boolean
+  // Server without email and no account for this address yet: sign up on the invitation page
+  canSignUpHere?: boolean
 }
 
 export function getInvitation(token: string) {
   return request<Invitation>(`/invitations/${encodeURIComponent(token)}`)
+}
+
+// Servers without email: creates the invited person's account and joins the organization
+export function signUpFromInvitation(token: string, password: string, name: string) {
+  return request<Organization>(`/invitations/${encodeURIComponent(token)}/sign-up`, { method: 'POST', json: { password, name } })
 }
 
 export function acceptInvitation(token: string) {
@@ -413,14 +422,39 @@ export function thumbnailUrl(slug: string, version: number) {
 
 // Magic link confirmation: opening the emailed link only looks it up; continuing uses it
 
-export type SignInLink = { email: string; expired: boolean; newAccount: boolean }
+export type SignInLink = {
+  email: string
+  expired: boolean
+  newAccount: boolean
+  // Using the link sets a password: it came from an admin, or the server can't send email
+  setPassword: boolean
+  emailEnabled: boolean
+}
 
 export function getSignInLink(token: string) {
   return request<SignInLink>(`/auth/email/confirm?token=${encodeURIComponent(token)}`)
 }
 
-export function confirmSignInLink(token: string, plan: string | null, next: string | null) {
-  return request<{ redirect: string }>('/auth/email/confirm', { method: 'POST', json: { token, plan, next } })
+export function confirmSignInLink(token: string, plan: string | null, next: string | null, password?: string) {
+  return request<{ redirect: string }>('/auth/email/confirm', { method: 'POST', json: { token, plan, next, password } })
+}
+
+export function logInWithPassword(email: string, password: string, plan: string | null, next: string | null) {
+  return request<{ redirect: string }>('/auth/password/login', { method: 'POST', json: { email, password, plan, next } })
+}
+
+// Servers without email whose sign-up policy lets people in
+export function signUpWithPassword(email: string, password: string, name: string, plan: string | null, next: string | null) {
+  return request<{ redirect: string }>('/auth/password/sign-up', { method: 'POST', json: { email, password, name, plan, next } })
+}
+
+// The first account on a server without email
+export function setUpServer(email: string, password: string, name: string) {
+  return request<{ redirect: string }>('/auth/password/setup', { method: 'POST', json: { email, password, name } })
+}
+
+export function changePassword(currentPassword: string, password: string) {
+  return request<null>('/me/password', { method: 'PUT', json: { currentPassword, password } })
 }
 
 export function requestSignInLink(email: string, intent: 'login' | 'signup', plan: string | null, next: string | null) {

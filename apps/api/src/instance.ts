@@ -1,4 +1,4 @@
-import { and, count, eq, inArray, isNull, ne, or, sql, type SQL } from 'drizzle-orm'
+import { and, count, eq, isNull, ne, sql, type SQL } from 'drizzle-orm'
 import { db, schema } from './db/index.js'
 import type { SignupPolicy, User } from './db/schema.js'
 import { env } from './env.js'
@@ -15,20 +15,14 @@ export async function lockAdmins(tx: Tx) {
   await tx.execute(sql`select pg_advisory_xact_lock(${ADMIN_LOCK})`)
 }
 
-export function adminFromEnvironment(email: string): boolean {
-  return env.adminEmails.includes(email.toLowerCase())
-}
-
-// Admins flagged in the database, plus everyone listed in ADMIN_EMAILS. Suspended people aren't admins.
-export function isInstanceAdmin(user: Pick<User, 'email' | 'isAdmin' | 'suspendedAt'>): boolean {
-  return !user.suspendedAt && (user.isAdmin || adminFromEnvironment(user.email))
+// Suspended people aren't admins
+export function isInstanceAdmin(user: Pick<User, 'isAdmin' | 'suspendedAt'>): boolean {
+  return !user.suspendedAt && user.isAdmin
 }
 
 // SQL for "this user row is an admin", matching isInstanceAdmin
 export function adminCondition(): SQL {
-  const flagged = eq(schema.users.isAdmin, true)
-  const listed = env.adminEmails.length ? or(flagged, inArray(schema.users.email, env.adminEmails))! : flagged
-  return and(isNull(schema.users.suspendedAt), listed)!
+  return and(isNull(schema.users.suspendedAt), eq(schema.users.isAdmin, true))!
 }
 
 export async function activeAdminCount(tx: Tx | typeof db = db): Promise<number> {
@@ -40,8 +34,12 @@ export async function activeAdminCount(tx: Tx | typeof db = db): Promise<number>
 // self-hosted install. Call inside the transaction holding lockAdmins.
 export async function firstAccountBecomesAdmin(tx: Tx): Promise<boolean> {
   if (!env.selfHosted) return false
+  return !(await hasAccounts(tx))
+}
+
+export async function hasAccounts(tx: Tx | typeof db = db): Promise<boolean> {
   const [any] = await tx.select({ id: schema.users.id }).from(schema.users).limit(1)
-  return !any
+  return Boolean(any)
 }
 
 // Settings
@@ -50,8 +48,6 @@ export type EffectiveSettings = {
   signupPolicy: SignupPolicy
   allowedDomains: string[]
   instanceName: string | null
-  // Where the sign-up policy comes from: the admin area, or ALLOWED_EMAIL_DOMAINS until someone saves it
-  source: 'settings' | 'environment'
   updatedAt: string | null
 }
 
@@ -62,17 +58,11 @@ export async function instanceSettings(): Promise<EffectiveSettings> {
       signupPolicy: row.signupPolicy,
       allowedDomains: row.allowedDomains,
       instanceName: row.instanceName,
-      source: 'settings',
       updatedAt: row.updatedAt.toISOString(),
     }
   }
-  return {
-    signupPolicy: env.allowedEmailDomains.length ? 'domains' : 'open',
-    allowedDomains: [...env.allowedEmailDomains],
-    instanceName: null,
-    source: 'environment',
-    updatedAt: null,
-  }
+  // Until an admin saves the form, anyone who can reach the server may sign up
+  return { signupPolicy: 'open', allowedDomains: [], instanceName: null, updatedAt: null }
 }
 
 const DOMAIN_RE = /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/
@@ -112,10 +102,6 @@ export async function saveSettings(value: SettingsInput, updatedBy: string) {
   await db.insert(schema.instanceSettings).values({ id: 1, ...row }).onConflictDoUpdate({ target: schema.instanceSettings.id, set: row })
 }
 
-export async function resetSettings() {
-  await db.delete(schema.instanceSettings)
-}
-
 // Everything a suspended person could still act through: web sessions, agent tokens, grants
 // in progress and unused sign-in links
 export async function revokeAccess(tx: Tx, user: Pick<User, 'id' | 'email'>) {
@@ -131,7 +117,7 @@ export const lastAdminError = {
 }
 
 // True when deleting this person would leave an instance with other people but no admin
-export async function isLastAdmin(user: Pick<User, 'id' | 'email' | 'isAdmin' | 'suspendedAt'>): Promise<boolean> {
+export async function isLastAdmin(user: Pick<User, 'id' | 'isAdmin' | 'suspendedAt'>): Promise<boolean> {
   if (!isInstanceAdmin(user) || (await activeAdminCount()) > 1) return false
   const [other] = await db.select({ id: schema.users.id }).from(schema.users).where(ne(schema.users.id, user.id)).limit(1)
   return Boolean(other)

@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { acceptInvitation, ApiError, declineInvitation, getInvitation, logout, type Invitation } from '../api'
+import { acceptInvitation, ApiError, declineInvitation, getInvitation, logout, signUpFromInvitation, type Invitation } from '../api'
 import { Wordmark } from '../components/Wordmark'
 import { LOGIN_URL, SIGNUP_URL } from '../config'
 import { timeAgo } from '../time'
@@ -55,6 +55,24 @@ export function Invite() {
       navigate('/app', { replace: true })
     } catch (err) {
       setProblem(err instanceof Error ? err.message : 'The invitation could not be accepted. Try again.')
+      setBusy(false)
+    }
+  }
+
+  // Servers without email: the invitation link is how someone new gets an account
+  async function signUpHere(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const data = new FormData(e.currentTarget)
+    const password = String(data.get('password') ?? '')
+    if (password !== String(data.get('confirm') ?? '')) return setProblem('The passwords don’t match.')
+    setBusy(true)
+    setProblem(null)
+    try {
+      const org = await signUpFromInvitation(token, password, String(data.get('name') ?? '').trim())
+      chooseWorkspace(org.id)
+      window.location.assign('/app')
+    } catch (err) {
+      setProblem(err instanceof ApiError ? err.message : 'Your account could not be created. Try again.')
       setBusy(false)
     }
   }
@@ -163,6 +181,35 @@ export function Invite() {
               Go to {org}
             </button>
           </div>
+        </>
+      )
+    }
+
+    if (!inv.signedInAs && inv.canSignUpHere) {
+      return (
+        <>
+          {diagram}
+          {intro}
+          <p className="invite-note">
+            Create your account for <strong>{inv.email}</strong> to accept.
+          </p>
+          <form className="auth-form" onSubmit={signUpHere} noValidate>
+            <input type="email" name="username" autoComplete="username" value={inv.email} readOnly hidden />
+            <label htmlFor="invite-name">Your name</label>
+            <input id="invite-name" name="name" autoComplete="name" maxLength={80} />
+            <label htmlFor="invite-password">Choose a password</label>
+            <input id="invite-password" name="password" type="password" autoComplete="new-password" minLength={8} required aria-describedby="invite-password-hint" />
+            <p id="invite-password-hint" className="field-hint">At least 8 characters.</p>
+            <label htmlFor="invite-confirm">Confirm password</label>
+            <input id="invite-confirm" name="confirm" type="password" autoComplete="new-password" required />
+            {problem && <p className="auth-error" role="alert">{problem}</p>}
+            <button type="submit" className="button" disabled={busy}>
+              {busy ? 'Joining' : `Create account and join ${org}`}
+            </button>
+          </form>
+          <p className="field-hint">
+            Already have an account? <Link className="text-link" to={`${LOGIN_URL}${next}`}>Log in to accept</Link>
+          </p>
         </>
       )
     }
