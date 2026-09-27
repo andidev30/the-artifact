@@ -14,7 +14,7 @@ Claude Code, Cursor, Codex or any MCP client publishes a page and gets a link ba
 [![Image](https://img.shields.io/badge/image-ghcr.io-1c2b4b?logo=docker&logoColor=white)](https://github.com/andidev30/the-artifact/pkgs/container/the-artifact)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-ffe066)](LICENSE)
 
-[Quick start](#quick-start) · [Documentation](docs/introduction.md) · [Self-hosting](docs/self-hosting.md) · [Kubernetes](docs/kubernetes.md) · [Contributing](CONTRIBUTING.md)
+[Quick start](#quick-start) · [Documentation](docs/introduction.md) · [Self-hosting](docs/self-hosting.md) · [Kubernetes](docs/kubernetes.md) · [Roadmap](https://github.com/users/andidev30/projects/2) · [Contributing](CONTRIBUTING.md)
 
 <br>
 
@@ -139,7 +139,7 @@ pnpm dev             # API on :3000, web on :5173
 
 `pnpm lint` runs Biome and the type checks, `pnpm format` formats, `pnpm test` runs the unit and integration tests, and `pnpm test:e2e` the browser tests; see [TESTING.md](TESTING.md). `CLAUDE.md` files describe the conventions for people and coding agents alike, and `.claude/` holds shared Claude Code settings and project skills.
 
-Contributions are welcome: read [CONTRIBUTING.md](CONTRIBUTING.md) first, and report security issues privately as described in [SECURITY.md](SECURITY.md).
+Contributions are welcome: what's planned is on the [project board](https://github.com/users/andidev30/projects/2); read [CONTRIBUTING.md](CONTRIBUTING.md) first, and report security issues privately as described in [SECURITY.md](SECURITY.md).
 
 ## License
 
