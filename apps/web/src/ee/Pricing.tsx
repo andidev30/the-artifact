@@ -15,7 +15,7 @@ type Plan = {
   comingSoon?: boolean
 }
 
-// Placeholder prices and limits; change here once they are decided
+// The Personal plan's page and history limits are placeholders; change them here once they are decided
 const CLOUD_PLANS: Plan[] = [
   {
     name: 'Personal',
@@ -29,7 +29,7 @@ const CLOUD_PLANS: Plan[] = [
   },
   {
     name: 'Organization',
-    price: '$12',
+    price: '$4',
     per: 'per member / month',
     summary: 'For teams that share what their agents build.',
     features: [

@@ -26,6 +26,12 @@ test('landing page renders and the pricing toggle switches plans', async ({ page
   for (const name of ['Personal', 'Organization', 'Enterprise']) {
     await expect(pricing.getByRole('heading', { name: `${name} Coming soon` })).toBeVisible()
   }
+  await expect(
+    pricing
+      .locator('.plan')
+      .filter({ has: page.getByRole('heading', { name: 'Organization Coming soon' }) })
+      .locator('.plan-price'),
+  ).toHaveText('$4per member / month')
   await expect(pricing.locator('.plan[data-coming-soon]')).toHaveCount(3)
   await expect(pricing.locator('.plans').getByRole('link')).toHaveCount(0)
 
