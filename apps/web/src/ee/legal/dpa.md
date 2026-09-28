@@ -41,7 +41,7 @@ Don't put special categories of personal data in pages (such as health, biometri
 
 ## Data outside Indonesia
 
-Our servers run in Tokyo, Japan. Our providers may process data in other countries, including the United States. We only use providers whose data protection terms protect the data at least as well as UU PDP requires.
+Our servers run in Tokyo, Japan. Our providers may process data in other countries, including the United States and France. We only use providers whose data protection terms protect the data at least as well as UU PDP requires.
 
 If the GDPR applies to your organization's data, this addendum is meant to cover what Article 28 of the GDPR asks of a processor. If you need the EU Standard Contractual Clauses, email us.
 

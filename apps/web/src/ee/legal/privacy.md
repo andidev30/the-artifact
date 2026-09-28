@@ -116,7 +116,7 @@ We don't sell personal data, and we don't use it for advertising.
 
 ## Where your data is
 
-Our servers run in Tokyo, Japan, on Vercel. The database and file storage are run by Supabase. Some providers are based in the United States and may process data there or in other countries. This means your data leaves Indonesia. We choose providers that protect personal data at least as well as UU PDP requires, under their data processing terms.
+Our servers run in Tokyo, Japan, on Vercel. The database and file storage are run by Supabase, and emails are sent through Brevo in France. Vercel and Supabase are based in the United States and may process data there or in other countries. This means your data leaves Indonesia. We choose providers that protect personal data at least as well as UU PDP requires, under their data processing terms.
 
 ## Cookies and browser storage
 

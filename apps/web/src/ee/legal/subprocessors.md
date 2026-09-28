@@ -16,9 +16,10 @@ These are the service providers that handle personal data for The Artifact's hos
 - **What it does for us:** runs our database and file storage, and keeps their backups
 - **Data it handles:** accounts, organizations, sharing, comments, and every page's files
 
-## Our email delivery provider
+## Brevo (Sendinblue SAS)
 
-- **What it does for us:** sends sign-in links, invitations, share and comment notices over SMTP, and forwards contact sales messages to us
+- **Company based in:** France (EU), 17 rue Salneuve, 75017 Paris
+- **What it does for us:** sends sign-in links, invitations and notification emails (shares and comments), and forwards contact sales messages to us
 - **Data it handles:** email addresses, names, page titles and links, comment text, and contact sales messages
 
 ## Payments
