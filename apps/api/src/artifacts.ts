@@ -442,7 +442,7 @@ const fileCache = new Lru<string, VersionFiles>(FILE_CACHE_VERSIONS, FILE_CACHE_
   return bytes
 })
 
-async function versionFiles(v: { id: string; artifactId: string }): Promise<Map<string, StoredFile>> {
+export async function versionFiles(v: { id: string; artifactId: string }): Promise<Map<string, StoredFile>> {
   const hit = fileCache.get(v.id)
   if (hit) return hit.files
   const rows = await db.select(FILE_META).from(f).where(eq(f.versionId, v.id))

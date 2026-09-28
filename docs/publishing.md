@@ -174,6 +174,18 @@ Lists every version of a page, newest first, as the [version history](/docs/vers
 | --- | --- | --- |
 | `artifact_id` | yes | Id or link of the page |
 
+### diff_versions
+
+What changed between two versions of a page, like **Compare** in the [history](/docs/version-history#comparing-two-versions), so an agent can check its own change after publishing. It lists the files added, removed and changed, with their sizes and types, and a unified diff (as `diff -u` writes it) of each text file: HTML, CSS, JavaScript, JSON, SVG, Markdown, plain text, CSV and XML. Editors only.
+
+| Argument | Required | Meaning |
+| --- | --- | --- |
+| `artifact_id` | yes | Id or link of the page |
+| `from` | yes | The older version number, from `list_versions` |
+| `to` | yes | The newer version number, from `list_versions` |
+
+A changed file shows without a diff when it isn't text (images, fonts, audio, video), when either version of it is bigger than 200 KB, or when more than 2,000 of its lines changed. One comparison reads up to 2 MB of text and returns up to 1 MB of diff; files past that show as changed without one.
+
 ### list_views
 
 How many times each version of a page was opened, and who opened it in the last 90 days with when they last did, like **Views** in the app. Visits through a link shared with **Anyone with the link** are counted but anonymous. Editors only. See [Who opened a page](/docs/sharing#who-opened-a-page) for what is recorded.

@@ -69,6 +69,7 @@ describe('version numbers', () => {
     expect((await call(`${base}/versions/1`, { cookie: owner.cookie })).status).toBe(200)
     expect((await call(`${base}/v/1/`, { cookie: owner.cookie })).status).toBe(200)
     expect((await call(`${base}/download?version=1`, { cookie: owner.cookie })).status).toBe(200)
+    expect((await call(`${base}/compare?from=1&to=1`, { cookie: owner.cookie })).status).toBe(200)
 
     for (const n of BAD) {
       const v = encodeURIComponent(n)
@@ -78,6 +79,8 @@ describe('version numbers', () => {
         `${base}/v/${v}/`,
         `${base}/v/${v}/index.html`,
         `${base}/download?version=${v}`,
+        `${base}/compare?from=${v}&to=1`,
+        `${base}/compare?from=1&to=${v}`,
       ]) {
         expect((await call(path, { cookie: owner.cookie })).status, path).toBe(404)
       }
@@ -94,6 +97,8 @@ describe('version numbers', () => {
       const result = await callTool(access_token, tool, { artifact_id: page.slug, version: 2147483648 })
       expect(result.isError, tool).toBe(true)
     }
+    expect((await callTool(access_token, 'diff_versions', { artifact_id: page.slug, from: 1, to: 2147483648 })).isError).toBe(true)
+    expect((await callTool(access_token, 'diff_versions', { artifact_id: page.slug, from: 0, to: 1 })).isError).toBe(true)
   })
 })
 

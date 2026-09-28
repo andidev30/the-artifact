@@ -59,6 +59,7 @@ import {
   type ListedComment,
 } from './comments.js'
 import { allowed, downloadLink, TOKEN_HOURS } from './content.js'
+import { comparisonText, compareVersions, MAX_DIFF_FILE_BYTES } from './compare.js'
 import { checkLinkPassword, describeLink, LinkError, parseLinkExpiry, publicLink, updateLink, type LinkChange } from './links.js'
 import { db, schema } from './db/index.js'
 import type { Artifact } from './db/schema.js'
@@ -733,7 +734,9 @@ function buildServer(auth: McpAuth) {
         const when = `${v.createdAt.toISOString().slice(0, 16).replace('T', ' ')} UTC`
         return `- Version ${v.version}${v.version === artifact.currentVersion ? ' (current)' : ''}: ${when}, ${how}${by ? ` by ${by}` : ''}`
       })
-      return text(`Versions of "${artifact.title}", newest first:\n${lines.join('\n')}\nUse restore_version to make an older one current again.`)
+      return text(
+        `Versions of "${artifact.title}", newest first:\n${lines.join('\n')}\nUse diff_versions to see what changed between two of them, and restore_version to make an older one current again.`,
+      )
     }),
   )
 
@@ -792,6 +795,31 @@ function buildServer(auth: McpAuth) {
       if (!updated) return text(`"${artifact.title}" has no version ${version}. Call list_versions to see its versions.`, true)
       return text(`Restored version ${version} of "${updated.title}" as version ${updated.currentVersion}.\nLink: ${artifactUrl(updated.slug)}`)
     }, true),
+  )
+
+  server.registerTool(
+    'diff_versions',
+    {
+      title: 'Compare two versions of a page',
+      description:
+        'See what changed between two versions of a page, e.g. to check your own change after publishing: the files added, removed and changed, ' +
+        `with a unified diff of each text file up to ${MAX_DIFF_FILE_BYTES / 1024} KB. Binary and bigger files are listed as changed without a diff. ` +
+        'For people who can edit the page.',
+      inputSchema: z.object({
+        artifact_id: z.string().describe('Id or link of the page'),
+        from: z.number().int().positive().max(MAX_VERSION).describe('The older version number, from list_versions'),
+        to: z.number().int().positive().max(MAX_VERSION).describe('The newer version number, from list_versions'),
+      }),
+      annotations: { readOnlyHint: true },
+    },
+    limited(async ({ artifact_id, from, to }) => {
+      const artifact = await findBySlug(parseArtifactRef(artifact_id))
+      if (!artifact || !(await canEdit(artifact, viewer))) return text(`No page you can edit has the id "${artifact_id}".`, true)
+      const [a, b] = await Promise.all([getVersion(artifact, from), getVersion(artifact, to)])
+      const missing = !a ? from : !b ? to : null
+      if (missing !== null) return text(`"${artifact.title}" has no version ${missing}. Call list_versions to see its versions.`, true)
+      return text(comparisonText(artifact.title, await compareVersions(a!, b!)))
+    }),
   )
 
   server.registerTool(
