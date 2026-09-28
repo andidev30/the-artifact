@@ -272,6 +272,11 @@ test('server admin', async ({ page }) => {
   await expect(people.getByText('Showing 1 of 1 person')).toBeVisible()
   await people.getByRole('button', { name: 'Manage' }).click()
   await expectAccessible(page, 'server admin, managing someone')
+
+  // Hosted only; e2e/self-hosted/license.spec.ts checks the License section of a self-hosted install
+  await page.goto('/admin#license-keys')
+  await expect(page.locator('#license-keys').getByRole('note')).toBeVisible()
+  await expectAccessible(page, 'server admin, license keys', { include: '#license-keys' })
 })
 
 test('agent consent page', async ({ page }) => {

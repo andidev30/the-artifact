@@ -41,3 +41,24 @@ test('an instance admin finds someone, suspends them and lets them back in', asy
   await expect(people.locator('.admin-badge-bad')).toHaveCount(0)
   await other.close()
 })
+
+test('on the hosted service, License keys says why it cannot issue keys without a signing key', async ({ page }) => {
+  const email = uniqueEmail('license-admin')
+  await signUpPersonal(page, email)
+  await grantInstanceAdmin(email)
+  await page.goto('/admin')
+
+  const rail = page.getByRole('navigation', { name: 'Admin sections' })
+  await expect(rail.getByRole('link', { name: 'License keys' })).toBeVisible()
+  // The self-hosted License section isn't here
+  await expect(rail.getByRole('link', { name: 'License', exact: true })).toHaveCount(0)
+  expect((await page.request.get('/api/admin/license')).status()).toBe(404)
+
+  await rail.getByRole('link', { name: 'License keys' }).focus()
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(/#license-keys$/)
+  const section = page.locator('#license-keys')
+  await expect(section.getByRole('heading', { name: 'License keys' })).toBeVisible()
+  await expect(section.getByRole('note')).toHaveText(/can’t issue keys yet.*LICENSE_SIGNING_KEY/)
+  await expect(section.getByRole('button', { name: 'Issue key' })).toHaveCount(0)
+})
