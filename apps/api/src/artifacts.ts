@@ -192,7 +192,12 @@ export async function publish(input: PublishInput): Promise<Artifact> {
 export async function publishUpload(input: PublishTarget & { uploadId: string; files: ManifestEntry[] }): Promise<Artifact> {
   const { html, files } = checkManifest(input.files)
   checkUploadId(input.uploadId)
-  return publishContent(input, { htmlSha256: html.sha256, htmlSize: html.size, files, store: () => claimUploads(input.uploadId, [html, ...files]) })
+  return publishContent(input, {
+    htmlSha256: html.sha256,
+    htmlSize: html.size,
+    files,
+    store: () => claimUploads(input.uploadId, [html, ...files], input.userId),
+  })
 }
 
 // undefined: leave the folder as it is; null: no folder

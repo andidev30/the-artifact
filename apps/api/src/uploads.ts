@@ -1,4 +1,6 @@
 import { randomBytes } from 'node:crypto'
+import { and, eq, inArray } from 'drizzle-orm'
+import { db, schema } from './db/index.js'
 import { checkManifest, type FileMeta, type ManifestEntry, PublishError } from './files.js'
 import { blobSize, presignUpload, promoteUpload } from './storage.js'
 
@@ -17,18 +19,54 @@ export type PreparedUpload = {
   stored: string[]
 }
 
-export async function prepareUpload(entries: ManifestEntry[]): Promise<PreparedUpload> {
+// Content in a version of a page this person owns. Only that may skip the upload: blobs are shared
+// by everyone on the server, so answering for any other content would tell whoever asks whether
+// someone else has stored those exact bytes.
+async function ownedBlobs(userId: string, hashes: string[]): Promise<Set<string>> {
+  if (!hashes.length) return new Set()
+  const { artifacts, artifactVersions: versions, artifactFiles: files } = schema
+  const [pages, extra] = await Promise.all([
+    db
+      .selectDistinct({ hash: versions.htmlSha256 })
+      .from(versions)
+      .innerJoin(artifacts, eq(artifacts.id, versions.artifactId))
+      .where(and(eq(artifacts.ownerId, userId), inArray(versions.htmlSha256, hashes))),
+    db
+      .selectDistinct({ hash: files.sha256 })
+      .from(files)
+      .innerJoin(versions, eq(versions.id, files.versionId))
+      .innerJoin(artifacts, eq(artifacts.id, versions.artifactId))
+      .where(and(eq(artifacts.ownerId, userId), inArray(files.sha256, hashes))),
+  ])
+  return new Set([...pages, ...extra].map((r) => r.hash))
+}
+
+// Stored content of this person's own pages, with the size it was stored at
+async function reusable(userId: string, files: FileMeta[]): Promise<Set<string>> {
+  const owned = await ownedBlobs(
+    userId,
+    files.map((f) => f.sha256),
+  )
+  const found = await Promise.all(files.filter((f) => owned.has(f.sha256)).map(async (f) => ((await blobSize(f.sha256)) === f.size ? f.sha256 : null)))
+  return new Set(found.filter((h) => h !== null))
+}
+
+export async function prepareUpload(entries: ManifestEntry[], userId: string): Promise<PreparedUpload> {
   const { html, files } = checkManifest(entries)
   const uploadId = randomBytes(16).toString('hex')
   const byHash = new Map<string, FileMeta[]>()
   for (const f of [html, ...files]) byHash.set(f.sha256, [...(byHash.get(f.sha256) ?? []), f])
+  const skip = await reusable(
+    userId,
+    [...byHash.values()].map((same) => same[0]),
+  )
 
   const uploads: PreparedUpload['uploads'] = []
   const stored: string[] = []
   await Promise.all(
     [...byHash].map(async ([hash, same]) => {
       const paths = same.map((f) => f.path)
-      if ((await blobSize(hash)) === same[0].size) stored.push(...paths)
+      if (skip.has(hash)) stored.push(...paths)
       else uploads.push({ paths, size: same[0].size, url: await presignUpload(uploadId, hash, same[0].size) })
     }),
   )
@@ -40,14 +78,14 @@ export function checkUploadId(uploadId: string) {
 }
 
 // Moves every file of a version into storage, or throws without recording anything. Runs under
-// the storage lock (see insertVersion), like any other write of blobs.
-export async function claimUploads(uploadId: string, files: FileMeta[]) {
-  const byHash = new Map(files.map((f) => [f.sha256, f]))
+// the storage lock (see insertVersion), like any other write of blobs. Anything prepare_upload
+// didn't skip must have been uploaded, even if the same bytes are already stored for someone else.
+export async function claimUploads(uploadId: string, files: FileMeta[], userId: string) {
+  const byHash = [...new Map(files.map((f) => [f.sha256, f])).values()]
+  const skip = await reusable(userId, byHash)
   await Promise.all(
-    [...byHash.values()].map(async (f) => {
-      const size = await blobSize(f.sha256)
-      if (size === f.size) return
-      if (size !== null) throw new PublishError(`"${f.path}" doesn't match the size you sent. Check its size and sha256.`)
+    byHash.map(async (f) => {
+      if (skip.has(f.sha256)) return
       const result = await promoteUpload(uploadId, f.sha256, f.size)
       if (result === 'missing')
         throw new PublishError(`"${f.path}" wasn't uploaded. PUT it to the link prepare_upload gave, or call prepare_upload again if the link expired.`)

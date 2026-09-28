@@ -81,6 +81,30 @@ describe('publishing by direct upload', () => {
     expect(await (await call(`/api/artifacts/${slug}/v/2/site.css`, { cookie: owner.cookie })).text()).toBe(css.toString())
   })
 
+  it("doesn't reveal whether content is already stored for someone else, and asks for the bytes anyway", async () => {
+    const alice = await agent()
+    const { files, manifest } = page()
+    const first = await callTool(alice.token, 'prepare_upload', { files: manifest })
+    for (const [path, url] of links(first.text)) await put(url, files[path])
+    const firstId = first.text.match(/upload_id: ([0-9a-f]+)/)![1]
+    expect((await callTool(alice.token, 'publish_upload', { title: 'Page', upload_id: firstId, files: manifest })).isError).toBe(false)
+
+    const bob = await agent()
+    const prepared = await callTool(bob.token, 'prepare_upload', { files: manifest })
+    expect(prepared.text).not.toContain('Already stored')
+    expect([...links(prepared.text).keys()].sort()).toEqual(['img/big.png', 'index.html', 'site.css'])
+    const uploadId = prepared.text.match(/upload_id: ([0-9a-f]+)/)![1]
+    const skipped = await callTool(bob.token, 'publish_upload', { title: 'Copy', upload_id: uploadId, files: manifest })
+    expect(skipped).toMatchObject({ isError: true })
+    expect(skipped.text).toMatch(/wasn't uploaded/)
+
+    for (const [path, url] of links(prepared.text)) await put(url, files[path])
+    const res = await callTool(bob.token, 'publish_upload', { title: 'Copy', upload_id: uploadId, files: manifest })
+    expect(res.isError).toBe(false)
+    const slug = slugFrom(res.text)
+    expect(await (await call(`/api/artifacts/${slug}/v/1/`, { cookie: bob.owner.cookie })).text()).toBe(files['index.html'].toString())
+  })
+
   it('refuses bytes that are not what the manifest said, and stores nothing under that hash', async () => {
     const { token } = await agent()
     const { manifest } = page()
