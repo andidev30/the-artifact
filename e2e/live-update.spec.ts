@@ -15,7 +15,8 @@ test('an open page shows a new version as soon as it is published', async ({ pag
 
   await publishViaMcp(page.request, token, { title: 'Live', html: '<!doctype html><h1>Second draft</h1>', artifact_id: slug })
   await expect(frame.getByRole('heading', { name: 'Second draft' })).toBeVisible({ timeout: 10_000 })
-  await expect(page.locator('iframe.viewer-frame')).toHaveAttribute('src', `/api/artifacts/${slug}/v/2/`)
+  // Signed-in viewers load it under ~comments/ for the comment helper
+  await expect(page.locator('iframe.viewer-frame')).toHaveAttribute('src', new RegExp(`^/api/artifacts/${slug}/v/2/`))
   await expect(page.getByRole('status').filter({ hasText: 'Updated to version 2.' })).toBeAttached()
   await expect(page.getByText('Updated to version 2', { exact: true })).toBeVisible()
   await expect(share).toBeFocused()
