@@ -246,7 +246,7 @@ describe('the app itself', () => {
       const res = await get(path)
       expect(res.status, path).toBe(200)
       expect(res.headers.get('x-frame-options'), path).toBe('SAMEORIGIN')
-      expect(res.headers.get('content-security-policy'), path).toBe("frame-ancestors 'self'")
+      expect(res.headers.get('content-security-policy'), path).toBe("frame-ancestors 'self'; object-src 'none'; base-uri 'self'")
     }
   })
 })

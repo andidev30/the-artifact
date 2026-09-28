@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import { SHELL_HEADERS } from '../../src/previews.js'
 
 type Rewrite = { source: string; destination: string }
 type Headers = { source: string; headers: { key: string; value: string }[] }
@@ -27,6 +28,12 @@ describe('vercel.json', () => {
   it('sends nosniff on every path', () => {
     const all = config.headers.find((h) => h.source === '/(.*)')
     expect(all?.headers).toContainEqual({ key: 'X-Content-Type-Options', value: 'nosniff' })
+  })
+
+  it('gives the static app shell the same framing and CSP as the API does', () => {
+    const shell = config.headers.find((h) => h.source === '/((?!api/|e/).*)')
+    expect(shell?.headers).toContainEqual({ key: 'Content-Security-Policy', value: SHELL_HEADERS['Content-Security-Policy'] })
+    expect(shell?.headers).toContainEqual({ key: 'X-Frame-Options', value: SHELL_HEADERS['X-Frame-Options'] })
   })
 
   // Served as a static file ahead of the app shell rewrite
