@@ -61,7 +61,7 @@ When linking isn't allowed, the sign-in page says so and the person signs in the
 4. Choose **Test connection** on the provider's row. You go through the provider's sign-in and come back to **Server admin**, which shows the address, name and id the provider sent and whether that person would get in. Nobody is signed in and no account is created or linked by the test.
 5. Choose **Edit**, turn on **Show on the sign-in page**, and save.
 
-The server itself must reach the provider's issuer URL, token endpoint and keys over the network; people's browsers must reach its sign-in page.
+The server itself must reach the provider's issuer URL, token endpoint and keys over the network; people's browsers must reach its sign-in page. The provider may be on the internet or on your own network; see [Requests to identity providers](/docs/security#requests-to-identity-providers) for the addresses the server refuses.
 
 ## Providers
 
@@ -147,4 +147,5 @@ Nothing is deleted: accounts, their links to the provider and the provider setti
 - Addresses link to existing accounts only as [Linking existing accounts](#linking-existing-accounts) describes: never an instance admin's, and without domains only for addresses the provider verified. Anyone who controls the provider can still sign in as any other account at its domains; treat admin access to the provider like admin access to this server.
 - Adding, changing and removing providers is written to the server log with the admin who did it (see [The security log](/docs/security#the-security-log)).
 - Issuer URLs must use HTTPS. Plain HTTP is accepted only while `APP_URL` is HTTP too, for trying it locally.
+- Requests to the provider don't follow redirects, give up after 10 seconds, and never go to loopback, link-local (such as the cloud metadata address `169.254.169.254`) or reserved addresses. When the settings can't be read, the admin form says only that; the reason is in the server's log.
 - Starting and finishing single sign-on is rate limited per network (`sso-ip` under [Rate limits](/docs/configuration#rate-limits)).

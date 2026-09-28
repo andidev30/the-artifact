@@ -1,8 +1,11 @@
 import { generateKeyPairSync } from 'node:crypto'
+import { createServer } from 'node:http'
+import type { AddressInfo } from 'node:net'
+import { DOMParser } from '@xmldom/xmldom'
 import { eq } from 'drizzle-orm'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { db, schema } from '../../src/db/index.js'
-import { parseIdpMetadata } from '../../src/ee/sso/saml-metadata.js'
+import { METADATA_URL_FAILED, parseIdpMetadata } from '../../src/ee/sso/saml-metadata.js'
 import { env } from '../../src/env.js'
 import { call, createOrg, createUser, sessionCookie, type TestUser } from './helpers.js'
 import { disableEnterprise, enableEnterprise, removeTestSigningKeys } from './enterprise.js'
@@ -29,6 +32,7 @@ beforeEach(async () => {
 afterEach(() => {
   env.selfHosted = original.selfHosted
   removeTestSigningKeys()
+  vi.restoreAllMocks()
 })
 
 type Described = { id: string; protocol: string; enabled: boolean; saml: { idpEntityId: string; ssoUrl: string; certificates: number } }
@@ -85,6 +89,31 @@ describe('SAML configuration', () => {
     expect(await res.json()).toMatchObject({ field: 'metadataXml' })
     expect(parseIdpMetadata(`<!DOCTYPE x [<!ENTITY a "b">]>${idp.metadata}`).ok).toBe(false)
     expect(parseIdpMetadata(idp.metadata.replace(/<md:KeyDescriptor[\s\S]*<\/md:KeyDescriptor>/, '')).ok).toBe(false)
+  })
+
+  it('reads the IdP from its metadata URL, and says only that it couldn’t when that fails', async () => {
+    const hits: string[] = []
+    const server = createServer((req, res) => {
+      hits.push(req.url ?? '')
+      if (req.url === '/moved') res.writeHead(302, { location: '/metadata' }).end()
+      else if (req.url === '/metadata') res.end(idp.metadata)
+      else if (req.url === '/big') res.end(`${idp.metadata}${' '.repeat(1024 * 1024)}`)
+      else res.end('<html></html>')
+    })
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+    try {
+      expect((await configure({ metadataXml: '', metadataUrl: `${base}/metadata` })).saml.idpEntityId).toBe(idp.entityId)
+      for (const url of [`${base}/moved`, `${base}/page`, `${base}/big`, 'http://169.254.169.254/latest/meta-data/', 'http://127.0.0.1:1/']) {
+        const res = await call('/api/admin/sso', { cookie: admin.cookie, json: { protocol: 'saml', name: 'Okta', metadataUrl: url } })
+        expect(res.status, url).toBe(400)
+        expect(await res.json(), url).toEqual({ error: METADATA_URL_FAILED, field: 'metadataUrl' })
+      }
+      // The redirect wasn't followed
+      expect(hits).toEqual(['/metadata', '/moved', '/page', '/big'])
+    } finally {
+      server.close()
+    }
   })
 
   it('serves SP metadata with the ACS URL', async () => {
@@ -237,10 +266,13 @@ describe('SAML sign-in', () => {
     expect(again.headers.get('location')).toBe(failed)
   })
 
-  it('refuses IdP-initiated responses unless turned on', async () => {
+  it('refuses IdP-initiated responses unless turned on, without reading them', async () => {
     await configure()
-    const res = await post(samlResponse(idp, sp, { inResponseTo: null }))
+    const response = samlResponse(idp, sp, { inResponseTo: null })
+    const parse = vi.spyOn(DOMParser.prototype, 'parseFromString')
+    const res = await post(response)
     expect(res.headers.get('location')).toBe(unmatched)
+    expect(parse).not.toHaveBeenCalled()
   })
 
   it('refuses a response for a request this server never sent', async () => {
@@ -274,6 +306,16 @@ describe('SAML without a license', () => {
     const res = await post(samlResponse(idp, sp))
     expect(res.headers.get('location')).toBe(`${env.appUrl}/login?error=sso_unavailable`)
     expect((await call('/api/auth/sso/saml/metadata')).status).toBe(404)
+  })
+
+  it('reads no response, even for a connection that takes them unasked', async () => {
+    await configure({ allowIdpInitiated: true })
+    await disableEnterprise()
+    const response = samlResponse(idp, sp, { inResponseTo: null })
+    const parse = vi.spyOn(DOMParser.prototype, 'parseFromString')
+    const res = await post(response)
+    expect(res.headers.get('location')).toBe(`${env.appUrl}/login?error=sso_unavailable`)
+    expect(parse).not.toHaveBeenCalled()
   })
 
   it('refuses a flow started while licensed once the license is gone', async () => {
