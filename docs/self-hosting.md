@@ -30,7 +30,7 @@ And `.env`, read by Docker Compose, before the first start (the database and Min
 | Setting | What to put there |
 | --- | --- |
 | `POSTGRES_PASSWORD`, `MINIO_ROOT_PASSWORD` | Passwords of the bundled Postgres and MinIO. Neither is reachable from outside the compose network. Without the file they default to `artifact` and `artifact-secret`. |
-| `ARTIFACT_VERSION` | Optional. The release to run, e.g. `0.1.0`. Without it, the compose file runs the release it was written for. Releases are listed at https://github.com/andidev30/the-artifact/releases. |
+| `ARTIFACT_VERSION` | Optional. The release to run: an exact version like `0.2.0`, or `0.2` to get that release's fixes whenever you pull. Without it, the compose file runs the release it was written for. See [Image tags](/docs/upgrading#image-tags). |
 | `ARTIFACT_PORT` | Optional. Port on the host, `8080` by default. |
 | `S3_*` | Optional. Object storage elsewhere; see [Using S3, R2 or your own MinIO](#using-s3-r2-or-your-own-minio). |
 
@@ -149,14 +149,15 @@ In Google Cloud Console, create an OAuth client of type Web application. Add `AP
 
 ## Updating
 
-Set `ARTIFACT_VERSION` in `.env` to the new release, then get the matching compose file and start it:
+Read the release notes first: [Upgrading](/docs/upgrading) says what the version number tells you and lists what to do for releases that need more than a restart. Then take a [backup](/docs/backups), get the compose file of the new release, set `ARTIFACT_VERSION` in `.env` to it and start it:
 
 ```sh
-git pull
+git fetch --tags
+git checkout v0.2.0
 docker compose up -d
 ```
 
-`docker compose up -d` pulls the new image and restarts the app with it; your data stays in its volumes. Database changes apply automatically when the new version starts, and an older version may not run on them, so take a [backup](/docs/backups) first. Pages published before thumbnails existed get theirs the first time the gallery lists them; to render them all at once:
+`docker compose up -d` pulls the new image and restarts the app with it; your data stays in its volumes. Database changes apply automatically when the new version starts, and an older version may not run on them. Pages published before thumbnails existed get theirs the first time the gallery lists them; to render them all at once:
 
 ```sh
 docker compose exec app node dist/scripts/backfill-thumbnails.js
