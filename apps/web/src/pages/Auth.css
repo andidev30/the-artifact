@@ -99,10 +99,6 @@
   border-radius: 3px;
 }
 
-.auth-form input::placeholder {
-  color: #8a95ad;
-}
-
 .auth-form input:focus-visible {
   outline-offset: 1px;
 }

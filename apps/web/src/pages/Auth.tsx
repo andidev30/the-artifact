@@ -447,6 +447,8 @@ function SetupForm() {
   }
 
   const invalid = (field: string) => (problem?.field === field ? true : undefined)
+  // The error is read out with the field it is about
+  const describedBy = (field: string, hint?: string) => [hint, invalid(field) && 'setup-error'].filter(Boolean).join(' ') || undefined
 
   return (
     <section className="auth-box" aria-labelledby="auth-title">
@@ -456,7 +458,16 @@ function SetupForm() {
         <label htmlFor="setup-name">Your name</label>
         <input id="setup-name" name="name" autoComplete="name" maxLength={80} />
         <label htmlFor="setup-email">Email</label>
-        <input id="setup-email" name="email" type="email" autoComplete="email" placeholder="you@company.com" required aria-invalid={invalid('email')} />
+        <input
+          id="setup-email"
+          name="email"
+          type="email"
+          autoComplete="email"
+          placeholder="you@company.com"
+          required
+          aria-invalid={invalid('email')}
+          aria-describedby={describedBy('email')}
+        />
         <label htmlFor="setup-password">Password</label>
         <input
           id="setup-password"
@@ -466,15 +477,23 @@ function SetupForm() {
           minLength={8}
           required
           aria-invalid={invalid('password')}
-          aria-describedby="setup-password-hint"
+          aria-describedby={describedBy('password', 'setup-password-hint')}
         />
         <p id="setup-password-hint" className="field-hint">
           At least 8 characters.
         </p>
         <label htmlFor="setup-confirm">Confirm password</label>
-        <input id="setup-confirm" name="confirm" type="password" autoComplete="new-password" required aria-invalid={invalid('confirm')} />
+        <input
+          id="setup-confirm"
+          name="confirm"
+          type="password"
+          autoComplete="new-password"
+          required
+          aria-invalid={invalid('confirm')}
+          aria-describedby={describedBy('confirm')}
+        />
         {problem && (
-          <p className="auth-error" role="alert">
+          <p id="setup-error" className="auth-error" role="alert">
             {problem.message}
           </p>
         )}
