@@ -6,6 +6,7 @@ import { clearFileCache } from '../../src/artifacts.js'
 import { forgetSsoButtons } from '../../src/ee/sso/connections.js'
 import { forgetAccounts } from '../../src/instance.js'
 import { db } from '../../src/db/index.js'
+import { forgetServerSecrets } from '../../src/secrets.js'
 import { ensureBucket } from '../../src/storage.js'
 import { batchViewCounts, forgetPendingViewCounts } from '../../src/views.js'
 
@@ -43,6 +44,7 @@ beforeEach(async () => {
   forgetAccounts()
   forgetSsoButtons()
   forgetPendingViewCounts()
+  forgetServerSecrets()
 })
 
 afterAll(async () => {

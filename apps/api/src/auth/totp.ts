@@ -85,6 +85,6 @@ export function otpauthUrl(secret: Buffer, issuer: string, account: string): str
 
 // Secrets are stored encrypted (AES-256-GCM) with a key from server_secrets, so a copy of the
 // totp_secrets table alone, or a query log, doesn't give anyone the codes. A full database backup
-// holds the key too; see docs/security.md.
+// holds the key too unless ENCRYPTION_KEY is set; see docs/security.md.
 export const sealSecret = (secret: Buffer) => seal('two-factor', secret)
 export const openSecret = (sealed: string) => unseal('two-factor', sealed)

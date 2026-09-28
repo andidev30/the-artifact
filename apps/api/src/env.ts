@@ -87,6 +87,24 @@ export function contentOrigin(value: string | undefined, appUrl: string): string
   return url.origin
 }
 
+// A key that encrypts the rows of server_secrets (src/secrets.ts): 32 random bytes in base64, as
+// openssl rand -base64 32 prints them, or in hex. Null when unset.
+export function encryptionKey(value: string | undefined, name: string): Buffer | null {
+  const v = value?.trim()
+  if (!v) return null
+  // Checked by shape first: Buffer.from skips characters it doesn't know, so a typo would pass as another key
+  const key = /^[0-9a-f]{64}$/i.test(v) ? Buffer.from(v, 'hex') : /^[A-Za-z0-9+/_-]{43}=?$/.test(v) ? Buffer.from(v, 'base64') : null
+  if (key?.length !== 32) throw new Error(`${name} must be 32 random bytes in base64 or hex, e.g. the output of openssl rand -base64 32.`)
+  return key
+}
+
+export function encryptionKeys(current: string | undefined, previous: string | undefined) {
+  const key = encryptionKey(current, 'ENCRYPTION_KEY')
+  const previousKey = encryptionKey(previous, 'ENCRYPTION_KEY_PREVIOUS')
+  if (previousKey && !key) throw new Error('ENCRYPTION_KEY_PREVIOUS is only for changing keys: set the new key as ENCRYPTION_KEY too.')
+  return { key, previousKey }
+}
+
 const appUrl = required('APP_URL').replace(/\/$/, '')
 
 export const env = {
@@ -139,6 +157,9 @@ export const env = {
   licenseSigningKey: process.env.LICENSE_SIGNING_KEY ?? '',
   // Days organizations' audit log events are kept (an Enterprise feature); the daily sweep deletes older ones
   auditLogRetentionDays: count('AUDIT_LOG_RETENTION_DAYS') ?? 365,
+  // Encrypts the keys the server keeps in its database, so a copy of the database alone doesn't open
+  // what they protect. previousKey is set only while changing to a new key; see docs/configuration.md
+  encryption: encryptionKeys(process.env.ENCRYPTION_KEY, process.env.ENCRYPTION_KEY_PREVIOUS),
   // Bearer token Prometheus scrapes GET /metrics with; without it, /metrics doesn't exist
   metricsToken: process.env.METRICS_TOKEN ?? '',
   // Object storage (S3 API: MinIO, AWS S3, Cloudflare R2...) for page content and thumbnails.
