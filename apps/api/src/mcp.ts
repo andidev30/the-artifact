@@ -144,7 +144,7 @@ function refusal(name: string, what: string, wait: number) {
 
 // One server per request (stateless), bound to the person and workspace behind the token
 function buildServer(auth: McpAuth) {
-  const viewer = { id: auth.userId, email: auth.email }
+  const viewer = { id: auth.userId, email: auth.email, blockedOrgs: auth.blockedOrgs }
   const workspace = { userId: auth.userId, organizationId: auth.organizationId }
   const server = new McpServer({ name: 'the-artifact', version: '0.1.0' })
 
@@ -193,6 +193,7 @@ function buildServer(auth: McpAuth) {
         const artifact = await publish({
           userId: auth.userId,
           email: auth.email,
+          blockedOrgs: auth.blockedOrgs,
           organizationId: auth.organizationId,
           clientName: auth.clientName,
           title,
@@ -263,6 +264,7 @@ function buildServer(auth: McpAuth) {
           const artifact = await publishUpload({
             userId: auth.userId,
             email: auth.email,
+            blockedOrgs: auth.blockedOrgs,
             organizationId: auth.organizationId,
             clientName: auth.clientName,
             title,

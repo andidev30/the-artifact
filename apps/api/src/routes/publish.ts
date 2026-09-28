@@ -141,6 +141,7 @@ publishApi.post(
       const artifact = await publish({
         userId: auth.userId,
         email: auth.email,
+        blockedOrgs: auth.blockedOrgs,
         organizationId: auth.organizationId,
         clientName: auth.clientName,
         title: input.title,

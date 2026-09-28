@@ -256,7 +256,9 @@ A connection publishes to one workspace: your personal workspace or one of your 
 
 ## Disconnecting
 
-**Account settings → Connected agents** lists every agent with access, the workspace it publishes to, and when it was last used. **Disconnect** revokes its access at once; the agent has to sign in again to publish. The [command line](/docs/publishing#command-line) shows there as **The Artifact CLI**, and `the-artifact logout` disconnects it too.
+**Account settings → Connected agents** lists every agent with access, the workspace it publishes to, and when it was last used. **Disconnect** revokes its access at once; the agent has to sign in again to publish.
+
+An agent is also disconnected when it leaves an organization's workspace (you leave or are removed), when your account is suspended, and when one of its refresh tokens is used a second time, which happens when a copy of the token is used somewhere else. Connect it again to go on. The [command line](/docs/publishing#command-line) shows there as **The Artifact CLI**, and `the-artifact logout` disconnects it too.
 
 ## Publishing from CI
 
@@ -268,7 +270,7 @@ A CI job (a test report, a nightly dashboard) can't open a browser to sign in. G
 
 A token acts for you in that one workspace, with your permissions, like a connected agent. It works as a bearer token for `POST /api/publish` (see [Publishing without an agent](/docs/publishing#publishing-without-an-agent)) and for every MCP tool at `{{MCP_URL}}`. It can't sign in to the app or make other tokens.
 
-**Account settings → Access tokens** lists your tokens with their workspace, when they were made and last used, and when they expire. **Revoke** stops a token at once: the next request with it is refused. A token also stops working when it expires, when you leave the organization it is for, or when your account is suspended. Owners and admins of an organization can see and revoke its members' tokens for it (see [Organizations](/docs/organizations#access-tokens)).
+**Account settings → Access tokens** lists your tokens with their workspace, when they were made and last used, and when they expire. **Revoke** stops a token at once: the next request with it is refused. A token also stops working when it expires, when you leave the organization it is for, or when your account is suspended, and while the organization [requires two-factor sign-in](/docs/organizations#requiring-two-factor-sign-in) and you haven't set it up. Owners and admins of an organization can see and revoke its members' tokens for it (see [Organizations](/docs/organizations#access-tokens)).
 
 ### GitHub Actions
 

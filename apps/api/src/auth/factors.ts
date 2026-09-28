@@ -22,8 +22,8 @@ export async function organizationsRequiringFactor(userId: string) {
     .orderBy(schema.memberships.createdAt)
 }
 
-// The organizations this person can't use in the web app until they set up a second factor. Their
-// agents and access tokens keep working there (see docs/security.md).
+// The organizations this person can't use until they set up a second factor: in the web app, and
+// through agents and access tokens, which are refused for them (see docs/security.md)
 export async function blockedOrganizations(userId: string): Promise<string[]> {
   const required = await organizationsRequiringFactor(userId)
   if (!required.length || (await hasSecondFactor(userId))) return []

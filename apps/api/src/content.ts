@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import { Hono, type Context } from 'hono'
 import { accessLevel, findBySlug, getFile, getVersion, linkLetsIn, linkOpen, loadVersionTree, versionHtml, type LinkPass, type Viewer } from './artifacts.js'
+import { blockedOrganizations } from './auth/factors.js'
 import type { AuthEnv } from './auth/session.js'
 import { db, schema } from './db/index.js'
 import type { Artifact } from './db/schema.js'
@@ -104,9 +105,15 @@ export async function verifyContentLink(token: string, artifact: Artifact, versi
   return given.length === expected.length && timingSafeEqual(given, expected) ? userId : null
 }
 
+// The person a link token names. Tokens are signed, not stored, so they can't be revoked: suspension
+// and an organization's two-factor requirement are checked here, on every use.
 async function userById(id: string): Promise<Viewer | null> {
-  const [u] = await db.select({ id: schema.users.id, email: schema.users.email }).from(schema.users).where(eq(schema.users.id, id))
-  return u ?? null
+  const [u] = await db
+    .select({ id: schema.users.id, email: schema.users.email, suspendedAt: schema.users.suspendedAt })
+    .from(schema.users)
+    .where(eq(schema.users.id, id))
+  if (!u || u.suspendedAt) return null
+  return { id: u.id, email: u.email, blockedOrgs: await blockedOrganizations(u.id) }
 }
 
 // The current version is for anyone who can open the page; older ones only for its editors,

@@ -1,0 +1,1 @@
+ALTER TABLE "oauth_tokens" ADD COLUMN "used_at" timestamp with time zone;

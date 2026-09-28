@@ -4,7 +4,7 @@ import { auditSettled } from '../../src/audit.js'
 import { hashToken } from '../../src/auth/session.js'
 import { db, schema } from '../../src/db/index.js'
 import { env } from '../../src/env.js'
-import { call, connectAgent, createOrg, createUser, type TestUser } from './helpers.js'
+import { addMember, call, connectAgent, createOrg, createUser, type TestUser } from './helpers.js'
 import { disableEnterprise, enableEnterprise, removeTestSigningKeys } from './enterprise.js'
 
 const original = { selfHosted: env.selfHosted }
@@ -250,6 +250,105 @@ describe('SCIM Users', () => {
     const res = await scim('/ServiceProviderConfig')
     expect(await res.json()).toMatchObject({ patch: { supported: true }, filter: { supported: true } })
     expect((await scim('/Groups')).status).toBe(404)
+  })
+})
+
+describe('SCIM tokens for an organization', () => {
+  let org: { id: string }
+  let other: { id: string }
+  beforeEach(async () => {
+    org = await createOrg(await createUser({ email: 'owner@acme.example' }), 'Acme', 'acme')
+    other = await createOrg(await createUser({ email: 'owner@globex.example' }), 'Globex', 'globex')
+    token = await newToken(org.id)
+  })
+
+  const patch = (id: string, Operations: unknown[]) => scim(`/Users/${id}`, { method: 'PATCH', json: { schemas: [PATCH], Operations } })
+  const emails = async (path = '/Users') => ((await (await scim(path)).json()).Resources as { emails: { value: string }[] }[]).map((r) => r.emails[0].value)
+
+  it('lists and reads only the organization’s members', async () => {
+    const created = await create()
+    const outsider = await createUser({ email: 'someone@globex.example' })
+    expect((await emails()).sort()).toEqual(['jane.doe@acme.example', 'owner@acme.example'])
+    expect(await emails(`/Users?filter=${encodeURIComponent('userName eq "someone@globex.example"')}`)).toEqual([])
+    expect((await scim(`/Users/${outsider.id}`)).status).toBe(404)
+    expect((await scim(`/Users/${admin.id}`)).status).toBe(404)
+    expect((await scim(`/Users/${created.id}`)).status).toBe(200)
+  })
+
+  it('can’t change or deactivate accounts outside the organization', async () => {
+    const outsider = await createUser({ email: 'someone@globex.example' })
+    for (const id of [outsider.id, admin.id]) {
+      expect((await patch(id, [{ op: 'replace', path: 'emails[type eq "work"].value', value: 'new@evil.example' }])).status).toBe(404)
+      expect((await scim(`/Users/${id}`, { method: 'PUT', json: { ...oktaUser, userName: 'new@evil.example' } })).status).toBe(404)
+      expect((await scim(`/Users/${id}`, { method: 'DELETE' })).status).toBe(404)
+    }
+    expect(await userRow(admin.id)).toMatchObject({ email: 'admin@acme.example', suspendedAt: null })
+    expect(await userRow(outsider.id)).toMatchObject({ email: 'someone@globex.example', suspendedAt: null })
+    // An account that already exists elsewhere isn't created again, nor linked
+    expect((await scim('/Users', { json: { ...oktaUser, userName: 'someone@globex.example', emails: [{ value: 'someone@globex.example' }] } })).status).toBe(
+      409,
+    )
+    expect(await db.select().from(schema.memberships).where(eq(schema.memberships.userId, outsider.id))).toHaveLength(0)
+  })
+
+  it('manages members who are in no other organization', async () => {
+    const user = await create()
+    const res = await patch(user.id, [
+      { op: 'replace', path: 'emails[type eq "work"].value', value: 'janet@acme.example' },
+      { op: 'replace', path: 'active', value: false },
+    ])
+    expect(res.status).toBe(200)
+    expect(await userRow(user.id)).toMatchObject({ email: 'janet@acme.example', suspendedAt: expect.any(Date) })
+  })
+
+  it('only takes members who are also elsewhere, or instance admins, out of the organization', async () => {
+    const shared = await createUser({ email: 'shared@acme.example' })
+    await addMember(org.id, shared, 'member')
+    await addMember(other.id, shared, 'member')
+    await addMember(org.id, admin, 'admin')
+    await connectAgent(shared, org.id)
+    await connectAgent(shared, other.id, 'cursor')
+
+    for (const person of [shared, admin]) {
+      const res = await patch(person.id, [
+        { op: 'replace', path: 'emails[type eq "work"].value', value: `x-${person.id}@evil.example` },
+        { op: 'replace', path: 'name.familyName', value: 'Changed' },
+      ])
+      expect(res.status).toBe(200)
+      expect(await userRow(person.id)).toMatchObject({ email: person.email, name: null, suspendedAt: null })
+    }
+
+    const off = await patch(shared.id, [{ op: 'replace', path: 'active', value: false }])
+    expect(off.status).toBe(200)
+    expect((await off.json()).active).toBe(false)
+    expect((await userRow(shared.id)).suspendedAt).toBeNull()
+    const left = await db.select().from(schema.memberships).where(eq(schema.memberships.userId, shared.id))
+    expect(left.map((m) => m.organizationId)).toEqual([other.id])
+    // Agents connected to the organization go with it, the others stay
+    const agents = await db.select().from(schema.oauthTokens).where(eq(schema.oauthTokens.userId, shared.id))
+    expect(new Set(agents.map((t) => t.organizationId))).toEqual(new Set([other.id]))
+    expect((await scim(`/Users/${shared.id}`)).status).toBe(404)
+
+    expect((await scim(`/Users/${admin.id}`, { method: 'DELETE' })).status).toBe(204)
+    expect((await userRow(admin.id)).suspendedAt).toBeNull()
+    expect(await db.select().from(schema.memberships).where(eq(schema.memberships.userId, admin.id))).toHaveLength(0)
+
+    await auditSettled()
+    const events = await db.select().from(schema.auditEvents).where(eq(schema.auditEvents.organizationId, org.id))
+    expect(
+      events
+        .filter((e) => e.action === 'member.removed')
+        .map((e) => e.targetId)
+        .sort(),
+    ).toEqual([shared.id, admin.id].sort())
+  })
+
+  it('won’t take out the organization’s only owner', async () => {
+    const [owner] = await db.select().from(schema.users).where(eq(schema.users.email, 'owner@acme.example'))
+    await db.insert(schema.memberships).values({ organizationId: other.id, userId: owner.id, role: 'member' })
+    const res = await scim(`/Users/${owner.id}`, { method: 'DELETE' })
+    expect(res.status).toBe(409)
+    expect(await res.json()).toMatchObject({ scimType: 'mutability' })
   })
 })
 

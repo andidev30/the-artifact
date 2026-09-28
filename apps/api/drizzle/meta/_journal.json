@@ -183,6 +183,13 @@
       "when": 1790614457550,
       "tag": "0025_email_unverified",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1790615363258,
+      "tag": "0026_refresh_token_reuse",
+      "breakpoints": true
     }
   ]
 }

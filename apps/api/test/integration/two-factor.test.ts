@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { hashPassword } from '../../src/auth/password.js'
 import { base32Decode, currentStep, totpCode } from '../../src/auth/totp.js'
+import { downloadLink, signContentLink } from '../../src/content.js'
 import { db, schema } from '../../src/db/index.js'
 import { env } from '../../src/env.js'
 import { sendSignInLink } from '../../src/mail.js'
@@ -14,6 +15,7 @@ import {
   createOrg,
   createPage,
   createUser,
+  mcpRequest,
   pkcePair,
   registerClient,
   sessionCookie,
@@ -509,15 +511,21 @@ describe('organizations that require two-factor sign-in', () => {
     expect(details.members.map((m: { twoFactor: boolean }) => m.twoFactor)).toEqual([true, false])
   })
 
-  it('keep members without one out of the organization in the app until they set one up', async () => {
+  it('keep members without one out of the organization until they set one up', async () => {
     const owner = await createUser()
     const member = await createUser()
     const org = await createOrg(owner)
     await addMember(org.id, member, 'member')
     const page = await createPage(owner, { organizationId: org.id, visibility: 'organization' })
     const linkPage = await createPage(owner, { organizationId: org.id, visibility: 'link' })
-    // Connected before the requirement: agents keep working
+    // Connected before the requirement
     const agent = await connectAgent(member, org.id)
+    const personal = await connectAgent(member, null, 'cursor')
+    const { token: accessToken } = await (await call('/api/me/access-tokens', { cookie: member.cookie, json: { name: 'CI', organizationId: org.id } })).json()
+    const [row] = await db.select().from(schema.artifacts).where(eq(schema.artifacts.id, page.id))
+    const frame = `/api/artifacts/${page.slug}/v/1/~${await signContentLink(member.id, row, 1)}/`
+    const download = (await downloadLink(member.id, row, 1)).replace('http://localhost:5177', '')
+    expect((await call(frame)).status).toBe(200)
     await enrolTotp(owner)
     await call(`/api/organizations/${org.id}`, { method: 'PATCH', cookie: owner.cookie, json: { requireTwoFactor: true } })
 
@@ -541,15 +549,29 @@ describe('organizations that require two-factor sign-in', () => {
     expect(consent.workspaces[0]).toEqual({ id: org.id, name: 'Acme Inc', blocked: true })
     expect((await call(`/api/oauth/requests/${requestId}/approve`, { cookie: member.cookie, json: { organizationId: org.id } })).status).toBe(403)
 
-    const listed = await callTool(agent.access_token, 'list_artifacts', {})
-    expect(listed.isError).toBe(false)
-    expect(listed.text).toContain(page.slug)
+    // Agents and access tokens for it are refused, and the rest can't reach its pages
+    expect((await mcpRequest(agent.access_token, 'tools/list')).status).toBe(401)
+    expect((await call('/api/whoami', { bearer: accessToken })).status).toBe(401)
+    const refresh = await call('/oauth/token', { form: { grant_type: 'refresh_token', refresh_token: agent.refresh_token } })
+    expect(await refresh.json()).toMatchObject({ error: 'invalid_grant', error_description: expect.stringContaining('requires two-factor sign-in') })
+    expect(await callTool(personal.access_token, 'get_artifact', { artifact_id: page.slug })).toMatchObject({ isError: true })
+    expect(await callTool(personal.access_token, 'rename_artifact', { artifact_id: page.slug, title: 'Renamed' })).toMatchObject({ isError: true })
+    expect((await call(frame)).status).toBe(404)
+    expect((await call(download)).status).toBe(404)
+    expect((await callTool(personal.access_token, 'list_artifacts', {})).isError).toBe(false)
 
     // Setting up a factor lets them back in, with the same session
     await enrolTotp(member)
     expect((await call(`/api/artifacts?workspace=${org.id}`, { cookie: member.cookie })).status).toBe(200)
     expect((await call(`/api/artifacts/${page.slug}`, { cookie: member.cookie })).status).toBe(200)
     expect((await (await call('/api/me', { cookie: member.cookie })).json()).organizations[0].blocked).toBe(false)
+    // and their agents, access tokens and links work again
+    expect((await callTool(agent.access_token, 'list_artifacts', {})).text).toContain(page.slug)
+    expect((await call('/api/whoami', { bearer: accessToken })).status).toBe(200)
+    expect((await call('/oauth/token', { form: { grant_type: 'refresh_token', refresh_token: agent.refresh_token } })).status).toBe(200)
+    expect((await callTool(personal.access_token, 'get_artifact', { artifact_id: page.slug })).isError).toBe(false)
+    expect((await call(frame)).status).toBe(200)
+    expect((await call(download)).status).toBe(200)
   })
 
   it('still let blocked members leave, and send them to set up a factor when they sign in', async () => {

@@ -240,6 +240,9 @@ export const oauthTokens = pgTable(
     organizationId: uuid('organization_id').references(() => organizations.id, { onDelete: 'cascade' }),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+    // Set when a refresh token is exchanged. The row is kept until it expires, so presenting it
+    // again is recognized as reuse and ends the whole connection.
+    usedAt: timestamp('used_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('oauth_tokens_user_idx').on(t.userId)],

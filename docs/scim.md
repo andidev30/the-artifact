@@ -14,7 +14,9 @@ The hosted service doesn't offer SCIM yet.
 Open **Server admin**, then **Provisioning (SCIM)**:
 
 1. Copy the **SCIM base URL**: `{{APP_URL}}/scim/v2`.
-2. Enter a **Token name**, such as the IdP's name, and optionally an **Organization for new people**. Accounts this token creates join that organization as members; without one, they start in a personal workspace.
+2. Enter a **Token name**, such as the IdP's name, and choose what it reaches under **Organization**:
+   - **An organization**: the token lists and manages only that organization's members, and accounts it creates join it as members. Use this when the IdP belongs to one organization on a server that others share.
+   - **Every account on this server**: the token manages every account, and accounts it creates start in a personal workspace. Use this when the IdP is the server's own directory.
 3. Choose **Make token** and copy it. It is shown once, and the server keeps only a hash of it.
 
 Each token shows when it was last used. **Revoke** stops it at once; make a new one to replace it.
@@ -39,7 +41,7 @@ Each token shows when it was last used. **Revoke** stops it at once; make a new 
 | The IdP | What happens here |
 | --- | --- |
 | Creates a user | A new account with the user's work email as its address (or the `userName`, when it is an email address). It joins the token's organization. |
-| Looks a user up (`userName eq "…"`) | Accounts are matched by `userName`, ignoring case. Accounts that existed before SCIM match by their email address, so the IdP links them instead of making a second one. |
+| Looks a user up (`userName eq "…"`) | Accounts are matched by `userName`, ignoring case. Accounts that existed before SCIM match by their email address, so the IdP links them instead of making a second one. A token for an organization finds only its members: invite people who already have an account to the organization first, or creating them answers `409`. |
 | Updates a user (`PUT` or `PATCH`) | The name and email address change. Changing the address changes what the person signs in with. |
 | Deactivates a user (`active: false`) | The account is suspended and signed out everywhere, including agents and access tokens, as when an admin suspends it. Setting `active: true` restores it. |
 | Deletes a user | The same as deactivating. The account and its pages stay, and an instance admin can restore or delete it under **Server admin**. |
@@ -47,6 +49,15 @@ Each token shows when it was last used. **Revoke** stops it at once; make a new 
 Only users are supported. SCIM Groups answer `404`: turn off group push in the IdP, and manage organizations and their members in the app.
 
 SCIM can't deactivate the only instance admin; make someone else an admin first. Users created over SCIM never become instance admins on their own.
+
+### What a token for an organization reaches
+
+A token for an organization only sees that organization's members; any other account answers `404`, as if it didn't exist. Suspending an account or changing its name or email address reaches beyond the organization (the person's own pages, other organizations they are in, the server), so the token does that only for members who are in no other organization and aren't instance admins. For everyone else:
+
+- Changes to the name and email address are ignored; the request still succeeds.
+- Deactivating or deleting them removes them from the organization instead, as when an owner removes them: their agents and access tokens for it stop working, and their account and other organizations stay. The organization's only owner can't be removed this way. Once removed, they are no longer the token's to manage; invite them again to bring them back.
+
+Only an instance admin can make SCIM tokens, including tokens for every account.
 
 ## Details for other IdPs
 
