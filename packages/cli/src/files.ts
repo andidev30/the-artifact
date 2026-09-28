@@ -1,5 +1,5 @@
-import { readdir, readFile, stat } from 'node:fs/promises'
-import { basename, extname, join, relative, sep } from 'node:path'
+import { readdir, readFile, realpath, stat } from 'node:fs/promises'
+import { basename, extname, isAbsolute, join, relative, sep } from 'node:path'
 import { CliError } from './errors.ts'
 
 // The server checks all of this again (apps/api/src/files.ts); checking here first means a build
@@ -147,11 +147,27 @@ export function checkLimits(collected: { entry: PageFile | null; files: PageFile
     )
 }
 
+export const OUTSIDE_LINK = 'a link to a file outside the folder'
+const HIDDEN_LINK = 'a link to a hidden file'
+
+// Where a link to a file leads, when that is a file of the folder that publishing it would send
+// anyway. A folder from someone else can hold links like data.json -> ~/.aws/credentials, which
+// would publish that file under the link's name.
+async function linkTarget(root: string, abs: string): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const real = await realpath(abs).catch(() => null)
+  if (real === null) return { ok: false, reason: OUTSIDE_LINK }
+  const inside = relative(root, real)
+  if (!inside || inside.startsWith('..') || isAbsolute(inside)) return { ok: false, reason: OUTSIDE_LINK }
+  if (inside.split(sep).some((part) => part.startsWith('.') || SKIPPED_FOLDERS.has(part))) return { ok: false, reason: HIDDEN_LINK }
+  return { ok: true }
+}
+
 // Every file in a folder, except hidden files and folders, node_modules and ignored paths, which are
-// never read. Links to folders are noted rather than followed.
+// never read. Links to folders are noted rather than followed, and so are links to files outside it.
 async function walkFolder(target: string, ignored: (path: string, isDir: boolean) => boolean): Promise<{ found: PageFile[]; skipped: Skipped[] }> {
   const found: PageFile[] = []
   const skipped: Skipped[] = []
+  const root = await realpath(target)
   async function walk(dir: string) {
     const entries = await readdir(dir, { withFileTypes: true })
     entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
@@ -170,6 +186,13 @@ async function walkFolder(target: string, ignored: (path: string, isDir: boolean
         continue
       }
       if (!isFile) continue
+      if (real) {
+        const link = await linkTarget(root, abs)
+        if (!link.ok) {
+          skipped.push({ path, reason: link.reason })
+          continue
+        }
+      }
       found.push({ path, abs, size: real ? real.size : (await stat(abs)).size })
     }
   }
@@ -220,6 +243,8 @@ export async function collectPage(target: string, opts: { entry?: string; ignore
   }
 
   if (!entry) {
+    const link = skipped.find((s) => s.path.toLowerCase() === entryPath.toLowerCase() && s.reason !== 'a link to a folder')
+    if (link) throw new CliError(`${entryPath} in ${label} is ${link.reason}. Only files inside the folder are published; copy it in instead.`)
     throw new CliError(
       opts.entry ? `There is no ${entryPath} in ${label}.` : `There is no index.html in ${label}. Pass --entry to choose the page's HTML file.`,
     )
@@ -258,6 +283,8 @@ export async function collectSome(
     const entryPath = entryPathOf(opts.entry)
     const walked = await walkFolder(target, ignoreMatcher(opts.ignore ?? []))
     skipped.push(...walked.skipped)
+    // A pattern that names only a file left out matched it: the note says why it isn't sent
+    for (const s of walked.skipped) matches(s.path)
     for (const file of walked.found) {
       const path = file.path
       const isEntry = path.toLowerCase() === entryPath.toLowerCase()

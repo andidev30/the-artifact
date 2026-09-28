@@ -330,7 +330,7 @@ Sign-ins are saved per server in `~/.config/the-artifact/credentials.json` (`%AP
 the-artifact publish ./dist
 ```
 
-publishes `dist/index.html` as the page and every other file in the folder next to it, then prints the link. Hidden files and folders, `node_modules`, and files of types pages can't hold are left out, with a note for each. A single file works too: `the-artifact publish report.html`. The [size limits](#what-makes-a-good-page) are checked before anything is sent.
+publishes `dist/index.html` as the page and every other file in the folder next to it, then prints the link. Hidden files and folders, `node_modules`, and files of types pages can't hold are left out, with a note for each. Links to folders aren't followed, and links to files are followed only to files inside the folder that would be published anyway; a link to a file outside it or to a hidden file is left out with a note. A single file works too: `the-artifact publish report.html`. The [size limits](#what-makes-a-good-page) are checked before anything is sent.
 
 | Option | Meaning |
 | --- | --- |
@@ -349,6 +349,8 @@ publishes `dist/index.html` as the page and every other file in the folder next 
 | `--dry-run` | List what would be sent, and send nothing |
 
 The link is the only thing printed on standard output, so `url=$(the-artifact publish dist)` captures it. Progress and notes go to standard error.
+
+When `.the-artifact.json` names the page, the first line on standard error says which one: `Publishing to https://artifact.example.com/a/k3v9x2m8pq, the page .the-artifact.json names for dist.` The file travels with the repository, so in a folder someone else gave you, check that line, or the file, before you publish: it can name a page of theirs that they shared with you to edit, and then they see what you publish. `--new` ignores the file.
 
 ### Updating some files
 
