@@ -36,7 +36,7 @@ Hono on Node 26, Drizzle ORM over `postgres`, S3 via `@aws-sdk/client-s3`, MCP v
 | `src/log.ts` | JSON logs, one object per line, tagged with the request id. Use `log.info/warn/error` rather than `console` |
 | `src/metrics.ts`, `src/routes/health.ts` | Prometheus metrics and the per-request middleware (request id, log line, timing by route pattern); `/healthz`, `/readyz` and `/metrics` (only with `METRICS_TOKEN`) |
 | `src/mail.ts` | Outgoing email. Throws `MailDisabledError` without SMTP |
-| `src/ee/` | Hosted-service-only routes (contact sales, issuing license keys) and enterprise features behind `hasEnterprise()`; see `src/ee/CLAUDE.md` |
+| `src/ee/` | Hosted-service-only code (contact sales, the Personal plan's limits, no new organizations until billing, issuing license keys) and enterprise features behind `hasEnterprise()`; see `src/ee/CLAUDE.md` |
 | `src/scripts/` | Operator CLIs (`admin:grant`, `storage:sweep`, `thumbnails:backfill`, and `license:keygen` for the hosted service's signing key), also run as `node dist/scripts/*.js` in the image |
 
 ## Rules that aren't obvious from one file

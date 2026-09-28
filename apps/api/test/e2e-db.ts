@@ -28,6 +28,18 @@ export async function grantInstanceAdmin(email: string) {
   })
 }
 
+// The hosted service doesn't create new organizations until the Organization plan has billing, so
+// specs that need one on the hosted server write it here, owned by an account that already signed up
+export async function createHostedOrganization(ownerEmail: string, name: string, slug: string): Promise<{ id: string; slug: string }> {
+  return withDatabase(HOSTED_DATABASE_URL, async (sql) => {
+    const [owner] = await sql<{ id: string }[]>`select id from users where email = ${ownerEmail.toLowerCase()}`
+    if (!owner) throw new Error(`No account for ${ownerEmail}`)
+    const [org] = await sql<{ id: string; slug: string }[]>`insert into organizations (name, slug) values (${name}, ${slug}) returning id, slug`
+    await sql`insert into memberships (user_id, organization_id, role) values (${owner.id}, ${org.id}, 'owner')`
+    return org
+  })
+}
+
 // Creates the self-hosted database on first use, migrates it and deletes everything in it
 export async function resetSelfHostedDatabase() {
   if (SELF_HOSTED_DATABASE_URL === HOSTED_DATABASE_URL) throw new Error('TEST_SELF_HOSTED_DATABASE_URL must differ from TEST_DATABASE_URL')

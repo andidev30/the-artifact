@@ -55,10 +55,12 @@ export async function createUser(opts: { email?: string; name?: string; onboarde
   return { id: user.id, email, name: user.name, cookie: `session=${token}` }
 }
 
+// An organization and its owner, written directly: the hosted service doesn't create new ones through the
+// API (ee/plans.ts), and creating them is covered in organizations.test.ts
 export async function createOrg(owner: TestUser, name = 'Acme Inc', slug = 'acme') {
-  const res = await call('/api/organizations', { cookie: owner.cookie, json: { name, slug } })
-  expect(res.status).toBe(201)
-  return (await res.json()) as { id: string; name: string; slug: string; role: Role }
+  const [org] = await db.insert(schema.organizations).values({ name, slug }).returning()
+  await db.insert(schema.memberships).values({ organizationId: org.id, userId: owner.id, role: 'owner' })
+  return { id: org.id, name: org.name, slug: org.slug, role: 'owner' as Role }
 }
 
 export async function addMember(organizationId: string, user: TestUser, role: Role) {

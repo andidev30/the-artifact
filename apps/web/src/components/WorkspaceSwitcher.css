@@ -153,6 +153,13 @@
   background: var(--paper);
 }
 
+.switcher-note {
+  margin: 0;
+  padding: 8px;
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+}
+
 .switcher-plus {
   display: grid;
   place-items: center;

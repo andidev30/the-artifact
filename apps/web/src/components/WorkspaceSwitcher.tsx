@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router'
 import type { Me } from '../api'
 import { usePendingInvitations } from '../invitations'
 import { moveFocusWithArrows } from '../focus'
+import { useConfig } from '../useConfig'
 import { organizationSettingsPath, useWorkspace } from '../workspace'
 import { InvitationRow } from './InvitationNotice'
 import './WorkspaceSwitcher.css'
@@ -13,6 +14,7 @@ const ROLE_LABEL = { owner: 'Owner', admin: 'Admin', member: 'Member' } as const
 export function WorkspaceSwitcher({ me }: { me: Me }) {
   const { org, name, choose } = useWorkspace(me)
   const { invitations } = usePendingInvitations(me.id)
+  const config = useConfig()
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLDivElement>(null)
   const button = useRef<HTMLButtonElement>(null)
@@ -135,12 +137,16 @@ export function WorkspaceSwitcher({ me }: { me: Me }) {
             </div>
           )}
           <div className="switcher-footer">
-            <Link to="/organizations/new" onClick={() => setOpen(false)}>
-              <span className="switcher-plus" aria-hidden="true">
-                +
-              </span>
-              Create an organization
-            </Link>
+            {config?.newOrganizations === false ? (
+              <p className="switcher-note">New organizations are coming soon.</p>
+            ) : (
+              <Link to="/organizations/new" onClick={() => setOpen(false)}>
+                <span className="switcher-plus" aria-hidden="true">
+                  +
+                </span>
+                Create an organization
+              </Link>
+            )}
           </div>
         </div>
       )}

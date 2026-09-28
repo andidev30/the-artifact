@@ -38,6 +38,20 @@ async function slugTaken(slug: string): Promise<boolean> {
   return Boolean(row)
 }
 
+// Why new organizations can't be created right now, or null when they can. Set once by an entry point
+// (src/app.ts sets the hosted service's rule from ee/); a self-hosted install keeps the default and
+// always can. Existing organizations are never affected: members, invitations, pages and sharing.
+export type OrganizationPolicy = () => string | null
+let newOrganizationRefusal: OrganizationPolicy = () => null
+
+export function setOrganizationPolicy(policy: OrganizationPolicy) {
+  newOrganizationRefusal = policy
+}
+
+export function newOrganizationsOpen(): boolean {
+  return newOrganizationRefusal() === null
+}
+
 export const organizations = new Hono<AuthEnv>()
 organizations.use(requireUser)
 
@@ -51,6 +65,8 @@ organizations.get('/slug-available', async (c) => {
 
 organizations.post('/', async (c) => {
   const user = c.get('user')!
+  const refusal = newOrganizationRefusal()
+  if (refusal) return c.json({ error: refusal }, 403)
   const body = (await c.req.json().catch(() => null)) as { name?: unknown; slug?: unknown } | null
   const name = typeof body?.name === 'string' ? body.name.trim() : ''
   const slug = typeof body?.slug === 'string' ? body.slug.trim().toLowerCase() : ''

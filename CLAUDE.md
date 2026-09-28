@@ -11,7 +11,7 @@ Hosts the HTML pages coding agents build. An agent publishes through the MCP ser
 | `packages/cli` | `@the-artifact/cli` on npm: `publish`, `list`, `share`, `login` over `POST /api/publish`, `/mcp` and the OAuth server. No dependencies | versions on its own (`cli-vX.Y.Z`); its tests against a real server are in `apps/api/test/integration/cli.test.ts` |
 | `docs/` | User and operator docs, rendered at `/docs` and read on GitHub | see `docs/CLAUDE.md` |
 | `deploy/` | Docker Compose, Kubernetes manifests and the Helm chart for self-hosting | see `deploy/CLAUDE.md` |
-| `apps/*/src/ee/` | Hosted-service-only code (marketing, contact sales, workspace choice, issuing license keys) and enterprise features a license key unlocks on a self-hosted install, under `LICENSE-EE` | see `apps/*/src/ee/CLAUDE.md` |
+| `apps/*/src/ee/` | Hosted-service-only code (marketing, contact sales, onboarding welcome, plan limits, issuing license keys) and enterprise features a license key unlocks on a self-hosted install, under `LICENSE-EE` | see `apps/*/src/ee/CLAUDE.md` |
 | `e2e/` | Playwright specs | setup in `TESTING.md` |
 | `load/` | k6 load tests, a Compose file for a production-like server, metrics sampling | see `load/README.md`; seeding in `apps/api/test/load/seed.ts` |
 | `docker-compose.yml` | Dev services only: Postgres, MinIO, Mailpit | not for deploying |
@@ -38,7 +38,7 @@ Create the test database once: `docker compose exec postgres createdb -U artifac
 
 ## Modes every change has to work in
 
-- **Self-hosted vs hosted.** `SELF_HOSTED` is on unless set to `false`. Self-hosted skips the marketing pages; its first account becomes the instance admin and names the server's organization, and everyone after it starts in a personal workspace and joins organizations by invitation. On the hosted service everyone chooses **Just me** or **My team**. Only the hosted service sets `false`.
+- **Self-hosted vs hosted.** `SELF_HOSTED` is on unless set to `false`. Self-hosted skips the marketing pages; its first account becomes the instance admin and names the server's organization, and everyone after it starts in a personal workspace and joins organizations by invitation. On the hosted service everyone starts in a personal workspace: new organizations are refused until the Organization plan has billing (#34, `apps/api/src/ee/plans.ts`), while existing ones, their members and invitations keep working. Only the hosted service sets `false`.
 - **With vs without email.** Without `SMTP_HOST` nothing is emailed: people sign in with a password, and admins and inviters pass links on by hand. Sign-in, invitations and sharing all have both paths; `apps/api/test/integration/no-email.test.ts` covers the no-email one.
 - **Thumbnails on vs off.** Without `CHROME_PATH` there are no screenshots and cards show a drawn sketch.
 

@@ -130,4 +130,4 @@ Storage is the size of every version of every page in the workspace, the HTML an
 
 When a publish would go past a quota, the agent gets an error that says which one and what to do, e.g. "Your personal workspace has 500 pages, the most this server allows. Publish a new version of a page you have (pass its artifact_id), or delete one you no longer need in the gallery." Restoring a version in the app shows the same message.
 
-On the hosted service, the free Personal plan holds 50 pages and 1 GB of storage in a personal workspace, and keeps older versions for 7 days. Organizations have no quota there.
+On the hosted service, the free Personal plan holds 50 pages and 1 GB of storage in a personal workspace, and keeps older versions for 7 days. Organizations have no quota there. New organizations can't be created there until the Organization plan has billing; see [Organizations](/docs/organizations#creating-one).

@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { db, schema } from '../../src/db/index.js'
-import { call, createOrg, createUser } from './helpers.js'
+import { env } from '../../src/env.js'
+import { addMember, call, createOrg, createPage, createUser } from './helpers.js'
 
 describe('onboarding', () => {
   it('personal workspace marks the person onboarded', async () => {
@@ -17,7 +18,20 @@ describe('onboarding', () => {
   })
 })
 
-describe('organizations', () => {
+// Creating organizations is open on a self-hosted install only; the hosted service waits for billing
+describe('creating organizations on a self-hosted install', () => {
+  const original = env.selfHosted
+  beforeEach(() => {
+    env.selfHosted = true
+  })
+  afterEach(() => {
+    env.selfHosted = original
+  })
+
+  it('is open, and the web app is told so', async () => {
+    expect(await (await call('/api/config')).json()).toMatchObject({ newOrganizations: true })
+  })
+
   it('creating one makes you its owner and finishes onboarding', async () => {
     const user = await createUser({ onboarded: false })
     const res = await call('/api/organizations', { cookie: user.cookie, json: { name: '  Acme Inc  ', slug: ' ACME ' } })
@@ -46,7 +60,7 @@ describe('organizations', () => {
   it('rejects a slug another organization uses', async () => {
     const first = await createUser()
     const second = await createUser()
-    await createOrg(first, 'Acme', 'acme')
+    expect((await call('/api/organizations', { cookie: first.cookie, json: { name: 'Acme', slug: 'acme' } })).status).toBe(201)
     const res = await call('/api/organizations', { cookie: second.cookie, json: { name: 'Other Acme', slug: 'acme' } })
     expect(res.status).toBe(409)
     expect(await res.json()).toMatchObject({ field: 'slug' })
@@ -68,5 +82,47 @@ describe('organizations', () => {
     const res = await call('/api/organizations', { cookie: user.cookie, json: body })
     expect(res.status).toBe(400)
     expect(await res.json()).toMatchObject({ field })
+  })
+})
+
+describe('organizations on the hosted service', () => {
+  it('refuses to create new ones, with a reason people can read', async () => {
+    const user = await createUser({ onboarded: false })
+    const res = await call('/api/organizations', { cookie: user.cookie, json: { name: 'Acme Inc', slug: 'acme' } })
+    expect(res.status).toBe(403)
+    expect(await res.json()).toEqual({ error: expect.stringMatching(/^New organizations are coming soon\./) })
+    expect(await db.select().from(schema.organizations)).toHaveLength(0)
+    expect(await db.select().from(schema.memberships)).toHaveLength(0)
+    // Refusing doesn't finish onboarding
+    expect((await (await call('/api/me', { cookie: user.cookie })).json()).onboarded).toBe(false)
+    expect(await (await call('/api/config')).json()).toMatchObject({ newOrganizations: false })
+  })
+
+  it('keeps existing ones working: members, invitations, pages and sharing', async () => {
+    const owner = await createUser({ email: 'owner@example.com' })
+    const org = await createOrg(owner, 'Acme', 'acme')
+    const member = await createUser({ email: 'member@example.com' })
+    await addMember(org.id, member, 'member')
+
+    // Invite someone new, who accepts from inside the app
+    const guest = await createUser({ email: 'guest@example.com', onboarded: false })
+    expect((await call(`/api/organizations/${org.id}/invitations`, { cookie: owner.cookie, json: { email: guest.email, role: 'member' } })).status).toBe(201)
+    const [invitation] = await (await call('/api/me/invitations', { cookie: guest.cookie })).json()
+    const accepted = await call(`/api/me/invitations/${invitation.id}/accept`, { cookie: guest.cookie, method: 'POST' })
+    expect(accepted.status).toBe(200)
+    expect(await accepted.json()).toMatchObject({ id: org.id, role: 'member' })
+
+    // Pages published to the organization open for its members, and sharing still works
+    const page = await createPage(owner, { organizationId: org.id, visibility: 'organization', title: 'Roadmap' })
+    expect((await call(`/api/artifacts/${page.slug}`, { cookie: guest.cookie })).status).toBe(200)
+    expect((await call(`/api/artifacts/${page.slug}`, { cookie: member.cookie })).status).toBe(200)
+    const outsider = await createUser({ email: 'outsider@example.com' })
+    expect((await call(`/api/artifacts/${page.slug}`, { cookie: outsider.cookie })).status).toBe(404)
+    const shared = await call(`/api/artifacts/${page.slug}/sharing/people`, {
+      cookie: owner.cookie,
+      json: { emails: [outsider.email], role: 'viewer', notify: false },
+    })
+    expect(shared.status).toBe(200)
+    expect((await call(`/api/artifacts/${page.slug}`, { cookie: outsider.cookie })).status).toBe(200)
   })
 })

@@ -1,10 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { checkSlug, createOrganization, FieldError, finishPersonalOnboarding, type Me, type Organization, type SlugCheck } from '../api'
 import { AccountHeader } from '../components/AccountHeader'
 import { ConnectTabs } from '../components/ConnectTabs'
 import { APP_HOST } from '../config'
-import { WorkspaceChoice, type Choice } from '../ee/WorkspaceChoice'
+import { Welcome } from '../ee/Welcome'
 import { useConfig } from '../useConfig'
 import { useMe } from '../useMe'
 import { LoadError, Loading } from './Status'
@@ -46,8 +46,6 @@ function StartPersonal() {
 }
 
 function Flow({ me, setUp }: { me: Me; setUp: boolean }) {
-  const [params] = useSearchParams()
-  const [choice, setChoice] = useState<Choice>(setUp || params.get('plan') === 'organization' ? 'team' : 'personal')
   const [step, setStep] = useState<Step>(setUp ? 'organization' : 'workspace')
   const [workspace, setWorkspace] = useState<string | undefined>()
   const [skipError, setSkipError] = useState<string | null>(null)
@@ -59,16 +57,15 @@ function Flow({ me, setUp }: { me: Me; setUp: boolean }) {
     try {
       await finishPersonalOnboarding()
       setWorkspace('Personal')
-      setChoice('personal')
       setStep('agent')
     } catch {
       setSkipError('Your workspace could not be saved. Try again.')
     }
   }
 
+  // The hosted service starts everyone in a personal workspace until organizations have billing
   const steps: { id: Step; label: string }[] = [
-    ...(setUp ? [] : [{ id: 'workspace' as const, label: 'Choose a workspace' }]),
-    ...(choice === 'team' ? [{ id: 'organization' as const, label: 'Name your organization' }] : []),
+    setUp ? { id: 'organization', label: 'Name your organization' } : { id: 'workspace', label: 'Your workspace' },
     { id: 'agent', label: 'Connect your agent' },
   ]
   const current = steps.findIndex((s) => s.id === step)
@@ -87,31 +84,21 @@ function Flow({ me, setUp }: { me: Me; setUp: boolean }) {
 
         <div className="onboarding-panel">
           {step === 'workspace' && (
-            <WorkspaceChoice
+            <Welcome
               me={me}
-              choice={choice}
-              onChoice={setChoice}
               onDone={() => {
-                if (choice === 'personal') {
-                  setWorkspace('Personal')
-                  setStep('agent')
-                } else {
-                  setStep('organization')
-                }
+                setWorkspace('Personal')
+                setStep('agent')
               }}
             />
           )}
           {step === 'organization' && (
             <OrganizationStep
-              {...(setUp
-                ? {
-                    title: `${firstName ? `Welcome, ${firstName}.` : 'Welcome.'} Name your organization`,
-                    lede: 'Everyone you add to this server works in it. You become its owner, and can invite people next.',
-                    backLabel: 'Skip, just me for now',
-                    notice: skipError,
-                  }
-                : {})}
-              onBack={setUp ? skipToPersonal : () => setStep('workspace')}
+              title={`${firstName ? `Welcome, ${firstName}.` : 'Welcome.'} Name your organization`}
+              lede="Everyone you add to this server works in it. You become its owner, and can invite people next."
+              backLabel="Skip, just me for now"
+              notice={skipError}
+              onBack={skipToPersonal}
               onDone={(org) => {
                 setWorkspace(org.name)
                 setStep('agent')
