@@ -31,7 +31,7 @@ Releases are made by [release-please](https://github.com/googleapis/release-plea
 The CLI in `packages/cli` is released on its own, from the commits that touch it (use the `cli` scope), and they stay out of the server's notes:
 
 - It has its own pull request, `chore(cli): release x.y.z`, with `packages/cli/CHANGELOG.md` and the version in `packages/cli/package.json`.
-- Merging it tags `cli-vx.y.z`, creates its GitHub release (not marked latest, which stays the server's) and publishes `@the-artifact/cli` to npm with provenance. That needs the `NPM_TOKEN` repository secret: an npm granular access token with read and write access to `@the-artifact/cli`.
+- Merging it tags `cli-vx.y.z`, creates its GitHub release (not marked latest, which stays the server's) and publishes `@the-artifact/cli` to npm with provenance. npm takes it without a token: the package lists `andidev30/the-artifact` and `release.yml` as its trusted publisher (npmjs.com, the package's Settings).
 
 Pull requests are merged with **Rebase and merge**, or with a merge commit whose description is left empty. release-please reads every commit, and a merge commit that repeats the pull request title in its description lists the change a second time.
 

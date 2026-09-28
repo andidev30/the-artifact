@@ -112,8 +112,8 @@ jobs:
           helm package deploy/helm/the-artifact --version "$VERSION" --app-version "$VERSION"
           helm push "the-artifact-$VERSION.tgz" "oci://ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/charts"
 
-  # The CLI versions on its own (tags cli-vX.Y.Z, packages/cli/CHANGELOG.md). Needs the NPM_TOKEN
-  # repository secret: an npm granular access token that can publish @the-artifact/cli.
+  # The CLI versions on its own (tags cli-vX.Y.Z, packages/cli/CHANGELOG.md). npm trusts this
+  # workflow as the package's trusted publisher (OIDC), so there is no npm token to keep or rotate.
   cli:
     needs: release-please
     if: needs.release-please.outputs.cli_release_created == 'true'
@@ -122,7 +122,7 @@ jobs:
     permissions:
       # gh release edit below
       contents: write
-      # npm provenance: the package is signed as built by this workflow, from this commit
+      # npm trusted publishing, and provenance: the package is signed as built by this workflow
       id-token: write
     steps:
       - uses: actions/checkout@v7
@@ -137,11 +137,9 @@ jobs:
       - run: pnpm install --frozen-lockfile --filter @the-artifact/cli
       - run: pnpm --filter @the-artifact/cli lint
       - run: pnpm --filter @the-artifact/cli test
-      # npm, not pnpm, for --provenance; prepack builds dist and copies the LICENSE in
+      # npm, not pnpm, for trusted publishing; prepack builds dist and copies the LICENSE in
       - run: npm publish --provenance --access public
         working-directory: packages/cli
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       # GitHub marks the newest release as latest; that stays the server's
       - run: gh release edit "$TAG" --latest=false
         env:
