@@ -77,6 +77,9 @@ thumbnails:
   # Hosts pages may load scripts, styles and fonts from while they render. Empty keeps the
   # built-in list, "none" blocks every host.
   cdnHosts: ''
+  # How many pages render at once, 1 to 8; 2 keeps up with about 150 new pages a minute. Raise it
+  # when the thumbnail queue keeps growing; each extra render costs some memory (resources.limits).
+  concurrency: 2
 
 metrics:
   # Turns on Prometheus metrics at /metrics for requests with this bearer token. Or METRICS_TOKEN

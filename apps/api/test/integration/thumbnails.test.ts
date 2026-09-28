@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
+import { eq } from 'drizzle-orm'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { publish } from '../../src/artifacts.js'
 import { db, schema } from '../../src/db/index.js'
@@ -13,6 +14,7 @@ import {
   queueThumbnail,
   renderPage,
   thumbnailQueueIdle,
+  thumbnailsRendering,
 } from '../../src/thumbnails.js'
 import { call, createPage, createUser, type TestUser } from './helpers.js'
 
@@ -112,7 +114,6 @@ describe('address checks for CDN requests', () => {
   })
 })
 
-// Starting Chrome for the first render can take several seconds on a cold CI runner
 describe.skipIf(!hasChrome)('rendering in headless Chrome', { timeout: 30_000 }, () => {
   let listener: Server
   let port: number
@@ -131,11 +132,35 @@ describe.skipIf(!hasChrome)('rendering in headless Chrome', { timeout: 30_000 },
     })
     await new Promise<void>((r) => listener.listen(0, '127.0.0.1', r))
     port = (listener.address() as AddressInfo).port
-  })
+
+    // The first Chrome start on a cold CI runner can pass the server's 15 s launch timeout, so it
+    // happens here with more time, outside every test's own limit. A Chrome that can't start fails
+    // at once rather than by timing out, and fails this hook loudly.
+    configureThumbnails({ chromePath: CHROME, launchTimeout: 60_000 })
+    const warm = await renderPage({ html: '<h1>warm</h1>', files: [] })
+    expect(isWebp(warm.image)).toBe(true)
+  }, 90_000)
 
   afterAll(async () => {
     await new Promise((r) => listener.close(r))
+    configureThumbnails({ launchTimeout: 15_000, concurrency: 2 })
   })
+
+  afterEach(() => {
+    configureThumbnails({ concurrency: 2, loadTimeout: 8000, renderTimeout: 20_000 })
+  })
+
+  // How many renders ran at once until the queue was empty
+  async function mostAtOnce() {
+    let most = 0
+    const poll = setInterval(() => (most = Math.max(most, thumbnailsRendering())), 5)
+    try {
+      await thumbnailQueueIdle()
+    } finally {
+      clearInterval(poll)
+    }
+    return most
+  }
 
   function enable() {
     configureThumbnails({ chromePath: CHROME, cdnHosts: [] })
@@ -304,4 +329,92 @@ describe.skipIf(!hasChrome)('rendering in headless Chrome', { timeout: 30_000 },
     expect((await db.select().from(schema.artifactThumbnails)).length).toBe(1)
     expect(page.slug).toBeTruthy()
   })
+
+  it('renders up to THUMBNAIL_CONCURRENCY pages at once, never more', async () => {
+    enable()
+    const owner = await createUser()
+    for (const concurrency of [1, 3]) {
+      configureThumbnails({ concurrency })
+      for (let i = 0; i < 6; i++) await createPage(owner, { title: `Page ${concurrency}-${i}`, html: `<h1>${i}</h1>` })
+      expect(await mostAtOnce()).toBe(concurrency)
+    }
+    const rows = await db.select().from(schema.artifactThumbnails)
+    expect(rows.length).toBe(12)
+    expect(rows.every((r) => r.sha256 && !r.error)).toBe(true)
+    expect(thumbnailsRendering()).toBe(0)
+  }, 60_000)
+
+  it('keeps pages rendering at the same time apart, with no network', async () => {
+    enable()
+    const local = `http://127.0.0.1:${port}`
+    const site = (name: string) => ({
+      html: `<!doctype html><img src="${local}/${name}-img"><script src="app.js"></script>`,
+      files: [
+        {
+          path: 'app.js',
+          contentType: 'text/javascript',
+          content: Buffer.from(`
+            if (localStorage.getItem('owner') || document.cookie) fetch('${local}/${name}-saw-another-page').catch(() => {})
+            localStorage.setItem('owner', '${name}'); document.cookie = 'owner=${name}'
+            fetch('secret.txt').then((r) => r.text()).then((t) => fetch('${local}/${name}-read-' + t).catch(() => {}))
+            try { new WebSocket('ws://127.0.0.1:${port}/${name}-ws') } catch {}
+            fetch('http://169.254.169.254/${name}').catch(() => {})`),
+        },
+        { path: 'secret.txt', contentType: 'text/plain', content: Buffer.from(`${name}-only`) },
+      ],
+    })
+    const names = ['alpha', 'beta', 'gamma', 'delta']
+    const results = await Promise.all(names.map((name) => renderPage(site(name))))
+
+    expect(hits).toEqual([])
+    expect(connections).toBe(0)
+    for (const [i, name] of names.entries()) {
+      const { blocked, image } = results[i]
+      expect(isWebp(image)).toBe(true)
+      // Each page got its own files, and never saw another's storage or requests
+      expect(blocked).toContain(`${local}/${name}-read-${name}-only`)
+      expect(blocked).toContain(`${local}/${name}-img`)
+      expect(blocked).toContain(`http://169.254.169.254/${name}`)
+      expect(blocked.filter((url) => url.includes('saw-another-page'))).toEqual([])
+      for (const other of names.filter((n) => n !== name)) expect(blocked.some((url) => url.includes(other))).toBe(false)
+    }
+  })
+
+  it('a page that hangs holds up only its own render', async () => {
+    enable()
+    configureThumbnails({ concurrency: 2, loadTimeout: 1500, renderTimeout: 4000 })
+    const owner = await createUser()
+    const bad = await createPage(owner, { title: 'Bad', html: '<script>while (true) {}</script>' })
+    const good = [await createPage(owner, { title: 'Good 1', html: '<h1>one</h1>' }), await createPage(owner, { title: 'Good 2', html: '<h1>two</h1>' })]
+    await thumbnailQueueIdle()
+
+    const rows = await db
+      .select({ slug: schema.artifacts.slug, sha256: schema.artifactThumbnails.sha256, createdAt: schema.artifactThumbnails.createdAt })
+      .from(schema.artifactThumbnails)
+      .innerJoin(schema.artifactVersions, eq(schema.artifactVersions.id, schema.artifactThumbnails.versionId))
+      .innerJoin(schema.artifacts, eq(schema.artifacts.id, schema.artifactVersions.artifactId))
+    const bySlug = new Map(rows.map((r) => [r.slug, r]))
+    expect(bySlug.get(bad.slug)?.sha256).toBeNull()
+    for (const page of good) {
+      const row = bySlug.get(page.slug)!
+      expect(row.sha256).toBeTruthy()
+      // Rendered in the other slot while the bad page was still running, not after it gave up
+      expect(row.createdAt.getTime()).toBeLessThan(bySlug.get(bad.slug)!.createdAt.getTime())
+    }
+  }, 40_000)
+
+  it('starts a new browser when Chromium goes away mid-batch, and renders what was on it again', async () => {
+    enable()
+    configureThumbnails({ concurrency: 2 })
+    const owner = await createUser()
+    for (let i = 0; i < 4; i++) await createPage(owner, { title: `Page ${i}`, html: `<h1>${i}</h1>` })
+    while (thumbnailsRendering() < 2) await new Promise((r) => setTimeout(r, 5))
+    await closeThumbnailBrowser()
+    await thumbnailQueueIdle()
+
+    const rows = await db.select().from(schema.artifactThumbnails)
+    expect(rows.length).toBe(4)
+    expect(rows.map((r) => r.error)).toEqual([null, null, null, null])
+    expect(isWebp((await renderPage({ html: '<h1>after</h1>', files: [] })).image)).toBe(true)
+  }, 60_000)
 })

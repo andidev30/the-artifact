@@ -1,6 +1,6 @@
 // Scenario 4: the thumbnail queue under a steady rate of publishes (100 a minute by default). Each
-// publish is a new, ordinary page, so each needs a render; renders run one at a time in one headless
-// Chromium per server process. A second scenario reads GET /metrics every few seconds and records the
+// publish is a new, ordinary page, so each needs a render; renders run THUMBNAIL_CONCURRENCY at a time
+// (2 by default) in one headless Chromium per server process. A second scenario reads GET /metrics every few seconds and records the
 // queue length and how many renders finished, and keeps doing so for DRAIN after publishing stops,
 // to see whether the queue empties again.
 //

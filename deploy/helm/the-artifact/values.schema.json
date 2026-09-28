@@ -144,6 +144,11 @@
         },
         "cdnHosts": {
           "type": "string"
+        },
+        "concurrency": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8
         }
       }
     },

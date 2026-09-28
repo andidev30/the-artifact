@@ -165,6 +165,10 @@ Secret already holds, else a new random one. (list $ given secretName key)
 - name: THUMBNAIL_CDN_HOSTS
   value: {{ . | quote }}
 {{- end }}
+{{- if .Values.thumbnails.enabled }}
+- name: THUMBNAIL_CONCURRENCY
+  value: {{ .Values.thumbnails.concurrency | default 2 | toString | quote }}
+{{- end }}
 {{- if .Values.postgresql.enabled }}
 - name: DATABASE_PASSWORD
   valueFrom:
