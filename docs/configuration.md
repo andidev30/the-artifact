@@ -101,7 +101,7 @@ Instance admins change these under **Server admin** (`/admin`); they are stored 
 | Page and files together | 10 MB |
 | File path | 200 characters |
 | Thumbnail render | 8 seconds to load, 20 in all; 640×360 WebP of a 1280×720 viewport |
-| Page inspection (`inspect_artifact`) | The same timeouts for each width; screenshots 1280 or 390 pixels wide and up to 2,000 tall; `THUMBNAIL_CONCURRENCY` at once besides thumbnails, with up to 20 more waiting at most 30 seconds |
+| Page inspection (`inspect_artifact`) | The same timeouts for each width; screenshots 1280 or 390 pixels wide and up to 2,000 tall; `THUMBNAIL_CONCURRENCY` at once besides thumbnails, with up to 20 more waiting at most 30 seconds; up to 1,000 distinct console errors and 1,000 broken links collected, the first 20 of each shown |
 | Page title | 200 characters |
 | Folders | 500 per workspace, names up to 80 characters |
 | Tags | 10 per page, each 1 to 32 characters |

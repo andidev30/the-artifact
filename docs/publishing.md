@@ -165,6 +165,8 @@ The answer has a screenshot per width, of the whole page down to 2,000 pixels (a
 - links (`<a href>`) to files of the page that don't exist
 - accessibility problems found by [axe-core](https://github.com/dequelabs/axe-core) with the WCAG 2.1 A and AA rules: the rule, its impact, a short explanation and up to three elements, for at most 20 rules
 
+Each list shows its first 20 items and how many more there are, counting up to 1,000 of each.
+
 The page is opened exactly like a [gallery screenshot](/docs/security#thumbnails-are-rendered-without-network-access): its own files and a few public CDNs load, nothing else does, and it has no cookies. Requests to other servers are listed as not loaded, even though they may work in people's browsers. Inspecting only works on servers that render thumbnails (`CHROME_PATH`, see [Configuration](/docs/configuration)); elsewhere it answers that it isn't available. It counts toward its own [limit](#limits).
 
 ### rename_artifact
