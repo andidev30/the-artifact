@@ -4,7 +4,7 @@ import { Hono } from 'hono'
 import { track } from '../analytics.js'
 import { db, schema } from '../db/index.js'
 import { mailEnabled } from '../env.js'
-import { hasAccounts, instanceSettings, lockAdmins, newAccountFields } from '../instance.js'
+import { hasAccounts, instanceSettings, lockAdmins, newAccountFields, type EffectiveSettings } from '../instance.js'
 import { clearHits, clientIp, hit, limitRequest, tooManyRequests, waitText } from '../limits.js'
 import { ssoRequiredError, ssoRequiredFor } from '../ee/sso/connections.js'
 import { startSession } from './session.js'
@@ -124,9 +124,9 @@ password.post('/setup', async (c) => {
 
 // Whether people may create a password account on their own: a server without email whose sign-up
 // policy lets people in. The address isn't verified, which is why invitations need their link.
-export async function passwordSignUpOpen(): Promise<boolean> {
+export function passwordSignUpOpen(settings: Pick<EffectiveSettings, 'signupPolicy'>): boolean {
   if (mailEnabled()) return false
-  return (await instanceSettings()).signupPolicy !== 'invite-only'
+  return settings.signupPolicy !== 'invite-only'
 }
 
 // Signing up with a password on a server without email, under the Anyone or Email domains policy.

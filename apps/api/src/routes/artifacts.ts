@@ -9,6 +9,7 @@ import {
   keyMatches,
   editableIds,
   findBySlug,
+  findPageVersion,
   getVersion,
   versionHtml,
   countForWorkspace,
@@ -20,7 +21,6 @@ import {
   PublishError,
   rename,
   restoreVersion,
-  versionId,
 } from '../artifacts.js'
 import { twoFactorRequiredError } from '../auth/factors.js'
 import { requireUser, type AuthEnv } from '../auth/session.js'
@@ -201,11 +201,11 @@ artifacts.get('/:slug/content', async (c) => {
 
 // The screenshot of a version shown on gallery cards. Missing ones are rendered in the background.
 artifacts.get('/:slug/thumbnails/:version', async (c) => {
-  const artifact = await findBySlug(c.req.param('slug'))
   const n = Number(c.req.param('version'))
-  if (!artifact || !Number.isInteger(n) || n < 1) return c.json({ error: 'Not found' }, 404)
-  if (!allowed(await accessFor(c, artifact), n === artifact.currentVersion)) return c.json({ error: 'Not found' }, 404)
-  const id = await versionId(artifact, n)
+  if (!Number.isInteger(n) || n < 1) return c.json({ error: 'Not found' }, 404)
+  const found = await findPageVersion(c.req.param('slug'), n)
+  if (!found || !allowed(await accessFor(c, found.artifact), n === found.artifact.currentVersion)) return c.json({ error: 'Not found' }, 404)
+  const id = found.version?.id
   if (!id) return c.json({ error: 'Not found' }, 404)
   const thumb = await getThumbnail(id)
   if (!thumb?.image) {

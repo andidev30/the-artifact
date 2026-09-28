@@ -46,6 +46,23 @@ export async function hasAccounts(tx: Tx | typeof db = db): Promise<boolean> {
   return Boolean(any)
 }
 
+// For /api/config on every visit: once a server has an account it almost never goes back, so a yes
+// is kept for a while. Only deleting the last account undoes it, and then the setup form shows again
+// within ACCOUNTS_KNOWN_MS. Setting up checks hasAccounts itself, inside its transaction.
+const ACCOUNTS_KNOWN_MS = 60_000
+let accountsSeenAt: number | null = null
+
+export async function hasAccountsCached(): Promise<boolean> {
+  if (accountsSeenAt !== null && Date.now() - accountsSeenAt < ACCOUNTS_KNOWN_MS) return true
+  const any = await hasAccounts()
+  accountsSeenAt = any ? Date.now() : null
+  return any
+}
+
+export function forgetAccounts() {
+  accountsSeenAt = null
+}
+
 export type EffectiveSettings = {
   signupPolicy: SignupPolicy
   allowedDomains: string[]

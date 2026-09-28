@@ -17,6 +17,7 @@ import {
   coversDomain,
   describeConnection,
   findConnection,
+  forgetSsoButtons,
   oidcConfig,
   oidcRedirectUri,
   openConnectionSecret,
@@ -212,6 +213,11 @@ ssoAdmin.use(async (c, next) => {
   await next()
 })
 ssoAdmin.use(requireEnterprise)
+// Adding, changing or removing a connection changes the sign-in page's buttons
+ssoAdmin.use(async (c, next) => {
+  await next()
+  if (c.req.method !== 'GET') forgetSsoButtons()
+})
 
 async function listing() {
   const rows = await db.select().from(schema.ssoConnections).orderBy(schema.ssoConnections.createdAt)

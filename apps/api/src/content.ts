@@ -1,7 +1,19 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import { Hono, type Context } from 'hono'
-import { accessLevel, findBySlug, getFile, getVersion, linkLetsIn, linkOpen, loadVersionTree, versionHtml, type LinkPass, type Viewer } from './artifacts.js'
+import {
+  accessLevel,
+  findBySlug,
+  findPageVersion,
+  getFile,
+  getVersion,
+  linkLetsIn,
+  linkOpen,
+  loadVersionTree,
+  versionHtml,
+  type LinkPass,
+  type Viewer,
+} from './artifacts.js'
 import { blockedOrganizations } from './auth/factors.js'
 import type { AuthEnv } from './auth/session.js'
 import { db, schema } from './db/index.js'
@@ -152,8 +164,10 @@ export async function serveVersion(c: Context<AuthEnv>) {
   if (path === '') path = ENTRY_PATH
   else if (!('path' in checkPath(path))) return notFound(c)
 
-  const artifact = await findBySlug(slug)
-  if (!artifact || version > artifact.currentVersion) return notFound(c)
+  // One query on a warm server: the page and the version fresh, the version's files from memory
+  const found = await findPageVersion(slug, version)
+  if (!found || version > found.artifact.currentVersion) return notFound(c)
+  const { artifact } = found
   const isCurrent = version === artifact.currentVersion
 
   // The content host has no session middleware, so no user; it doesn't read the grant cookie either
@@ -211,7 +225,7 @@ export async function serveVersion(c: Context<AuthEnv>) {
     }
   }
 
-  const v = await getVersion(artifact, version)
+  const v = found.version
   if (!v) return notFound(c)
   // A browser opening the page, not one of its files. Runs next to the storage read and is awaited
   // before answering, so serverless hosts don't cut it off.
@@ -236,7 +250,7 @@ export async function serveVersion(c: Context<AuthEnv>) {
     // Unchanged pages revalidate without a trip to storage
     body = c.req.header('if-none-match') === `"${etag}"` ? '' : await versionHtml(v)
   } else {
-    const file = await getFile(v.id, path)
+    const file = await getFile(v, path)
     if (!file) return notFound(c)
     body = file.content
     contentType = file.contentType
@@ -307,7 +321,7 @@ export async function downloadVersion(c: Context<AuthEnv>) {
   const link = token ? {} : await linkPassFor(c, artifact)
   if (!allowed(await accessLevel(artifact, viewer, link), version === artifact.currentVersion)) return notFound(c)
   const v = await getVersion(artifact, version)
-  const tree = v ? await loadVersionTree(v.id) : null
+  const tree = v ? await loadVersionTree(v) : null
   if (!v || !tree) return notFound(c)
 
   const archive = zip(

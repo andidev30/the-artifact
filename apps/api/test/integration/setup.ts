@@ -2,6 +2,9 @@ import { sql } from 'drizzle-orm'
 import { afterAll, beforeAll, beforeEach, vi } from 'vitest'
 import { trackingSettled } from '../../src/analytics.js'
 import { auditSettled } from '../../src/audit.js'
+import { clearFileCache } from '../../src/artifacts.js'
+import { forgetSsoButtons } from '../../src/ee/sso/connections.js'
+import { forgetAccounts } from '../../src/instance.js'
 import { db } from '../../src/db/index.js'
 import { ensureBucket } from '../../src/storage.js'
 
@@ -31,6 +34,10 @@ beforeEach(async () => {
   const rows = await db.execute<{ tablename: string }>(sql`select tablename from pg_tables where schemaname = 'public'`)
   const tables = [...rows].map((r) => `"public"."${r.tablename}"`)
   if (tables.length) await db.execute(sql.raw(`TRUNCATE ${tables.join(', ')} RESTART IDENTITY CASCADE`))
+  // In-process caches of what was just truncated behind the app's back
+  clearFileCache()
+  forgetAccounts()
+  forgetSsoButtons()
 })
 
 afterAll(async () => {

@@ -431,7 +431,7 @@ function buildServer(auth: McpAuth) {
 
       if (path && path !== ENTRY_PATH) {
         const checked = checkPath(path)
-        const file = 'path' in checked ? await getFile(current.id, checked.path) : null
+        const file = 'path' in checked ? await getFile(current, checked.path) : null
         if (!file)
           return text(
             `Version ${artifact.currentVersion} of "${artifact.title}" has no file "${path}". Call get_artifact without path to list its files.`,
