@@ -36,6 +36,10 @@
       "description": "Origin that serves page files only, on another host than appUrl, e.g. https://artifact-content.example.net",
       "pattern": "^(https?://[^/?#]+/?)?$"
     },
+    "embedFrameAncestors": {
+      "type": "string",
+      "description": "EMBED_FRAME_ANCESTORS: *, none, or origins separated by spaces or commas; empty lets any site"
+    },
     "selfHosted": {
       "type": "boolean"
     },

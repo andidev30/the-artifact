@@ -26,6 +26,11 @@ appUrl: ''
 # to the Ingress and to its TLS hosts. Empty serves pages from appUrl. See docs/self-hosting.md.
 contentOrigin: ''
 
+# Which sites may embed pages in a frame (EMBED_FRAME_ANCESTORS): empty or * lets any site, none
+# turns embedding off, or origins separated by spaces or commas, e.g. https://www.notion.so
+# https://*.atlassian.net. See docs/sharing.md.
+embedFrameAncestors: ''
+
 # Skips the marketing pages and makes the first account the instance admin. Only the hosted
 # service turns it off.
 selfHosted: true

@@ -109,6 +109,10 @@ Secret already holds, else a new random one. (list $ given secretName key)
 - name: CONTENT_ORIGIN
   value: {{ . | quote }}
 {{- end }}
+{{- with .Values.embedFrameAncestors }}
+- name: EMBED_FRAME_ANCESTORS
+  value: {{ . | quote }}
+{{- end }}
 - name: SELF_HOSTED
   value: {{ .Values.selfHosted | toString | quote }}
 - name: TRUST_PROXY
