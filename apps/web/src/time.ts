@@ -16,3 +16,9 @@ export function timeAgo(iso: string): string {
   }
   return 'just now'
 }
+
+// For an access token: null never expires
+export function expiryText(t: { expiresAt: string | null; expired: boolean }): string {
+  if (!t.expiresAt) return 'No expiry'
+  return t.expired ? `Expired ${timeAgo(t.expiresAt)}` : `Expires ${timeAgo(t.expiresAt)}`
+}

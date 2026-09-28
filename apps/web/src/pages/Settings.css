@@ -328,6 +328,51 @@
   grid-column: 1 / -1;
 }
 
+/* New access token: name, workspace, expiry and button in one line on wide screens */
+.settings-token-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: end;
+  gap: 10px;
+}
+
+.settings-token-form .field > input {
+  height: 40px;
+  padding: 0 12px;
+}
+
+.settings-token-form .settings-select {
+  height: 40px;
+  border-color: var(--ink);
+}
+
+.settings-token-form .button {
+  height: 40px;
+}
+
+.settings-token-hint {
+  grid-column: 1 / -1;
+}
+
+/* A token that was just made, shown once */
+.settings-token-new {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  font-size: var(--step--1);
+  background: var(--paper);
+  border: 1.5px dashed var(--ink);
+  border-radius: 3px;
+}
+
+.settings-token-new p {
+  margin: 0;
+}
+
+.settings-token-new code {
+  font-family: var(--mono);
+}
+
 .settings-link {
   display: block;
   margin-top: 6px;
@@ -454,6 +499,19 @@
 
   .settings-invite input {
     grid-column: 1 / -1;
+  }
+
+  .settings-token-form {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .settings-token-form .field:first-child,
+  .settings-token-form .button {
+    grid-column: 1 / -1;
+  }
+
+  .settings-token-form .settings-select {
+    width: 100%;
   }
 
   .settings-inline {
