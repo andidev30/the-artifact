@@ -1,5 +1,6 @@
 import type { Env, Hono } from 'hono'
 import { canView, findBySlug } from './artifacts.js'
+import type { Artifact } from './db/schema.js'
 import { env } from './env.js'
 import { log } from './log.js'
 import { currentThumbnails } from './thumbnails.js'
@@ -12,10 +13,14 @@ import { currentThumbnails } from './thumbnails.js'
 // must not differ for the owner either. Restricted, organization and missing pages all get the
 // same generic tags, so a preview doesn't reveal that a page exists or what it is called.
 
-const SITE = 'The Artifact'
+export const SITE = 'The Artifact'
 // Thumbnails are stored at half the render viewport (see thumbnails.ts)
-const IMAGE = { type: 'image/webp', width: 640, height: 360 }
-const SLUG_RE = /^[a-z0-9]{1,64}$/
+export const IMAGE = { type: 'image/webp', width: 640, height: 360 }
+export const SLUG_RE = /^[a-z0-9]{1,64}$/
+
+// The app itself is never framed by other sites (clickjacking); only /e/<slug> and page content are
+// (see embeds.ts). Both headers, for browsers that predate frame-ancestors.
+export const SHELL_FRAMING = { 'Content-Security-Policy': "frame-ancestors 'self'", 'X-Frame-Options': 'SAMEORIGIN' }
 
 export type Preview = { title: string; url: string; image: string | null }
 
@@ -23,11 +28,17 @@ export function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`)
 }
 
-// The preview of a page, or null when it gets the generic one
-export async function pagePreview(slug: string): Promise<Preview | null> {
+// A page a signed-out visitor can open, or null for restricted, organization and missing ones alike
+export async function linkSharedPage(slug: string): Promise<Artifact | null> {
   if (!SLUG_RE.test(slug)) return null
   const artifact = await findBySlug(slug)
-  if (!artifact || !(await canView(artifact, null))) return null
+  return artifact && (await canView(artifact, null)) ? artifact : null
+}
+
+// The preview of a page, or null when it gets the generic one
+export async function pagePreview(slug: string): Promise<Preview | null> {
+  const artifact = await linkSharedPage(slug)
+  if (!artifact) return null
   // The thumbnail route serves link-shared pages without a session, so a crawler can fetch it.
   // With thumbnails off, or before the first render, there is no image rather than a placeholder
   // that looks like every other page.
@@ -47,6 +58,9 @@ export function previewTags(preview: Preview | null): string[] {
   const tags = [tag('property', 'og:site_name', SITE), tag('property', 'og:type', 'website')]
   if (!preview) return [...tags, tag('property', 'og:title', SITE), tag('name', 'twitter:card', 'summary')]
   tags.push(tag('property', 'og:title', preview.title), tag('property', 'og:url', preview.url), tag('name', 'twitter:title', preview.title))
+  // oEmbed discovery, for Notion, Confluence and other tools that embed a link
+  const oembed = `${env.appUrl}/api/oembed?url=${encodeURIComponent(preview.url)}&format=json`
+  tags.push(`<link rel="alternate" type="application/json+oembed" href="${escapeHtml(oembed)}" title="${escapeHtml(preview.title)}" />`)
   if (!preview.image) return [...tags, tag('name', 'twitter:card', 'summary')]
   return [
     ...tags,
@@ -76,7 +90,6 @@ export function servePagePreviews<E extends Env>(app: Hono<E>, index: string) {
       // The app still has to load when the lookup fails; it only loses the preview
       log.error('Link preview failed', { path: c.req.path, error: err instanceof Error ? err.message : String(err) })
     }
-    c.header('Cache-Control', 'no-cache')
-    return c.html(withPreview(index, preview))
+    return c.html(withPreview(index, preview), 200, { 'Cache-Control': 'no-cache', ...SHELL_FRAMING })
   })
 }

@@ -44,6 +44,19 @@ function trustProxy(): number {
   return n
 }
 
+// Who may frame embeds (/e/<slug>) and page content, as a CSP frame-ancestors source list, or null
+// for anyone (unset or "*", the default). "none" is this app only; otherwise origins such as
+// "https://www.notion.so https://*.atlassian.net". Checked strictly, since it goes into a header.
+export function embedFrameAncestors(value: string | undefined): string | null {
+  const v = value?.trim()
+  if (!v || v === '*') return null
+  if (v.toLowerCase() === 'none') return "'self'"
+  const origins = v.split(/[\s,]+/).filter(Boolean)
+  const bad = origins.find((o) => !/^https?:\/\/(\*\.)?[a-z0-9-]+(\.[a-z0-9-]+)*(:\d{1,5})?$/i.test(o))
+  if (bad) throw new Error(`EMBED_FRAME_ANCESTORS must be *, none, or origins like https://www.notion.so separated by spaces or commas; got "${bad}".`)
+  return ["'self'", ...origins].join(' ')
+}
+
 export const env = {
   port: Number(process.env.PORT ?? 3000),
   appUrl: required('APP_URL').replace(/\/$/, ''),
@@ -74,6 +87,7 @@ export const env = {
   // Bearer token for GET /api/cron/*, for hosts that run scheduled jobs from outside (Vercel Cron)
   cronSecret: process.env.CRON_SECRET ?? '',
   trustProxy: trustProxy(),
+  embedFrameAncestors: embedFrameAncestors(process.env.EMBED_FRAME_ANCESTORS),
   // "off", or changes to the built-in rate limits such as "sign-in-link=20/1h,mcp=off"; read by src/limits.ts
   rateLimits: process.env.RATE_LIMITS ?? '',
   // What one workspace (a personal workspace or an organization) may hold; no limit when unset

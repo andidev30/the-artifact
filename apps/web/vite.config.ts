@@ -7,12 +7,14 @@ const api = process.env.API_URL ?? 'http://localhost:3000'
 export default defineConfig({
   plugins: [react()],
   server: {
-    // In production /mcp, /api, /oauth and /.well-known are served from the same domain; in dev the API runs on its own port
+    // In production /mcp, /api, /oauth, /.well-known and /e/ are served from the same domain; in dev the API runs on its own port
     proxy: {
       '/mcp': api,
       '/api': api,
       '/oauth': api,
       '/.well-known': api,
+      // A pattern, so app paths that merely start with /e stay with Vite
+      '^/e/': api,
     },
   },
 })

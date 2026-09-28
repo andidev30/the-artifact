@@ -7,6 +7,7 @@ import { endSession, loadUser, requireUser, type AuthEnv } from './auth/session.
 import { db, schema } from './db/index.js'
 import { contact } from './ee/contact.js'
 import { historyCron, personalPlan } from './ee/plans.js'
+import { embeds } from './embeds.js'
 import { env, mailEnabled } from './env.js'
 import { hasAccounts, instanceSettings, isInstanceAdmin } from './instance.js'
 import { checkRateLimits } from './limits.js'
@@ -43,6 +44,9 @@ if (!env.webDir) app.get('/', (c) => c.text('The Artifact API'))
 // MCP endpoint and the OAuth server MCP clients sign in through
 app.route('/', oauth)
 app.route('/mcp', mcp)
+
+// /e/<slug> and /api/oembed, outside the session middleware: embeds never look at who is signed in
+app.route('/', embeds)
 
 const api = new Hono<AuthEnv>()
 api.use(loadUser)

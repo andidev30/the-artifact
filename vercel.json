@@ -37,6 +37,10 @@
       "destination": "/api"
     },
     {
+      "source": "/e/:slug",
+      "destination": "/api"
+    },
+    {
       "source": "/healthz",
       "destination": "/api"
     },
@@ -65,6 +69,19 @@
         {
           "key": "Cache-Control",
           "value": "no-cache"
+        }
+      ]
+    },
+    {
+      "source": "/((?!api/|e/).*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "frame-ancestors 'self'"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "SAMEORIGIN"
         }
       ]
     }
