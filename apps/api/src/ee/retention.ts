@@ -1,6 +1,7 @@
 import { and, eq, sql, type SQL } from 'drizzle-orm'
 import { Hono, type Context } from 'hono'
 import { forgetVersionFiles } from '../artifacts.js'
+import { audit } from '../audit.js'
 import { requireUser, type AuthEnv } from '../auth/session.js'
 import { db, schema } from '../db/index.js'
 import { env } from '../env.js'
@@ -134,6 +135,7 @@ retention.put('/', async (c) => {
   if (!parsed.ok) return c.json({ error: parsed.error, field: parsed.field }, 400)
   const { keepDays, keepVersions } = parsed.policy
   const user = c.get('user')!
+  const [before] = await db.select().from(schema.retentionPolicies).where(eq(schema.retentionPolicies.organizationId, orgId))
   if (keepDays === null && keepVersions === null) {
     // Turning retention off is allowed without a license, so a lapsed install can drop a policy
     await db.delete(schema.retentionPolicies).where(eq(schema.retentionPolicies.organizationId, orgId))
@@ -146,5 +148,18 @@ retention.put('/', async (c) => {
       .onConflictDoUpdate({ target: schema.retentionPolicies.organizationId, set: values })
   }
   log.info('Retention policy changed', { organizationId: orgId, userId: user.id, keepDays, keepVersions })
+  const changes: Record<string, { from: number | null; to: number | null }> = {}
+  if ((before?.keepDays ?? null) !== keepDays) changes.keepDays = { from: before?.keepDays ?? null, to: keepDays }
+  if ((before?.keepVersions ?? null) !== keepVersions) changes.keepVersions = { from: before?.keepVersions ?? null, to: keepVersions }
+  if (Object.keys(changes).length) {
+    const [org] = await db.select({ name: schema.organizations.name }).from(schema.organizations).where(eq(schema.organizations.id, orgId))
+    audit({
+      action: 'organization.retention_changed',
+      organizationId: orgId,
+      actor: user,
+      target: { type: 'organization', id: orgId, label: org?.name ?? '' },
+      details: changes,
+    })
+  }
   return c.json(await current(orgId))
 })

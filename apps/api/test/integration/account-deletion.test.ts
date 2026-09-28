@@ -1,7 +1,8 @@
 import { and, eq } from 'drizzle-orm'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { publish } from '../../src/artifacts.js'
 import { db, schema } from '../../src/db/index.js'
+import { log } from '../../src/log.js'
 import { addMember, call, createOrg, createPage, createUser, type TestUser } from './helpers.js'
 
 function deleteAccount(user: TestUser) {
@@ -159,6 +160,22 @@ describe('deleting an account', () => {
       .from(schema.memberships)
       .where(and(eq(schema.memberships.organizationId, org.id), eq(schema.memberships.role, 'owner')))
     expect(owners).toHaveLength(1)
+  })
+
+  it('writes who deleted the account and the organizations that went with it to the server log', async () => {
+    const solo = await createUser({ email: 'solo@example.com' })
+    const org = await createOrg(solo, 'Solo Co', 'solo')
+    const warn = vi.spyOn(log, 'warn')
+    try {
+      expect((await deleteAccount(solo)).status).toBe(204)
+      expect(warn).toHaveBeenCalledWith('Account deleted', expect.objectContaining({ event: 'account.deleted', actorId: solo.id, targetId: solo.id }))
+      expect(warn).toHaveBeenCalledWith(
+        'Organization deleted',
+        expect.objectContaining({ event: 'organization.deleted', actorId: solo.id, targetId: org.id, via: 'account deletion' }),
+      )
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   it('deletes organizations with nobody else in them, with their pages', async () => {

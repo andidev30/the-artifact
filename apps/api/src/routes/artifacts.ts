@@ -499,7 +499,7 @@ artifacts.post('/:slug/versions/:version/restore', requireUser, async (c) => {
 artifacts.delete('/:slug', requireUser, async (c) => {
   const artifact = await findBySlug(c.req.param('slug'))
   if (!artifact || !canDelete(artifact, c.get('user')!)) return c.json({ error: 'Not found' }, 404)
-  await deleteArtifact(artifact)
+  await deleteArtifact(artifact, c.get('user')!)
   return c.body(null, 204)
 })
 

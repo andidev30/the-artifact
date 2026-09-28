@@ -5,10 +5,12 @@ import { hashPassword, passwordProblem, verifyPassword } from '../auth/password.
 import { twoFactorRequiredError } from '../auth/factors.js'
 import { requireRecentSignIn, requireUser, startSession, type AuthEnv } from '../auth/session.js'
 import { track } from '../analytics.js'
+import { securityLog } from '../audit.js'
 import { db, schema } from '../db/index.js'
 import { deleteExportFiles, exportsOf } from '../exports.js'
 import { forgetAccounts, isInstanceAdmin, isLastAdmin, lastAdminError, lockAdmins } from '../instance.js'
 import { clearHits, hit, limitRequest, tooManyRequests, waitText } from '../limits.js'
+import { auditAgent } from '../oauth/server.js'
 import { auditToken, checkExpiry, checkTokenName, createToken, describeToken, revokeToken, tokensOf } from '../tokens.js'
 import { CONTROL_CHARS_ERROR, hasControlChars, UUID_RE } from '../validation.js'
 
@@ -54,6 +56,7 @@ settings.put('/password', firstPasswordNeedsRecentSignIn, async (c) => {
     await tx.delete(schema.sessions).where(eq(schema.sessions.userId, user.id))
     await tx.delete(schema.pendingSignIns).where(eq(schema.pendingSignIns.userId, user.id))
   })
+  securityLog(user.passwordHash ? 'account.password_changed' : 'account.password_added', { actorId: user.id, targetId: user.id })
   // Without a current password to check, setting one proves nothing new, so it doesn't count as a fresh sign-in
   await startSession(c, user.id, user.passwordHash ? undefined : (c.get('session')?.createdAt ?? undefined))
   return c.body(null, 204)
@@ -99,10 +102,21 @@ settings.get('/agents', async (c) => {
 settings.delete('/agents/:clientId', async (c) => {
   const user = c.get('user')!
   const clientId = c.req.param('clientId')
-  await db.transaction(async (tx) => {
-    await tx.delete(schema.oauthTokens).where(and(eq(schema.oauthTokens.userId, user.id), eq(schema.oauthTokens.clientId, clientId)))
+  const ended = await db.transaction(async (tx) => {
+    const tokens = await tx
+      .delete(schema.oauthTokens)
+      .where(and(eq(schema.oauthTokens.userId, user.id), eq(schema.oauthTokens.clientId, clientId)))
+      .returning({ organizationId: schema.oauthTokens.organizationId })
     await tx.delete(schema.oauthGrants).where(and(eq(schema.oauthGrants.userId, user.id), eq(schema.oauthGrants.clientId, clientId)))
+    return tokens
   })
+  await auditAgent(
+    'agent.disconnected',
+    clientId,
+    user.id,
+    ended.map((t) => t.organizationId),
+    { via: 'settings' },
+  )
   return c.body(null, 204)
 })
 
@@ -243,7 +257,7 @@ export class DeletionRefused extends Error {
 // admins deleting each other could leave the instance without an admin.
 export async function deleteAccount(userId: string, adminId?: string) {
   const exports = await exportsOf(userId)
-  await db.transaction(async (tx) => {
+  const { empty } = await db.transaction(async (tx) => {
     await lockAdmins(tx)
     if (adminId) {
       const [self] = await tx.select().from(schema.users).where(eq(schema.users.id, adminId))
@@ -281,7 +295,12 @@ export async function deleteAccount(userId: string, adminId?: string) {
     // Sessions, memberships, agent and access tokens and the remaining (personal) pages cascade from the user.
     // Invitations and shares they sent, and versions they published, keep working without them.
     await tx.delete(schema.users).where(eq(schema.users.id, user.id))
+    return plan
   })
+  const actorId = adminId ?? userId
+  securityLog(adminId ? 'user.deleted' : 'account.deleted', { actorId, targetId: userId })
+  // Their audit logs went with them, so these lines are what is left of them
+  for (const id of empty) securityLog('organization.deleted', { actorId, targetId: id, via: 'account deletion' })
   // Their data exports' rows went with the account; the zips go now rather than at the next sweep
   await deleteExportFiles(exports)
   forgetAccounts()

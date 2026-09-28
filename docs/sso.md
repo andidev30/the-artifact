@@ -135,5 +135,6 @@ Nothing is deleted: accounts, their links to the provider and the provider setti
 - The client secret is encrypted at rest (AES-256-GCM) with a key the server keeps in its `server_secrets` table, like authenticator app secrets. A full database backup holds both, so protect backups like the database.
 - The redirect URI is built from `APP_URL`, never from the request's `Host` header, and the page people return to after signing in is always on this server.
 - Addresses link to existing accounts only when the provider says they are verified, or when you turned on **Trust addresses** for it. Anyone who controls the provider can sign in as any account at its domains, instance admins included; treat admin access to the provider like admin access to this server.
+- Adding, changing and removing providers is written to the server log with the admin who did it (see [The security log](/docs/security#the-security-log)).
 - Issuer URLs must use HTTPS. Plain HTTP is accepted only while `APP_URL` is HTTP too, for trying it locally.
 - Starting and finishing single sign-on is rate limited per network (`sso-ip` under [Rate limits](/docs/configuration#rate-limits)).

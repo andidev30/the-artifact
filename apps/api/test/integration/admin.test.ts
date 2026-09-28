@@ -5,6 +5,7 @@ import { hashToken } from '../../src/auth/session.js'
 import { downloadLink, signContentLink } from '../../src/content.js'
 import { db, schema } from '../../src/db/index.js'
 import { env } from '../../src/env.js'
+import { log } from '../../src/log.js'
 import { sendSignInLink } from '../../src/mail.js'
 import { addMember, call, callTool, connectAgent, createOrg, createPage, createUser, mcpRequest, type TestUser } from './helpers.js'
 
@@ -322,6 +323,63 @@ describe('deleting people', () => {
     const other = await createUser({ admin: true })
     const res = await call(`/api/admin/users/${other.id}`, { method: 'DELETE', cookie: admin.cookie, json: { confirmEmail: other.email } })
     expect(res.status).toBe(204)
+  })
+})
+
+describe('the server log of what admins do', () => {
+  it('writes a warning with the admin, the account or setting and the action', async () => {
+    env.selfHosted = true
+    const admin = await createUser({ admin: true })
+    const bob = await createUser({ email: 'bob@example.com' })
+    const org = await createOrg(await createUser(), 'Acme', 'acme')
+    const warn = vi.spyOn(log, 'warn')
+    try {
+      const patch = (json: Record<string, unknown>) => call(`/api/admin/users/${bob.id}`, { method: 'PATCH', cookie: admin.cookie, json })
+      await patch({ admin: true })
+      await patch({ admin: false })
+      await patch({ suspended: true })
+      await patch({ suspended: false })
+      await call('/api/admin/settings', { method: 'PUT', cookie: admin.cookie, json: { signupPolicy: 'invite-only', allowedDomains: [] } })
+      await call(`/api/admin/organizations/${org.id}`, { method: 'DELETE', cookie: admin.cookie, json: { confirmSlug: 'acme' } })
+      await call(`/api/admin/users/${bob.id}`, { method: 'DELETE', cookie: admin.cookie, json: { confirmEmail: bob.email } })
+
+      const events = warn.mock.calls.map(([, fields]) => fields as Record<string, unknown>).filter((f) => f?.event)
+      expect(events.map((f) => f.event)).toEqual([
+        'admin.granted',
+        'admin.revoked',
+        'user.suspended',
+        'user.reactivated',
+        'instance.settings_changed',
+        'organization.deleted',
+        'user.deleted',
+      ])
+      for (const f of events) expect(f.actorId).toBe(admin.id)
+      expect(events[0].targetId).toBe(bob.id)
+      expect(events[4].changes).toEqual({ signupPolicy: { from: 'open', to: 'invite-only' } })
+      expect(events[5]).toMatchObject({ targetId: org.id, slug: 'acme' })
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('warns when an admin makes a sign-in link that sets an existing account’s password', async () => {
+    env.selfHosted = true
+    const smtpHost = env.smtp.host
+    env.smtp.host = ''
+    const admin = await createUser({ admin: true })
+    const bob = await createUser({ email: 'bob@example.com' })
+    const warn = vi.spyOn(log, 'warn')
+    try {
+      const res = await call('/api/admin/sign-up-links', { cookie: admin.cookie, json: { email: bob.email } })
+      expect(res.status).toBe(201)
+      expect(warn).toHaveBeenCalledWith(
+        'Sign-in link made by an admin',
+        expect.objectContaining({ event: 'user.sign_in_link_created', actorId: admin.id, targetId: bob.id, newAccount: false }),
+      )
+    } finally {
+      warn.mockRestore()
+      env.smtp.host = smtpHost
+    }
   })
 })
 

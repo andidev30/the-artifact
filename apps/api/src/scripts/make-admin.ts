@@ -5,6 +5,7 @@
 //   docker compose exec app node dist/scripts/make-admin.js you@example.com      (in deploy/docker-compose)
 // On a server without email it also prints a sign-in link that sets a new password.
 import { eq } from 'drizzle-orm'
+import { securityLog } from '../audit.js'
 import { createAdminLink } from '../auth/email.js'
 import { db, schema } from '../db/index.js'
 import { mailEnabled } from '../env.js'
@@ -21,6 +22,7 @@ if (!user) {
   await db.$client.end()
   process.exit(1)
 }
+securityLog('admin.granted', { actorId: null, targetId: user.id, via: 'server' })
 console.log(`${email} is now an instance admin.`)
 
 if (!mailEnabled()) {

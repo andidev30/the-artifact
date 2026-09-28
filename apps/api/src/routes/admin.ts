@@ -7,7 +7,7 @@ import type { User } from '../db/schema.js'
 import { likeTerm } from '../artifacts.js'
 import { createAdminLink } from '../auth/email.js'
 import { resetSecondFactor } from '../auth/twofactor.js'
-import { log } from '../log.js'
+import { securityLog } from '../audit.js'
 import { mailEnabled } from '../env.js'
 import { activeAdminCount, adminCondition, instanceSettings, isInstanceAdmin, lockAdmins, parseSettings, revokeAccess, saveSettings } from '../instance.js'
 import { license } from './license.js'
@@ -169,8 +169,9 @@ admin.patch('/users/:id', async (c) => {
   const suspend = typeof body?.suspended === 'boolean' ? body.suspended : undefined
   if (makeAdmin === undefined && suspend === undefined) return c.json({ error: 'Send admin or suspended.' }, 400)
 
+  let changed: { target: User; set: Partial<User> }
   try {
-    await db.transaction(async (tx) => {
+    changed = await db.transaction(async (tx) => {
       // Admin changes one at a time, so two admins can't demote each other into having none
       await lockAdmins(tx)
       // Checked again under the lock: another admin may have just removed this one
@@ -200,11 +201,18 @@ admin.patch('/users/:id', async (c) => {
       if (suspend === false) set.suspendedAt = null
 
       await tx.update(schema.users).set(set).where(eq(schema.users.id, target.id))
+      return { target, set }
     })
   } catch (err) {
     if (err instanceof Conflict) return c.json({ error: err.message, code: err.code }, err.code === 'not_found' ? 404 : err.code === 'not_admin' ? 403 : 409)
     throw err
   }
+  const { target, set } = changed
+  const who = { actorId: actor.id, targetId: target.id }
+  if (set.isAdmin === true && !target.isAdmin) securityLog('admin.granted', who)
+  if (set.isAdmin === false && target.isAdmin) securityLog('admin.revoked', who)
+  if (set.suspendedAt && !target.suspendedAt) securityLog('user.suspended', who)
+  if (set.suspendedAt === null && target.suspendedAt) securityLog('user.reactivated', who)
 
   const [row] = await db
     .select(userColumns)
@@ -223,7 +231,7 @@ admin.post('/users/:id/reset-two-factor', async (c) => {
   if (!target) return c.json({ error: 'This person no longer has an account.' }, 404)
   if (target.id === actor.id) return c.json({ error: 'Change your own sign-in security from your account settings.', code: 'self' }, 409)
   await resetSecondFactor(target.id)
-  log.warn('Two-factor sign-in reset by an admin', { adminId: actor.id, userId: target.id })
+  securityLog('user.two_factor_reset', { actorId: actor.id, targetId: target.id })
   const [row] = await db.select(userColumns).from(schema.users).where(eq(schema.users.id, target.id))
   const [described] = await describeUsers([row], actor.id)
   return c.json(described)
@@ -331,6 +339,8 @@ admin.delete('/organizations/:id', async (c) => {
   const typed = typeof body?.confirmSlug === 'string' ? body.confirmSlug.trim().toLowerCase() : ''
   if (typed !== org.slug) return c.json({ error: 'Type the organization’s address exactly to confirm.', field: 'confirmSlug' }, 400)
   await db.delete(schema.organizations).where(eq(schema.organizations.id, org.id))
+  // Its audit log went with it, so this line is the record that it was deleted, and by whom
+  securityLog('organization.deleted', { actorId: c.get('user')!.id, targetId: org.id, slug: org.slug, via: 'admin' })
   return c.body(null, 204)
 })
 
@@ -341,7 +351,14 @@ admin.get('/release', async (c) => c.json(await releaseStatus()))
 admin.put('/settings', async (c) => {
   const parsed = parseSettings(await c.req.json().catch(() => null))
   if (!parsed.ok) return c.json({ error: parsed.error, field: parsed.field }, 400)
+  const before = await instanceSettings()
   await saveSettings(parsed.value, c.get('user')!.id)
+  const changes = Object.fromEntries(
+    (['signupPolicy', 'allowedDomains', 'instanceName'] as const)
+      .filter((k) => JSON.stringify(before[k]) !== JSON.stringify(parsed.value[k]))
+      .map((k) => [k, { from: before[k], to: parsed.value[k] }]),
+  )
+  securityLog('instance.settings_changed', { actorId: c.get('user')!.id, targetId: null, changes })
   return c.json(await instanceSettings())
 })
 
@@ -354,5 +371,13 @@ admin.post('/sign-up-links', async (c) => {
   const body = (await c.req.json().catch(() => null)) as { email?: unknown } | null
   const result = await createAdminLink(typeof body?.email === 'string' ? body.email : '', c.get('user')!.id)
   if (!result.ok) return c.json({ error: result.error, field: 'email' }, 400)
+  // For an existing account the link sets a new password, so whoever holds it gets in as that person
+  const [existing] = result.link.newAccount ? [] : await db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, result.link.email))
+  securityLog('user.sign_in_link_created', {
+    actorId: c.get('user')!.id,
+    targetId: existing?.id ?? null,
+    email: result.link.email,
+    newAccount: result.link.newAccount,
+  })
   return c.json(result.link, 201)
 })

@@ -1,5 +1,6 @@
 import { and, eq } from 'drizzle-orm'
 import { Hono, type Context } from 'hono'
+import { audit } from '../audit.js'
 import { requireUser, type AuthEnv, type SessionUser } from '../auth/session.js'
 import { db, schema } from '../db/index.js'
 import type { DataExport } from '../db/schema.js'
@@ -28,15 +29,26 @@ const NOT_FOUND = { error: 'Not found' }
 // Browsers get a link straight to the bucket for this long; the export's own expiry is checked first
 const BUCKET_LINK_SECONDS = 300
 
-// The organization's slug when this person owns it and may use it
-async function ownedOrganization(user: SessionUser, organizationId: string): Promise<string | null> {
+// The organization when this person owns it and may use it
+async function ownedOrganization(user: SessionUser, organizationId: string): Promise<{ slug: string; name: string } | null> {
   if (!UUID_RE.test(organizationId) || user.blockedOrgs.includes(organizationId)) return null
   const [row] = await db
-    .select({ role: schema.memberships.role, slug: schema.organizations.slug })
+    .select({ role: schema.memberships.role, slug: schema.organizations.slug, name: schema.organizations.name })
     .from(schema.memberships)
     .innerJoin(schema.organizations, eq(schema.memberships.organizationId, schema.organizations.id))
     .where(and(eq(schema.memberships.organizationId, organizationId), eq(schema.memberships.userId, user.id)))
-  return row?.role === 'owner' ? row.slug : null
+  return row?.role === 'owner' ? { slug: row.slug, name: row.name } : null
+}
+
+// An organization export holds every page of it, so asking for one and downloading it are in its audit log
+function auditExport(action: 'organization.export_requested' | 'organization.export_downloaded', user: SessionUser, e: DataExport, orgName: string) {
+  audit({
+    action,
+    organizationId: e.organizationId,
+    actor: user,
+    target: { type: 'organization', id: e.organizationId as string, label: orgName },
+    details: { exportId: e.id, versions: e.allVersions ? 'all' : 'current' },
+  })
 }
 
 // organizationId from the query or body: null for the account, a string for an organization, or
@@ -64,7 +76,8 @@ exportsApi.post('/', requireUser, async (c) => {
   const user = c.get('user')!
   const body = (await c.req.json().catch(() => null)) as { organizationId?: unknown; versions?: unknown } | null
   const organizationId = scopeOf(body?.organizationId)
-  if (organizationId === undefined || (organizationId && !(await ownedOrganization(user, organizationId)))) return c.json(NOT_FOUND, 404)
+  const org = organizationId ? await ownedOrganization(user, organizationId) : null
+  if (organizationId === undefined || (organizationId && !org)) return c.json(NOT_FOUND, 404)
   if (body?.versions !== 'all' && body?.versions !== 'current')
     return c.json({ error: 'Choose every version or only the current one.', field: 'versions' }, 400)
 
@@ -76,6 +89,7 @@ exportsApi.post('/', requireUser, async (c) => {
 
   const created = await createExport(user.id, organizationId, body.versions === 'all')
   startBuilding(created.id)
+  if (org) auditExport('organization.export_requested', user, created, org.name)
   return c.json({ export: await describeExport(created) }, 202)
 })
 
@@ -93,20 +107,22 @@ exportsApi.get('/:id/download', async (c) => {
   const e: DataExport | null = await findExport(id)
   if (!e || e.userId !== user.id || e.status !== 'ready' || !e.expiresAt || e.expiresAt <= new Date()) return notFound(c)
   if (!(await signatureMatches(e, c.req.query('sig') ?? ''))) return notFound(c)
-  let orgSlug: string | null = null
-  if (e.organizationId) {
-    orgSlug = await ownedOrganization(user, e.organizationId)
-    if (!orgSlug) return notFound(c)
-  }
-  const filename = exportFilename(e, orgSlug)
+  const org = e.organizationId ? await ownedOrganization(user, e.organizationId) : null
+  if (e.organizationId && !org) return notFound(c)
+  const filename = exportFilename(e, org?.slug ?? null)
   const headers = { 'Cache-Control': 'private, no-store', 'Referrer-Policy': 'no-referrer', 'X-Content-Type-Options': 'nosniff' }
 
   // Straight from the bucket when browsers can reach it: a big file never passes through the API,
   // which on a serverless host couldn't send it in time
-  if (directUploads()) return c.body(null, 302, { ...headers, Location: await presignDownload(zipKey(e.id), filename, BUCKET_LINK_SECONDS) })
+  if (directUploads()) {
+    const location = await presignDownload(zipKey(e.id), filename, BUCKET_LINK_SECONDS)
+    if (org) auditExport('organization.export_downloaded', user, e, org.name)
+    return c.body(null, 302, { ...headers, Location: location })
+  }
 
   const object = await streamObject(zipKey(e.id))
   if (!object) return notFound(c)
+  if (org) auditExport('organization.export_downloaded', user, e, org.name)
   return c.body(object.body, 200, {
     ...headers,
     'Content-Type': 'application/zip',

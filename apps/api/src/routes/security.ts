@@ -3,6 +3,7 @@ import { and, desc, eq, isNotNull, ne } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { deleteCookie, getCookie } from 'hono/cookie'
 import QRCode from 'qrcode'
+import { securityLog } from '../audit.js'
 import { describeDevice } from '../auth/devices.js'
 import { hasSecondFactor, organizationsRequiringFactor } from '../auth/factors.js'
 import { MAX_PASSKEYS, PasskeyError, passkeysOf, registrationOptions, verifyRegistration } from '../auth/passkeys.js'
@@ -12,7 +13,6 @@ import { countCodeAttempt, dropCodesWithoutFactor, recoveryCodesLeft, replaceRec
 import { db, schema } from '../db/index.js'
 import type { Passkey } from '../db/schema.js'
 import { clearHits, limitRequest } from '../limits.js'
-import { log } from '../log.js'
 import { instanceSettings } from '../instance.js'
 import { CONTROL_CHARS_ERROR, hasControlChars, UUID_RE } from '../validation.js'
 
@@ -92,7 +92,7 @@ security.post('/passkeys', requireRecentSignIn, async (c) => {
     .onConflictDoNothing()
     .returning()
   if (!row) return c.json({ error: 'This passkey is already added.' }, 409)
-  log.info('Passkey added', { userId: user.id })
+  securityLog('account.passkey_added', { actorId: user.id, targetId: user.id, passkeyId: row.id })
   return c.json({ passkey: describePasskey(row), recoveryCodes: await codesForFirstFactor(user.id, hadFactor) }, 201)
 })
 
@@ -124,7 +124,7 @@ security.delete('/passkeys/:id', requireRecentSignIn, async (c) => {
     : []
   if (!deleted.length) return c.json({ error: 'That passkey was already removed.' }, 404)
   await dropCodesWithoutFactor(user.id)
-  log.info('Passkey removed', { userId: user.id })
+  securityLog('account.passkey_removed', { actorId: user.id, targetId: user.id, passkeyId: deleted[0].id })
   return c.body(null, 204)
 })
 
@@ -167,7 +167,7 @@ security.post('/totp/confirm', requireRecentSignIn, async (c) => {
     return c.json({ error: 'That code is wrong. Check the time on your phone, and enter the newest code.', field: 'code' }, 400)
   }
   await clearHits('two-factor', user.id)
-  log.info('Authenticator app added', { userId: user.id })
+  securityLog('account.authenticator_added', { actorId: user.id, targetId: user.id })
   return c.json({ recoveryCodes: await codesForFirstFactor(user.id, hadFactor) })
 })
 
@@ -176,7 +176,7 @@ security.delete('/totp', requireRecentSignIn, async (c) => {
   const deleted = await db.delete(schema.totpSecrets).where(eq(schema.totpSecrets.userId, user.id)).returning({ userId: schema.totpSecrets.userId })
   if (!deleted.length) return c.json({ error: 'You don’t use an authenticator app.' }, 404)
   await dropCodesWithoutFactor(user.id)
-  log.info('Authenticator app removed', { userId: user.id })
+  securityLog('account.authenticator_removed', { actorId: user.id, targetId: user.id })
   return c.body(null, 204)
 })
 
@@ -186,7 +186,9 @@ security.post('/recovery-codes', requireRecentSignIn, async (c) => {
   if (!(await hasSecondFactor(user.id))) return c.json({ error: 'Add a passkey or an authenticator app first.' }, 409)
   const busy = await setupLimit(c, user.id)
   if (busy) return busy
-  return c.json({ recoveryCodes: await replaceRecoveryCodes(user.id) })
+  const recoveryCodes = await replaceRecoveryCodes(user.id)
+  securityLog('account.recovery_codes_created', { actorId: user.id, targetId: user.id })
+  return c.json({ recoveryCodes })
 })
 
 // Where you're signed in, mounted at /api/me/sessions
@@ -222,6 +224,7 @@ sessions.delete('/', async (c) => {
   const user = c.get('user')!
   const current = currentId(c)
   await db.delete(schema.sessions).where(and(eq(schema.sessions.userId, user.id), current ? ne(schema.sessions.id, current) : undefined))
+  securityLog('account.sessions_revoked', { actorId: user.id, targetId: user.id })
   return c.body(null, 204)
 })
 

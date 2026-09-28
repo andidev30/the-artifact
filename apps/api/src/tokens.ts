@@ -1,5 +1,5 @@
 import { and, desc, eq, sql } from 'drizzle-orm'
-import { audit } from './audit.js'
+import { audit, securityLog } from './audit.js'
 import { blockedOrganizations } from './auth/factors.js'
 import { hashToken, randomToken } from './auth/session.js'
 import { db, schema } from './db/index.js'
@@ -146,7 +146,8 @@ export async function tokensIn(organizationId: string) {
 
 type Actor = { id: string; email: string }
 
-// For the audit log of the token's organization; personal tokens aren't recorded
+// For the audit log of the token's organization, and a line in the server log for every token,
+// personal ones included
 export function auditToken(
   action: 'access_token.created' | 'access_token.revoked',
   token: { id: string; name: string; organizationId: string | null; userId: string },
@@ -159,6 +160,7 @@ export function auditToken(
     target: { type: 'access_token', id: token.id, label: token.name },
     details: token.userId === actor.id ? {} : { owner: token.userId },
   })
+  securityLog(action, { actorId: actor.id, targetId: token.id, owner: token.userId, organizationId: token.organizationId })
 }
 
 // Whether a token was deleted; `where` narrows it to one person's or one organization's tokens.

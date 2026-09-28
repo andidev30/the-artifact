@@ -3,6 +3,7 @@ import { Hono } from 'hono'
 import { twoFactorRequiredError } from '../auth/factors.js'
 import { hashToken, randomToken, requireUser, type AuthEnv } from '../auth/session.js'
 import { db, schema } from '../db/index.js'
+import { auditAgent } from './server.js'
 
 // Backs the consent page at /authorize, where a signed-in person lets an MCP client act for them
 export const consent = new Hono<AuthEnv>()
@@ -60,6 +61,7 @@ consent.post('/:id/approve', async (c) => {
     .update(schema.oauthGrants)
     .set({ userId: user.id, organizationId, code: hashToken(code) })
     .where(eq(schema.oauthGrants.id, row.grant.id))
+  await auditAgent('agent.connected', row.client.id, user.id, [organizationId])
 
   const back = new URL(row.grant.redirectUri)
   back.searchParams.set('code', code)

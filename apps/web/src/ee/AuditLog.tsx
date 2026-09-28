@@ -34,6 +34,7 @@ const ACTION_LABEL: Record<string, string> = {
   'page.unshared': 'Removed someone from a page',
   'page.moved_in': 'Moved a page into the organization',
   'page.moved_out': 'Moved a page out of the organization',
+  'page.deleted': 'Deleted a page',
   'member.invited': 'Invited someone',
   'member.invitation_revoked': 'Revoked an invitation',
   'member.joined': 'Joined',
@@ -43,6 +44,11 @@ const ACTION_LABEL: Record<string, string> = {
   'member.suspended': 'Suspended',
   'member.reactivated': 'Reactivated',
   'organization.settings_changed': 'Changed settings',
+  'organization.retention_changed': 'Changed version retention',
+  'organization.export_requested': 'Started an export',
+  'organization.export_downloaded': 'Downloaded an export',
+  'agent.connected': 'Connected an agent',
+  'agent.disconnected': 'Disconnected an agent',
   'access_token.created': 'Created an access token',
   'access_token.revoked': 'Revoked an access token',
   'webhook.created': 'Added a webhook',
@@ -53,6 +59,12 @@ const ACTION_LABEL: Record<string, string> = {
 const VISIBILITY_LABEL: Record<string, string> = { private: 'Restricted', organization: 'Organization', link: 'Anyone with the link' }
 const ROLE_LABEL: Record<string, string> = { owner: 'Owner', admin: 'Admin', member: 'Member', viewer: 'Viewer', editor: 'Editor' }
 const SETTING_LABEL: Record<string, string> = { name: 'Name', requireTwoFactor: 'Two-factor sign-in required' }
+const DISCONNECT_LABEL: Record<string, string> = {
+  settings: 'From their account settings',
+  agent: 'The agent signed out',
+  token_reused: 'Its refresh token was used twice, so the connection ended',
+}
+const RETENTION_LABEL: Record<string, string> = { keepDays: 'Days to keep', keepVersions: 'Versions to keep' }
 
 const label = (map: Record<string, string>, v: unknown) => map[String(v)] ?? String(v)
 const show = (v: unknown) => (typeof v === 'boolean' ? (v ? 'on' : 'off') : String(v))
@@ -106,6 +118,18 @@ function summary(e: AuditEvent): string {
           return `${label(SETTING_LABEL, k)}: ${show(change.from)} to ${show(change.to)}`
         })
         .join('; ')
+    case 'organization.retention_changed':
+      return Object.entries(d)
+        .map(([k, v]) => {
+          const change = v as { from: number | null; to: number | null }
+          return `${label(RETENTION_LABEL, k)}: ${change.from ?? 'no limit'} to ${change.to ?? 'no limit'}`
+        })
+        .join('; ')
+    case 'organization.export_requested':
+    case 'organization.export_downloaded':
+      return d.versions === 'all' ? 'Every version' : 'Current versions'
+    case 'agent.disconnected':
+      return d.via ? label(DISCONNECT_LABEL, d.via) : ''
     default:
       return ''
   }
