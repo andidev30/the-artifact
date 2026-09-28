@@ -229,7 +229,7 @@ function buildServer(auth: McpAuth) {
       description:
         'Publish an HTML page and get a shareable link. Either one self-contained document (inline CSS and JS; scripts from public CDNs are fine), ' +
         'or a small site: html is the entry (index.html) and files holds the CSS, JS, images, fonts and data it loads by relative paths. ' +
-        `Limits: html up to ${MAX_HTML_BYTES / 1024 / 1024} MB, each file up to ${MAX_FILE_BYTES / 1024 / 1024} MB, ${MAX_TOTAL_BYTES / 1024 / 1024} MB and ${MAX_FILES} files in total. ` +
+        `Limits: html up to ${MAX_HTML_BYTES / 1024 / 1024} MB, each file up to ${MAX_FILE_BYTES / 1024 / 1024} MB, ${MAX_TOTAL_BYTES / 1024 / 1024} MB in total, and at most ${MAX_FILES} files besides index.html. ` +
         'To update a page you published before, pass its artifact_id (or its link) and the link stays the same; send every file again, since each version has its own full set. ' +
         'To change only some files of a page (new data for a dashboard, one fixed script), use update_files instead. ' +
         'Before publishing a new version, call list_comments to read the feedback people left on the page.' +
@@ -326,7 +326,7 @@ function buildServer(auth: McpAuth) {
           'List every file of the page with its size and sha256, including index.html (the page itself). Returns an upload_id and a link per file: ' +
           "PUT each file's exact bytes to its link, then call publish_upload with the upload_id and the same files. " +
           `Files already stored in your own pages need no upload. The same limits as publish_artifact apply: html up to ${MAX_HTML_BYTES / 1024 / 1024} MB, ` +
-          `each file up to ${MAX_FILE_BYTES / 1024 / 1024} MB, ${MAX_TOTAL_BYTES / 1024 / 1024} MB and ${MAX_FILES} files in total. Allowed types: ${ALLOWED_EXTENSIONS.join(', ')}. ` +
+          `each file up to ${MAX_FILE_BYTES / 1024 / 1024} MB, ${MAX_TOTAL_BYTES / 1024 / 1024} MB in total, and at most ${MAX_FILES} files besides index.html. Allowed types: ${ALLOWED_EXTENSIONS.join(', ')}. ` +
           'To change only some files of an existing page, pass update: true and list just those; then call publish_upload with update: true.',
         inputSchema: z.object({
           files: manifest.describe('Every file of the page, index.html included; with update, only the files to add or replace'),
