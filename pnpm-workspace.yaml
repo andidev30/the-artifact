@@ -10,3 +10,7 @@ allowBuilds:
 # drizzle-kit still pulls esbuild 0.18 through @esbuild-kit (GHSA-67mh-4wv8-2f99)
 overrides:
   '@esbuild-kit/core-utils>esbuild': ^0.25.0
+  # SAML (@node-saml/node-saml) checks signatures with these; keep them at versions without known
+  # signature-bypass or parser advisories (xml-crypto GHSA-x3m8-899r-f7c3, xmldom GHSA-c7q8-3ch8-vqpv and others)
+  xml-crypto: ^6.3.2
+  '@xmldom/xmldom@<0.8.15': 0.8.15

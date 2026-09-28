@@ -600,6 +600,64 @@ export const ssoIdentities = pgTable(
   (t) => [uniqueIndex('sso_identities_subject_unique').on(t.connectionId, t.subject), index('sso_identities_user_idx').on(t.userId)],
 )
 
+// IDs of SAML AuthnRequests this server sent (src/ee/sso/saml.ts), so a response must answer one of
+// them (InResponseTo) and is checked against the connection that sent it
+export const samlRequests = pgTable(
+  'saml_requests',
+  {
+    id: text('id').primaryKey(),
+    connectionId: uuid('connection_id')
+      .notNull()
+      .references(() => ssoConnections.id, { onDelete: 'cascade' }),
+    // The request's IssueInstant, which node-saml compares against
+    issuedAt: text('issued_at').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [index('saml_requests_expires_at_idx').on(t.expiresAt)],
+)
+
+// SAML assertions already used to sign in, kept until they would be too old to accept anyway, so
+// none signs anyone in twice. id is the SHA-256 of the connection and the assertion's ID.
+export const samlAssertions = pgTable(
+  'saml_assertions',
+  {
+    id: text('id').primaryKey(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [index('saml_assertions_expires_at_idx').on(t.expiresAt)],
+)
+
+// Bearer tokens an IdP provisions accounts with over SCIM (src/ee/scim.ts); only the SHA-256 is
+// stored. New accounts join organization_id, when set.
+export const scimTokens = pgTable('scim_tokens', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  tokenHash: text('token_hash').notNull().unique(),
+  organizationId: uuid('organization_id').references(() => organizations.id, { onDelete: 'set null' }),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  // Updated at most once a minute while the token is used
+  lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+// What an IdP calls an account it provisioned over SCIM: its userName and name parts as sent, and its
+// own id for the person, so they read back the way the IdP wrote them
+export const scimUsers = pgTable(
+  'scim_users',
+  {
+    userId: uuid('user_id')
+      .primaryKey()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    userName: text('user_name').notNull(),
+    externalId: text('external_id'),
+    givenName: text('given_name'),
+    familyName: text('family_name'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('scim_users_user_name_unique').on(sql`lower(${t.userName})`)],
+)
+
 // Counters for rate limits (see src/limits.ts): how often something happened for one key in the
 // current window, which starts at the first hit and ends at resets_at. Kept in Postgres so every
 // server process, or serverless instance, counts the same thing.
