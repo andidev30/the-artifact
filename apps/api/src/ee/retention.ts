@@ -1,5 +1,6 @@
 import { and, eq, sql, type SQL } from 'drizzle-orm'
 import { Hono, type Context } from 'hono'
+import { forgetVersionFiles } from '../artifacts.js'
 import { requireUser, type AuthEnv } from '../auth/session.js'
 import { db, schema } from '../db/index.js'
 import { env } from '../env.js'
@@ -58,6 +59,7 @@ export async function pruneRetention(now = new Date()): Promise<number> {
     delete from ${schema.artifactVersions}
     where id in (select id from (${expiredVersions(sql`${schema.retentionPolicies}`, now)}) x)
     returning id`)
+  forgetVersionFiles(deleted.map((row) => row.id as string))
   if (deleted.length) log.info('Retention removed older versions', { deleted: deleted.length })
   return deleted.length
 }

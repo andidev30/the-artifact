@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm'
 import { Hono } from 'hono'
+import { forgetVersionFiles } from '../artifacts.js'
 import { db, schema } from '../db/index.js'
 import { env } from '../env.js'
 import type { PlanQuota } from '../quota.js'
@@ -46,6 +47,7 @@ export async function pruneHistory(now = new Date()): Promise<number> {
       and v.version <> a.current_version
       and v.created_at < ${cutoff.toISOString()}::timestamptz
     returning v.id`)
+  forgetVersionFiles(deleted.map((row) => row.id as string))
   return deleted.length
 }
 

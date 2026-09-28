@@ -1,4 +1,5 @@
 import { and, eq } from 'drizzle-orm'
+import { memo } from '../../cache.js'
 import { db, schema } from '../../db/index.js'
 import type { SsoConnection, User } from '../../db/schema.js'
 import { env, isProduction } from '../../env.js'
@@ -55,8 +56,11 @@ export async function usableConnection(id: string): Promise<SsoConnection | null
 }
 
 // The buttons on the sign-in page. Without a license there are none, and nothing else changes.
-export async function ssoButtons(): Promise<{ id: string; name: string }[]> {
-  if (!env.selfHosted) return []
+// They are in /api/config on every visit, so read at most every few seconds. A change made through the admin API on this process shows at once (routes.ts forgets them); one on
+// another process, or the license lapsing, shows within BUTTONS_TTL_MS. The buttons are only links:
+// signing in through one checks the connection and the license again.
+const BUTTONS_TTL_MS = 5000
+const buttons = memo(BUTTONS_TTL_MS, async () => {
   const rows = await db
     .select({ id: schema.ssoConnections.id, name: schema.ssoConnections.name })
     .from(schema.ssoConnections)
@@ -64,6 +68,15 @@ export async function ssoButtons(): Promise<{ id: string; name: string }[]> {
     .orderBy(schema.ssoConnections.createdAt)
   if (!rows.length || !(await hasEnterprise())) return []
   return rows
+})
+
+export async function ssoButtons(): Promise<{ id: string; name: string }[]> {
+  if (!env.selfHosted) return []
+  return buttons.get()
+}
+
+export function forgetSsoButtons() {
+  buttons.clear()
 }
 
 export const domainOf = (email: string) => email.toLowerCase().split('@')[1] ?? ''

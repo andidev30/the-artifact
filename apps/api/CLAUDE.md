@@ -12,6 +12,7 @@ Hono on Node 26, Drizzle ORM over `postgres`, S3 via `@aws-sdk/client-s3`, MCP v
 | `src/db/schema.ts` | Tables. `src/db/index.ts` exports `db`, `schema` and the `Tx` type |
 | `src/artifacts.ts` | Pages and versions: access rules (`accessLevel`, `canView`, `canEdit`, `canDelete`), publish, restore, delete, listing (newest first, paged by an `(updated_at, id)` cursor) |
 | `src/content.ts` | Serves a version as a document tree at `/api/artifacts/<slug>/v/<n>/…` and as a zip at `/api/artifacts/<slug>/download`, link tokens for sandboxed frames and agents' download links; with `CONTENT_ORIGIN`, `contentHost` is all that origin answers (`app.ts` hands it every request on that host) and the app's host redirects page files there |
+| `src/cache.ts` | In-process caches (`Lru`, `memo`), one per process: a version's files by version id (`artifacts.ts`), `/api/config`'s account and SSO lookups. Only for immutable rows looked up by a key the request just read fresh (the page row and version row always are), or answers a few seconds old may give |
 | `src/zip.ts` | Writes zip archives (no dependency) |
 | `src/files.ts` | Multi-file page validation and size limits |
 | `src/storage.ts`, `src/gc.ts` | Content-addressed blobs in S3 and the sweep that deletes unreferenced ones; `addPruner` jobs run before each sweep |

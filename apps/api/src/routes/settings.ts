@@ -6,7 +6,7 @@ import { twoFactorRequiredError } from '../auth/factors.js'
 import { requireRecentSignIn, requireUser, startSession, type AuthEnv } from '../auth/session.js'
 import { track } from '../analytics.js'
 import { db, schema } from '../db/index.js'
-import { isLastAdmin, lastAdminError } from '../instance.js'
+import { forgetAccounts, isLastAdmin, lastAdminError } from '../instance.js'
 import { clearHits, hit, limitRequest, tooManyRequests, waitText } from '../limits.js'
 import { auditToken, checkExpiry, checkTokenName, createToken, describeToken, revokeToken, tokensOf } from '../tokens.js'
 import { CONTROL_CHARS_ERROR, hasControlChars, UUID_RE } from '../validation.js'
@@ -238,6 +238,7 @@ export async function deleteAccountData(user: { id: string; email: string }) {
     // Invitations and shares they sent, and versions they published, keep working without them.
     await tx.delete(schema.users).where(eq(schema.users.id, user.id))
   })
+  forgetAccounts()
 }
 
 // What deleting the account would do, so the page can explain it before anyone types their email

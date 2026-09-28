@@ -6,6 +6,7 @@ import { db, schema } from './db/index.js'
 import type { Artifact, Visibility } from './db/schema.js'
 import { env } from './env.js'
 import { checkHtmlSize, checkManifest, MAX_HTML_BYTES, prepareFiles, PublishError, sha256, type FileInput, type FileMeta, type ManifestEntry } from './files.js'
+import { Lru } from './cache.js'
 import { belongsTo, checkFolderName, ensureFolder, FolderError } from './folders.js'
 import { holdStorageLock } from './gc.js'
 import { checkQuota, type Workspace } from './quota.js'
@@ -111,10 +112,29 @@ export function canDelete(artifact: Artifact, viewer: Viewer): boolean {
 // Its versions, files, shares and thumbnails go with it; the storage sweep removes blobs nothing uses any more
 export async function deleteArtifact(artifact: Artifact) {
   await db.delete(schema.artifacts).where(eq(schema.artifacts.id, artifact.id))
+  forgetPageFiles(artifact.id)
 }
 
 export async function findBySlug(slug: string) {
   const [row] = await db.select().from(schema.artifacts).where(eq(schema.artifacts.slug, slug))
+  return row ?? null
+}
+
+export type Version = typeof schema.artifactVersions.$inferSelect
+
+// A page and one of its versions in one query, both read fresh: the page row holds who may open it
+// (visibility, the link's key and expiry, the current version, the owner), and the version row says the
+// version still exists, which retention, history pruning or deleting the page may have changed on any
+// process. The version's files are then read from the cache below. Null when there is no such page;
+// version null when the page has no such version.
+export async function findPageVersion(slug: string, version: number): Promise<{ artifact: Artifact; version: Version | null } | null> {
+  const a = schema.artifacts
+  const v = schema.artifactVersions
+  const [row] = await db
+    .select({ artifact: a, version: v })
+    .from(a)
+    .leftJoin(v, and(eq(v.artifactId, a.id), eq(v.version, version)))
+    .where(eq(a.slug, slug))
   return row ?? null
 }
 
@@ -310,6 +330,44 @@ export async function listFiles(versionId: string) {
 
 const f = schema.artifactFiles
 const FILE_META = { path: f.path, contentType: f.contentType, size: f.size, sha256: f.sha256 }
+type StoredFile = { path: string; contentType: string; size: number; sha256: string }
+
+// The files of recently served versions, by version id: every viewer of a page loads the same ones.
+// A version's files never change once it is written and the id is never reused, so an entry can only
+// go out of date by the version being deleted. Every lookup passes a version row the request has just
+// read from the database (findPageVersion, getVersion), so a version deleted on another process is
+// never served from here; deletes on this process also drop their entries, and the rest age out.
+type VersionFiles = { artifactId: string; files: Map<string, StoredFile> }
+const FILE_CACHE_VERSIONS = 5000
+const FILE_CACHE_BYTES = 16 * 1024 * 1024
+const fileCache = new Lru<string, VersionFiles>(FILE_CACHE_VERSIONS, FILE_CACHE_BYTES, (entry) => {
+  // A rough size: the strings plus the Map's and objects' overhead
+  let bytes = 200
+  for (const file of entry.files.values()) bytes += 150 + 2 * (file.path.length + file.contentType.length + file.sha256.length)
+  return bytes
+})
+
+async function versionFiles(v: { id: string; artifactId: string }): Promise<Map<string, StoredFile>> {
+  const hit = fileCache.get(v.id)
+  if (hit) return hit.files
+  const rows = await db.select(FILE_META).from(f).where(eq(f.versionId, v.id))
+  const files = new Map(rows.map((row) => [row.path, row]))
+  fileCache.set(v.id, { artifactId: v.artifactId, files })
+  return files
+}
+
+export function forgetVersionFiles(versionIds: Iterable<string>) {
+  for (const id of versionIds) fileCache.delete(id)
+}
+
+function forgetPageFiles(artifactId: string) {
+  fileCache.deleteWhere((entry) => entry.artifactId === artifactId)
+}
+
+// For tests
+export function clearFileCache() {
+  fileCache.clear()
+}
 
 async function withContent<T extends { sha256: string }>(file: T): Promise<T & { content: Buffer }> {
   const content = await getBlob(file.sha256)
@@ -317,19 +375,15 @@ async function withContent<T extends { sha256: string }>(file: T): Promise<T & {
   return { ...file, content }
 }
 
-export async function getFile(versionId: string, path: string) {
-  const [file] = await db
-    .select(FILE_META)
-    .from(f)
-    .where(and(eq(f.versionId, versionId), eq(f.path, path)))
+// `v` must have been read from the database by this request (see the file cache above)
+export async function getFile(v: { id: string; artifactId: string }, path: string) {
+  const file = (await versionFiles(v)).get(path)
   return file ? withContent(file) : null
 }
 
-// Everything needed to render a version, e.g. for its thumbnail
-export async function loadVersionTree(versionId: string) {
-  const [v] = await db.select({ htmlSha256: schema.artifactVersions.htmlSha256 }).from(schema.artifactVersions).where(eq(schema.artifactVersions.id, versionId))
-  if (!v) return null
-  const files = await db.select(FILE_META).from(f).where(eq(f.versionId, versionId))
+// Everything needed to render a version, e.g. for a download; `v` read fresh as for getFile
+export async function loadVersionTree(v: { id: string; artifactId: string; htmlSha256: string }) {
+  const files = [...(await versionFiles(v)).values()]
   return { html: await versionHtml(v), files: await Promise.all(files.map(withContent)) }
 }
 

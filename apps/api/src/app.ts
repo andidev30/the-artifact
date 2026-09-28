@@ -25,7 +25,7 @@ import { contentHost, onContentHost } from './content.js'
 import { embeds } from './embeds.js'
 import { env, mailEnabled } from './env.js'
 import { addPruner } from './gc.js'
-import { hasAccounts, instanceSettings, isInstanceAdmin } from './instance.js'
+import { hasAccountsCached, instanceSettings, isInstanceAdmin } from './instance.js'
 import { checkRateLimits } from './limits.js'
 import { mcp } from './mcp.js'
 import { observeRequests, onUnhandledError } from './metrics.js'
@@ -94,23 +94,24 @@ api.use(sameOriginWrites)
 api.use(loadUser)
 
 // What the web app needs to know about this install
-api.get('/config', async (c) =>
-  c.json({
+api.get('/config', async (c) => {
+  const [accounts, settings, sso] = await Promise.all([mailEnabled() ? true : hasAccountsCached(), instanceSettings(), ssoButtons()])
+  return c.json({
     selfHosted: env.selfHosted,
     googleSignIn: Boolean(env.google.clientId && env.google.clientSecret),
     // Without SMTP, people sign in with a password and admins pass links on by hand
     emailSignIn: mailEnabled(),
     // No accounts yet on a server without email: the web app shows the setup form
-    needsSetup: !mailEnabled() && !(await hasAccounts()),
+    needsSetup: !accounts,
     // Without email, whether people can create a password account on their own
-    passwordSignUp: await passwordSignUpOpen(),
-    instanceName: (await instanceSettings()).instanceName,
+    passwordSignUp: passwordSignUpOpen(settings),
+    instanceName: settings.instanceName,
     // Off on the hosted service until the Organization plan has billing; the app hides the ways in
     newOrganizations: newOrganizationsOpen(),
     // Enterprise single sign-on buttons; none without a license that counts
-    sso: await ssoButtons(),
-  }),
-)
+    sso,
+  })
+})
 
 api.route('/auth/google', google)
 api.route('/auth/email', email)
