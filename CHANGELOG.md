@@ -2,6 +2,13 @@
 
 Every release of The Artifact, newest first. Entries are generated from the commit messages when a release is made; what you have to do when you upgrade is in [Upgrading](docs/upgrading.md), and the versioning policy is there too.
 
+## [0.6.1](https://github.com/andidev30/the-artifact/compare/v0.6.0...v0.6.1) (2026-09-28)
+
+
+### Bug fixes
+
+* **ops:** start Hosted migrate over REST, which the fine-grained token allows ([ceb7fe1](https://github.com/andidev30/the-artifact/commit/ceb7fe104dd500fe6d23505b9a49157a70602db1))
+
 ## [0.6.0](https://github.com/andidev30/the-artifact/compare/v0.5.0...v0.6.0) (2026-09-28)
 
 
