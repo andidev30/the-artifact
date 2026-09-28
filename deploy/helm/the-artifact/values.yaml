@@ -47,7 +47,7 @@ smtp:
   secure: false
   user: ''
   # Or SMTP_PASS in existingSecret
-  password: ''
+  password: null
   from: 'The Artifact <artifact@example.com>'
 
 # Optional Google sign-in. Redirect URI to register: <appUrl>/api/auth/google/callback
@@ -97,9 +97,9 @@ postgresql:
   auth:
     username: artifact
     database: artifact
-    # Letters and digits only, since it goes into the database URL. Empty generates one on
+    # Letters and digits only, since it goes into the database URL. Unset generates one on
     # install and keeps it on upgrades. Postgres keeps the password it was created with.
-    password: ''
+    password: null
     # A Secret of your own with the password, under existingSecretPasswordKey
     existingSecret: ''
     existingSecretPasswordKey: password
@@ -137,7 +137,7 @@ externalDatabase:
   port: 5432
   user: artifact
   database: artifact
-  password: ''
+  password: null
   # Added to the URL after ?, e.g. sslmode=require
   params: ''
   # A Secret of your own with the whole URL (existingSecretUrlKey) or the password

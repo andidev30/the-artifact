@@ -105,7 +105,7 @@
           "type": "string"
         },
         "password": {
-          "type": "string"
+          "type": ["string", "null"]
         },
         "from": {
           "type": "string"
@@ -187,7 +187,7 @@
               "minLength": 1
             },
             "password": {
-              "type": "string",
+              "type": ["string", "null"],
               "pattern": "^[A-Za-z0-9]*$"
             },
             "existingSecret": {
@@ -234,7 +234,7 @@
           "type": "string"
         },
         "password": {
-          "type": "string"
+          "type": ["string", "null"]
         },
         "params": {
           "type": "string"
