@@ -83,7 +83,7 @@ async function fromForm(c: Context): Promise<Input> {
       if (!FIELDS.has(name)) throw new InputError(`"${name}" isn't a field this takes. Send files as file parts, named by their path.`, name)
       fields[name] = value
     } else {
-      files.push({ path: name, content: Buffer.from(await value.arrayBuffer()).toString('base64'), encoding: 'base64' })
+      files.push({ path: name, content: new Uint8Array(await value.arrayBuffer()) })
     }
   }
   return checkInput({ ...fields, html, files })

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { isMainThread, parentPort, workerData } from 'node:worker_threads'
 
 // A page is one entry HTML document, optionally with files next to it (CSS, JS, images, fonts, data)
 // that it references by relative paths. These limits keep a page a page, not a file host.
@@ -12,12 +13,16 @@ export const ENTRY_PATH = 'index.html'
 
 export class PublishError extends Error {}
 
-export type FileInput = { path: string; content: string; encoding?: 'utf8' | 'base64' }
+// content is text or base64 as agents send it, or the bytes themselves for a file part of a form
+export type FileInput = { path: string; content: string | Uint8Array; encoding?: 'utf8' | 'base64' }
 
 // A file as a version records it; its bytes are in storage under sha256
 export type FileMeta = { path: string; contentType: string; size: number; sha256: string }
 
 export type PreparedFile = FileMeta & { content: Buffer }
+
+// A page as it is stored: the entry HTML and its files, checked, decoded and hashed
+export type PreparedContent = { html: Buffer; htmlSha256: string; htmlSize: number; files: PreparedFile[] }
 
 // A file an agent is about to upload itself, described rather than sent
 export type ManifestEntry = { path: string; size: number; sha256: string }
@@ -119,6 +124,23 @@ export function checkHtmlSize(bytes: number) {
   }
 }
 
+function decode(file: FileInput, path: string, type: (typeof TYPES)[string]): Buffer {
+  // A file part of a form, already bytes
+  if (file.content instanceof Uint8Array) return Buffer.from(file.content.buffer, file.content.byteOffset, file.content.byteLength)
+  if (typeof file.content !== 'string') throw new PublishError(`"${path}" has no content.`)
+  const encoding = file.encoding ?? 'utf8'
+  if (encoding === 'base64') {
+    const b64 = file.content.replace(/\s+/g, '')
+    if (b64.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(b64)) throw new PublishError(`"${path}" isn't valid base64.`)
+    return Buffer.from(b64, 'base64')
+  }
+  if (encoding === 'utf8') {
+    if (type.kind === BINARY) throw new PublishError(`"${path}" is a binary file: send it with encoding "base64".`)
+    return Buffer.from(file.content, 'utf8')
+  }
+  throw new PublishError(`"${path}" has an unknown encoding; use "utf8" or "base64".`)
+}
+
 // Validates and decodes the files an agent sent. htmlBytes counts towards the total.
 export function prepareFiles(files: FileInput[] | undefined, htmlBytes: number): PreparedFile[] {
   if (!files || files.length === 0) return []
@@ -129,26 +151,22 @@ export function prepareFiles(files: FileInput[] | undefined, htmlBytes: number):
   const prepared: PreparedFile[] = []
   for (const file of files) {
     const { path, type } = checkFile(file?.path, seen)
-    if (typeof file.content !== 'string') throw new PublishError(`"${path}" has no content.`)
-
-    const encoding = file.encoding ?? 'utf8'
-    let content: Buffer
-    if (encoding === 'base64') {
-      const b64 = file.content.replace(/\s+/g, '')
-      if (b64.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(b64)) throw new PublishError(`"${path}" isn't valid base64.`)
-      content = Buffer.from(b64, 'base64')
-    } else if (encoding === 'utf8') {
-      if (type.kind === BINARY) throw new PublishError(`"${path}" is a binary file: send it with encoding "base64".`)
-      content = Buffer.from(file.content, 'utf8')
-    } else {
-      throw new PublishError(`"${path}" has an unknown encoding; use "utf8" or "base64".`)
-    }
-
+    const content = decode(file, path, type)
     total += content.length
     checkSize(path, content.length, total)
     prepared.push({ path, content, contentType: type.type, size: content.length, sha256: sha256(content) })
   }
   return prepared
+}
+
+// Everything an inline publish does to its content before storing it: the same checks and errors
+// wherever it runs (see src/prepare.ts for when that is a worker thread)
+export function prepareContent(html: string, files: FileInput[] | undefined): PreparedContent {
+  const htmlSize = Buffer.byteLength(html, 'utf8')
+  checkHtmlSize(htmlSize)
+  const prepared = prepareFiles(files, htmlSize)
+  const content = Buffer.from(html, 'utf8')
+  return { html: content, htmlSha256: sha256(content), htmlSize, files: prepared }
 }
 
 const SHA256 = /^[0-9a-f]{64}$/
@@ -192,4 +210,36 @@ export function sha256(data: Buffer | string): string {
 // Text types go back to agents as text, everything else as base64
 export function isText(contentType: string): boolean {
   return /^text\/|^application\/(json|xml)|^image\/svg\+xml/.test(contentType)
+}
+
+// This module is also the entry of the worker threads in src/prepare.ts. It imports nothing but Node's
+// own modules, so it loads the same from dist/ in the image and on Vercel as from src/ in tests.
+export const FILES_MODULE = import.meta.url
+export const PREPARE_WORKER = 'the-artifact:prepare'
+
+export type PrepareReply = { content: PreparedContent } | { error: string; publishError: boolean }
+
+// A buffer with memory of its own, so it can be transferred to the main thread without copying there
+function owned(data: Buffer): Buffer {
+  const copy = Buffer.from(new ArrayBuffer(data.length))
+  data.copy(copy)
+  return copy
+}
+
+if (!isMainThread && workerData === PREPARE_WORKER && parentPort) {
+  const port = parentPort
+  port.on('message', ({ html, files }: { html: string; files: FileInput[] | undefined }) => {
+    let reply: PrepareReply
+    const transfer: ArrayBuffer[] = []
+    try {
+      const content = prepareContent(html, files)
+      content.html = owned(content.html)
+      for (const file of content.files) file.content = owned(file.content)
+      for (const data of [content.html, ...content.files.map((f) => f.content)]) transfer.push(data.buffer as ArrayBuffer)
+      reply = { content }
+    } catch (err) {
+      reply = { error: err instanceof Error ? err.message : String(err), publishError: err instanceof PublishError }
+    }
+    port.postMessage(reply, transfer)
+  })
 }

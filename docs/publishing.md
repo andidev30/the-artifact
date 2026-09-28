@@ -213,6 +213,8 @@ Files already stored in one of your own pages, like the images of a page you pub
 
 Agents that can't make requests of their own keep using `publish_artifact`.
 
+Direct upload is also easier on the server. An inline page arrives as one large JSON request, with images and fonts in base64, and the server reads and parses all of it before it can answer anything else. It decodes and hashes large pages on worker threads, but many agents publishing large pages at once still slow every request down. With direct upload the files go to storage without passing through the server. If you run a server where agents publish sites with images, fonts or media, or pages over about 1 MB, set `S3_PUBLIC_ENDPOINT` so they can (see [Configuration](/docs/configuration#object-storage)).
+
 ## Command line
 
 The `the-artifact` command publishes a folder or an HTML file from a terminal or a CI job, without an agent. It needs Node.js 20 or later:

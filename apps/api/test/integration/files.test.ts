@@ -1,10 +1,12 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
+import { app } from '../../src/app.js'
 import { publish } from '../../src/artifacts.js'
 import { signContentLink } from '../../src/content.js'
 import { getBlob } from '../../src/storage.js'
 import { db, schema } from '../../src/db/index.js'
+import { WORKER_MIN_CHARS } from '../../src/prepare.js'
 import { addMember, call, callTool, connectAgent, createOrg, createUser, slugFrom, type TestUser } from './helpers.js'
 
 const CSP = 'sandbox allow-scripts allow-forms allow-popups allow-modals allow-downloads'
@@ -345,5 +347,74 @@ describe('multi-file pages over MCP', () => {
     expect(await (await call(`/api/artifacts/${slug}/v/2/app.js`, { cookie: owner.cookie })).text()).toBe('v2()')
     expect((await call(`/api/artifacts/${slug}/v/2/css/site.css`, { cookie: owner.cookie })).status).toBe(404)
     expect((await call(`/api/artifacts/${slug}/v/1/css/site.css`, { cookie: owner.cookie })).status).toBe(200)
+  })
+})
+
+// Pages over WORKER_MIN_CHARS are checked, decoded and hashed on worker threads (src/prepare.ts)
+describe('large pages', () => {
+  const html = `<!doctype html><title>Large</title><img src="img/photo.png"><link rel="stylesheet" href="css/big.css">${'<p>Week 12: 42 signups ✓</p>\n'.repeat(20000)}`
+  const photo = randomBytes(1024 * 1024)
+  const css = `body { color: rgb(1, 2, 3) }\n${'.row { margin: 0 }\n'.repeat(15000)}`
+  const sha = (data: Buffer | string) => createHash('sha256').update(data).digest('hex')
+
+  async function stored(slug: string) {
+    const [artifact] = await db.select().from(schema.artifacts).where(eq(schema.artifacts.slug, slug))
+    const [version] = await db.select().from(schema.artifactVersions).where(eq(schema.artifactVersions.artifactId, artifact.id))
+    const files = await db.select().from(schema.artifactFiles).where(eq(schema.artifactFiles.versionId, version.id))
+    return { version, files: Object.fromEntries(files.map((f) => [f.path, f])) }
+  }
+
+  it('publish over MCP, POST /api/publish and multipart all store the same bytes under the same hashes', async () => {
+    expect(html.length).toBeGreaterThan(WORKER_MIN_CHARS)
+    const owner = await createUser()
+    const agent = (await connectAgent(owner)).access_token
+    const files = [
+      { path: 'img/photo.png', content: photo.toString('base64'), encoding: 'base64' },
+      { path: 'css/big.css', content: css },
+    ]
+    const viaMcp = slugFrom((await callTool(agent, 'publish_artifact', { title: 'Large', html, files, visibility: 'link' })).text)
+
+    const created = await call('/api/me/access-tokens', { cookie: owner.cookie, json: { name: 'CI', organizationId: null } })
+    const { token } = (await created.json()) as { token: string }
+    const json = await call('/api/publish', { bearer: token, json: { title: 'Large', html, files, visibility: 'link' } })
+    expect(json.status).toBe(201)
+    const viaJson = ((await json.json()) as { id: string }).id
+
+    const form = new FormData()
+    form.set('title', 'Large')
+    form.set('visibility', 'link')
+    form.set('index.html', new Blob([html], { type: 'text/html' }), 'index.html')
+    form.set('img/photo.png', new Blob([photo]), 'photo.png')
+    form.set('css/big.css', new Blob([css]), 'big.css')
+    const multipart = await app.request('/api/publish', { method: 'POST', headers: { authorization: `Bearer ${token}` }, body: form })
+    expect(multipart.status).toBe(201)
+    const viaForm = ((await multipart.json()) as { id: string }).id
+
+    for (const slug of [viaMcp, viaJson, viaForm]) {
+      const { version, files: rows } = await stored(slug)
+      expect(version).toMatchObject({ htmlSha256: sha(html), htmlSize: Buffer.byteLength(html) })
+      expect(rows['img/photo.png']).toMatchObject({ sha256: sha(photo), size: photo.length, contentType: 'image/png' })
+      expect(rows['css/big.css']).toMatchObject({ sha256: sha(css), size: Buffer.byteLength(css) })
+
+      const base = `/api/artifacts/${slug}/v/1/`
+      expect(await (await call(base)).text()).toBe(html)
+      expect(Buffer.from(await (await call(`${base}img/photo.png`)).arrayBuffer()).equals(photo)).toBe(true)
+      expect(await (await call(`${base}css/big.css`)).text()).toBe(css)
+    }
+    expect((await getBlob(sha(photo)))?.equals(photo)).toBe(true)
+  })
+
+  it('refuses a large page with the same errors as a small one', async () => {
+    const owner = await createUser()
+    const agent = (await connectAgent(owner)).access_token
+    const bad = await callTool(agent, 'publish_artifact', {
+      title: 'Large',
+      html,
+      files: [{ path: 'img/photo.png', content: `${photo.toString('base64')}#`, encoding: 'base64' }],
+    })
+    expect(bad).toMatchObject({ isError: true, text: '"img/photo.png" isn\'t valid base64.' })
+    const raw = await callTool(agent, 'publish_artifact', { title: 'Large', html, files: [{ path: 'img/photo.png', content: css }] })
+    expect(raw).toMatchObject({ isError: true, text: '"img/photo.png" is a binary file: send it with encoding "base64".' })
+    expect(await db.select().from(schema.artifacts)).toEqual([])
   })
 })

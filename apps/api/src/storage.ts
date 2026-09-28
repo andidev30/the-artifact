@@ -107,7 +107,17 @@ function forget(hash: string) {
 // Stores content and returns its hash, the key everything else refers to it by
 export async function putBlob(content: Buffer | string, hash = sha256(content)): Promise<string> {
   const body = typeof content === 'string' ? Buffer.from(content, 'utf8') : content
-  await s3.send(new PutObjectCommand({ Bucket, Key: blobKey(hash), Body: body, ContentType: 'application/octet-stream' }))
+  const command = new PutObjectCommand({ Bucket, Key: blobKey(hash), Body: body, ContentType: 'application/octet-stream' })
+  // SigV4 signs the SHA-256 of the body, which is the key: given it, the SDK doesn't hash every blob
+  // a second time on the main thread. A wrong one would be refused by the store, never stored.
+  command.middlewareStack.add(
+    (next) => (args) => {
+      ;(args.request as { headers: Record<string, string> }).headers['x-amz-content-sha256'] = hash
+      return next(args)
+    },
+    { step: 'build', name: 'blobPayloadHash' },
+  )
+  await s3.send(command)
   return hash
 }
 

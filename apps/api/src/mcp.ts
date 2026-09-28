@@ -1,4 +1,12 @@
-import { createMcpHandler, isLegacyRequest, McpServer, WebStandardStreamableHTTPServerTransport, type AuthInfo } from '@modelcontextprotocol/server'
+import {
+  createMcpHandler,
+  isJsonContentType,
+  isLegacyRequest,
+  McpServer,
+  readRequestBody,
+  WebStandardStreamableHTTPServerTransport,
+  type AuthInfo,
+} from '@modelcontextprotocol/server'
 import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
@@ -870,6 +878,20 @@ function buildServer(auth: McpAuth) {
 // The tools send no progress or log messages, so every answer is a single JSON body.
 const modern = createMcpHandler(({ authInfo }) => buildServer(authInfo?.extra?.mcp as McpAuth), { legacy: 'reject' })
 
+// The SDK reads and parses a POST body once to tell the protocol eras apart and again to serve it,
+// and a publish_artifact body is megabytes of JSON parsed on the main thread. Parse it once here and
+// hand it over. Anything unusual (not JSON, too large, unreadable) is left to the SDK as before, which
+// still has the body to read and answers with its own errors.
+async function parseOnce(request: Request): Promise<unknown> {
+  if (request.method !== 'POST' || !isJsonContentType(request.headers.get('content-type'))) return undefined
+  try {
+    const read = await readRequestBody(request.clone())
+    return read.tooLarge || !read.text ? undefined : JSON.parse(read.text)
+  } catch {
+    return undefined
+  }
+}
+
 export const mcp = new Hono()
 
 mcp.all('/', async (c) => {
@@ -884,12 +906,13 @@ mcp.all('/', async (c) => {
     })
   }
   // 2025-era clients (initialize handshake, no per-request envelope): stateless, plain JSON responses
-  if (await isLegacyRequest(c.req.raw)) {
+  const parsedBody = await parseOnce(c.req.raw)
+  if (await isLegacyRequest(c.req.raw, parsedBody)) {
     const server = buildServer(auth)
     const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true })
     await server.connect(transport)
-    return transport.handleRequest(c.req.raw)
+    return transport.handleRequest(c.req.raw, parsedBody === undefined ? undefined : { parsedBody })
   }
   const authInfo: AuthInfo = { token: header!.replace(/^Bearer\s+/i, ''), clientId: auth.clientName, scopes: [], extra: { mcp: auth } }
-  return modern.fetch(c.req.raw, { authInfo })
+  return modern.fetch(c.req.raw, { authInfo, ...(parsedBody === undefined ? {} : { parsedBody }) })
 })
