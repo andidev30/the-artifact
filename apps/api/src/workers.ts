@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { availableParallelism } from 'node:os'
+import type { InspectAnswer, Width } from './inspect.js'
 
 // How many Node processes serve requests (WEB_CONCURRENCY) and how many database connections each
 // may open (DATABASE_POOL_MAX). One process tops out at about one and a half cores however many the
@@ -54,12 +55,18 @@ export function restartDelay(failures: number): number {
   return Math.min(30_000, 1000 * 2 ** Math.max(0, failures - 1))
 }
 
-// What the primary and its workers say to each other over the cluster's IPC channel (src/primary.ts)
+// What the primary and its workers say to each other over the cluster's IPC channel (src/primary.ts).
+// An inspection goes from a worker to the primary, which adds the asking worker's id (`from`) and
+// passes it to the background worker; its answer names that worker (`to`) and the primary passes it back.
 export type FromWorker =
   | { type: 'artifact:thumbnail'; versionId: string }
   | { type: 'artifact:thumbnail-queue-full'; full: boolean }
   | { type: 'artifact:metrics'; id: number }
+  | { type: 'artifact:inspect'; id: number; versionId: string; widths: Width[] }
+  | { type: 'artifact:inspected'; id: number; to: number; answer: InspectAnswer }
 export type ToWorker =
   | { type: 'artifact:thumbnail'; versionId: string }
   | { type: 'artifact:thumbnail-queue-full'; full: boolean }
   | { type: 'artifact:metrics'; id: number; text?: string; error?: string }
+  | { type: 'artifact:inspect'; id: number; from: number; versionId: string; widths: Width[] }
+  | { type: 'artifact:inspected'; id: number; answer: InspectAnswer }

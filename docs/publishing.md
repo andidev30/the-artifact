@@ -117,6 +117,25 @@ Files a page into a folder of the connected workspace, or takes it out of its fo
 
 Returns the current version of a page, so the agent can edit it and publish a new version: its title, version number, the list of its files with their sizes, and the entry HTML. With `path` (for example `css/site.css`) it returns that one file instead, as text or, for binary files, as base64.
 
+### inspect_artifact
+
+Opens a page in a headless browser on the server and reports what is wrong with it, so the agent can check its work before it hands you the link. Agents are told to call it after publishing and before sharing; they fix what it finds, publish a new version and inspect again. Editors only.
+
+| Argument | Required | Meaning |
+| --- | --- | --- |
+| `artifact_id` | yes | Id or link of the page |
+| `version` | no | A version number from `list_versions`. Without it, the current version. |
+| `widths` | no | Widths to render at: `1280` (desktop) and `390` (a phone, with a phone's viewport handling). `[1280]` by default; `[1280, 390]` checks both. |
+
+The answer has a screenshot per width, of the whole page down to 2,000 pixels (a PNG, or a JPEG for pages whose PNG would be over 1 MB), and a report of:
+
+- console errors and uncaught exceptions, with the file and line
+- files the page asked for that it doesn't have (answered with a 404), and requests to public CDNs that failed
+- links (`<a href>`) to files of the page that don't exist
+- accessibility problems found by [axe-core](https://github.com/dequelabs/axe-core) with the WCAG 2.1 A and AA rules: the rule, its impact, a short explanation and up to three elements, for at most 20 rules
+
+The page is opened exactly like a [gallery screenshot](/docs/security#thumbnails-are-rendered-without-network-access): its own files and a few public CDNs load, nothing else does, and it has no cookies. Requests to other servers are listed as not loaded, even though they may work in people's browsers. Inspecting only works on servers that render thumbnails (`CHROME_PATH`, see [Configuration](/docs/configuration)); elsewhere it answers that it isn't available. It counts toward its own [limit](#limits).
+
 ### rename_artifact
 
 Changes a page's title without publishing a new version. The same rules as renaming in the app apply: editors only, 1 to 200 characters, spaces around it are trimmed.
@@ -428,6 +447,7 @@ Besides the size of each page, a server limits how fast an account uses these to
 | New pages and versions (`publish_artifact`, `update_files`, `publish_upload`, `restore_version`, `POST /api/publish`) | 200 per hour |
 | People shared with by email (`share_artifact`, counted with invitations in the app) | 200 per hour |
 | Comments and replies (`add_comment`, `reply_comment`, counted with comments in the app) | 120 per hour |
+| Page inspections (`inspect_artifact`) | 100 per hour |
 | Pages, versions and storage in a self-hosted workspace | None, unless the server sets them |
 | A personal workspace on the hosted service's free Personal plan | 50 pages and 1 GB of storage; versions older than 7 days are removed |
 

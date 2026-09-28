@@ -151,14 +151,14 @@ export async function mcpRequest(token: string, method: string, params: Record<s
   })
 }
 
-export type ToolResult = { content: { type: 'text'; text: string }[]; isError?: boolean }
+export type ToolResult = { content: ({ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string })[]; isError?: boolean }
 
 export async function callTool(token: string, name: string, args: Record<string, unknown>) {
   const res = await mcpRequest(token, 'tools/call', { name, arguments: args })
   expect(res.status).toBe(200)
   const body = (await res.json()) as { result?: ToolResult; error?: { message: string } }
   if (!body.result) throw new Error(`tools/call ${name} failed: ${body.error?.message}`)
-  return { text: body.result.content.map((c) => c.text).join('\n'), isError: Boolean(body.result.isError) }
+  return { text: body.result.content.flatMap((c) => (c.type === 'text' ? [c.text] : [])).join('\n'), isError: Boolean(body.result.isError) }
 }
 
 export function slugFrom(text: string): string {

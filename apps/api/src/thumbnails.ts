@@ -3,7 +3,7 @@ import { request } from 'node:https'
 import { BlockList, isIP } from 'node:net'
 import { tmpdir } from 'node:os'
 import { and, eq, or, sql } from 'drizzle-orm'
-import { chromium, type Browser, type BrowserContext, type Request, type Route } from 'playwright-core'
+import { chromium, type Browser, type BrowserContext, type CDPSession, type Page, type Request, type Route } from 'playwright-core'
 import { db, schema } from './db/index.js'
 import { env } from './env.js'
 import { sha256 } from './files.js'
@@ -22,6 +22,8 @@ import { getBlob, getText, putBlob } from './storage.js'
 // - a fresh browser context per render, fixed viewport, no downloads, no service workers, short timeouts
 // - renders that run at once (THUMBNAIL_CONCURRENCY) share one Chromium but never a context, and each
 //   has its own interception, CDN budget and timeouts; nothing above is relaxed for them
+// - inspections (inspect_artifact, src/inspect.ts) open pages through the same inPage, in the same
+//   Chromium, so the same rules hold for them; only the viewport and what is read from the page differ
 
 export const VIEWPORT = { width: 1280, height: 720 }
 // Stored at half size: 640x360, enough for a card on a 2x screen
@@ -311,19 +313,38 @@ function withTimeout<T>(promise: Promise<T>, ms: number, what: string): Promise<
   ]).finally(() => clearTimeout(timer))
 }
 
-// Renders the page and returns a WebP screenshot, plus every URL it tried to reach and was refused
-export async function renderPage(tree: PageTree): Promise<RenderResult> {
+// What a render noticed about the page's requests, for inspections (src/inspect.ts): its own files it
+// asked for and doesn't have, and CDN answers that were errors
+export type RequestNotes = { missing: string[]; failed: { url: string; status: number }[] }
+
+export type View = { width: number; height: number; mobile?: boolean }
+
+type RenderOptions = {
+  view: View
+  // Names the work in the timeout's message
+  what: string
+  // Called with the page before it loads, to listen to it
+  watch?: (page: Page) => void
+  notes?: RequestNotes
+}
+
+// Opens the page in a fresh context under every rule above, lets it settle, and hands it to `use`.
+// Thumbnails and inspections both go through here, so they can't differ in what a page may reach.
+export async function inPage<T>(
+  tree: PageTree,
+  opts: RenderOptions,
+  use: (opened: { page: Page; cdp: CDPSession; blocked: string[] }) => Promise<T>,
+): Promise<T> {
   if (!config.chromePath) throw new Error('No browser configured (CHROME_PATH)')
   current ??= launch()
   const instance = current
   instance.renders += 1
-  rendering += 1
-  thumbnailRendering.set(rendering)
   const contexts: Promise<BrowserContext>[] = []
   let ok = false
   try {
     const b = await instance.browser
     const blocked: string[] = []
+    const notes = opts.notes
     let cdnBytes = 0
     let cdnRequests = 0
     const files = new Map(tree.files.map((f) => [f.path, f]))
@@ -335,11 +356,15 @@ export async function renderPage(tree: PageTree): Promise<RenderResult> {
         try {
           path = decodeURIComponent(url.pathname.slice(1))
         } catch {
+          notes?.missing.push(url.pathname.slice(1))
           return route.fulfill({ status: 404, body: '' })
         }
         if (path === '' || path === 'index.html') return route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: tree.html })
         const file = files.get(path)
-        if (!file) return route.fulfill({ status: 404, body: '' })
+        if (!file) {
+          notes?.missing.push(path)
+          return route.fulfill({ status: 404, body: '' })
+        }
         return route.fulfill({ status: 200, contentType: file.contentType, body: file.content })
       }
       if (req.method() === 'GET' && cdnRequests < MAX_CDN_REQUESTS && cdnBytes < MAX_CDN_TOTAL) {
@@ -347,6 +372,7 @@ export async function renderPage(tree: PageTree): Promise<RenderResult> {
         const res = await fetchFromCdn(url, req.headers().accept).catch(() => null)
         if (res && cdnBytes + res.body.length <= MAX_CDN_TOTAL) {
           cdnBytes += res.body.length
+          if (res.status >= 400) notes?.failed.push({ url: url.href, status: res.status })
           // Redirects go back through this handler, so their targets are checked too
           return route.fulfill({ status: res.status, headers: res.headers, body: res.body })
         }
@@ -355,12 +381,14 @@ export async function renderPage(tree: PageTree): Promise<RenderResult> {
       return route.abort('blockedbyclient')
     }
 
-    // Everything from the new context to the screenshot is under one timeout, so a browser that
+    // Everything from the new context to what `use` returns is under one timeout, so a browser that
     // stops answering can't hold this render (and its place in the queue) longer than that
-    const shot = (async () => {
+    const run = (async () => {
       const context = b.newContext({
-        viewport: VIEWPORT,
+        viewport: { width: opts.view.width, height: opts.view.height },
         deviceScaleFactor: 1,
+        isMobile: opts.view.mobile ?? false,
+        hasTouch: opts.view.mobile ?? false,
         javaScriptEnabled: true,
         serviceWorkers: 'block',
         acceptDownloads: false,
@@ -375,21 +403,17 @@ export async function renderPage(tree: PageTree): Promise<RenderResult> {
         ws.close()
       })
       const page = await ctx.newPage()
+      opts.watch?.(page)
       await page.goto(`${PAGE_ORIGIN}/`, { waitUntil: 'load', timeout: config.loadTimeout }).catch(() => {})
       await new Promise((r) => setTimeout(r, SETTLE_MS))
       const cdp = await ctx.newCDPSession(page)
-      const { data } = await cdp.send('Page.captureScreenshot', {
-        format: 'webp',
-        quality: QUALITY,
-        clip: { x: 0, y: 0, width: VIEWPORT.width, height: VIEWPORT.height, scale: SCALE },
-      })
-      return Buffer.from(data, 'base64')
+      return use({ page, cdp, blocked })
     })()
     // It may still reject after the timeout below has given up on it
-    shot.catch(() => {})
-    const image = await withTimeout(shot, config.renderTimeout, 'Rendering the thumbnail')
+    run.catch(() => {})
+    const result = await withTimeout(run, config.renderTimeout, opts.what)
     ok = true
-    return { image, blocked }
+    return result
   } catch (err) {
     const b = await instance.browser.catch(() => null)
     // Closing or closed under this render: not the page's doing (errors can arrive before Chromium says it is gone)
@@ -404,12 +428,34 @@ export async function renderPage(tree: PageTree): Promise<RenderResult> {
       ).catch(() => {})
     if (!ok) retire(instance)
     release(instance)
+  }
+}
+
+// Renders the page and returns a WebP screenshot, plus every URL it tried to reach and was refused
+export async function renderPage(tree: PageTree): Promise<RenderResult> {
+  rendering += 1
+  thumbnailRendering.set(rendering)
+  try {
+    return await inPage(tree, { view: VIEWPORT, what: 'Rendering the thumbnail' }, async ({ cdp, blocked }) => {
+      const { data } = await cdp.send('Page.captureScreenshot', {
+        format: 'webp',
+        quality: QUALITY,
+        clip: { x: 0, y: 0, width: VIEWPORT.width, height: VIEWPORT.height, scale: SCALE },
+      })
+      return { image: Buffer.from(data, 'base64'), blocked }
+    })
+  } finally {
     rendering -= 1
     thumbnailRendering.set(rendering)
   }
 }
 
-async function loadTree(versionId: string): Promise<PageTree | null> {
+// Renders that may run at once in this process (THUMBNAIL_CONCURRENCY)
+export function renderConcurrency(): number {
+  return config.concurrency
+}
+
+export async function loadTree(versionId: string): Promise<PageTree | null> {
   const [v] = await db.select({ htmlSha256: schema.artifactVersions.htmlSha256 }).from(schema.artifactVersions).where(eq(schema.artifactVersions.id, versionId))
   if (!v) return null
   const html = await getText(v.htmlSha256)
