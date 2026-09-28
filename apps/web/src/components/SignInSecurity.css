@@ -1,0 +1,193 @@
+/* Sign-in security and sessions in account settings */
+
+.security-block {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.security-required,
+.security-locked {
+  padding: 10px 12px;
+  font-size: var(--step--1);
+  color: var(--ink);
+  background: var(--paper);
+  border: 1.5px dashed var(--ink);
+  border-radius: 3px;
+}
+
+.security-required {
+  background: color-mix(in srgb, var(--marker) 35%, var(--white));
+  border-style: solid;
+}
+
+.security-locked {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+
+.security-locked p {
+  flex: 1 1 18rem;
+  margin: 0;
+}
+
+.security-app {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.security-app p {
+  flex: 1 1 16rem;
+  margin: 0;
+}
+
+.security-add input,
+.security-rename input {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.security-rename {
+  grid-column: 2 / -1;
+}
+
+.security-steps {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  font-size: var(--step--1);
+  list-style: none;
+  counter-reset: step;
+}
+
+.security-steps > li {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  min-width: 0;
+  padding-left: 40px;
+  counter-increment: step;
+}
+
+.security-steps > li::before {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  font-size: 0.8125rem;
+  font-weight: 800;
+  content: counter(step);
+  background: var(--white);
+  border: 1.5px solid var(--ink);
+  border-radius: 50%;
+}
+
+.security-steps form {
+  flex-wrap: wrap;
+}
+
+.security-steps form label {
+  flex-basis: 100%;
+  font-weight: 600;
+}
+
+.security-steps form input {
+  flex: 0 1 10rem;
+  min-width: 0;
+  font-family: var(--mono);
+  letter-spacing: 0.1em;
+}
+
+.security-steps .command code {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.security-qr {
+  width: 180px;
+  height: 180px;
+  padding: 8px;
+  background: var(--white);
+  border: 1.5px solid var(--ink);
+  border-radius: 3px;
+}
+
+.security-code-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+  gap: 6px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.security-code-list code {
+  font-family: var(--mono);
+  font-size: var(--step--1);
+  letter-spacing: 0.04em;
+}
+
+.security-code-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Two-factor status of members and people in lists */
+
+.two-factor-badge {
+  flex: none;
+  padding: 0 6px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+  border: 1px solid var(--ink-soft);
+  border-radius: 3px;
+}
+
+.two-factor-badge[data-on] {
+  color: var(--ink);
+  background: var(--grid-fine);
+  border-color: var(--ink);
+}
+
+.settings-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--step--1);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.settings-check input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--ink);
+}
+
+.two-factor-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  margin-bottom: 24px;
+}
+
+.two-factor-notice p {
+  flex: 1 1 18rem;
+  margin: 0;
+}

@@ -6,7 +6,7 @@ Settings are environment variables. With Docker Compose they go in `deploy/docke
 
 | Variable | Meaning |
 | --- | --- |
-| `APP_URL` | Public address of the install, without a trailing slash, e.g. `https://artifact.example.com`. Sign-in links, page links, the MCP URL and OAuth metadata are built from it. Cookies are marked `Secure` when it starts with `https://`. |
+| `APP_URL` | Public address of the install, without a trailing slash, e.g. `https://artifact.example.com`. Sign-in links, page links, the MCP URL and OAuth metadata are built from it. Cookies are marked `Secure` when it starts with `https://`. Passkeys work only on its host name, so changing that makes existing passkeys unusable (people sign in another way and add new ones). |
 | `DATABASE_URL` | Postgres connection string. `deploy/docker-compose/docker-compose.yml` sets it for its own database. |
 | `S3_BUCKET` | Bucket for page content and thumbnails. `deploy/docker-compose/docker-compose.yml` sets it for its own MinIO. |
 
@@ -86,6 +86,9 @@ Instance admins change these under **Server admin** (`/admin`); they are stored 
 | Sign-in link | Works once, for 15 minutes, and is used when you press Continue on the page it opens (opening it alone uses nothing); a new one can be sent after 60 seconds |
 | Organization invitation | 7 days |
 | Browser session | 30 days, extended while you use it |
+| Two-factor sign-in | 10 minutes to finish the second step; changes to it need a sign-in from the last hour |
+| Passkeys | 20 per account, names up to 60 characters |
+| Recovery codes | 10, each works once |
 | Agent access token | 1 hour, refreshed automatically; refresh tokens last 60 days and rotate on use |
 | Access token for CI | 7, 30 or 90 days, 1 year, or no expiry, as chosen when it is made (90 days by default); names up to 60 characters |
 | Requests | See [Rate limits](/docs/configuration#rate-limits) |
@@ -101,6 +104,9 @@ Each limit counts something for one key (an email address, an account, or a netw
 | `sign-in-link-ip` | Sign-in links asked for from one network | 30 per hour |
 | `password` | Wrong passwords for one address. Signing in with the right one resets it. | 10 per 15 minutes |
 | `password-ip` | Password sign-ins, sign-ups and first-account setups from one network | 100 per 15 minutes |
+| `two-factor` | Wrong authenticator app and recovery codes for one account, when signing in or turning the app on. Entering a right one resets it. | 10 per hour |
+| `two-factor-ip` | [Second-factor steps](/docs/security#two-factor-sign-in) and passkey sign-ins from one network | 100 per 15 minutes |
+| `two-factor-setup` | Passkeys, authenticator app set-ups and new recovery codes one account asks for in **Account settings** | 30 per hour |
 | `oauth-register-ip` | Agents registering with the server (`POST /oauth/register`) from one network, which each agent does once when it connects | 60 per hour |
 | `invite` | People one account invites to an organization or shares a page with by email, in the app or through an agent | 200 per hour |
 | `invite-ip` | The same, from one network | 500 per hour |

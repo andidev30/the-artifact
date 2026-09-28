@@ -12,8 +12,8 @@ On a self-hosted server, whoever sets it up names the organization everyone ther
 
 | Role | Can |
 | --- | --- |
-| Owner | Everything: rename the organization, invite and remove anyone, change any role, make other owners |
-| Admin | Invite people, remove and change members and admins, rename the organization, edit every page, see and revoke every member's [access tokens](#access-tokens) for it |
+| Owner | Everything: rename the organization, invite and remove anyone, change any role, make other owners, [require two-factor sign-in](#requiring-two-factor-sign-in) |
+| Admin | Invite people, remove and change members and admins, rename the organization, require two-factor sign-in, edit every page, see and revoke every member's [access tokens](#access-tokens) for it |
 | Member | Publish and see the organization's pages; create, rename and delete its [folders](/docs/publishing#folders); leave the organization |
 
 An organization always keeps at least one owner. The last owner can't leave, be removed or change their own role until someone else is an owner.
@@ -31,6 +31,16 @@ The chip next to the logo shows the current workspace. Click it to switch betwee
 ## Access tokens
 
 Members make [access tokens](/docs/connect-your-agent#publishing-from-ci) in **Account settings** to publish to the organization from CI. Owners and admins see every member's tokens for the organization under **Access tokens** in its settings: the name, who made it, when it was last used and when it expires, never the token itself. **Revoke** stops a token at once, whoever made it, so a token that leaks doesn't have to wait for its owner.
+
+## Requiring two-factor sign-in
+
+Owners and admins can check **Require two-factor sign-in** under **General** in the organization's settings. You need a passkey or an authenticator app on your own account first (see [Signing in](/docs/signing-in)), so turning it on can't lock you out. **Members** shows who has two-factor sign-in (**2FA on**) and who doesn't yet (**No 2FA**).
+
+Members without it are sent to **Sign-in security** the next time they sign in. Until they add a passkey or an authenticator app, they can't open the organization's gallery, folders or settings in the app, see its pages (except ones shared with them directly or by link), connect a new agent to it or make access tokens for it. The notice on their pages says so. They can still leave the organization.
+
+Agents they already connected and access tokens they already made keep publishing, so turning it on doesn't break anyone's CI. To stop access tokens too, revoke them under [Access tokens](#access-tokens); removing someone from the organization also stops their agents there. Turning the requirement off lets everyone back in at once.
+
+Only an instance admin can reset someone's second factor if they lose it; owners and admins of an organization can't.
 
 ## Leaving or deleting
 

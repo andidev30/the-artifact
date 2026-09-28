@@ -6,6 +6,7 @@ import { mailEnabled } from '../env.js'
 import { hasAccounts, instanceSettings, lockAdmins, newAccountFields } from '../instance.js'
 import { atLimit, clearHits, clientIp, hit, limitRequest, tooManyRequests, waitText } from '../limits.js'
 import { startSession } from './session.js'
+import { continueSignIn } from './twofactor.js'
 import { EMAIL_RE } from '../validation.js'
 import { afterSignInUrl, createPasswordAccount, waitingForAccess } from './users.js'
 
@@ -84,8 +85,8 @@ password.post('/login', async (c) => {
     return c.json({ error: 'This account is suspended. Ask an admin of this server to restore it.', code: 'account_suspended' }, 403)
   }
   await clearHits('password', email)
-  await startSession(c, user.id)
-  return c.json({ redirect: afterSignInUrl(typeof body?.plan === 'string' ? body.plan : null, typeof body?.next === 'string' ? body.next : null) })
+  const redirect = afterSignInUrl(typeof body?.plan === 'string' ? body.plan : null, typeof body?.next === 'string' ? body.next : null)
+  return c.json({ redirect: await continueSignIn(c, user, redirect) })
 })
 
 // The first account on a server without email. It becomes the instance admin on a self-hosted install.

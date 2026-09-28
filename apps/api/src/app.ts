@@ -3,7 +3,9 @@ import { Hono } from 'hono'
 import { email } from './auth/email.js'
 import { google } from './auth/google.js'
 import { password, passwordSignUpOpen } from './auth/password.js'
+import { hasSecondFactor } from './auth/factors.js'
 import { endSession, loadUser, requireUser, type AuthEnv } from './auth/session.js'
+import { clearPending, passkeySignIn, twoFactor } from './auth/twofactor.js'
 import { db, schema } from './db/index.js'
 import { contact } from './ee/contact.js'
 import { historyCron, personalPlan } from './ee/plans.js'
@@ -25,6 +27,7 @@ import { comments } from './routes/comments.js'
 import { folders } from './routes/folders.js'
 import { invitations, members, myInvitations } from './routes/members.js'
 import { onboarding, organizations } from './routes/organizations.js'
+import { security, sessions } from './routes/security.js'
 import { settings } from './routes/settings.js'
 import { mountWeb } from './web.js'
 
@@ -72,9 +75,12 @@ api.get('/config', async (c) =>
 api.route('/auth/google', google)
 api.route('/auth/email', email)
 api.route('/auth/password', password)
+api.route('/auth/two-factor', twoFactor)
+api.route('/auth/passkey', passkeySignIn)
 
 api.post('/auth/logout', async (c) => {
   await endSession(c)
+  clearPending(c)
   return c.body(null, 204)
 })
 
@@ -89,6 +95,8 @@ api.route('/contact-sales', contact)
 api.route('/organizations/:orgId', members)
 api.route('/invitations', invitations)
 api.route('/me/invitations', myInvitations)
+api.route('/me/security', security)
+api.route('/me/sessions', sessions)
 api.route('/me', settings)
 api.route('/admin', admin)
 api.route('/cron/history', historyCron)
@@ -102,6 +110,7 @@ api.get('/me', requireUser, async (c) => {
       name: schema.organizations.name,
       slug: schema.organizations.slug,
       role: schema.memberships.role,
+      requireTwoFactor: schema.organizations.requireTwoFactor,
     })
     .from(schema.memberships)
     .innerJoin(schema.organizations, eq(schema.memberships.organizationId, schema.organizations.id))
@@ -119,7 +128,9 @@ api.get('/me', requireUser, async (c) => {
     avatarUrl: user.avatarUrl,
     hasPassword: Boolean(user.passwordHash),
     onboarded: user.onboardedAt !== null,
-    organizations: orgs,
+    // blocked: the organization requires a second factor this person hasn't set up yet
+    organizations: orgs.map((o) => ({ ...o, blocked: user.blockedOrgs.includes(o.id) })),
+    twoFactor: await hasSecondFactor(user.id),
     agentConnected: Boolean(token),
     hasPublished: Boolean(page),
     isAdmin: isInstanceAdmin(user),

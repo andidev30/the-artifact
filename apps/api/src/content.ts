@@ -1,4 +1,4 @@
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
+import { createHmac, timingSafeEqual } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import type { Context } from 'hono'
 import { accessLevel, findBySlug, getFile, getVersion, loadVersionTree, versionHtml, type Viewer } from './artifacts.js'
@@ -7,6 +7,7 @@ import { db, schema } from './db/index.js'
 import type { Artifact } from './db/schema.js'
 import { env } from './env.js'
 import { checkPath, ENTRY_PATH } from './files.js'
+import { serverSecret } from './secrets.js'
 import { zip } from './zip.js'
 
 // A version is served as a real document tree at /api/artifacts/<slug>/v/<version>/, so the entry
@@ -33,23 +34,7 @@ const CACHE = 'private, max-age=3600'
 export const TOKEN_HOURS = 12
 const NAVIGATIONS = new Set(['document', 'iframe', 'frame', 'embed', 'object'])
 
-let secret: Promise<Buffer> | null = null
-
-// Created once per database and shared by every server process
-function linkSecret(): Promise<Buffer> {
-  secret ??= (async () => {
-    await db
-      .insert(schema.serverSecrets)
-      .values({ name: 'content-links', value: randomBytes(32).toString('base64url') })
-      .onConflictDoNothing()
-    const [row] = await db.select().from(schema.serverSecrets).where(eq(schema.serverSecrets.name, 'content-links'))
-    return Buffer.from(row.value, 'base64url')
-  })().catch((err) => {
-    secret = null
-    throw err
-  })
-  return secret
-}
+const linkSecret = () => serverSecret('content-links')
 
 function mac(key: Buffer, userId: string, artifactId: string, version: number, expires: number) {
   return createHmac('sha256', key).update(`${userId}|${artifactId}|${version}|${expires}`).digest('base64url').slice(0, 32)

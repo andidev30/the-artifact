@@ -16,6 +16,22 @@ Links work for 15 minutes. Press **Email me a new link** on the same page to get
 
 The server limits how often one address, account or network can ask for sign-in links, try passwords, invite people or use agent tools (see [Rate limits](/docs/configuration#rate-limits)). The limit ends on its own after the time the message gives. On a self-hosted server, if everyone behind the same office network or reverse proxy hits it together, the admin can set `TRUST_PROXY` or raise the limit with `RATE_LIMITS`.
 
+## I lost my phone or my passkey
+
+On **Confirm it’s you**, choose **Use a recovery code** and enter one of the codes you saved when you set up two-factor sign-in. Once you are in, remove the lost passkey or set up the authenticator app again under **Account settings**, **Sign-in security**, and make new recovery codes. Without a recovery code, ask an admin of this server to reset your two-factor sign-in; see [If you lose your second factor](/docs/signing-in#if-you-lose-your-second-factor). If you are the only admin of a self-hosted server, run the reset script on the server; see [An existing install without an admin](/docs/self-hosting#an-existing-install-without-an-admin).
+
+## "That code is wrong or was already used"
+
+Each code from an authenticator app works once. Wait for the app to show the next one. If new codes keep failing, the phone's clock is probably off by more than 30 seconds: set its time to update automatically.
+
+## "… requires two-factor sign-in"
+
+The organization's owners require a passkey or an authenticator app. Add one under **Account settings**, **Sign-in security**, and the organization opens again at once. See [Organizations that require it](/docs/signing-in#organizations-that-require-it).
+
+## "Sign in again to change how you sign in"
+
+Adding or removing passkeys and the authenticator app, and making new recovery codes, need a sign-in from the last hour. Choose **Sign in again**, sign in, and you return to **Sign-in security**.
+
 ## "Your personal workspace has … pages" or "… past … of storage"
 
 The workspace is full. Delete pages you no longer need in the gallery, or ask the agent to publish a new version of a page you have. See [Limits](/docs/publishing#limits).

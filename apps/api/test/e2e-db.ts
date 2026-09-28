@@ -66,3 +66,10 @@ export async function createSelfHostedAccount(email: string, { isAdmin }: { isAd
     await sql`insert into users (email, is_admin, onboarded_at) values (${email.toLowerCase()}, ${isAdmin}, null)`
   })
 }
+
+// For specs that sign in by email again within a minute, which the server otherwise answers without sending a new link
+export async function forgetSignInLinks(email: string) {
+  await withDatabase(HOSTED_DATABASE_URL, async (sql) => {
+    await sql`delete from email_tokens where email = ${email.toLowerCase()}`
+  })
+}

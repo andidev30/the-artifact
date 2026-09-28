@@ -3,7 +3,8 @@ import { Hono } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import { env, isProduction } from '../env.js'
 import { log } from '../log.js'
-import { randomToken, startSession } from './session.js'
+import { randomToken } from './session.js'
+import { continueSignIn } from './twofactor.js'
 import { afterSignInUrl, findOrCreateUser, safeNext, signInErrorUrl, SignupClosedError } from './users.js'
 
 const AUTHORIZE_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
@@ -97,8 +98,7 @@ google.get('/callback', async (c) => {
       avatarUrl: profile.picture,
       googleSub: profile.sub,
     })
-    await startSession(c, user.id)
-    return c.redirect(afterSignInUrl(plan, next))
+    return c.redirect(await continueSignIn(c, user, afterSignInUrl(plan, next)))
   } catch (err) {
     if (err instanceof SignupClosedError) return c.redirect(signInErrorUrl(err.code))
     log.error('Google sign-in failed', { err })

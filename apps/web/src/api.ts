@@ -1,3 +1,5 @@
+import type { PublicKeyCredentialCreationOptionsJSON, PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser'
+
 export type Role = 'owner' | 'admin' | 'member'
 
 export type Organization = {
@@ -5,6 +7,10 @@ export type Organization = {
   name: string
   slug: string
   role: Role
+  // Members need a passkey or an authenticator app to use it
+  requireTwoFactor?: boolean
+  // It requires one and you have none yet, so it stays closed to you in the app. Only in /api/me.
+  blocked?: boolean
 }
 
 export type Me = {
@@ -16,6 +22,8 @@ export type Me = {
   hasPassword: boolean
   onboarded: boolean
   organizations: Organization[]
+  // A passkey or an authenticator app, asked for after the password, email link or Google
+  twoFactor: boolean
   agentConnected: boolean
   hasPublished: boolean
   // Instance admin: can open /admin
@@ -260,7 +268,8 @@ export function markCommentsSeen(slug: string) {
 export type ConsentRequest = {
   clientName: string
   redirectHost: string
-  workspaces: { id: string | null; name: string }[]
+  // blocked: requires two-factor sign-in you haven't set up
+  workspaces: { id: string | null; name: string; blocked?: boolean }[]
 }
 
 export class RequestExpired extends Error {}
@@ -337,6 +346,7 @@ export type OrganizationMember = {
   avatarUrl: string | null
   role: Role
   joinedAt: string
+  twoFactor?: boolean
 }
 
 export type PendingInvitation = {
@@ -386,6 +396,10 @@ export function getOrganization(id: string) {
 
 export function renameOrganization(id: string, name: string) {
   return request<OrganizationDetails>(orgPath(id), { method: 'PATCH', json: { name } })
+}
+
+export function setRequireTwoFactor(id: string, requireTwoFactor: boolean) {
+  return request<OrganizationDetails>(orgPath(id), { method: 'PATCH', json: { requireTwoFactor } })
 }
 
 export function inviteMember(id: string, email: string, role: InviteRole) {
@@ -634,4 +648,107 @@ export function changePassword(currentPassword: string, password: string) {
 
 export function requestSignInLink(email: string, intent: 'login' | 'signup', plan: string | null, next: string | null) {
   return request<null>('/auth/email', { method: 'POST', json: { email, intent, plan, next } })
+}
+
+// Two-factor sign-in, passkeys and sessions
+
+export type Passkey = { id: string; name: string; backedUp: boolean; createdAt: string; lastUsedAt: string | null }
+
+export type SignInSecurity = {
+  passkeys: Passkey[]
+  totp: boolean
+  // How many unused recovery codes are left
+  recoveryCodes: number
+  requiredBy: { id: string; name: string }[]
+  // false: changes need signing in again first
+  recentSignIn: boolean
+}
+
+export function getSignInSecurity() {
+  return request<SignInSecurity>('/me/security')
+}
+
+// The options go to @simplewebauthn/browser as they are
+export function passkeyRegistrationOptions() {
+  return request<PublicKeyCredentialCreationOptionsJSON>('/me/security/passkeys/options', { method: 'POST' })
+}
+
+export function addPasskey(name: string, response: unknown) {
+  return request<{ passkey: Passkey; recoveryCodes?: string[] }>('/me/security/passkeys', { method: 'POST', json: { name, response } })
+}
+
+export function renamePasskey(id: string, name: string) {
+  return request<Passkey>(`/me/security/passkeys/${encodeURIComponent(id)}`, { method: 'PATCH', json: { name } })
+}
+
+export function removePasskey(id: string) {
+  return request<null>(`/me/security/passkeys/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
+export type TotpSetup = { secret: string; uri: string; qr: string }
+
+export function startTotpSetup() {
+  return request<TotpSetup>('/me/security/totp', { method: 'POST' })
+}
+
+export function confirmTotp(code: string) {
+  return request<{ recoveryCodes?: string[] }>('/me/security/totp/confirm', { method: 'POST', json: { code } })
+}
+
+export function removeTotp() {
+  return request<null>('/me/security/totp', { method: 'DELETE' })
+}
+
+export function newRecoveryCodes() {
+  return request<{ recoveryCodes: string[] }>('/me/security/recovery-codes', { method: 'POST' })
+}
+
+export type SignedInSession = {
+  id: string
+  browser: string | null
+  os: string | null
+  createdAt: string
+  lastActiveAt: string
+  current: boolean
+}
+
+export function listSessions() {
+  return request<SignedInSession[]>('/me/sessions')
+}
+
+export function endSession(id: string) {
+  return request<null>(`/me/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
+export function signOutOtherSessions() {
+  return request<null>('/me/sessions', { method: 'DELETE' })
+}
+
+// The second step of signing in, while a pending sign-in cookie is set
+export type SecondFactorMethods = { email: string; passkey: boolean; totp: boolean; recoveryCodes: boolean }
+
+export function getSecondFactorMethods() {
+  return request<SecondFactorMethods>('/auth/two-factor')
+}
+
+export function sendSecondFactorCode(code: string) {
+  return request<{ redirect: string }>('/auth/two-factor/code', { method: 'POST', json: { code } })
+}
+
+export function secondFactorPasskeyOptions() {
+  return request<PublicKeyCredentialRequestOptionsJSON>('/auth/two-factor/passkey/options', {
+    method: 'POST',
+  })
+}
+
+export function sendSecondFactorPasskey(response: unknown) {
+  return request<{ redirect: string }>('/auth/two-factor/passkey', { method: 'POST', json: { response } })
+}
+
+export function passkeySignInOptions() {
+  return request<PublicKeyCredentialRequestOptionsJSON>('/auth/passkey/options', { method: 'POST' })
+}
+
+export function signInWithPasskey(response: unknown, plan: string | null, next: string | null) {
+  return request<{ redirect: string }>('/auth/passkey', { method: 'POST', json: { response, plan, next } })
 }

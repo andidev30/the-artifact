@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import {
   changePassword,
   createAccessToken,
@@ -19,6 +19,7 @@ import {
 } from '../api'
 import { AccountHeader } from '../components/AccountHeader'
 import { CopyCommand } from '../components/CopyCommand'
+import { SecuritySection, SessionsSection } from '../components/SignInSecurity'
 import { expiryText, timeAgo } from '../time'
 import { useConfig } from '../useConfig'
 import { useMe } from '../useMe'
@@ -48,6 +49,7 @@ export function Settings() {
 // settings page, and the server has its admin area.
 function SettingsPage({ initial }: { initial: Me }) {
   const navigate = useNavigate()
+  const [params] = useSearchParams()
   const [me, setMe] = useState(initial)
   const { org, name } = useWorkspace(me)
   const config = useConfig()
@@ -69,6 +71,8 @@ function SettingsPage({ initial }: { initial: Me }) {
   const sections = [
     { id: 'profile', label: 'Profile' },
     ...(showPassword ? [{ id: 'password', label: 'Password' }] : []),
+    { id: 'security', label: 'Sign-in security' },
+    { id: 'sessions', label: 'Sessions' },
     { id: 'agents', label: 'Connected agents' },
     { id: 'tokens', label: 'Access tokens' },
     { id: 'delete', label: 'Delete account' },
@@ -81,7 +85,7 @@ function SettingsPage({ initial }: { initial: Me }) {
         <div className="app-title">
           <h1>Account settings</h1>
           <p>
-            Your profile{showPassword ? ', password' : ''} and the agents and access tokens that publish for you, the same in every workspace.
+            Your profile, how you sign in, and the agents and access tokens that publish for you, the same in every workspace.
             {org && (
               <>
                 {' '}
@@ -109,6 +113,8 @@ function SettingsPage({ initial }: { initial: Me }) {
           <div className="settings-sections">
             <ProfileSection me={me} onSaved={(n) => setMe({ ...me, name: n })} />
             {showPassword && <PasswordSection me={me} onSaved={() => setMe({ ...me, hasPassword: true })} />}
+            <SecuritySection required={params.get('two-factor') === 'required'} />
+            <SessionsSection />
             <AgentsSection />
             <TokensSection me={me} defaultWorkspace={org?.id ?? null} />
             <DeleteSection me={me} />

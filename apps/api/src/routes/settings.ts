@@ -2,6 +2,7 @@ import { and, asc, count, eq, gt, inArray, max, ne, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { deleteCookie } from 'hono/cookie'
 import { hashPassword, passwordProblem, verifyPassword } from '../auth/password.js'
+import { twoFactorRequiredError } from '../auth/factors.js'
 import { requireUser, startSession, type AuthEnv } from '../auth/session.js'
 import { db, schema } from '../db/index.js'
 import { isLastAdmin, lastAdminError } from '../instance.js'
@@ -37,8 +38,10 @@ settings.put('/password', async (c) => {
   await db.transaction(async (tx) => {
     await tx.update(schema.users).set({ passwordHash }).where(eq(schema.users.id, user.id))
     await tx.delete(schema.sessions).where(eq(schema.sessions.userId, user.id))
+    await tx.delete(schema.pendingSignIns).where(eq(schema.pendingSignIns.userId, user.id))
   })
-  await startSession(c, user.id)
+  // Without a current password to check, setting one proves nothing new, so it doesn't count as a fresh sign-in
+  await startSession(c, user.id, user.passwordHash ? undefined : (c.get('session')?.createdAt ?? undefined))
   return c.body(null, 204)
 })
 
@@ -112,6 +115,8 @@ settings.post('/access-tokens', async (c) => {
             .where(and(eq(schema.memberships.userId, user.id), eq(schema.memberships.organizationId, organizationId)))
         : []
     if (!member) return c.json({ error: 'You are not a member of that organization.', field: 'organizationId' }, 400)
+    if (user.blockedOrgs.includes(organizationId as string))
+      return c.json({ ...(await twoFactorRequiredError(organizationId as string)), field: 'organizationId' }, 403)
   }
   const busy = await limitRequest(c, 'access-token', user.id, 'You have created a lot of access tokens in a short time.')
   if (busy) return busy

@@ -10,6 +10,7 @@ import {
   revokeInvitation,
   revokeOrganizationToken,
   setMemberRole,
+  setRequireTwoFactor,
   type InviteRole,
   type Me,
   type Organization,
@@ -19,6 +20,7 @@ import {
   type Role,
 } from '../api'
 import { AccountHeader } from '../components/AccountHeader'
+import '../components/SignInSecurity.css'
 import { APP_HOST } from '../config'
 import { expiryText, timeAgo } from '../time'
 import { useConfig } from '../useConfig'
@@ -173,7 +175,41 @@ function Page({ initial, org }: { initial: Me; org: Organization }) {
           </nav>
 
           <div className="settings-sections">
-            {details.kind !== 'ready' ? (
+            {current.blocked ? (
+              <section className="settings-card" aria-labelledby="blocked-title">
+                <header className="settings-card-head">
+                  <h2 id="blocked-title">Two-factor sign-in required</h2>
+                  <p>
+                    {current.name} requires two-factor sign-in. Add a passkey or an authenticator app to your account to use it. Your agents and access tokens
+                    keep working in the meantime.
+                  </p>
+                </header>
+                <div className="settings-signout">
+                  <Link className="button button-small" to="/settings#security">
+                    Set up two-factor sign-in
+                  </Link>
+                  {confirming === 'leave' ? (
+                    <>
+                      <button type="button" className="button button-small button-danger" onClick={leave}>
+                        Leave {current.name}
+                      </button>
+                      <button type="button" className="auth-reset" onClick={() => setConfirming(null)}>
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button type="button" className="auth-reset" onClick={() => setConfirming('leave')}>
+                      Leave {current.name}
+                    </button>
+                  )}
+                </div>
+                {problem && (
+                  <p className="auth-notice" role="alert">
+                    {problem}
+                  </p>
+                )}
+              </section>
+            ) : details.kind !== 'ready' ? (
               <section className="settings-card">
                 {details.kind === 'loading' ? (
                   <p className="settings-muted" role="status">
@@ -200,7 +236,7 @@ function Page({ initial, org }: { initial: Me; org: Organization }) {
                 }}
               />
             )}
-            {current.role !== 'member' && <TokensSection org={current} me={me} />}
+            {current.role !== 'member' && !current.blocked && <TokensSection org={current} me={me} />}
           </div>
         </div>
       </main>
@@ -252,6 +288,7 @@ function Sections({
             {APP_HOST}/{d.slug}
           </p>
         </div>
+        <TwoFactorSetting me={me} details={d} onChanged={onDetails} />
       </section>
 
       <section id="members" className="settings-card" aria-labelledby="members-title">
@@ -472,6 +509,9 @@ function MemberRow({
         <strong>
           {display}
           {self && <span className="settings-you">You</span>}
+          <span className="two-factor-badge" data-on={m.twoFactor || undefined}>
+            {m.twoFactor ? '2FA on' : 'No 2FA'}
+          </span>
         </strong>
         {m.name && <span>{m.email}</span>}
       </span>
@@ -506,6 +546,53 @@ function MemberRow({
           ))}
       </span>
     </li>
+  )
+}
+
+// Owners and admins turn the requirement on; they need a second factor themselves first
+function TwoFactorSetting({ me, details: d, onChanged }: { me: Me; details: OrganizationDetails; onChanged: (d: OrganizationDetails) => void }) {
+  const [saving, setSaving] = useState(false)
+  const [problem, setProblem] = useState<string | null>(null)
+  const manager = d.role !== 'member'
+  const without = d.members.filter((m) => !m.twoFactor).length
+
+  async function toggle(on: boolean) {
+    setSaving(true)
+    setProblem(null)
+    try {
+      onChanged(await setRequireTwoFactor(d.id, on))
+    } catch (err) {
+      setProblem(errorText(err, 'The setting could not be saved. Try again.'))
+    }
+    setSaving(false)
+  }
+
+  if (!manager) {
+    return (
+      <div className="field">
+        <span className="settings-label">Two-factor sign-in</span>
+        <p className="settings-value">{d.requireTwoFactor ? 'Required for every member' : 'Not required'}</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="field">
+      <label className="settings-check">
+        <input type="checkbox" checked={Boolean(d.requireTwoFactor)} disabled={saving} onChange={(e) => toggle(e.target.checked)} />
+        <span>Require two-factor sign-in</span>
+      </label>
+      <p className="field-hint" data-tone={problem ? 'bad' : undefined} aria-live="polite">
+        {problem ??
+          (d.requireTwoFactor
+            ? without
+              ? `${without === 1 ? '1 member hasn’t' : `${without} members haven’t`} set it up. Until they do, they can’t use ${d.name} in the app; their agents and access tokens keep working.`
+              : 'Every member signs in with a passkey or an authenticator app.'
+            : me.twoFactor
+              ? 'Members without a passkey or an authenticator app are asked to add one, and can’t use the organization in the app until they do.'
+              : 'Add a passkey or an authenticator app to your own account first, in account settings.')}
+      </p>
+    </div>
   )
 }
 

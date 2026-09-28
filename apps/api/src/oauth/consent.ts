@@ -1,5 +1,6 @@
 import { and, eq, isNull } from 'drizzle-orm'
 import { Hono } from 'hono'
+import { twoFactorRequiredError } from '../auth/factors.js'
 import { hashToken, randomToken, requireUser, type AuthEnv } from '../auth/session.js'
 import { db, schema } from '../db/index.js'
 
@@ -17,14 +18,15 @@ async function openGrant(id: string) {
   return row
 }
 
-async function workspacesFor(userId: string) {
+// blocked: the organization requires a second factor this person hasn't set up, so agents can't be connected to it yet
+async function workspacesFor(userId: string, blockedOrgs: readonly string[]) {
   const orgs = await db
     .select({ id: schema.organizations.id, name: schema.organizations.name })
     .from(schema.memberships)
     .innerJoin(schema.organizations, eq(schema.memberships.organizationId, schema.organizations.id))
     .where(eq(schema.memberships.userId, userId))
     .orderBy(schema.memberships.createdAt)
-  return [...orgs, { id: null, name: 'Personal' }]
+  return [...orgs.map((o) => ({ ...o, blocked: blockedOrgs.includes(o.id) })), { id: null, name: 'Personal', blocked: false }]
 }
 
 consent.get('/:id', async (c) => {
@@ -33,7 +35,7 @@ consent.get('/:id', async (c) => {
   return c.json({
     clientName: row.client.name,
     redirectHost: new URL(row.grant.redirectUri).host || new URL(row.grant.redirectUri).protocol,
-    workspaces: await workspacesFor(c.get('user')!.id),
+    workspaces: await workspacesFor(c.get('user')!.id, c.get('user')!.blockedOrgs),
   })
 })
 
@@ -50,6 +52,7 @@ consent.post('/:id/approve', async (c) => {
       .from(schema.memberships)
       .where(and(eq(schema.memberships.userId, user.id), eq(schema.memberships.organizationId, organizationId)))
     if (!member) return c.json({ error: 'You are not a member of that organization.' }, 403)
+    if (user.blockedOrgs.includes(organizationId)) return c.json(await twoFactorRequiredError(organizationId), 403)
   }
 
   const code = randomToken()

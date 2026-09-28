@@ -29,6 +29,8 @@ export type AdminUser = {
   suspendedAt: string | null
   organizations: { id: string; name: string; role: Role }[]
   pageCount: number
+  // Has a passkey or an authenticator app
+  twoFactor?: boolean
   isYou: boolean
 }
 
@@ -107,3 +109,6 @@ export const saveSettings = (value: { signupPolicy: SignupPolicy; allowedDomains
   adminRequest<InstanceSettings>('/settings', { method: 'PUT', json: value })
 
 export const createSignUpLink = (email: string) => adminRequest<SignUpLink>('/sign-up-links', { method: 'POST', json: { email } })
+
+// Removes every passkey, authenticator app and recovery code of someone else, and signs them out
+export const resetTwoFactor = (id: string) => adminRequest<AdminUser>(`/users/${encodeURIComponent(id)}/reset-two-factor`, { method: 'POST' })

@@ -70,6 +70,7 @@ export async function findOrCreateUser(profile: Profile): Promise<User> {
     if (profile.passwordHash) {
       // A new password signs the person out everywhere else
       await db.delete(schema.sessions).where(eq(schema.sessions.userId, byEmail.id))
+      await db.delete(schema.pendingSignIns).where(eq(schema.pendingSignIns.userId, byEmail.id))
       const [updated] = await db.update(schema.users).set({ passwordHash: profile.passwordHash }).where(eq(schema.users.id, byEmail.id)).returning()
       return updated
     }
