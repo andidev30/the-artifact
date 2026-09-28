@@ -24,6 +24,8 @@ Markdown that ships inside the app at `/docs/<file name>` (bundled by `apps/web/
 
 ## Keeping it true
 
+The Helm `--version` examples in `kubernetes.md` sit between `<!-- x-release-please-start-version -->` and `<!-- x-release-please-end -->`, and `release-please-config.json` lists the file, so the release PR bumps them; keep the markers around them, and keep other version numbers out of those blocks.
+
 Numbers and names here come from code; check them when you change it:
 
 | Doc | Source of truth |

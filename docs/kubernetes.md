@@ -19,11 +19,15 @@ Both run the app, and for trying it out a bundled Postgres and MinIO. Both can u
 
 The chart is published with every release from 0.2.0 on, under the release's version, and runs that release's image. Pick a release (see [Where releases are listed](/docs/upgrading#where-releases-are-listed)) and install it into its own namespace:
 
+<!-- x-release-please-start-version -->
+
 ```sh
-helm install the-artifact oci://ghcr.io/andidev30/charts/the-artifact --version 0.2.0 \
+helm install the-artifact oci://ghcr.io/andidev30/charts/the-artifact --version 0.6.1 \
   --namespace the-artifact --create-namespace
 kubectl -n the-artifact rollout status deploy/the-artifact
 ```
+
+<!-- x-release-please-end -->
 
 That is enough to try it: the app, Postgres and MinIO, with passwords the chart generates and keeps across upgrades, and no ingress. Forward a port and open `http://localhost:8080`, which is the address the chart assumes without an ingress or `appUrl`:
 
@@ -39,7 +43,11 @@ With the release name `the-artifact`, the app's Deployment and Service are calle
 
 ### Values for a server
 
-Put your values in a file and pass it with `-f`. `helm show values oci://ghcr.io/andidev30/charts/the-artifact --version 0.2.0` prints every value with what it does. The ones most servers set:
+<!-- x-release-please-start-version -->
+
+Put your values in a file and pass it with `-f`. `helm show values oci://ghcr.io/andidev30/charts/the-artifact --version 0.6.1` prints every value with what it does. The ones most servers set:
+
+<!-- x-release-please-end -->
 
 | Value | Default | What it does |
 | --- | --- | --- |
@@ -47,6 +55,7 @@ Put your values in a file and pass it with `-f`. `helm show values oci://ghcr.io
 | `ingress.enabled`, `ingress.host`, `ingress.className` | off | An Ingress for the host. `ingress.annotations` already raises nginx's body size limit to 20 MB for large pages. |
 | `ingress.tls.enabled`, `ingress.tls.secretName` | on, `<release>-the-artifact-tls` | TLS for the host, from that secret. With cert-manager, add its issuer annotation and it fills the secret. |
 | `contentOrigin` | none | `CONTENT_ORIGIN`: a [separate domain for pages](/docs/self-hosting#a-separate-domain-for-pages). With the ingress on, its host is added to the Ingress and its TLS hosts, so the certificate has to cover it too (cert-manager does that on its own). |
+| `embedFrameAncestors` | any site | `EMBED_FRAME_ANCESTORS`: which sites may [embed pages](/docs/sharing#embedding) in a frame; `none` turns embedding off. See [Configuration](/docs/configuration#optional). |
 | `trustProxy` | `true` with the ingress, `false` without | `TRUST_PROXY`, so [rate limits](/docs/configuration#rate-limits) see each visitor's address instead of the ingress controller's |
 | `smtp.host`, `smtp.port`, `smtp.user`, `smtp.password`, `smtp.from` | no email | Email, as in the [configuration reference](/docs/configuration). Without `smtp.host` the server [runs without email](/docs/self-hosting#running-without-email). |
 | `google.clientId`, `google.clientSecret` | off | **Continue with Google** |
@@ -80,10 +89,14 @@ smtp:
 existingSecret: artifact-settings
 ```
 
+<!-- x-release-please-start-version -->
+
 ```sh
-helm install the-artifact oci://ghcr.io/andidev30/charts/the-artifact --version 0.2.0 \
+helm install the-artifact oci://ghcr.io/andidev30/charts/the-artifact --version 0.6.1 \
   --namespace the-artifact --create-namespace -f values.yaml
 ```
+
+<!-- x-release-please-end -->
 
 The app runs as one pod, and the chart has no replica count: the app migrates the database on start, so two pods must never start at once. Upgrades stop the old pod before the new one starts.
 
@@ -125,11 +138,15 @@ The app waits for whatever database and bucket it is given before it starts, and
 
 Read [Upgrading](/docs/upgrading) and take a [backup](#backups), then upgrade to the new chart with the same values:
 
+<!-- x-release-please-start-version -->
+
 ```sh
-helm upgrade the-artifact oci://ghcr.io/andidev30/charts/the-artifact --version 0.3.0 \
+helm upgrade the-artifact oci://ghcr.io/andidev30/charts/the-artifact --version 0.6.1 \
   --namespace the-artifact -f values.yaml
 kubectl -n the-artifact rollout status deploy/the-artifact
 ```
+
+<!-- x-release-please-end -->
 
 Database changes apply when the new version starts. Generated passwords are kept. `helm uninstall` leaves the bundled Postgres and MinIO volumes and their password Secrets in place, so installing again with the same release name finds the data where it was; delete the `data-*` PersistentVolumeClaims and those Secrets to start over.
 
