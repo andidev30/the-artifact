@@ -82,8 +82,8 @@ password.post('/login', async (c) => {
   const [user] = await db.select().from(schema.users).where(eq(schema.users.email, email))
   if (!(await verifyPassword(given, user?.passwordHash ?? null)) || !user) {
     if (user) signInFailed(user, 'wrong password')
-    const hint = user && !user.passwordHash ? ' This account has no password yet; use Google, or ask an admin for a sign-in link.' : ''
-    return c.json({ error: `The email or password is wrong.${hint}`, code: 'wrong_password' }, 401)
+    // The same answer whether or not the address has an account, or a password
+    return c.json({ error: 'The email or password is wrong.', code: 'wrong_password' }, 401)
   }
   if (user.suspendedAt) {
     signInFailed(user, 'account suspended')

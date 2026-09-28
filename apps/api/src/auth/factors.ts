@@ -1,6 +1,8 @@
 import { and, eq, isNotNull } from 'drizzle-orm'
 import { db, schema } from '../db/index.js'
 
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0]
+
 // A second factor is a passkey or a confirmed authenticator app. Recovery codes only stand in for one.
 export async function hasSecondFactor(userId: string): Promise<boolean> {
   const [passkey] = await db.select({ id: schema.passkeys.id }).from(schema.passkeys).where(eq(schema.passkeys.userId, userId)).limit(1)
@@ -10,6 +12,14 @@ export async function hasSecondFactor(userId: string): Promise<boolean> {
     .from(schema.totpSecrets)
     .where(and(eq(schema.totpSecrets.userId, userId), isNotNull(schema.totpSecrets.confirmedAt)))
   return Boolean(totp)
+}
+
+// Every passkey, authenticator app and recovery code of the account, and challenges in progress
+export async function deleteSecondFactors(tx: Tx, userId: string) {
+  await tx.delete(schema.passkeys).where(eq(schema.passkeys.userId, userId))
+  await tx.delete(schema.totpSecrets).where(eq(schema.totpSecrets.userId, userId))
+  await tx.delete(schema.recoveryCodes).where(eq(schema.recoveryCodes.userId, userId))
+  await tx.delete(schema.webauthnChallenges).where(eq(schema.webauthnChallenges.userId, userId))
 }
 
 // Organizations of this person that require two-factor sign-in

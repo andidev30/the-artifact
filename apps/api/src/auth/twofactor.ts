@@ -9,7 +9,7 @@ import type { User } from '../db/schema.js'
 import { env, isProduction } from '../env.js'
 import { clearHits, clientIp, hit, limitRequest, tooManyRequests, waitText } from '../limits.js'
 import { log } from '../log.js'
-import { hasSecondFactor, organizationsRequiringFactor } from './factors.js'
+import { deleteSecondFactors, hasSecondFactor, organizationsRequiringFactor } from './factors.js'
 import { authenticationOptions, PasskeyError, verifyAuthentication } from './passkeys.js'
 import { hashToken, randomToken, startSession } from './session.js'
 import { matchTotp, openSecret } from './totp.js'
@@ -283,10 +283,7 @@ passkeySignIn.post('/', async (c) => {
 // instance admin helping someone who lost their phone and their codes.
 export async function resetSecondFactor(userId: string) {
   await db.transaction(async (tx) => {
-    await tx.delete(schema.passkeys).where(eq(schema.passkeys.userId, userId))
-    await tx.delete(schema.totpSecrets).where(eq(schema.totpSecrets.userId, userId))
-    await tx.delete(schema.recoveryCodes).where(eq(schema.recoveryCodes.userId, userId))
-    await tx.delete(schema.webauthnChallenges).where(eq(schema.webauthnChallenges.userId, userId))
+    await deleteSecondFactors(tx, userId)
     await tx.delete(schema.pendingSignIns).where(eq(schema.pendingSignIns.userId, userId))
     await tx.delete(schema.sessions).where(eq(schema.sessions.userId, userId))
   })

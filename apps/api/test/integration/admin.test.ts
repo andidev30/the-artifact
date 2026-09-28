@@ -233,11 +233,14 @@ describe('suspension', () => {
     const refresh = await call('/oauth/token', { form: { grant_type: 'refresh_token', refresh_token: tokens.refresh_token } })
     expect(refresh.status).toBe(400)
     await expect(findOrCreateUser({ email: 'bob@example.com', method: 'email_link' })).rejects.toBeInstanceOf(AccountSuspendedError)
-    // No sign-in link is sent to a suspended account
+    // Asking for a sign-in link answers as for any account, so nobody learns it is suspended by typing
+    // the address; only using the link, from the mailbox, says so
     const link = await call('/api/auth/email', { json: { email: 'BOB@example.com' } })
-    expect(link.status).toBe(403)
-    expect(await link.json()).toMatchObject({ code: 'account_suspended' })
-    expect(sendSignInLink).not.toHaveBeenCalled()
+    expect(link.status).toBe(204)
+    const token = new URL(vi.mocked(sendSignInLink).mock.calls[0][1]).searchParams.get('token')
+    const used = await call('/api/auth/email/confirm', { json: { token } })
+    expect(used.status).toBe(403)
+    expect(await used.json()).toMatchObject({ code: 'account_suspended' })
 
     // The page is still there and still opens by link
     expect((await call(`/api/artifacts/${page.slug}`)).status).toBe(200)
