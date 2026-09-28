@@ -236,6 +236,8 @@ kubectl apply -k deploy/kubernetes
 kubectl -n the-artifact rollout status deploy/the-artifact
 ```
 
+Every container runs as a user other than root, with no Linux capabilities and a read-only root filesystem, like the chart's. `postgres.yaml` and `minio.yaml` each carry a NetworkPolicy that lets only the app's pod reach the database and MinIO, since the app's S3 key is MinIO's root account; the network plugin enforces them (k3s's does out of the box, and so do Calico and Cilium).
+
 The app waits for Postgres and MinIO before it starts, then creates its tables and bucket. Open `APP_URL` and create the first account: it becomes the [instance admin](/docs/self-hosting#the-instance-admin), so it needs the setup code the app prints to its log:
 
 ```sh

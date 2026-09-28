@@ -167,3 +167,33 @@ Only releases that need you to do something are listed. Each section is copied i
 - **Direct uploads have a limit of their own.** `prepare_upload` counts the size of the files it hands out links for toward the new `upload` rate limit, 2048 MB per account per hour. Raise it with `RATE_LIMITS=upload=<n>/1h` if your agents upload more. See [Rate limits](/docs/configuration#rate-limits).
 - **Set an encryption key.** The keys the server keeps in its database (for authenticator apps, webhooks, single sign-on and page links) can now be stored encrypted with `ENCRYPTION_KEY`, so a copy of the database or a backup alone doesn't give them away. Make one with `openssl rand -base64 32`, put it in `app.env` (`encryptionKey` in Helm values, or `ENCRYPTION_KEY` in your `existingSecret`), and restart once every server of the install runs 1.0.0. The server encrypts the existing rows as it starts; people keep their authenticator apps and nothing else changes. Keep the key apart from your backups: from then on the server needs it to start. Without it, everything works as before. See [Encryption key](/docs/configuration#encryption-key).
 - **Docker Compose publishes the app on `127.0.0.1` only.** A reverse proxy on the same server keeps working. If people or a proxy on another machine reach port 8080 directly, set `ARTIFACT_BIND=0.0.0.0` (or the server's address on that network) in `.env` before you start the new release, and leave `TRUST_PROXY` unset unless only the proxy can reach that address. See [Put it behind HTTPS](/docs/self-hosting#3-put-it-behind-https).
+- **The Kubernetes manifests run MinIO as user 1000** instead of root, and every container in `deploy/kubernetes` without capabilities, on a read-only root filesystem, with NetworkPolicies that let only the app reach Postgres and MinIO. Storage that applies the pod's `fsGroup` (most block storage) needs nothing. On storage that doesn't, such as k3s's `local-path`, MinIO can't write to the files it made as root and stops with "Unable to write to the backend". Hand them to user 1000 once, before you apply the new release:
+
+  ```sh
+  kubectl -n the-artifact scale statefulset/minio --replicas=0
+  kubectl -n the-artifact wait --for=delete pod/minio-0
+  kubectl -n the-artifact apply -f - <<'EOF'
+  apiVersion: v1
+  kind: Pod
+  metadata:
+    name: minio-owner
+  spec:
+    restartPolicy: Never
+    containers:
+      - name: chown
+        image: busybox:1.36
+        command: ['chown', '-R', '1000:1000', '/data']
+        volumeMounts:
+          - name: data
+            mountPath: /data
+    volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: data-minio-0
+  EOF
+  kubectl -n the-artifact wait --for=jsonpath='{.status.phase}'=Succeeded pod/minio-owner
+  kubectl -n the-artifact delete pod minio-owner
+  kubectl apply -k deploy/kubernetes
+  ```
+
+  Postgres already ran as its own user, so its volume is fine. The Helm chart is unchanged.
