@@ -13,7 +13,50 @@ permissions:
   contents: read
 
 jobs:
+  # A pull request that only touches docs, Markdown or the hosted service's ops scripts skips the tests
+  # and the image build: nothing they cover changed. Pushes to main always run everything.
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ -z "$BASE" ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # docs/ ships inside the web app, but the lint job's build still checks it renders
+          if git diff --name-only "$BASE"...HEAD | grep -qvE '^docs/|\.md$|^ee/ops/'; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "code=false" >> "$GITHUB_OUTPUT"
+            echo "Only docs changed: tests and the image build are skipped" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm --filter @the-artifact/web build
+
   test:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -37,19 +80,47 @@ jobs:
       # Chrome's sandbox needs unprivileged user namespaces, which Ubuntu 24.04 restricts by default
       - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
-      - run: pnpm lint
-      - run: pnpm --filter @the-artifact/web build
       - run: pnpm test
-      - run: pnpm test:e2e
+
+  e2e:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Start Postgres, MinIO and Mailpit
+        run: |
+          docker compose up -d
+          until docker compose exec -T postgres pg_isready -U artifact; do sleep 1; done
+          until curl -sf http://localhost:9000/minio/health/live; do sleep 1; done
+          docker compose exec -T postgres createdb -U artifact artifact_test
+
+      - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      - run: pnpm test:e2e --shard=${{ matrix.shard }}/2
 
       - if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-traces
+          name: playwright-traces-${{ matrix.shard }}
           path: test-results/
           retention-days: 7
 
   docker:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
