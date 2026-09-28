@@ -32,10 +32,10 @@ const errorText = (err: unknown, fallback: string) => (err instanceof Error ? er
 
 const listOf = (names: string[]) => (names.length < 2 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`)
 
-// Signing out and back in, for changes that need a recent sign-in
-async function signInAgain() {
+// Signing out and back in, for changes that need a recent sign-in; back to this settings section after
+export async function signInAgain(section = 'security') {
   await logout()
-  window.location.assign(`${LOGIN_URL}?next=${encodeURIComponent('/settings#security')}`)
+  window.location.assign(`${LOGIN_URL}?next=${encodeURIComponent(`/settings#${section}`)}`)
 }
 
 // Passkeys, the authenticator app and recovery codes, in account settings
@@ -106,7 +106,7 @@ export function SecuritySection({ required }: { required: boolean }) {
       {locked && (
         <div className="security-locked">
           <p>For your security, sign in again before you change how you sign in. It needs a sign-in from the last hour.</p>
-          <button type="button" className="button button-small" onClick={signInAgain}>
+          <button type="button" className="button button-small" onClick={() => signInAgain()}>
             Sign in again
           </button>
         </div>

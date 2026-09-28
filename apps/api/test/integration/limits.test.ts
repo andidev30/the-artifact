@@ -96,6 +96,44 @@ describe('password sign-in', () => {
     await expectTooMany(await login('a@example.com', 'whatever123'), /^Too many sign-in attempts from your network\. Try again in 15 minutes\.$/)
     expect((await login('a@example.com', 'whatever123', '198.51.100.1')).status).toBe(401)
   })
+
+  it('checks no more wrong passwords for an address than the limit when they arrive at the same time', async () => {
+    await withPassword(await createUser({ email: 'burst@example.com' }), 'right password')
+    const statuses = await Promise.all(Array.from({ length: 40 }, (_, i) => login('burst@example.com', `wrong ${i}`, `198.51.100.${i}`).then((r) => r.status)))
+    expect(statuses.filter((s) => s === 401)).toHaveLength(10)
+    expect(statuses.filter((s) => s === 429)).toHaveLength(30)
+  })
+
+  it('limits wrong current passwords when changing the password, together with sign-in', async () => {
+    env.rateLimits = 'password=3/15m'
+    const user = await createUser({ email: 'change@example.com' })
+    await withPassword(user, 'right password')
+    const change = (currentPassword: string) =>
+      call('/api/me/password', { method: 'PUT', cookie: user.cookie, json: { currentPassword, password: 'a new password' } })
+    expect((await change('wrong 1')).status).toBe(400)
+    // A right one clears the count
+    expect((await login('change@example.com', 'right password')).status).toBe(200)
+    expect((await change('wrong 2')).status).toBe(400)
+    expect((await login('change@example.com', 'wrong 3')).status).toBe(401)
+    expect((await change('wrong 4')).status).toBe(400)
+    const { body } = await expectTooMany(await change('right password'), /^Too many wrong passwords\. Try again in 15 minutes\.$/)
+    expect(body).toMatchObject({ code: 'too_many_attempts', field: 'currentPassword' })
+    await expectTooMany(await login('change@example.com', 'right password'), /^Too many wrong passwords for this address/)
+  })
+
+  it('checks no more wrong current passwords than the limit when they arrive at the same time', async () => {
+    const user = await createUser()
+    await withPassword(user, 'right password')
+    const statuses = await Promise.all(
+      Array.from({ length: 25 }, (_, i) =>
+        call('/api/me/password', { method: 'PUT', cookie: user.cookie, json: { currentPassword: `wrong ${i}`, password: 'a new password' } }).then(
+          (r) => r.status,
+        ),
+      ),
+    )
+    expect(statuses.filter((s) => s === 400)).toHaveLength(10)
+    expect(statuses.filter((s) => s === 429)).toHaveLength(15)
+  })
 })
 
 describe('agent registration', () => {

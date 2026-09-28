@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import {
+  ApiError,
   changePassword,
   createAccessToken,
   deleteAccount,
@@ -19,7 +20,7 @@ import {
 } from '../api'
 import { AccountHeader } from '../components/AccountHeader'
 import { CopyCommand } from '../components/CopyCommand'
-import { SecuritySection, SessionsSection } from '../components/SignInSecurity'
+import { SecuritySection, SessionsSection, signInAgain } from '../components/SignInSecurity'
 import { expiryText, timeAgo } from '../time'
 import { useConfig } from '../useConfig'
 import { useMe } from '../useMe'
@@ -188,6 +189,8 @@ function ProfileSection({ me, onSaved }: { me: Me; onSaved: (name: string) => vo
 function PasswordSection({ me, onSaved }: { me: Me; onSaved: () => void }) {
   const [saving, setSaving] = useState(false)
   const [status, setStatus] = useState<{ tone: 'ok' | 'bad'; text: string } | null>(null)
+  // Adding a first password needs a sign-in from the last hour
+  const [reauth, setReauth] = useState(false)
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -200,9 +203,11 @@ function PasswordSection({ me, onSaved }: { me: Me; onSaved: () => void }) {
     try {
       await changePassword(String(data.get('current') ?? ''), password)
       form.reset()
+      setReauth(false)
       onSaved()
       setStatus({ tone: 'ok', text: 'Saved. Other devices were logged out.' })
     } catch (err) {
+      setReauth(err instanceof ApiError && err.code === 'reauth_required')
       setStatus({ tone: 'bad', text: errorText(err, 'Your password could not be changed. Try again.') })
     }
     setSaving(false)
@@ -230,10 +235,15 @@ function PasswordSection({ me, onSaved }: { me: Me; onSaved: () => void }) {
           <label htmlFor="password-confirm">Confirm new password</label>
           <input id="password-confirm" name="confirm" type="password" autoComplete="new-password" required />
         </div>
-        <div>
+        <div className="settings-buttons">
           <button type="submit" className="button button-small" disabled={saving}>
             {saving ? 'Saving' : me.hasPassword ? 'Change password' : 'Set password'}
           </button>
+          {reauth && (
+            <button type="button" className="button button-small button-quiet" onClick={() => signInAgain('password')}>
+              Sign in again
+            </button>
+          )}
         </div>
         <p id="password-status" className="field-hint" data-tone={status?.tone} aria-live="polite">
           {status?.text ?? 'At least 8 characters.'}

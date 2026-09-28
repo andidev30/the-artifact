@@ -226,6 +226,34 @@ describe('authenticator app', () => {
     expect((await sendCode(await firstFactor(user), right)).status).toBe(429)
   })
 
+  it('checks no more wrong codes than the limit when they arrive at the same time', async () => {
+    const user = await createUser()
+    await withPassword(user)
+    const { secret } = await enrolTotp(user)
+    const right = totpCode(secret, currentStep())
+    const pending = await firstFactor(user)
+    const codes = Array.from({ length: 40 }, (_, i) => String(100000 + i)).filter((c) => c !== right)
+    const statuses = await Promise.all(codes.map((code) => sendCode(pending, code).then((r) => r.status)))
+    expect(statuses.filter((s) => s === 400)).toHaveLength(10)
+    expect(statuses.filter((s) => s === 429)).toHaveLength(codes.length - 10)
+    // Recovery codes count the same way
+    const recovery = await Promise.all(Array.from({ length: 5 }, () => sendCode(pending, 'aaaaa-bbbbb').then((r) => r.status)))
+    expect(recovery.every((s) => s === 429)).toBe(true)
+  })
+
+  it('counts wrong codes while setting the app up, attempts at once included', async () => {
+    const user = await createUser()
+    expect((await call('/api/me/security/totp', { method: 'POST', cookie: user.cookie })).status).toBe(200)
+    const statuses = await Promise.all(
+      Array.from(
+        { length: 20 },
+        async (_, i) => (await call('/api/me/security/totp/confirm', { cookie: user.cookie, json: { code: String(100000 + i) } })).status,
+      ),
+    )
+    expect(statuses.filter((s) => s === 400).length).toBeLessThanOrEqual(10)
+    expect(statuses.filter((s) => s === 429).length).toBeGreaterThanOrEqual(10)
+  })
+
   it('can be removed, which turns two-factor sign-in off and drops the recovery codes', async () => {
     const user = await createUser()
     await withPassword(user)
@@ -285,20 +313,48 @@ describe('changing sign-in security', () => {
     expect((await (await call('/api/me/security', { cookie: user.cookie })).json()).recentSignIn).toBe(false)
   })
 
-  it("isn't made fresh by setting a first password, which needs no current one", async () => {
+  it('adding a first password needs a recent sign-in, and does not make the session fresh', async () => {
     const user = await createUser()
-    await db
-      .update(schema.sessions)
-      .set({ createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000) })
-      .where(eq(schema.sessions.userId, user.id))
+    const signedIn = (minutes: number) =>
+      db
+        .update(schema.sessions)
+        .set({ createdAt: new Date(Date.now() - minutes * 60 * 1000) })
+        .where(eq(schema.sessions.userId, user.id))
+    await signedIn(120)
+    const stale = await call('/api/me/password', { method: 'PUT', cookie: user.cookie, json: { password: 'a new password here' } })
+    expect(stale.status).toBe(403)
+    expect((await stale.json()).code).toBe('reauth_required')
+    const [unchanged] = await db.select({ passwordHash: schema.users.passwordHash }).from(schema.users).where(eq(schema.users.id, user.id))
+    expect(unchanged.passwordHash).toBeNull()
+
+    await signedIn(50)
     const res = await call('/api/me/password', { method: 'PUT', cookie: user.cookie, json: { password: 'a new password here' } })
     expect(res.status).toBe(204)
     const cookie = newSession(res)
+    // The new session keeps the old sign-in time, so it stops counting as recent when the old one would
+    const [session] = await db.select({ createdAt: schema.sessions.createdAt }).from(schema.sessions).where(eq(schema.sessions.userId, user.id))
+    expect(Date.now() - session.createdAt.getTime()).toBeGreaterThan(49 * 60 * 1000)
+    await signedIn(120)
     expect((await call('/api/me/security/totp', { method: 'POST', cookie })).status).toBe(403)
 
     // Knowing the current password does count
     const again = await call('/api/me/password', { method: 'PUT', cookie, json: { currentPassword: 'a new password here', password: 'another password' } })
     expect((await call('/api/me/security/totp', { method: 'POST', cookie: newSession(again) })).status).toBe(200)
+  })
+
+  it('a stale session of an account without a password cannot add one and sign in with it', async () => {
+    const user = await createUser()
+    await db
+      .update(schema.sessions)
+      .set({ createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000) })
+      .where(eq(schema.sessions.userId, user.id))
+    expect((await call('/api/me/password', { method: 'PUT', cookie: user.cookie, json: { password: 'a password of theirs' } })).status).toBe(403)
+    const login = await call('/api/auth/password/login', { json: { email: user.email, password: 'a password of theirs' } })
+    expect(login.status).toBe(401)
+    expect(sessionCookie(login)).toBeNull()
+    // The session itself still works, and changing sign-in security still asks for a new sign-in
+    expect((await call('/api/me', { cookie: user.cookie })).status).toBe(200)
+    expect((await call('/api/me/security/totp', { method: 'POST', cookie: user.cookie })).status).toBe(403)
   })
 })
 
