@@ -1,13 +1,21 @@
+// Longer addresses can't be delivered (RFC 5321), and the length is checked before any pattern, so
+// no input makes a pattern slow
+export const MAX_EMAIL_LENGTH = 254
+
 // A plain subset of what mail systems accept: one @, a dot in the domain, and none of the characters
 // that make an address mean something else to a mail library or a header (quotes, angle brackets,
 // commas, semicolons, colons, brackets, backslashes, spaces, control characters). Checked for every
 // address that is new to the server or that mail is sent to.
 const NOT_IN_EMAIL = String.raw`\s@"<>(),;:\\\[\]\p{Cc}`
-export const EMAIL_RE = new RegExp(`^[^${NOT_IN_EMAIL}]+@(?:[^${NOT_IN_EMAIL}.]+\\.)+[^${NOT_IN_EMAIL}.]+$`, 'u')
+const EMAIL_RE = new RegExp(`^[^${NOT_IN_EMAIL}]+@(?:[^${NOT_IN_EMAIL}.]+\\.)+[^${NOT_IN_EMAIL}.]+$`, 'u')
+export const isEmail = (value: string) => value.length <= MAX_EMAIL_LENGTH && EMAIL_RE.test(value)
 
-// What EMAIL_RE accepted before it was tightened. Only for finding an account that already exists, so
-// people whose address predates the stricter rule can still sign in; never for storing a new address.
-export const ACCOUNT_EMAIL_RE = /^[^\s@\p{Cc}]+@[^\s@\p{Cc}]+\.[^\s@\p{Cc}]+$/u
+// What EMAIL_RE accepted before it was tightened: a domain with a dot that is neither its first nor
+// its last character. Only for finding an account that already exists, so people whose address
+// predates the stricter rule can still sign in; never for storing a new address. The dot it looks for
+// is the first one after the domain's first character, which keeps it linear on a domain of many dots.
+const ACCOUNT_EMAIL_RE = /^[^\s@\p{Cc}]+@[^\s@\p{Cc}][^\s@\p{Cc}.]*\.[^\s@\p{Cc}]+$/u
+export const isAccountEmail = (value: string) => value.length <= MAX_EMAIL_LENGTH && ACCOUNT_EMAIL_RE.test(value)
 
 // Control characters other than tab and line breaks. Postgres can't store NUL at all, and the rest
 // have no place in names people read.

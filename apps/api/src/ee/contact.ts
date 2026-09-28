@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { env } from '../env.js'
 import { clientIp, defineLimit, hit, limitRequest, tooManyRequests } from '../limits.js'
 import { log } from '../log.js'
-import { EMAIL_RE } from '../validation.js'
+import { isEmail } from '../validation.js'
 import { sendSalesInquiry } from './mail.js'
 
 // Control characters (newlines included) have no place in one-line fields that end up in a subject
@@ -51,7 +51,7 @@ contact.post('/', async (c) => {
   const name = line(body.name, 100)
   if (!name) return bad('name', 'Enter your name, up to 100 characters.')
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
-  if (email.length > 254 || !EMAIL_RE.test(email) || CONTROL_RE.test(email)) return bad('email', 'Enter a valid work email address.')
+  if (!isEmail(email) || CONTROL_RE.test(email)) return bad('email', 'Enter a valid work email address.')
   const company = line(body.company, 120)
   if (!company) return bad('company', 'Enter your company, up to 120 characters.')
   const teamSize = TEAM_SIZES.find((s) => s === body.teamSize)

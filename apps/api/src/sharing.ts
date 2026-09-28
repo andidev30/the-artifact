@@ -8,7 +8,7 @@ import { mailEnabled } from './env.js'
 import { linkSettings } from './links.js'
 import { log } from './log.js'
 import { sendShareNotice } from './mail.js'
-import { EMAIL_RE } from './validation.js'
+import { isEmail } from './validation.js'
 
 export const MAX_PEOPLE_PER_INVITE = 20
 
@@ -71,7 +71,7 @@ type Inviter = { id: string; name: string | null; email: string }
 export async function sharePeople(artifact: Artifact, inviter: Inviter, emails: string[], role: ShareRole, notify: boolean, message?: string) {
   if (emails.length === 0) throw new SharingError('Add at least one email address.')
   if (emails.length > MAX_PEOPLE_PER_INVITE) throw new SharingError(`Share with up to ${MAX_PEOPLE_PER_INVITE} people at a time.`)
-  const invalid = emails.filter((e) => !EMAIL_RE.test(e))
+  const invalid = emails.filter((e) => !isEmail(e))
   if (invalid.length) throw new SharingError(`These don't look like email addresses: ${invalid.join(', ')}`)
 
   const [owner] = await db.select({ email: schema.users.email }).from(schema.users).where(eq(schema.users.id, artifact.ownerId))

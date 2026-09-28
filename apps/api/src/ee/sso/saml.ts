@@ -13,7 +13,7 @@ import { env } from '../../env.js'
 import { hasEnterprise } from '../../license.js'
 import { clientIp, defineLimit, hit } from '../../limits.js'
 import { log } from '../../log.js'
-import { EMAIL_RE } from '../../validation.js'
+import { isEmail } from '../../validation.js'
 import { coversDomain, describeConnection, parseShared, type SharedInput, usableConnection } from './connections.js'
 import { accountFor } from './routes.js'
 import { fetchIdpMetadata, parseIdpMetadata, pem } from './saml-metadata.js'
@@ -162,14 +162,14 @@ export function mapProfile(profile: Profile, config: Pick<SamlConfig, 'emailAttr
   const email = (
     config.emailAttribute
       ? firstString(attrs[config.emailAttribute])
-      : (pick(attrs, EMAIL_ATTRIBUTES) ?? (profile.nameIDFormat === EMAIL_FORMAT || EMAIL_RE.test(profile.nameID ?? '') ? profile.nameID : null))
+      : (pick(attrs, EMAIL_ATTRIBUTES) ?? (profile.nameIDFormat === EMAIL_FORMAT || isEmail(profile.nameID ?? '') ? profile.nameID : null))
   )?.toLowerCase()
   const given = pick(attrs, GIVEN)
   const family = pick(attrs, FAMILY)
   const name = config.nameAttribute
     ? firstString(attrs[config.nameAttribute])
     : (pick(attrs, NAME_ATTRIBUTES) ?? ([given, family].filter(Boolean).join(' ') || null))
-  return { email: email && EMAIL_RE.test(email) && email.length <= 254 ? email : null, name: name ? name.slice(0, 200) : null }
+  return { email: email && isEmail(email) ? email : null, name: name ? name.slice(0, 200) : null }
 }
 
 type XmlJs = { $?: Record<string, string> } & Record<string, unknown>

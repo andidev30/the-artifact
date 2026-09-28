@@ -15,7 +15,7 @@ import { limitInvites } from '../limits.js'
 import { log } from '../log.js'
 import { sendInvitation } from '../mail.js'
 import { revokeToken, tokensIn } from '../tokens.js'
-import { CONTROL_CHARS_ERROR, EMAIL_RE, hasControlChars, UUID_RE } from '../validation.js'
+import { CONTROL_CHARS_ERROR, hasControlChars, isEmail, UUID_RE } from '../validation.js'
 
 const DAY = 24 * 60 * 60 * 1000
 const INVITE_DAYS = 7
@@ -198,7 +198,7 @@ members.post('/invitations', async (c) => {
   const body = (await c.req.json().catch(() => null)) as { email?: unknown; role?: unknown } | null
   const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : ''
   const role = body?.role as InviteRole
-  if (!EMAIL_RE.test(email)) return c.json({ error: 'Enter a valid email address.', field: 'email' }, 400)
+  if (!isEmail(email)) return c.json({ error: 'Enter a valid email address.', field: 'email' }, 400)
   if (!INVITE_ROLES.has(role)) return c.json({ error: 'Invite people as an admin or a member.', field: 'role' }, 400)
 
   const [existing] = await db

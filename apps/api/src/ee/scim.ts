@@ -10,7 +10,7 @@ import { env } from '../env.js'
 import { activeAdminCount, isInstanceAdmin, lockAdmins, newAccountFields, removeMembership, revokeAccess } from '../instance.js'
 import { enterpriseRequired, hasEnterprise, requireEnterprise } from '../license.js'
 import { defineLimit, hit, waitText } from '../limits.js'
-import { EMAIL_RE, UUID_RE } from '../validation.js'
+import { isEmail, UUID_RE } from '../validation.js'
 
 // SCIM 2.0 (RFC 7643, RFC 7644) at /scim/v2, for an IdP (Okta, Entra ID) to create, update and
 // deactivate accounts. Users only: the app has no groups for SCIM Groups to map to. Deleting a user
@@ -302,7 +302,7 @@ function fromPatch(body: Record<string, unknown>): Changes {
 function checkEmail(email: string | undefined): string | undefined {
   if (email === undefined) return undefined
   const e = email.toLowerCase()
-  if (!EMAIL_RE.test(e) || e.length > 254) throw new ScimProblem(400, `${email} is not an email address.`, 'invalidValue')
+  if (!isEmail(e)) throw new ScimProblem(400, `${email} is not an email address.`, 'invalidValue')
   return e
 }
 

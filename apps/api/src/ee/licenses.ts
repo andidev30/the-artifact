@@ -6,7 +6,7 @@ import { db, schema } from '../db/index.js'
 import { env } from '../env.js'
 import { isInstanceAdmin } from '../instance.js'
 import { LICENSE_FORMAT, LICENSE_PREFIX, LICENSE_PUBLIC_KEYS, licenseKeyId, type LicensePayload } from '../license.js'
-import { EMAIL_RE } from '../validation.js'
+import { isEmail } from '../validation.js'
 
 // Issuing license keys for self-hosted installs, on the hosted service only. The key is signed with
 // LICENSE_SIGNING_KEY; installs check it offline against LICENSE_PUBLIC_KEYS in src/license.ts.
@@ -98,8 +98,7 @@ issuedLicenses.post('/', async (c) => {
   if (!customerName) return c.json({ error: 'Enter who the license is for.', field: 'customerName' }, 400)
   if (customerName.length > 200) return c.json({ error: 'Use at most 200 characters for the name.', field: 'customerName' }, 400)
   const customerEmail = typeof b.customerEmail === 'string' ? b.customerEmail.trim().toLowerCase() : ''
-  if (!EMAIL_RE.test(customerEmail) || customerEmail.length > 254)
-    return c.json({ error: 'Enter an email address like name@example.com.', field: 'customerEmail' }, 400)
+  if (!isEmail(customerEmail)) return c.json({ error: 'Enter an email address like name@example.com.', field: 'customerEmail' }, 400)
   const seats = Number(b.seats)
   if (!Number.isSafeInteger(seats) || seats < 1 || seats > 1_000_000)
     return c.json({ error: 'Enter a whole number of seats, at least 1.', field: 'seats' }, 400)

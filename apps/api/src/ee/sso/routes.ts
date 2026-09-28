@@ -12,7 +12,7 @@ import { isInstanceAdmin } from '../../instance.js'
 import { requireEnterprise } from '../../license.js'
 import { clientIp, defineLimit, limitRequest } from '../../limits.js'
 import { log } from '../../log.js'
-import { EMAIL_RE } from '../../validation.js'
+import { isEmail } from '../../validation.js'
 import {
   coversDomain,
   describeConnection,
@@ -88,7 +88,7 @@ function finishTest(c: Context, result: TestResult): Response {
 
 // Why an identity can't sign in, as a /login?error= code, or null when it can
 function refusal(conn: SsoConnection, identity: SsoIdentity): string | null {
-  if (!identity.email || !EMAIL_RE.test(identity.email)) return 'sso_no_email'
+  if (!identity.email || !isEmail(identity.email)) return 'sso_no_email'
   // Linking to an existing account by address is only safe for addresses the provider checked
   if (!identity.emailVerified && !oidcConfig(conn).trustEmail) return 'sso_unverified'
   if (!coversDomain(conn, identity.email)) return 'sso_domain'

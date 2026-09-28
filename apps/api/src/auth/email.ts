@@ -6,7 +6,7 @@ import { env, mailEnabled } from '../env.js'
 import { clientIp, limitRequest } from '../limits.js'
 import { log } from '../log.js'
 import { sendSignInLink } from '../mail.js'
-import { ACCOUNT_EMAIL_RE, EMAIL_RE } from '../validation.js'
+import { isAccountEmail, isEmail } from '../validation.js'
 import { hashPassword, passwordProblem } from './password.js'
 import { hashToken, randomToken } from './session.js'
 import { continueSignIn } from './twofactor.js'
@@ -28,10 +28,10 @@ email.post('/', async (c) => {
   }
   const busy = await limitRequest(c, 'sign-in-link-ip', clientIp(c), 'Too many sign-in links were asked for from your network.')
   if (busy) return busy
-  if (!ACCOUNT_EMAIL_RE.test(address)) return c.json({ error: 'Enter a valid email address.' }, 400)
+  if (!isAccountEmail(address)) return c.json({ error: 'Enter a valid email address.' }, 400)
   const [existing] = await db.select({ suspendedAt: schema.users.suspendedAt }).from(schema.users).where(eq(schema.users.email, address))
   // An account from before EMAIL_RE was tightened still gets its link; a new address has to pass it
-  if (!existing && !EMAIL_RE.test(address)) return c.json({ error: 'Enter a valid email address.' }, 400)
+  if (!existing && !isEmail(address)) return c.json({ error: 'Enter a valid email address.' }, 400)
   // A link a suspended person can't use is not worth an email
   if (existing?.suspendedAt) {
     return c.json({ error: 'This account is suspended. Ask an admin of this server to restore it.', code: 'account_suspended' }, 403)
@@ -78,9 +78,9 @@ export type AdminLink = { email: string; link: string; newAccount: boolean; expi
 // asks for a new password; for someone without an account it creates one whatever the sign-up policy.
 export async function createAdminLink(rawEmail: string, adminId: string): Promise<{ ok: true; link: AdminLink } | { ok: false; error: string }> {
   const address = rawEmail.trim().toLowerCase()
-  if (!ACCOUNT_EMAIL_RE.test(address)) return { ok: false, error: 'Enter a valid email address.' }
+  if (!isAccountEmail(address)) return { ok: false, error: 'Enter a valid email address.' }
   const [existing] = await db.select({ suspendedAt: schema.users.suspendedAt }).from(schema.users).where(eq(schema.users.email, address))
-  if (!existing && !EMAIL_RE.test(address)) return { ok: false, error: 'Enter a valid email address.' }
+  if (!existing && !isEmail(address)) return { ok: false, error: 'Enter a valid email address.' }
   if (existing?.suspendedAt) return { ok: false, error: `${address} is suspended. Restore the account first.` }
   // Only the newest link for an address works
   await db.delete(schema.emailTokens).where(eq(schema.emailTokens.email, address))
