@@ -113,6 +113,18 @@ async function published(artifact: Artifact, otherFiles: number) {
   )
 }
 
+// A published page as data, the same as POST /api/publish answers, for the CLI (packages/cli)
+async function publishedData(artifact: Artifact) {
+  return {
+    id: artifact.slug,
+    url: artifactUrl(artifact.slug),
+    title: artifact.title,
+    version: artifact.currentVersion,
+    visibility: artifact.visibility,
+    folder: await folderName(artifact),
+  }
+}
+
 const folderArg = z
   .string()
   .optional()
@@ -319,21 +331,32 @@ function buildServer(auth: McpAuth) {
           files: manifest.describe('Every file of the page, index.html included; with update, only the files to add or replace'),
           update: z.boolean().optional().describe('true to upload only some files of an existing page, for publish_upload with update: true'),
         }),
+        // The same answer as data, for the CLI (packages/cli); the text is what agents read
+        outputSchema: z.object({
+          upload_id: z.string(),
+          uploads: z
+            .array(z.object({ paths: z.array(z.string()), size: z.number(), url: z.string() }))
+            .describe('One link per distinct content still to upload'),
+          stored: z.array(z.string()).describe('Paths already stored in your own pages, which need no upload'),
+        }),
       },
       limited(async ({ files, update }) => {
         try {
           const { uploadId, uploads, stored } = await prepareUpload(files, auth.userId, { partial: update === true })
           const commands = uploads.map((u) => `curl -fsS -T '${u.paths[0]}' '${u.url}'${u.paths.length > 1 ? `  # also ${u.paths.slice(1).join(', ')}` : ''}`)
-          return text(
-            `upload_id: ${uploadId}\n` +
-              (uploads.length
-                ? `PUT each file's exact bytes to its link within ${UPLOAD_TTL_SECONDS / 60} minutes, for example with curl from the page's folder:\n${commands.join('\n')}\n`
-                : '') +
-              (stored.length ? `Already stored, no upload needed: ${stored.join(', ')}\n` : '') +
-              (update
-                ? 'Then call publish_upload with this upload_id, the same files, the artifact_id and update: true.'
-                : 'Then call publish_upload with this upload_id, the title and the same files.'),
-          )
+          return {
+            ...text(
+              `upload_id: ${uploadId}\n` +
+                (uploads.length
+                  ? `PUT each file's exact bytes to its link within ${UPLOAD_TTL_SECONDS / 60} minutes, for example with curl from the page's folder:\n${commands.join('\n')}\n`
+                  : '') +
+                (stored.length ? `Already stored, no upload needed: ${stored.join(', ')}\n` : '') +
+                (update
+                  ? 'Then call publish_upload with this upload_id, the same files, the artifact_id and update: true.'
+                  : 'Then call publish_upload with this upload_id, the title and the same files.'),
+            ),
+            structuredContent: { upload_id: uploadId, uploads, stored },
+          }
         } catch (err) {
           if (err instanceof PublishError) return text(err.message, true)
           throw err
@@ -360,6 +383,15 @@ function buildServer(auth: McpAuth) {
           remove: removeArg.describe("With update: paths of files of the current version to leave out. index.html can't be removed."),
           base_version: baseVersionArg.describe('With update: the version you read, as for update_files'),
         }),
+        // As POST /api/publish answers, for the CLI (packages/cli)
+        outputSchema: z.object({
+          id: z.string(),
+          url: z.string(),
+          title: z.string(),
+          version: z.number(),
+          visibility: z.enum(['private', 'organization', 'link']),
+          folder: z.string().nullable(),
+        }),
       },
       limited(async ({ title, upload_id, files, artifact_id, visibility, folder, update, remove, base_version }) => {
         try {
@@ -380,11 +412,14 @@ function buildServer(auth: McpAuth) {
               remove,
               baseVersion: base_version,
             })
-            return await updated(
-              artifact,
-              files.map((f) => f.path),
-              remove ?? [],
-            )
+            return {
+              ...(await updated(
+                artifact,
+                files.map((f) => f.path),
+                remove ?? [],
+              )),
+              structuredContent: await publishedData(artifact),
+            }
           }
           if (remove?.length || base_version !== undefined) return text('remove and base_version go with update: true.', true)
           if (!title) return text('Give the page a title.', true)
@@ -401,7 +436,10 @@ function buildServer(auth: McpAuth) {
             visibility,
             folder,
           })
-          return await published(artifact, files.length - 1)
+          return {
+            ...(await published(artifact, files.length - 1)),
+            structuredContent: await publishedData(artifact),
+          }
         } catch (err) {
           if (err instanceof PublishError) return text(err.message, true)
           throw err

@@ -1,11 +1,13 @@
-import { resolve } from 'node:path'
+import { createHash } from 'node:crypto'
+import { readFile, stat } from 'node:fs/promises'
+import { basename, dirname, resolve } from 'node:path'
 import { parseArgs, type ParseArgsConfig } from 'node:util'
-import { callTool, publishPage, VERSION, whoami } from './api.ts'
+import { callTool, canUpload, type PageContent, publishByUpload, publishPage, type Published, StorageUnreachable, VERSION, whoami } from './api.ts'
 import { browserLogin, resolveAuth, resolveServer, revoke } from './auth.ts'
 import { type Env, normalizeServer, readCredentials, readLink, saveLink, type Saved, updateCredentials, LINK_FILE } from './config.ts'
 import { CliError, SignedOutError, UsageError } from './errors.ts'
-import { readFile } from 'node:fs/promises'
 import { checkLimits, collectPage, collectSome, ENTRY_PATH, fallbackTitle, formatBytes, readPage, titleFromHtml } from './files.ts'
+import { type Clock, relevantChange, runWatch, type Subscribe, watchFolder } from './watch.ts'
 
 export type Io = {
   env: Env
@@ -14,6 +16,11 @@ export type Io = {
   stderr: { write(s: string): unknown; isTTY?: boolean }
   readStdin: () => Promise<string>
   openBrowser: boolean
+  // Aborts on Ctrl+C, for commands that run until then (publish --watch). Only asked for by them, so
+  // Ctrl+C stops every other command the usual way.
+  interrupted?: () => AbortSignal
+  // For tests of publish --watch: what reports changes, and the timers
+  watch?: { subscribe?: (root: string, relevant: (path: string) => boolean) => Subscribe; clock?: Clock; debounceMs?: number }
 }
 
 const HELP = `Publish HTML pages to The Artifact.
@@ -55,6 +62,8 @@ Options:
   --remove <path>        Remove this file from the page and keep the others; repeat for more
   --save                 Remember the page in ${LINK_FILE}, so later publishes update it
   --new                  Publish a new page even if ${LINK_FILE} has one for this path
+  --watch                Keep watching, and publish a new version whenever files change, until Ctrl+C
+  --poll                 With --watch: look for changes every second, where file events don't arrive
   --dry-run              List what would be sent, and send nothing`,
   list: `Usage: the-artifact list [options]
 
@@ -114,6 +123,8 @@ const OPTIONS: Record<string, ParseArgsConfig['options']> = {
     remove: { type: 'string', multiple: true },
     save: { type: 'boolean' },
     new: { type: 'boolean' },
+    watch: { type: 'boolean' },
+    poll: { type: 'boolean' },
     'dry-run': { type: 'boolean' },
   },
   list: { query: { type: 'string' }, folder: { type: 'string' }, limit: { type: 'string' }, cursor: { type: 'string' } },
@@ -186,17 +197,47 @@ function print(io: Io, values: Values, json: unknown, human: string) {
   io.stdout.write(values.json ? `${JSON.stringify(json, null, 2)}\n` : human ? `${human}\n` : '')
 }
 
-async function publish(io: Io, parsed: Parsed) {
-  const { values } = parsed
-  if ((values.only as string[] | undefined)?.length || (values.remove as string[] | undefined)?.length) return update(io, parsed)
-  const { positionals } = parsed
-  const given = one(positionals, 'folder', 'publish')
-  const target = resolve(io.cwd, given)
-  const visibility = visibilityArg(str(values, 'visibility'))
+function publishedLine(page: Published, extra = '') {
+  return (
+    `${page.version === 1 ? 'Published' : `Published version ${page.version} of`} "${page.title}" (${ACCESS_LABEL[page.visibility] ?? page.visibility}${page.folder ? `, in ${page.folder}` : ''}).` +
+    extra
+  )
+}
+
+// What publishing `target` sends, with its title
+async function readTarget(target: string, given: string, values: Values) {
   const collected = await collectPage(target, { entry: str(values, 'entry'), ignore: values.ignore as string[] | undefined, label: given })
   checkLimits(collected)
   const { html, files } = await readPage(collected)
   const title = str(values, 'title')?.trim() || titleFromHtml(html.toString('utf8')) || fallbackTitle(target, collected.isDir)
+  return { collected, html, files, title }
+}
+
+function describePage(collected: { files: unknown[]; total: number }) {
+  const count = collected.files.length
+  return `${count ? `index.html and ${count} ${count === 1 ? 'file' : 'files'}` : 'index.html'}, ${formatBytes(collected.total)}`
+}
+
+// The page --id names, or the one .the-artifact.json remembers for this path on this server
+async function pageToPublish(io: Io, values: Values, target: string, server: string): Promise<string | undefined> {
+  // An empty --id is a new page, so CI can pass --id "$PAGE_ID" before the first run has set it
+  const idArg = str(values, 'id')?.trim() || undefined
+  const link = values.new || idArg ? null : await readLink(io.cwd, target)
+  return idArg ?? (link && link.server === server ? link.id : undefined)
+}
+
+async function publish(io: Io, parsed: Parsed) {
+  const { positionals, values } = parsed
+  const partial = Boolean((values.only as string[] | undefined)?.length || (values.remove as string[] | undefined)?.length)
+  if (partial && values.watch) throw new UsageError("--watch publishes the whole folder, so it doesn't go with --only or --remove.")
+  if (partial) return update(io, parsed)
+  const given = one(positionals, 'folder', 'publish')
+  const target = resolve(io.cwd, given)
+  const visibility = visibilityArg(str(values, 'visibility'))
+  if (values.watch && values['dry-run']) throw new UsageError("--watch and --dry-run don't go together.")
+  if (values.poll && !values.watch) throw new UsageError('--poll goes with --watch.')
+  if (values.watch) return watchAndPublish(io, values, given, target, visibility)
+  const { collected, html, files, title } = await readTarget(target, given, values)
   const log = (line: string) => io.stderr.write(`${line}\n`)
   for (const s of collected.skipped) log(`Left out ${s.path}: ${s.reason}.`)
 
@@ -216,21 +257,12 @@ async function publish(io: Io, parsed: Parsed) {
 
   const server = await resolveServer(str(values, 'server'), io.env)
   const auth = await resolveAuth(server, { token: str(values, 'token'), env: io.env })
-  // An empty --id is a new page, so CI can pass --id "$PAGE_ID" before the first run has set it
-  const idArg = str(values, 'id')?.trim() || undefined
-  const link = values.new || idArg ? null : await readLink(io.cwd, target)
-  const id = idArg ?? (link && link.server === server ? link.id : undefined)
-  const count = collected.files.length
-  log(
-    `${id ? 'Publishing a new version of' : 'Publishing'} "${title}": ${count ? `index.html and ${count} ${count === 1 ? 'file' : 'files'}` : 'index.html'}, ${formatBytes(collected.total)}.`,
-  )
+  const id = await pageToPublish(io, values, target, server)
+  log(`${id ? 'Publishing a new version of' : 'Publishing'} "${title}": ${describePage(collected)}.`)
 
   const page = await publishPage(auth, { title, html, files, id, visibility, folder: str(values, 'folder') })
   if (values.save) await saveLink(io.cwd, target, { id: page.id, server })
-  log(
-    `${page.version === 1 ? 'Published' : `Published version ${page.version} of`} "${page.title}" (${ACCESS_LABEL[page.visibility] ?? page.visibility}${page.folder ? `, in ${page.folder}` : ''}).` +
-      (values.save ? ` Saved in ${LINK_FILE}; publishing this path again updates it.` : ''),
-  )
+  log(publishedLine(page, values.save ? ` Saved in ${LINK_FILE}; publishing this path again updates it.` : ''))
   // The link alone on stdout, so `url=$(the-artifact publish dist)` works
   print(io, values, page, page.url)
 }
@@ -283,6 +315,93 @@ async function update(io: Io, { positionals, values }: Parsed) {
       (values.save ? ` Saved in ${LINK_FILE}; publishing this path again updates it.` : ''),
   )
   print(io, values, page, page.url)
+}
+
+// Publishes, then again whenever the folder changes, until Ctrl+C. Every publish after the first is a
+// new version of the same page, and a failed one is reported without ending the watch.
+async function watchAndPublish(io: Io, values: Values, given: string, target: string, visibility: string | undefined) {
+  const info = await stat(target).catch(() => null)
+  if (!info) throw new CliError(`There is no file or folder at ${given}.`)
+  const server = await resolveServer(str(values, 'server'), io.env)
+  const auth = await resolveAuth(server, { token: str(values, 'token'), env: io.env })
+  const log = (line: string) => io.stderr.write(`${line}\n`)
+  const state = {
+    id: await pageToPublish(io, values, target, server),
+    published: false,
+    // Direct uploads send only the files the server doesn't have yet. Decided on the first publish.
+    uploads: null as boolean | null,
+    fingerprint: '',
+    skipped: '',
+  }
+
+  async function publishOnce() {
+    const { collected, html, files, title } = await readTarget(target, given, values)
+    const skipped = collected.skipped.map((s) => `Left out ${s.path}: ${s.reason}.`).join('\n')
+    if (skipped && skipped !== state.skipped) log(skipped)
+    state.skipped = skipped
+    // Saving a file without changing it, or touching it, publishes nothing
+    const hash = createHash('sha256').update(title).update('\0').update(html)
+    for (const f of files) hash.update('\0').update(f.path).update('\0').update(f.content)
+    const fingerprint = hash.digest('hex')
+    if (state.published && fingerprint === state.fingerprint) return
+
+    // Visibility and folder go with the first publish only, so changing them in the app meanwhile sticks
+    const page: PageContent = { title, html, files, id: state.id }
+    if (!state.published) Object.assign(page, { visibility, folder: str(values, 'folder') })
+    log(`${state.id ? 'Publishing a new version of' : 'Publishing'} "${title}": ${describePage(collected)}.`)
+    state.uploads ??= await canUpload(auth).catch(() => false)
+    let result: Published & { uploaded?: number }
+    if (state.uploads) {
+      try {
+        result = await publishByUpload(auth, page)
+      } catch (err) {
+        if (!(err instanceof StorageUnreachable)) throw err
+        log(`${err.message} Sending whole pages instead.`)
+        state.uploads = false
+        result = await publishPage(auth, page)
+      }
+    } else result = await publishPage(auth, page)
+
+    const first = !state.published
+    state.id = result.id
+    state.published = true
+    state.fingerprint = fingerprint
+    if (first && values.save) await saveLink(io.cwd, target, { id: result.id, server })
+    const total = 1 + files.length
+    const sent = result.uploaded !== undefined && result.uploaded < total ? ` Sent ${result.uploaded} of ${total} files; the others were already stored.` : ''
+    log(publishedLine(result, sent + (first && values.save ? ` Saved in ${LINK_FILE}.` : '')))
+    // One line per version: the link, or with --json one JSON object
+    io.stdout.write(values.json ? `${JSON.stringify(result)}\n` : `${result.url}\n`)
+  }
+
+  const signal = io.interrupted?.() ?? new AbortController().signal
+  const stop = new AbortController()
+  let fatal: unknown = null
+  // A refused sign-in won't fix itself, so it ends the watch; anything else waits for the next change
+  const report = (err: unknown) => {
+    if (err instanceof SignedOutError) {
+      fatal = err
+      stop.abort()
+    } else if (err instanceof CliError) log(err.message)
+    else log(`Something went wrong: ${(err as Error)?.stack ?? err}`)
+  }
+
+  try {
+    await publishOnce()
+  } catch (err) {
+    report(err)
+    if (fatal) throw fatal
+  }
+  const file = info.isFile() ? basename(target) : undefined
+  const root = file === undefined ? target : dirname(target)
+  const relevant = relevantChange({ file, ignore: values.ignore as string[] | undefined })
+  const subscribe = io.watch?.subscribe?.(root, relevant) ?? watchFolder(root, { file, relevant, poll: Boolean(values.poll), log })
+  log(`Watching ${given} for changes. Press Ctrl+C to stop.`)
+  signal.addEventListener('abort', () => stop.abort(), { once: true })
+  if (signal.aborted) stop.abort()
+  await runWatch({ subscribe, relevant, signal: stop.signal, clock: io.watch?.clock, debounceMs: io.watch?.debounceMs, publish: publishOnce, onError: report })
+  if (fatal) throw fatal
+  log('Stopped watching.')
 }
 
 type Listed = {

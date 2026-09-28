@@ -199,6 +199,23 @@ export async function getArtifact(slug: string, key?: string | null): Promise<Ar
   return res.json()
 }
 
+// The page's current version number, or null when it is gone or closed to this person. Sends the
+// version shown as an ETag, so an unchanged page costs a 304 with no body.
+export async function currentVersion(slug: string, key: string | null, shown: number): Promise<number | null> {
+  const query = key ? `?k=${encodeURIComponent(key)}` : ''
+  const res = await fetch(`/api/artifacts/${encodeURIComponent(slug)}/current${query}`, {
+    credentials: 'same-origin',
+    cache: 'no-store',
+    headers: { 'If-None-Match': `"v${shown}"` },
+  })
+  if (res.status === 304) return shown
+  if (res.status === 404) return null
+  if (!res.ok) throw new Error(`Checking for a new version failed with ${res.status}`)
+  const body = (await res.json()) as { version?: unknown }
+  if (typeof body.version !== 'number') throw new Error('Checking for a new version gave no version')
+  return body.version
+}
+
 export async function setVisibility(slug: string, visibility: Visibility): Promise<void> {
   const res = await fetch(`/api/artifacts/${encodeURIComponent(slug)}`, {
     method: 'PATCH',

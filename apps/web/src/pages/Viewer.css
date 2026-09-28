@@ -41,6 +41,14 @@
   white-space: nowrap;
 }
 
+.viewer-updated {
+  padding: 0 4px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--marker);
+  border-radius: 2px;
+}
+
 .viewer-actions {
   display: flex;
   align-items: center;

@@ -15,6 +15,12 @@ In **History**, tick **Compare** on two versions and choose **Compare**. The pag
 
 Change either version with **From** and **To** at the top. Images, fonts and other files that aren't text show as changed without a line diff, and so do text files bigger than 200 KB or with more than 2,000 changed lines.
 
+## Live updates
+
+A page that is open shows a new version as soon as it is published, without a reload: the frame loads it and the bar says **Updated to version N** for a few seconds. Where focus was, it stays. This is how `the-artifact publish --watch` works for everyone who has the page open (see [Watching a folder](/docs/publishing#watching-a-folder)).
+
+The page checks every few seconds while its tab is visible, less and less often while it's hidden, and at once when you come back to it. Someone looking at an older version from **History** keeps seeing it; going back to the latest picks up whatever was published meanwhile. If the page is deleted or no longer shared with you, it stops checking.
+
 ## Restoring
 
 **Restore this version** publishes that version's HTML and files again as a new version. The history keeps both, so you can always go back.

@@ -1,6 +1,18 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
-import { downloadUrl, FRAME_SANDBOX, fetchMe, getArtifact, logout, PasswordNeeded, unlockPage, versionUrl, type ArtifactPage, type Visibility } from '../api'
+import {
+  currentVersion,
+  downloadUrl,
+  FRAME_SANDBOX,
+  fetchMe,
+  getArtifact,
+  logout,
+  PasswordNeeded,
+  unlockPage,
+  versionUrl,
+  type ArtifactPage,
+  type Visibility,
+} from '../api'
 import { CommentsPanel } from '../components/CommentsPanel'
 import { PickBar, PinLayer, useFrameHelper } from '../components/PagePins'
 import { HistoryPanel, OldVersionBar, type Viewing } from '../components/HistoryPanel'
@@ -12,6 +24,7 @@ import { ViewsPanel } from '../components/ViewsPanel'
 import { Wordmark } from '../components/Wordmark'
 import { LOGIN_URL } from '../config'
 import { HELPER_MARK } from '../frameMessages'
+import { pollCurrentVersion } from '../livePoll'
 import { timeAgo } from '../time'
 import './Auth.css'
 import './Viewer.css'
@@ -81,7 +94,7 @@ export function Viewer() {
   if (state.kind === 'locked') return <PasswordGate slug={slug} linkKey={key} onUnlocked={() => setAttempt((n) => n + 1)} />
 
   // Keyed by page, so opening another one (such as a copy just made) starts with its panels and dialogs closed
-  return <PageFrame key={state.page.slug} page={state.page} email={state.email} onChange={(page) => setState({ ...state, page })} />
+  return <PageFrame key={state.page.slug} page={state.page} email={state.email} linkKey={key} onChange={(page) => setState({ ...state, page })} />
 }
 
 // A page shared by a link with a password. It says nothing about the page until the password is right.
@@ -204,7 +217,20 @@ function Unavailable({ slug, email }: { slug: string; email: string | null }) {
   )
 }
 
-function PageFrame({ page, email, onChange }: { page: ArtifactPage; email: string | null; onChange: (p: ArtifactPage) => void }) {
+// How long the bar says a page was just updated to a new version
+const UPDATED_NOTICE_MS = 6_000
+
+function PageFrame({
+  page,
+  email,
+  linkKey,
+  onChange,
+}: {
+  page: ArtifactPage
+  email: string | null
+  linkKey: string | null
+  onChange: (p: ArtifactPage) => void
+}) {
   const navigate = useNavigate()
   const [copied, setCopied] = useState(false)
   const [sharing, setSharing] = useState(false)
@@ -248,6 +274,45 @@ function PageFrame({ page, email, onChange }: { page: ArtifactPage; email: strin
     if (panel !== 'comments' && picking) stopPick()
   }, [panel, picking])
 
+  // The version a new publish brought in while the page was open, shown for a few seconds
+  const [updated, setUpdated] = useState<number | null>(null)
+  const [pollRound, setPollRound] = useState(0)
+  const onChangeRef = useRef(onChange)
+  onChangeRef.current = onChange
+
+  // Loads new versions as they are published, only while the current version is on screen: someone
+  // looking at an older one from the history keeps it. Focus stays where it is; the status line says what happened.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: pollRound starts polling again after a failed load
+  useEffect(() => {
+    if (viewing) return
+    let active = true
+    const stop = pollCurrentVersion({
+      shown: page.version,
+      check: () => currentVersion(page.slug, linkKey, page.version),
+      onNewer: async () => {
+        const fresh = await getArtifact(page.slug, linkKey).catch(() => undefined)
+        if (!active || fresh === null) return
+        if (!fresh) {
+          setTimeout(() => active && setPollRound((n) => n + 1), 3_000)
+          return
+        }
+        onChangeRef.current({ ...pageRef.current, ...fresh })
+        setUpdated(fresh.version)
+        setAnnounce(`Updated to version ${fresh.version}.`)
+      },
+    })
+    return () => {
+      active = false
+      stop()
+    }
+  }, [page.slug, page.version, viewing, linkKey, pollRound])
+
+  useEffect(() => {
+    if (updated === null) return
+    const timer = setTimeout(() => setUpdated(null), UPDATED_NOTICE_MS)
+    return () => clearTimeout(timer)
+  }, [updated])
+
   // Downloads what the frame shows, which can be an older version picked in the history
   const menu: MenuItem[] = [{ label: 'Download', download: downloadUrl(page.slug, viewing?.version) }]
   if (page.canEdit) menu.push({ label: 'Rename', onSelect: () => setDialog('rename') })
@@ -282,7 +347,13 @@ function PageFrame({ page, email, onChange }: { page: ArtifactPage; email: strin
         <div className="viewer-title">
           <h1>{page.title}</h1>
           <p>
-            Version {page.version}, updated {timeAgo(page.updatedAt)}
+            {updated === page.version ? (
+              <>
+                <span className="viewer-updated">Updated to version {page.version}</span> {timeAgo(page.updatedAt)}
+              </>
+            ) : (
+              `Version ${page.version}, updated ${timeAgo(page.updatedAt)}`
+            )}
             {page.owner ? ` by ${page.owner}` : ''}
           </p>
         </div>

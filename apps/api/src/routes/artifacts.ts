@@ -19,6 +19,7 @@ import {
   listSharedWith,
   listVersions,
   PublishError,
+  recentAccessLevel,
   rename,
   restoreVersion,
 } from '../artifacts.js'
@@ -33,6 +34,7 @@ import {
   checkLinkPassword,
   keyLetsIn,
   LinkError,
+  linkPassFor,
   linkSettings,
   needsPassword,
   parseLinkExpiry,
@@ -192,6 +194,20 @@ artifacts.get('/:slug', async (c) => {
     views,
     contentUrl: `/api/artifacts/${artifact.slug}/v/${artifact.currentVersion}/`,
   })
+})
+
+// The current version's number, which an open page asks for every few seconds to show new versions as
+// they are published. Kept cheap: one indexed read of the page row, access from recentAccessLevel, and
+// 304 when the version the client has (If-None-Match) is still the current one.
+artifacts.get('/:slug/current', async (c) => {
+  const artifact = await findBySlug(c.req.param('slug'))
+  const access = artifact ? await recentAccessLevel(artifact, c.get('user'), await linkPassFor(c, artifact)) : null
+  if (!artifact || !access) return c.json({ error: 'Not found' }, 404, { 'Cache-Control': 'no-store' })
+  const etag = `"v${artifact.currentVersion}"`
+  const headers = { 'Cache-Control': 'private, no-cache', Vary: 'Cookie', ETag: etag }
+  const sent = c.req.header('if-none-match')
+  if (sent?.split(',').some((tag) => tag.trim().replace(/^W\//, '') === etag)) return c.body(null, 304, headers)
+  return c.json({ version: artifact.currentVersion }, 200, headers)
 })
 
 // The entry and files of one version, with the same access as the page (older versions: editors)
