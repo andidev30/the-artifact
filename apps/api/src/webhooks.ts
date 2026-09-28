@@ -243,8 +243,16 @@ export function useWebhookQueue(on = true) {
 // when this process queues one. `every: 0` starts no timer.
 export function startWebhookQueue({ every = POLL_MS }: { every?: number } = {}) {
   queued = true
+  // A failed round (the database still migrating at start, or briefly away) is logged and retried on
+  // the next tick; an unhandled rejection here would end the whole process
   const tick = () => {
-    if (!running) running = runWebhookQueue().finally(() => (running = null))
+    if (!running)
+      running = runWebhookQueue()
+        .catch((err) => {
+          log.warn('Sending webhooks failed; trying again on the next round', { err })
+          return 0
+        })
+        .finally(() => (running = null))
   }
   nudge = tick
   clearInterval(timer)
