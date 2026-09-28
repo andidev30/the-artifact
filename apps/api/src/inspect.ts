@@ -124,7 +124,12 @@ async function inspectOnce(tree: PageTree, width: Width): Promise<Found> {
           add(errors, clip(`${msg.text()}${at.url ? ` (${short(at.url)}${at.lineNumber ? `:${at.lineNumber + 1}` : ''})` : ''}`))
         })
         page.on('pageerror', (err) => {
-          const frame = err.stack?.split('\n').find((line) => line.includes(PAGE_ORIGIN))
+          // The page names its own functions, so a frame can be any length; the location is at its end,
+          // and the pattern backtracks, so only the end is searched
+          const frame = err.stack
+            ?.split('\n')
+            .find((line) => line.includes(PAGE_ORIGIN))
+            ?.slice(-1000)
           const where = frame?.match(/(https?:\/\/\S+?):(\d+):\d+\)?$/)
           add(errors, clip(`Uncaught ${err.name}: ${err.message}${where ? ` (${short(where[1])}:${where[2]})` : ''}`))
         })
