@@ -133,8 +133,10 @@ function ExportStatus({ e }: { e: DataExport }) {
   if (e.status === 'building') {
     return (
       <p className="export-status" role="status">
-        Building the export: {e.pagesDone} of {e.pagesTotal} {e.pagesTotal === 1 ? 'page' : 'pages'} so far. Keep this page open until it is ready
-        {email ? '; you also get an email then.' : '.'}
+        Building the export: {e.pagesDone} of {e.pagesTotal} {e.pagesTotal === 1 ? 'page' : 'pages'} so far.{' '}
+        {e.buildsOnPoll
+          ? `Keep this page open until it is ready${email ? '; you also get an email then.' : '.'}`
+          : `It carries on if you leave this page${email ? ', and you get an email when it is ready.' : '.'}`}
       </p>
     )
   }

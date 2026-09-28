@@ -164,6 +164,8 @@ export async function describeExport(e: DataExport) {
     pagesTotal: p.pagesTotal,
     error: e.error,
     downloadUrl: e.status === 'ready' ? await downloadPath(e) : null,
+    // Whether the build moves on only while someone asks how it is going, so the settings page must stay open
+    buildsOnPoll: !inProcess,
   }
 }
 
@@ -728,8 +730,8 @@ export async function buildExport(id: string): Promise<StepResult> {
 // status is asked for (serverless)
 let inProcess = false
 
-export function buildExportsInProcess() {
-  inProcess = true
+export function buildExportsInProcess(on = true) {
+  inProcess = on
 }
 
 export const buildsInProcess = () => inProcess
