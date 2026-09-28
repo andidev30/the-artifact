@@ -35,7 +35,7 @@ export class VersionConflictError extends PublishError {}
 
 const SLUG_ALPHABET = 'abcdefghijkmnpqrstuvwxyz23456789'
 
-function newSlug(): string {
+export function newSlug(): string {
   const bytes = randomBytes(10)
   return Array.from(bytes, (b) => SLUG_ALPHABET[b % SLUG_ALPHABET.length]).join('')
 }

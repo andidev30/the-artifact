@@ -30,6 +30,12 @@ You don't need the email to accept. When you are signed in with the invited addr
 
 The chip next to the logo shows the current workspace. Click it to switch between your organizations and your personal workspace. The app remembers your choice on this device.
 
+## Moving pages between workspaces
+
+Pages can move between your personal workspace and an organization, or from one organization to another, with **Move to workspace** in their **…** menu, and be copied with **Duplicate**. Moving keeps the page's link, owner, the people it is shared with, its link settings, comments and views; it leaves its folder, and a page open to **Your organization** becomes **Restricted** when it moves to a personal workspace. Moving takes edit access to the page and membership in both workspaces; only the owner moves a page into or out of their personal workspace. Once a page arrives, the organization's rules apply to it: two-factor sign-in, version retention and its audit log. See [Duplicating and moving pages](/docs/sharing#duplicating-a-page).
+
+On the hosted service, new organizations are not available yet, but you can move and duplicate pages into the organizations you already belong to.
+
 ## Access tokens
 
 Members make [access tokens](/docs/connect-your-agent#publishing-from-ci) in **Account settings** to publish to the organization from CI. Owners and admins see every member's tokens for the organization under **Access tokens** in its settings: the name, who made it, when it was last used and when it expires, never the token itself. **Revoke** stops a token at once, whoever made it, so a token that leaks doesn't have to wait for its owner.

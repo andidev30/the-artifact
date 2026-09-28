@@ -119,6 +119,41 @@ If your server is only reachable on a private network, browsers such as Chrome a
 
 A server admin can limit which sites may embed pages with `EMBED_FRAME_ANCESTORS` (see the [configuration reference](/docs/configuration)). The app itself, including `/a/<page id>`, can't be framed by other sites.
 
+## Duplicating a page
+
+**Duplicate** in a page's **…** menu, in the gallery or the viewer, makes a new page from what the page shows now. Anyone signed in who can open the page can duplicate it, into their personal workspace or an organization they are a member of. Agents do the same with `duplicate_artifact`.
+
+- **Only the current version is copied.** The copy starts at version 1, and older versions stay with the original.
+- **The copy is yours** and has its own link. It starts **Restricted**: nobody else is added, it has no link expiry, password or public link, and no comments or views. Share it as you would a new page.
+- **Its name** is the page's name with " (copy)" after it, unless you change it in the dialog.
+- It counts as a new page in the workspace it goes to, toward its [quota](/docs/configuration#workspace-quotas) and the `publish` [rate limit](/docs/configuration#rate-limits). The content itself is stored once, however many copies there are.
+
+## Moving a page to another workspace
+
+**Move to workspace** in a page's **…** menu moves it between your personal workspace and an organization, or from one organization to another. Agents do the same with `move_artifact` and its `workspace` argument.
+
+Who can move a page:
+
+- **You need edit access to the page and a place in the workspace it is in now**: owners, and in an organization its owners and admins and editors who are members. People it is only shared with can't move it out of someone else's workspace.
+- **You need to be able to publish in the workspace it goes to**: your personal workspace, or an organization you are a member of. An organization that [requires two-factor sign-in](/docs/organizations#requiring-two-factor-sign-in) takes pages only from members who have it.
+- **Personal pages are their owner's.** Only the owner moves a page out of their personal workspace, and only the owner moves a page into Personal: it goes to their own.
+
+What happens to the page:
+
+| | After the move |
+| --- | --- |
+| Link and page id | The same. Links already shared keep working. |
+| Owner, versions and history | The same |
+| People it is shared with | Kept, with their roles |
+| Link expiry, password and public link | Kept |
+| Comments and views | Kept |
+| Folder | Cleared: folders belong to one workspace. File it again in the new one. |
+| **Your organization** access | Becomes **Restricted** when the page moves to a personal workspace. Moved to another organization, it is open to that organization instead. |
+
+From then on, the new workspace's rules apply: its members and admins get the access its general access gives them and members of the old organization lose theirs, and its [version retention](/docs/retention) and quota count the page and all its versions. A move is refused when the page wouldn't fit in the new workspace's quota. On the hosted service, the free Personal plan's limits apply to pages moved into Personal, and it removes versions older than 7 days as it does for every personal page.
+
+With an [audit log](/docs/audit-log), the organization the page leaves records **Moved a page out of the organization** and the one it arrives in records **Moved a page into the organization**.
+
 ## Pages shared with you
 
 The **Shared with you** tab in the gallery lists pages other people shared with your email address, with your role. It shows no [folders](/docs/publishing#folders): those belong to the workspace the page is in, so you don't see how its owner sorts their pages.

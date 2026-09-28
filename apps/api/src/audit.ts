@@ -15,6 +15,8 @@ export const AUDIT_ACTIONS = [
   'page.shared',
   'page.share_role_changed',
   'page.unshared',
+  'page.moved_in',
+  'page.moved_out',
   'member.invited',
   'member.invitation_revoked',
   'member.joined',

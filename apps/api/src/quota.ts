@@ -53,8 +53,9 @@ const count = (n: number, what: string) => `${n} ${what}${n === 1 ? '' : 's'}`
 
 // Refuses, with a PublishError, what would take the workspace past its quota. Runs inside the
 // transaction that adds the page or version, and locks the workspace's row first, so two publishes
-// at once can't both take the last of the room.
-export async function checkQuota(tx: Tx, workspace: Workspace, adding: { page: boolean; bytes: number }) {
+// at once can't both take the last of the room. `versions` is how many versions come in (1 when left
+// out); a page moved from another workspace brings all of its versions and their bytes.
+export async function checkQuota(tx: Tx, workspace: Workspace, adding: { page: boolean; bytes: number; versions?: number }) {
   const quota = quotaFor(workspace)
   if (!quota) return
   const { userId, organizationId } = workspace
@@ -79,15 +80,19 @@ export async function checkQuota(tx: Tx, workspace: Workspace, adding: { page: b
         'Publish a new version of a page you have (pass its artifact_id), or delete one you no longer need in the gallery.',
     )
   }
-  if (quota.versions && used.versions >= quota.versions) {
+  const incoming = adding.versions ?? 1
+  if (quota.versions && used.versions + incoming > quota.versions) {
     throw new PublishError(
-      `${where} has ${count(used.versions, 'version')} of its pages, the most ${quota.by} allows. Delete pages you no longer need in the gallery to make room.`,
+      (incoming > 1
+        ? `This page has ${count(incoming, 'version')}, which would take ${where.toLowerCase()} past ${count(quota.versions, 'version')}, the most ${quota.by} allows (${used.versions} used). `
+        : `${where} has ${count(used.versions, 'version')} of its pages, the most ${quota.by} allows. `) +
+        'Delete pages you no longer need in the gallery to make room.',
     )
   }
   if (quota.bytes && used.bytes + adding.bytes > quota.bytes) {
     throw new PublishError(
       `This would take ${organizationId ? 'this organization' : 'your personal workspace'} past ${formatSize(quota.bytes)} of storage, the most ${quota.by} allows ` +
-        `(${formatSize(used.bytes)} used, this version is ${formatSize(adding.bytes)}). ` +
+        `(${formatSize(used.bytes)} used, ${adding.versions === undefined ? 'this version' : 'this page'} is ${formatSize(adding.bytes)}). ` +
         `Delete pages you no longer need in the gallery, or make the page smaller.${quota.hint ? ` ${quota.hint}` : ''}`,
     )
   }

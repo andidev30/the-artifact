@@ -32,6 +32,8 @@ const ACTION_LABEL: Record<string, string> = {
   'page.shared': 'Shared a page',
   'page.share_role_changed': 'Changed someone’s access to a page',
   'page.unshared': 'Removed someone from a page',
+  'page.moved_in': 'Moved a page into the organization',
+  'page.moved_out': 'Moved a page out of the organization',
   'member.invited': 'Invited someone',
   'member.invitation_revoked': 'Revoked an invitation',
   'member.joined': 'Joined',
@@ -76,6 +78,13 @@ function summary(e: AuditEvent): string {
       return `${d.person} is now ${label(ROLE_LABEL, d.role).toLowerCase()}`
     case 'page.unshared':
       return String(d.person ?? '')
+    case 'page.moved_in':
+      return d.from ? `From ${d.from}` : 'From the owner’s personal workspace'
+    case 'page.moved_out': {
+      const visibility = d.visibility as { from: unknown; to: unknown } | undefined
+      const to = d.to ? `To ${d.to}` : 'To the owner’s personal workspace'
+      return visibility ? `${to}; ${label(VISIBILITY_LABEL, visibility.from)} to ${label(VISIBILITY_LABEL, visibility.to)}` : to
+    }
     case 'member.role_changed':
       return `${label(ROLE_LABEL, d.from)} to ${label(ROLE_LABEL, d.to)}`
     case 'member.invited':

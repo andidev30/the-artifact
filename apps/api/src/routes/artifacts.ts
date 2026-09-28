@@ -48,6 +48,7 @@ import { compareVersions } from '../compare.js'
 import { MAX_VIEWERS, pageViewers, totalViews, versionViews, VIEWER_RETENTION_DAYS } from '../views.js'
 import { parseVersion } from '../validation.js'
 import { getSharing, MAX_PEOPLE_PER_INVITE, parseEmails, removePerson, setPersonRole, sharePeople, SharingError } from '../sharing.js'
+import { canMove, duplicatePage, movePage, TransferError, workspaceKey } from '../transfer.js'
 
 export const artifacts = new Hono<AuthEnv>()
 
@@ -124,6 +125,8 @@ artifacts.get('/', requireUser, async (c) => {
         ...summary(a, ownerName ?? ownerEmail, thumbs.get(a.id), counts.get(a.id)),
         mine: a.ownerId === user.id,
         canEdit: editable.has(a.id),
+        // Everyone listing a workspace belongs to it, so editors can move its pages elsewhere
+        canMove: editable.has(a.id),
         folder: a.folderId && folderName ? { id: a.folderId, name: folderName } : null,
       })),
       200,
@@ -171,6 +174,7 @@ artifacts.get('/:slug', async (c) => {
   const counts = user ? await commentCounts(user.id, [artifact.id]) : null
   // Only people who can manage the page see how often it was opened
   const views = access === 'edit' ? await totalViews(artifact) : null
+  const movable = user ? await canMove(artifact, user, access === 'edit') : false
   return c.json({
     slug: artifact.slug,
     title: artifact.title,
@@ -181,6 +185,9 @@ artifacts.get('/:slug', async (c) => {
     inOrganization: artifact.organizationId !== null,
     canEdit: access === 'edit',
     isOwner: user?.id === artifact.ownerId,
+    canMove: movable,
+    // 'personal' or the organization's id, for people who belong to it and may move the page
+    ...(movable ? { workspace: workspaceKey(artifact.organizationId) } : {}),
     comments: counts ? (counts.get(artifact.id) ?? { total: 0, unread: 0 }) : null,
     views,
     contentUrl: `/api/artifacts/${artifact.slug}/v/${artifact.currentVersion}/`,
@@ -247,6 +254,55 @@ artifacts.post('/:slug/unlock', async (c) => {
   await refund('link-password', artifact.id)
   await setGrantCookie(c, artifact)
   return c.body(null, 204)
+})
+
+function transferFailed(c: Context<AuthEnv>, err: unknown) {
+  if (err instanceof TransferError) {
+    return c.json(
+      { error: err.message, ...(err.blockedOrg ? { code: 'two_factor_required' } : {}), ...(err.status === 400 ? {} : { field: 'workspace' }) },
+      err.status,
+    )
+  }
+  // The workspace is full
+  if (err instanceof PublishError) return c.json({ error: err.message, field: 'workspace' }, 403)
+  throw err
+}
+
+// A new page with a copy of the current version, in a workspace this person can publish to
+// ({ workspace: 'personal' or an organization id, title? }). Anyone signed in who can open the page.
+artifacts.post('/:slug/duplicate', requireUser, async (c) => {
+  const user = c.get('user')!
+  const artifact = await findBySlug(c.req.param('slug'))
+  if (!artifact || !(await accessFor(c, artifact))) return c.json({ error: 'Not found' }, 404)
+  const body = (await c.req.json().catch(() => ({}))) as { workspace?: unknown; title?: unknown }
+  let title: string | undefined
+  if (body.title !== undefined && body.title !== null) {
+    const checked = checkTitle(body.title)
+    if ('error' in checked) return c.json({ error: checked.error, field: 'title' }, 400)
+    title = checked.title
+  }
+  const busy = await limitRequest(c, 'publish', user.id, 'You have published a lot of pages in a short time.')
+  if (busy) return busy
+  try {
+    const copy = await duplicatePage(artifact, user, body.workspace, { title })
+    return c.json({ slug: copy.slug, title: copy.title, visibility: copy.visibility, workspace: workspaceKey(copy.organizationId) }, 201)
+  } catch (err) {
+    return transferFailed(c, err)
+  }
+})
+
+// Moves the page to another workspace ({ workspace: 'personal' or an organization id }); see src/transfer.ts
+artifacts.post('/:slug/move', requireUser, async (c) => {
+  const user = c.get('user')!
+  const artifact = await findBySlug(c.req.param('slug'))
+  if (!artifact || !(await canMove(artifact, user, await canEdit(artifact, user)))) return c.json({ error: 'Not found' }, 404)
+  const body = (await c.req.json().catch(() => ({}))) as { workspace?: unknown }
+  try {
+    const moved = await movePage(artifact, user, body.workspace)
+    return c.json({ slug: moved.slug, visibility: moved.visibility, workspace: workspaceKey(moved.organizationId) })
+  } catch (err) {
+    return transferFailed(c, err)
+  }
 })
 
 // Everything below changes the page or who can open it, so it needs edit access

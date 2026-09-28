@@ -33,7 +33,7 @@ const CORE = {
   // People one account invites to an organization or shares a page with
   invite: { max: 200, seconds: HOUR },
   'invite-ip': { max: 500, seconds: HOUR },
-  // MCP tool calls by one account, and the ones among them (or through POST /api/publish) that publish a version
+  // MCP tool calls by one account, and the ones among them (or through POST /api/publish) that publish a version or duplicate a page
   mcp: { max: 600, seconds: 10 * MINUTE },
   publish: { max: 200, seconds: HOUR },
   // Pages one account has rendered on the server with inspect_artifact (each takes a few seconds of Chromium)

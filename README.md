@@ -111,7 +111,8 @@ Other clients, HTTPS, email and backups are covered in [Self-hosting](docs/self-
 | `update_files` | Publishes a new version that changes only some files of a page, like refreshed data |
 | `list_artifacts` | Lists the most recently updated pages in the connected workspace, by title or folder, a batch at a time |
 | `list_folders` | Lists the workspace's folders |
-| `move_artifact` | Files a page into a folder, or takes it out |
+| `move_artifact` | Files a page into a folder, or takes it out, or moves it to another workspace |
+| `duplicate_artifact` | Copies a page's current version into a new, restricted page, in any workspace you can publish to |
 | `get_artifact` | Reads a page's HTML and files, to edit it |
 | `inspect_artifact` | Checks a page before sharing it: screenshots, console errors, missing files, broken links and accessibility problems |
 | `rename_artifact` | Renames a page |
