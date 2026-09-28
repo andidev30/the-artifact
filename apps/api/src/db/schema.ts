@@ -443,7 +443,32 @@ export const instanceSettings = pgTable('instance_settings', {
   instanceName: text('instance_name'),
   updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  // The license key an admin pasted on a self-hosted install (see src/license.ts). It is checked
+  // against the public keys in the code every time it is read, so editing it here unlocks nothing.
+  licenseKey: text('license_key'),
+  licenseUpdatedBy: uuid('license_updated_by').references(() => users.id, { onDelete: 'set null' }),
+  licenseUpdatedAt: timestamp('license_updated_at', { withTimezone: true }),
 })
+
+// License keys an instance admin of the hosted service issued (src/ee/licenses.ts), so they can see
+// what went to whom. The key itself isn't kept: it is shown once, and the signing key lives only in
+// LICENSE_SIGNING_KEY.
+export const issuedLicenses = pgTable(
+  'issued_licenses',
+  {
+    // The id inside the key
+    id: uuid('id').primaryKey().defaultRandom(),
+    // Which signing key signed it, as in LICENSE_PUBLIC_KEYS
+    signingKeyId: text('signing_key_id').notNull(),
+    customerName: text('customer_name').notNull(),
+    customerEmail: text('customer_email').notNull(),
+    seats: integer('seats').notNull(),
+    issuedAt: timestamp('issued_at', { withTimezone: true }).notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    issuedBy: uuid('issued_by').references(() => users.id, { onDelete: 'set null' }),
+  },
+  (t) => [index('issued_licenses_issued_at_idx').on(t.issuedAt)],
+)
 
 // Counters for rate limits (see src/limits.ts): how often something happened for one key in the
 // current window, which starts at the first hit and ends at resets_at. Kept in Postgres so every

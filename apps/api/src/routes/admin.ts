@@ -10,6 +10,7 @@ import { resetSecondFactor } from '../auth/twofactor.js'
 import { log } from '../log.js'
 import { mailEnabled } from '../env.js'
 import { activeAdminCount, adminCondition, instanceSettings, isInstanceAdmin, lockAdmins, parseSettings, revokeAccess, saveSettings } from '../instance.js'
+import { license } from './license.js'
 import { deleteAccountData, ownedAlone } from './settings.js'
 
 // The instance admin area, mounted at /api/admin. Only instance admins get past requireAdmin.
@@ -22,6 +23,7 @@ const requireAdmin = createMiddleware<AuthEnv>(async (c, next) => {
   await next()
 })
 admin.use(requireAdmin)
+admin.route('/license', license)
 
 const PAGE_SIZE = 50
 

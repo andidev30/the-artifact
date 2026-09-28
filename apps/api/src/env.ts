@@ -96,6 +96,9 @@ export const env = {
     versions: count('WORKSPACE_MAX_VERSIONS'),
     bytes: parseSize(process.env.WORKSPACE_MAX_STORAGE, 'WORKSPACE_MAX_STORAGE'),
   },
+  // Hosted service only: the Ed25519 private key that signs license keys for self-hosted installs
+  // (src/ee/licenses.ts). Without it, Server admin can't issue keys. Self-hosted installs never need it.
+  licenseSigningKey: process.env.LICENSE_SIGNING_KEY ?? '',
   // Bearer token Prometheus scrapes GET /metrics with; without it, /metrics doesn't exist
   metricsToken: process.env.METRICS_TOKEN ?? '',
   // Object storage (S3 API: MinIO, AWS S3, Cloudflare R2...) for page content and thumbnails.
