@@ -598,7 +598,10 @@ function DeleteSection({ me }: { me: Me }) {
     <section id="delete" className="settings-card settings-danger" aria-labelledby="delete-title">
       <header className="settings-card-head">
         <h2 id="delete-title">Delete account</h2>
-        <p>Deletes your account, your personal pages, your agent connections and your access tokens. People you shared personal pages with lose access. This can't be undone.</p>
+        <p>
+          Deletes your account, your personal pages, your agent connections and your access tokens. People you shared personal pages with lose access. This
+          can't be undone.
+        </p>
       </header>
 
       {preview && preview.blockedBy.length === 0 && <DeletionSummary preview={preview} />}
