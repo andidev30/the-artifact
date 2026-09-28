@@ -14,6 +14,8 @@ async function signInAsAdmin(page: Page) {
   await page.getByRole('button', { name: 'Email me a sign-in link' }).click()
   await expect(page.getByRole('heading', { name: 'Check your inbox' })).toBeVisible()
   await openSignInLink(page, await signInLink(page.request, email), email)
+  // Continue signs in with a request of its own; going on before it lands would leave the session unset
+  await expect(page).toHaveURL(/\/app$/)
 }
 
 test('an admin sees there is no license and a key that is not one is refused, by keyboard alone', async ({ page }) => {
