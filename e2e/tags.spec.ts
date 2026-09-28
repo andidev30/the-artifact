@@ -40,7 +40,7 @@ test('search inside pages, tag a page from its menu and filter the gallery by ta
   const bar = page.getByRole('navigation', { name: 'Tags' })
   await bar.getByRole('button', { name: /launch/ }).click()
   await expect(cards).toHaveCount(1)
-  await expect(page.getByText('Pages tagged')).toBeVisible()
+  await expect(page.locator('.gallery-filter').getByText('Pages tagged')).toBeVisible()
   await page.getByRole('button', { name: 'Show every page' }).click()
   await expect(cards).toHaveCount(2)
   await cards

@@ -273,7 +273,7 @@ test('tags: the tag bar, tags on cards and the tags dialog', async ({ page }) =>
   await expect(page.getByRole('navigation', { name: 'Tags' }).getByRole('button', { name: /launch/ })).toBeVisible()
   await expectAccessible(page, 'gallery with tags')
   await page.getByRole('navigation', { name: 'Tags' }).getByRole('button', { name: /q4/ }).click()
-  await expect(page.getByText('Pages tagged')).toBeVisible()
+  await expect(page.locator('.gallery-filter').getByText('Pages tagged')).toBeVisible()
   await expect(page.locator('.gallery[data-stale]')).toHaveCount(0)
   await expectAccessible(page, 'gallery filtered by a tag')
 
