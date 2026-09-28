@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
+import { bodyLimit } from 'hono/body-limit'
 import { contextStorage } from 'hono/context-storage'
 import { setProductEventStore } from './analytics.js'
 import { setAuditStore } from './audit.js'
@@ -20,6 +21,7 @@ import { pruneRetention, retention } from './ee/retention.js'
 import { ssoButtons } from './ee/sso/connections.js'
 import { ssoAdmin, ssoSignIn } from './ee/sso/routes.js'
 import { samlSignIn } from './ee/sso/saml.js'
+import { MAX_METADATA_BYTES } from './ee/sso/saml-metadata.js'
 import { scim, scimAdmin } from './ee/scim.js'
 import { contentHost, onContentHost } from './content.js'
 import { embeds } from './embeds.js'
@@ -59,6 +61,23 @@ app.onError(onUnhandledError)
 app.use(async (c, next) => {
   await next()
   c.header('X-Content-Type-Options', 'nosniff')
+})
+
+// Bodies are read whole into memory, most of them before anyone is signed in, so a request carries at
+// most 1 MB unless its route needs more. /api/publish sets its own limit from the page size limits, and
+// /mcp reads a body only once the token checks out, up to the MCP SDK's own limit (its 413 is an
+// error MCP clients understand).
+const MB = 1024 * 1024
+const maxBody = (maxSize: number) =>
+  bodyLimit({ maxSize, onError: (c) => c.json({ error: `This request is too large. It can be up to ${maxSize / MB} MB.` }, 413) })
+const DEFAULT_BODY = maxBody(MB)
+// SAML metadata pasted by an admin, escaped as JSON
+const SSO_SETTINGS_BODY = maxBody(2 * MAX_METADATA_BYTES + MB)
+const under = (path: string, prefix: string) => path === prefix || path.startsWith(`${prefix}/`)
+app.use((c, next) => {
+  const path = c.req.path
+  if (under(path, '/mcp') || under(path, '/api/publish')) return next()
+  return (under(path, '/api/admin/sso') ? SSO_SETTINGS_BODY : DEFAULT_BODY)(c, next)
 })
 // CONTENT_ORIGIN serves page files and nothing else: a page that escaped its sandbox there finds no app
 app.use(async (c, next) => {
