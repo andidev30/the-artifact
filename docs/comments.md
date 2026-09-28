@@ -57,6 +57,6 @@ Without email, nothing is sent; new comments show in the app.
 
 ## From your agent
 
-Agents read comments with `list_comments` and answer with `reply_comment`, and can start a thread with `add_comment` and resolve one with `resolve_comment` (see [Publishing](/docs/publishing#list-comments)). For a pinned comment, `list_comments` also gives the element's selector, file, version and text, so the agent knows exactly what to change, and `add_comment` can pin a comment to an element too. They are told to read the open comments before publishing a new version, so you can say "deal with the comments on the launch plan".
+Agents read comments with `list_comments` and answer with `reply_comment`, and can start a thread with `add_comment` and resolve one with `resolve_comment` (see [Publishing](/docs/publishing#list_comments)). For a pinned comment, `list_comments` also gives the element's selector, file, version and text, so the agent knows exactly what to change, and `add_comment` can pin a comment to an element too. They are told to read the open comments before publishing a new version, so you can say "deal with the comments on the launch plan".
 
 A comment from an agent is posted as the person it is connected as, marked with the agent's name, like "via claude-code". It follows that person's access: an agent can comment wherever they can, and resolve what they could resolve in the app.
