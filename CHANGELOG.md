@@ -2,6 +2,55 @@
 
 Every release of The Artifact, newest first. Entries are generated from the commit messages when a release is made; what you have to do when you upgrade is in [Upgrading](docs/upgrading.md), and the versioning policy is there too.
 
+## [0.5.0](https://github.com/andidev30/the-artifact/compare/v0.4.1...v0.5.0) (2026-09-28)
+
+
+### Bug fixes
+
+* accept only same-origin paths after sign-in ([0bc2804](https://github.com/andidev30/the-artifact/commit/0bc2804d7e1d203f2787cbb1e83e7ac93ac9b979))
+* **api:** accept only plain email addresses and send mail to one mailbox ([beeb1a5](https://github.com/andidev30/the-artifact/commit/beeb1a595fb14dd576e3a49a14cfad230c914a62))
+* **api:** answer 404 for malformed page ids and version numbers ([5c87998](https://github.com/andidev30/the-artifact/commit/5c87998bcf61714c7cb17fc3e2be1e1c210c1530))
+* **api:** check membership and two-factor sign-in on every agent request, revoke a refresh token family on reuse ([a2ad6d2](https://github.com/andidev30/the-artifact/commit/a2ad6d299c6e7e19422e38b7f82466ba1188427b))
+* **api:** check the request's origin on state-changing requests ([ae7de7e](https://github.com/andidev30/the-artifact/commit/ae7de7e98e20e7f771d6bbd40db84eb588462ad6))
+* **api:** count wrong passwords and codes before checking them ([d708015](https://github.com/andidev30/the-artifact/commit/d708015990451d0b6b89c49309f955a418d00ea2))
+* **api:** don't reveal whether content is already stored for someone else ([a6166d7](https://github.com/andidev30/the-artifact/commit/a6166d79411f1545825049c86e03eeba9d8648d6))
+* **api:** join by invitation link only for addresses nobody checked ([6945491](https://github.com/andidev30/the-artifact/commit/69454912b0e765e5df8256f05f555d57a7996b9b))
+* **api:** limit a SCIM token to its organization ([863669c](https://github.com/andidev30/the-artifact/commit/863669caabaff4b09d43f875e5bc922951925731))
+* **api:** log unexpected errors in the JSON format without query parameters ([9cf0adb](https://github.com/andidev30/the-artifact/commit/9cf0adbefae0f2f3eff61073e3c877b0d5300aa4))
+* **api:** misc hardening: upload shortcuts, invitations without email, error logs, control characters ([62ad024](https://github.com/andidev30/the-artifact/commit/62ad0247952aabf0d1139f05e3bf4e6acee7db9d))
+* **api:** refuse control characters in titles and names ([46b3850](https://github.com/andidev30/the-artifact/commit/46b38505a0d23b14d4518821bcede26fff1b3cf3))
+* **api:** scope SCIM tokens and recheck agent tokens and content links ([b56976b](https://github.com/andidev30/the-artifact/commit/b56976bb0c7107c91d46f329b85db3c9a03440af))
+* **api:** tighten agent redirect addresses and keep emails out of a log line ([c70dc02](https://github.com/andidev30/the-artifact/commit/c70dc02545b3fcba0f9afdc51065aa9cf31a193b))
+* **api:** treat IPv4-compatible and reserved IPv6 ranges as not public for screenshots ([9d095fc](https://github.com/andidev30/the-artifact/commit/9d095fc75d240e7ac9db72a5502f743aa3bb0400))
+* ask for a fresh sign-in before adding a first password ([837e443](https://github.com/andidev30/the-artifact/commit/837e443144d56f4d055fe73f42b98bbe51556d7e))
+* **deploy:** wait for the real Postgres server, not the one that initialises it ([de355c3](https://github.com/andidev30/the-artifact/commit/de355c3d38051f95da8af4c056fbc9bcae6ae787))
+* **deploy:** wait for the real Postgres server, not the one that initialises it ([9ddccc6](https://github.com/andidev30/the-artifact/commit/9ddccc6e501333a22d0dfd95c24ac35b645f30dc))
+* harden sign-in redirects, request origins and attempt limits ([6245056](https://github.com/andidev30/the-artifact/commit/6245056ad36eb3b3a926856e31af4d97c03e226e))
+* response hardening (malformed ids, nosniff, self-hosted fonts, email addresses, robots.txt) ([7f81f1b](https://github.com/andidev30/the-artifact/commit/7f81f1b2f9cd38a42624d5f06cf312998c331920))
+* send nosniff on every response and serve robots.txt ([b0a3b04](https://github.com/andidev30/the-artifact/commit/b0a3b04ee40cd718b5f07a194eb6dc0b1377f998))
+* **web:** self-host the web fonts ([8dd4b46](https://github.com/andidev30/the-artifact/commit/8dd4b46328b49825aa09edeeff027620bb63acc8))
+
+
+### Performance
+
+* **api:** batch view counts in memory and write them every 5 seconds ([766cc3c](https://github.com/andidev30/the-artifact/commit/766cc3c166099ab6e666f0c76521f1b25ff4ee45))
+* **api:** batch view counts in memory and write them every 5 seconds ([3d78cea](https://github.com/andidev30/the-artifact/commit/3d78cea2ea107d23ebb429e188769fb864f0653e)), closes [#122](https://github.com/andidev30/the-artifact/issues/122)
+* **api:** check, decode and hash large inline publishes on worker threads ([2b434ce](https://github.com/andidev30/the-artifact/commit/2b434ce85bd7892c1d2bd76dd8b15dbeb760c917)), closes [#121](https://github.com/andidev30/the-artifact/issues/121)
+* **api:** give S3 the blob's hash instead of hashing it again ([331a616](https://github.com/andidev30/the-artifact/commit/331a6168ee1e401b89b794bd0323a91b6d5b5164)), closes [#121](https://github.com/andidev30/the-artifact/issues/121)
+* **api:** keep large inline publishes off the main thread ([64b95e6](https://github.com/andidev30/the-artifact/commit/64b95e6ab0625e57e2104530ec20f039354ed88e))
+* **api:** parse MCP request bodies once ([459ab96](https://github.com/andidev30/the-artifact/commit/459ab96888be0944d23208cb2563898b82858be1)), closes [#121](https://github.com/andidev30/the-artifact/issues/121)
+* **api:** render THUMBNAIL_CONCURRENCY thumbnails at a time ([44968a8](https://github.com/andidev30/the-artifact/commit/44968a8cfa4cde29627323c1ab0b9d2df89ebe9c))
+* **api:** render THUMBNAIL_CONCURRENCY thumbnails at a time ([616ec6a](https://github.com/andidev30/the-artifact/commit/616ec6ac28a181691444ef3ec07e9ec0d2b3e136)), closes [#120](https://github.com/andidev30/the-artifact/issues/120)
+* **api:** run one worker process per CPU with node:cluster ([cd4e671](https://github.com/andidev30/the-artifact/commit/cd4e6715a963b802101cff17b6ba0228b12b3186))
+* **api:** run one worker process per CPU with node:cluster ([93014d5](https://github.com/andidev30/the-artifact/commit/93014d5ca52335e066d5440f6e58b3be21d12b75)), closes [#118](https://github.com/andidev30/the-artifact/issues/118)
+* **api:** serve page files with one query when warm ([ebda495](https://github.com/andidev30/the-artifact/commit/ebda495c0310578c2de38fce977f0e51d907ecaf))
+* **api:** serve page files with one query when warm ([a91200b](https://github.com/andidev30/the-artifact/commit/a91200b6b714d50df009623fa88e7de71a115b06)), closes [#119](https://github.com/andidev30/the-artifact/issues/119)
+
+
+### Documentation
+
+* complete the upgrade notes for 0.5.0 ([e76e6a3](https://github.com/andidev30/the-artifact/commit/e76e6a3c2aae561b3edaa129315aedbe0a49e124))
+
 ## [0.4.1](https://github.com/andidev30/the-artifact/compare/v0.4.0...v0.4.1) (2026-09-28)
 
 
