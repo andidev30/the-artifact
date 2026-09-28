@@ -8,6 +8,7 @@ import { endSession, loadUser, requireUser, type AuthEnv } from './auth/session.
 import { clearPending, passkeySignIn, twoFactor } from './auth/twofactor.js'
 import { db, schema } from './db/index.js'
 import { contact } from './ee/contact.js'
+import { issuedLicenses } from './ee/licenses.js'
 import { historyCron, personalPlan } from './ee/plans.js'
 import { embeds } from './embeds.js'
 import { env, mailEnabled } from './env.js'
@@ -99,6 +100,7 @@ api.route('/me/invitations', myInvitations)
 api.route('/me/security', security)
 api.route('/me/sessions', sessions)
 api.route('/me', settings)
+api.route('/admin/issued-licenses', issuedLicenses)
 api.route('/admin', admin)
 api.route('/cron/history', historyCron)
 api.route('/cron', cron)

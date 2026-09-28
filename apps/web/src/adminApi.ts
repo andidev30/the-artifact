@@ -64,7 +64,7 @@ export type UserDeletionPreview = {
   pageCount: number
 }
 
-async function adminRequest<T>(path: string, init?: { method?: string; json?: unknown; signal?: AbortSignal }): Promise<T> {
+export async function adminRequest<T>(path: string, init?: { method?: string; json?: unknown; signal?: AbortSignal }): Promise<T> {
   const res = await fetch(`/api/admin${path}`, {
     method: init?.method,
     credentials: 'same-origin',
@@ -112,3 +112,21 @@ export const createSignUpLink = (email: string) => adminRequest<SignUpLink>('/si
 
 // Removes every passkey, authenticator app and recovery code of someone else, and signs them out
 export const resetTwoFactor = (id: string) => adminRequest<AdminUser>(`/users/${encodeURIComponent(id)}/reset-two-factor`, { method: 'POST' })
+
+// A self-hosted install's license key (/api/admin/license)
+export type LicenseStatus = 'none' | 'active' | 'grace' | 'expired'
+
+export type LicenseState = {
+  status: LicenseStatus
+  // Why a saved key doesn't count, e.g. it was signed by a key this version doesn't know
+  invalid: string | null
+  license: { id: string; customer: string; email: string; seats: number; issuedAt: string; expiresAt: string; graceEndsAt: string } | null
+  // Accounts that aren't suspended
+  seatsInUse: number
+}
+
+export const getLicense = () => adminRequest<LicenseState>('/license')
+
+export const saveLicense = (key: string) => adminRequest<LicenseState>('/license', { method: 'PUT', json: { key } })
+
+export const removeLicense = () => adminRequest<LicenseState>('/license', { method: 'DELETE' })

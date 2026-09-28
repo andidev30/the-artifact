@@ -24,6 +24,7 @@ Hono on Node 26, Drizzle ORM over `postgres`, S3 via `@aws-sdk/client-s3`, MCP v
 | `src/limits.ts` | Rate limits: counters in Postgres (`hit`, `limitRequest` for a 429 with `Retry-After`), `RATE_LIMITS` overrides, the client address (`clientIp`, `TRUST_PROXY`) |
 | `src/quota.ts` | Pages, versions and storage per workspace, checked when a page or version is added; `WORKSPACE_MAX_*` and the plan hook for `ee/` |
 | `src/instance.ts` | Instance admins, sign-up policy and instance settings |
+| `src/license.ts`, `src/routes/license.ts` | License keys, verified offline against `LICENSE_PUBLIC_KEYS` (Ed25519, `node:crypto`); the enterprise gate `hasEnterprise()` / `enterprise()` / `requireEnterprise`; `/api/admin/license` where a self-hosted admin enters the key |
 | `src/mcp.ts` | The MCP tools (`publish_artifact`, `list_artifacts`, `list_folders`, `move_artifact`, `get_artifact`, `rename_artifact`, `set_artifact_visibility`, `share_artifact`, `delete_artifact`, `list_versions`, `restore_version`, `download_artifact`, `list_comments`, `add_comment`, `reply_comment`, `resolve_comment`, and `prepare_upload`/`publish_upload` when `S3_PUBLIC_ENDPOINT` is set) |
 | `src/uploads.ts` | Publishing by direct upload: upload links, then checking and claiming what arrived |
 | `src/oauth/` | OAuth 2.1 server for MCP clients and the CLI (discovery, dynamic registration, PKCE, revocation) and the consent API; `authenticateBearer` resolves every bearer token |
@@ -35,8 +36,8 @@ Hono on Node 26, Drizzle ORM over `postgres`, S3 via `@aws-sdk/client-s3`, MCP v
 | `src/log.ts` | JSON logs, one object per line, tagged with the request id. Use `log.info/warn/error` rather than `console` |
 | `src/metrics.ts`, `src/routes/health.ts` | Prometheus metrics and the per-request middleware (request id, log line, timing by route pattern); `/healthz`, `/readyz` and `/metrics` (only with `METRICS_TOKEN`) |
 | `src/mail.ts` | Outgoing email. Throws `MailDisabledError` without SMTP |
-| `src/ee/` | Hosted-service-only routes (contact sales); see `src/ee/CLAUDE.md` |
-| `src/scripts/` | Operator CLIs (`admin:grant`, `storage:sweep`, `thumbnails:backfill`), also run as `node dist/scripts/*.js` in the image |
+| `src/ee/` | Hosted-service-only routes (contact sales, issuing license keys) and enterprise features behind `hasEnterprise()`; see `src/ee/CLAUDE.md` |
+| `src/scripts/` | Operator CLIs (`admin:grant`, `storage:sweep`, `thumbnails:backfill`, and `license:keygen` for the hosted service's signing key), also run as `node dist/scripts/*.js` in the image |
 
 ## Rules that aren't obvious from one file
 

@@ -1,0 +1,41 @@
+.issue-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.issue-form .admin-panel-actions,
+.issue-form .auth-notice {
+  grid-column: 1 / -1;
+}
+
+.issue-result:focus {
+  outline: none;
+}
+
+.issue-result:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 4px;
+}
+
+.issue-list {
+  display: grid;
+  gap: 8px;
+}
+
+.issue-list h3 {
+  margin: 0;
+}
+
+.issue-row {
+  display: grid;
+  gap: 2px;
+  padding: 10px 0;
+  font-size: var(--step--1);
+  border-bottom: 1.5px solid var(--grid);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 560px) {
+  .issue-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

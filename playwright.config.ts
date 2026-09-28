@@ -37,6 +37,8 @@ function servers(ports: { api: number; web: number }, selfHosted: boolean, datab
         GOOGLE_CLIENT_ID: '',
         GOOGLE_CLIENT_SECRET: '',
         SALES_EMAIL: '',
+        // No signing key, so Server admin shows why it can't issue license keys (e2e/admin.spec.ts)
+        LICENSE_SIGNING_KEY: '',
         // Every spec signs in from localhost, so per-network limits would count them all together.
         // The limits themselves are covered by apps/api/test/integration/limits.test.ts.
         RATE_LIMITS: 'off',

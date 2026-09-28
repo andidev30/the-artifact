@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import type { Me } from '../api'
 import {
@@ -28,10 +28,14 @@ import { useConfig } from '../useConfig'
 import { timeAgo } from '../time'
 import { useMe } from '../useMe'
 import { useWorkspace } from '../workspace'
+import { LicenseSection } from './AdminLicense'
 import { LoadError, Loading } from './Status'
 import './Workspace.css'
 import './Settings.css'
 import './Admin.css'
+
+// Hosted service only, so its code never loads on a self-hosted install
+const IssuedLicensesSection = lazy(() => import('../ee/IssueLicenses').then((m) => ({ default: m.IssuedLicensesSection })))
 
 const errorText = (err: unknown, fallback: string) => (err instanceof Error ? err.message : fallback)
 const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString('en')} ${n === 1 ? one : many}`
@@ -75,6 +79,7 @@ function NotAdmin({ me }: { me: Me }) {
 
 function AdminPage({ me }: { me: Me }) {
   const { name } = useWorkspace(me)
+  const config = useConfig()
   // Bumped after any change so the counts at the top stay current
   const [version, setVersion] = useState(0)
   const changed = useCallback(() => setVersion((v) => v + 1), [])
@@ -89,6 +94,8 @@ function AdminPage({ me }: { me: Me }) {
     { id: 'people', label: 'People' },
     { id: 'organizations', label: 'Organizations' },
     { id: 'signup', label: 'Sign-up' },
+    ...(config?.selfHosted === true ? [{ id: 'license', label: 'License' }] : []),
+    ...(config?.selfHosted === false ? [{ id: 'license-keys', label: 'License keys' }] : []),
   ]
 
   return (
@@ -122,6 +129,12 @@ function AdminPage({ me }: { me: Me }) {
             <PeopleSection onChanged={changed} />
             <OrganizationsSection onChanged={changed} />
             <SignupSection onChanged={changed} />
+            {config?.selfHosted === true && <LicenseSection />}
+            {config?.selfHosted === false && (
+              <Suspense fallback={null}>
+                <IssuedLicensesSection />
+              </Suspense>
+            )}
           </div>
         </div>
       </main>

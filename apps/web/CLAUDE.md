@@ -7,7 +7,7 @@ React 19, React Router 8, Vite 8, TypeScript. No UI or state library: plain comp
 | Path | What |
 | --- | --- |
 | `src/main.tsx` | Every route. Add new pages here |
-| `src/ee/` | Hosted-service-only pages (see `src/ee/CLAUDE.md`); `pages/Home.tsx` loads them |
+| `src/ee/` | Hosted-service-only pages and enterprise features (see `src/ee/CLAUDE.md`); `pages/Home.tsx` and `pages/Admin.tsx` load them |
 | `src/pages/` | One component per route, with its own `.css` when it needs styles |
 | `src/components/` | Shared pieces (header, gallery, share dialog, history panel, menus), each with its own `.css` |
 | `src/api.ts` | Typed `fetch` wrappers for `/api/*`; `src/adminApi.ts` for `/api/admin` |
