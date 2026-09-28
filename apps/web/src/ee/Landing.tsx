@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useLocation } from 'react-router'
 import { fetchMe, type Me } from '../api'
 import { ConnectTabs } from '../components/ConnectTabs'
 import { Wordmark } from '../components/Wordmark'
@@ -34,6 +34,12 @@ type Session = Me | null | undefined
 // The hosted service's home page. Self-hosted installs never load it (see pages/Home.tsx).
 export function Landing() {
   const [me, setMe] = useState<Session>(undefined)
+  const { hash } = useLocation()
+
+  // Links from other pages (the docs' Pricing) arrive as /#pricing, and the router doesn't scroll to it
+  useEffect(() => {
+    if (hash) document.getElementById(decodeURIComponent(hash.slice(1)))?.scrollIntoView()
+  }, [hash])
 
   useEffect(() => {
     fetchMe()
