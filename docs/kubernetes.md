@@ -206,7 +206,7 @@ cp deploy/kubernetes/app.env.example deploy/kubernetes/app.env
 | `S3_SECRET_ACCESS_KEY` | A new password; it is also the bundled MinIO's password. |
 | `SMTP_*`, `GOOGLE_*` | Optional, as in the [configuration reference](/docs/configuration). Without `SMTP_HOST` the server [runs without email](/docs/self-hosting#running-without-email). |
 | `ENCRYPTION_KEY` | Recommended. The output of `openssl rand -base64 32`, kept apart from your backups too: the server needs it to start. See [Encryption key](/docs/configuration#encryption-key). |
-| `TRUST_PROXY` | Already `true`, since people reach the app through the ingress. It makes [rate limits](/docs/configuration#rate-limits) see each visitor's address instead of the ingress controller's. |
+| `TRUST_PROXY` | Already `true`, since people reach the app through the ingress. It makes [rate limits](/docs/configuration#rate-limits) see each visitor's address instead of the ingress controller's. Keep the Service a `ClusterIP`: exposed as a `NodePort` or `LoadBalancer`, anyone reaching it past the ingress could claim any address. |
 
 The database and MinIO keep the passwords they were created with, so changing them later means changing them inside Postgres and MinIO too. `app.env` is ignored by git.
 

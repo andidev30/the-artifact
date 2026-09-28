@@ -33,6 +33,7 @@ And `.env`, read by Docker Compose, before the first start (the database and Min
 | `POSTGRES_PASSWORD`, `MINIO_ROOT_PASSWORD` | Passwords of the bundled Postgres and MinIO. Neither is reachable from outside the compose network. Without the file they default to `artifact` and `artifact-secret`. |
 | `ARTIFACT_VERSION` | Optional. The release to run: an exact version like `0.2.0`, or `0.2` to get that release's fixes whenever you pull. Without it, the compose file runs the release it was written for. See [Image tags](/docs/upgrading#image-tags). |
 | `ARTIFACT_PORT` | Optional. Port on the host, `8080` by default. |
+| `ARTIFACT_BIND` | Optional. Address on the host the port is published on. `127.0.0.1` by default, so only the server itself reaches the app, e.g. a reverse proxy running there. `0.0.0.0` publishes it on every network the server is on. |
 | `S3_*` | Optional. Object storage elsewhere; see [Using S3, R2 or your own MinIO](#using-s3-r2-or-your-own-minio). |
 
 Put each setting in the file listed here: the compose file sets the `.env` ones for the app itself, so the same line in `app.env` would be ignored. Every setting is listed in the [configuration reference](/docs/configuration).
@@ -43,7 +44,7 @@ Put each setting in the file listed here: the compose file sets the `.env` ones 
 docker compose up -d
 ```
 
-The first start pulls the images. The app listens on port 8080 (or `ARTIFACT_PORT`). It creates and updates its database tables on every start. Open `APP_URL` and create the first account: it becomes the instance admin (see [The instance admin](#the-instance-admin)). Without email, the first page you see is **Set up this server**, which asks for your email and a password. Do this before you share the address.
+The first start pulls the images. The app listens on port 8080 (or `ARTIFACT_PORT`) of the server itself, `127.0.0.1`, so nothing else reaches it until you [put it behind HTTPS](#3-put-it-behind-https). To try it from another computer first, set `ARTIFACT_BIND=0.0.0.0` in `.env` and `APP_URL` to the address you open, e.g. `http://192.168.1.20:8080`, then run `docker compose up -d` again. It creates and updates its database tables on every start. Open `APP_URL` and create the first account: it becomes the instance admin (see [The instance admin](#the-instance-admin)). Without email, the first page you see is **Set up this server**, which asks for your email and a password. Do this before you share the address.
 
 The image includes a headless Chromium for gallery thumbnails. The compose file runs the app with `deploy/seccomp-chromium.json` so Chromium can keep its sandbox on (see [Security](/docs/security)); keep that line if you write your own compose file, or the log will say thumbnails are off. On Kubernetes the profile goes on the nodes; see [Kubernetes](/docs/kubernetes#3-the-seccomp-profile).
 
@@ -87,11 +88,11 @@ Agents and browsers should reach The Artifact over HTTPS. Any reverse proxy work
 
 ```
 artifact.example.com {
-  reverse_proxy localhost:8080
+  reverse_proxy 127.0.0.1:8080
 }
 ```
 
-Then set `APP_URL=https://artifact.example.com` and `TRUST_PROXY=true` in `app.env`, and restart with `docker compose up -d`. `TRUST_PROXY` tells the app to take each visitor's address from the `X-Forwarded-For` header the proxy adds; without it, every visitor has the proxy's address, and the [per-network rate limits](/docs/configuration#rate-limits) count them all together. Only set it when the app can't be reached except through the proxy, or anyone could claim any address.
+Then set `APP_URL=https://artifact.example.com` and `TRUST_PROXY=true` in `app.env`, and restart with `docker compose up -d`. `TRUST_PROXY` tells the app to take each visitor's address from the `X-Forwarded-For` header the proxy adds; without it, every visitor has the proxy's address, and the [per-network rate limits](/docs/configuration#rate-limits) count them all together. Only set it when the app can't be reached except through the proxy, or anyone could claim any address. The compose file makes sure of that while the proxy runs on the same server, since it publishes the port on `127.0.0.1` only. For a proxy on another machine, set `ARTIFACT_BIND` to the server's address on the network the proxy uses, and keep everyone else away from that port. A firewall like `ufw` doesn't do that on its own, because Docker publishes ports past its rules. With `ARTIFACT_BIND=0.0.0.0` and no proxy, leave `TRUST_PROXY` unset.
 
 ### A separate domain for pages
 
@@ -103,7 +104,7 @@ Pages are untrusted HTML. They already run in a sandbox with no origin of their 
 
    ```
    artifact.example.com, artifact-content.example.net {
-     reverse_proxy localhost:8080
+     reverse_proxy 127.0.0.1:8080
    }
    ```
 
