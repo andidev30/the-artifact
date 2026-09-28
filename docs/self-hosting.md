@@ -246,7 +246,7 @@ Both return JSON, e.g. `{"status":"ok","checks":{"database":"ok","storage":"ok"}
 
 ### Logs
 
-The app logs one JSON object per line: one per request, with `requestId`, `method`, `route`, `status` and `durationMs`, and others for things like failed emails or thumbnails. `route` is the pattern that matched (`/api/artifacts/:slug`), never the address itself, so page links and tokens stay out of the log. Every response has an `X-Request-Id` header with the request's id. When your reverse proxy sends its own `X-Request-Id` (letters, digits, `.`, `_`, `:` and `-`, up to 128 characters), the app uses that instead, so you can follow one request through both logs. Probes and scrapes that succeed aren't logged.
+The app logs one JSON object per line: one per request, with `requestId`, `method`, `route`, `status` and `durationMs`, and others for things like failed emails or thumbnails. An error the app didn't expect is logged as `unhandled error` with the request's id and route; for a failed database query that is the query and what Postgres said, never the values it was run with. `route` is the pattern that matched (`/api/artifacts/:slug`), never the address itself, so page links and tokens stay out of the log. Every response has an `X-Request-Id` header with the request's id. When your reverse proxy sends its own `X-Request-Id` (letters, digits, `.`, `_`, `:` and `-`, up to 128 characters), the app uses that instead, so you can follow one request through both logs. Probes and scrapes that succeed aren't logged.
 
 ```sh
 docker compose logs app | grep '"status":5'

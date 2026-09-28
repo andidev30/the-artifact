@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import type { MiddlewareHandler } from 'hono'
+import type { ErrorHandler, MiddlewareHandler } from 'hono'
+import { HTTPException } from 'hono/http-exception'
 import { routePath } from 'hono/route'
 import { collectDefaultMetrics, Gauge, Histogram, Registry } from 'prom-client'
 import { poolStats } from './db/index.js'
@@ -92,4 +93,12 @@ export const observeRequests: MiddlewareHandler = async (c, next) => {
     log[status >= 500 ? 'error' : 'info']('request', { requestId, method, route, status, durationMs: Math.round(seconds * 10_000) / 10 })
   }
   c.header('X-Request-Id', requestId)
+}
+
+// For every Hono app: an error nothing caught becomes one JSON log line (see describe in src/log.ts
+// for what is left out) and a plain 500, instead of Hono's default, which prints the error as is.
+export const onUnhandledError: ErrorHandler = (err, c) => {
+  if (err instanceof HTTPException) return err.getResponse()
+  log.error('unhandled error', { method: METHODS.has(c.req.method) ? c.req.method : 'OTHER', route: routePath(c), err })
+  return c.json({ error: 'Something went wrong. Try again in a moment.' }, 500)
 }
