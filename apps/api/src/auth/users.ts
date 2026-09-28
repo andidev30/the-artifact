@@ -67,9 +67,13 @@ export async function findOrCreateUser(profile: Profile): Promise<User> {
     }
   }
 
-  const [byEmail] = await db.select().from(schema.users).where(eq(schema.users.email, email))
-  if (byEmail) {
-    if (byEmail.suspendedAt) throw new AccountSuspendedError()
+  const [found] = await db.select().from(schema.users).where(eq(schema.users.email, email))
+  if (found) {
+    if (found.suspendedAt) throw new AccountSuspendedError()
+    // Every way in here proves the address: an email link, Google's verified email, or single sign-on
+    const byEmail = found.emailUnverified
+      ? (await db.update(schema.users).set({ emailUnverified: false }).where(eq(schema.users.id, found.id)).returning())[0]
+      : found
     if (profile.passwordHash) {
       // A new password signs the person out everywhere else
       await db.delete(schema.sessions).where(eq(schema.sessions.userId, byEmail.id))
@@ -138,14 +142,15 @@ export function signInErrorUrl(error: string): string {
 
 // A new account with a password, or null when the address already has one. Never touches an
 // existing account, unlike findOrCreateUser.
-export async function createPasswordAccount(email: string, name: string | null, passwordHash: string): Promise<User | null> {
+// unverified: the person typed the address themselves and nothing checked it (see emailUnverified).
+export async function createPasswordAccount(email: string, name: string | null, passwordHash: string, unverified = false): Promise<User | null> {
   const user = await db.transaction(async (tx) => {
     await lockAdmins(tx)
     const [taken] = await tx.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, email))
     if (taken) return null
     const [created] = await tx
       .insert(schema.users)
-      .values({ email, name, passwordHash, ...(await newAccountFields(tx)) })
+      .values({ email, name, passwordHash, emailUnverified: unverified, ...(await newAccountFields(tx)) })
       .returning()
     return created
   })

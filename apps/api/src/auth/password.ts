@@ -166,7 +166,7 @@ password.post('/sign-up', async (c) => {
   const problem = passwordProblem(body?.password)
   if (problem) return c.json({ error: problem, field: 'password' }, 400)
 
-  const created = await createPasswordAccount(email, name, await hashPassword(body!.password as string))
+  const created = await createPasswordAccount(email, name, await hashPassword(body!.password as string), true)
   if (!created) return c.json({ error: 'This address already has an account. Log in instead.', code: 'account_exists', field: 'email' }, 409)
   await startSession(c, created.id)
   return c.json({ redirect: afterSignInUrl(typeof body?.plan === 'string' ? body.plan : null, typeof body?.next === 'string' ? body.next : null) }, 201)

@@ -491,12 +491,15 @@ invitations.post('/:token/decline', requireUser, async (c) => {
 })
 
 // Invitations to the signed-in person's email, so they can join without the email link.
-// Mounted at /api/me/invitations.
+// Mounted at /api/me/invitations. Only for accounts whose address was checked: someone who signed
+// up with a password on a server without email may have typed another person's address, so they
+// join with the invitation link the inviter passed on, like a new account would.
 export const myInvitations = new Hono<AuthEnv>()
 myInvitations.use(requireUser)
 
 myInvitations.get('/', async (c) => {
   const user = c.get('user')!
+  if (user.emailUnverified) return c.json([])
   const rows = await db
     .select({
       id: schema.invitations.id,
@@ -541,7 +544,7 @@ myInvitations.get('/', async (c) => {
 // The invitation by id, only when it is for this person's email; others look missing
 async function ownInvitation(c: Context<AuthEnv>) {
   const id = c.req.param('id') ?? ''
-  if (!UUID_RE.test(id)) return null
+  if (!UUID_RE.test(id) || c.get('user')!.emailUnverified) return null
   const [row] = await db
     .select({ invitation: schema.invitations, org: schema.organizations })
     .from(schema.invitations)
