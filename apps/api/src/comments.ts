@@ -2,8 +2,9 @@ import { and, asc, count, eq, inArray, isNotNull, isNull, sql, type SQL } from '
 import { alias } from 'drizzle-orm/pg-core'
 import { accessLevel, artifactUrl, canView, type LinkPass, type Viewer } from './artifacts.js'
 import { db, schema } from './db/index.js'
-import type { Artifact, Comment } from './db/schema.js'
+import type { Artifact, Comment, CommentAnchor } from './db/schema.js'
 import { mailEnabled } from './env.js'
+import { checkPath } from './files.js'
 import { hit } from './limits.js'
 import { log } from './log.js'
 import { sendCommentNotice } from './mail.js'
@@ -12,6 +13,10 @@ import { UUID_RE } from './validation.js'
 export const MAX_COMMENT_LENGTH = 5000
 export const THREADS_PER_PAGE = 50
 export const MAX_THREADS_PER_PAGE = 100
+export const MAX_SELECTOR_LENGTH = 500
+export const MAX_SNIPPET_LENGTH = 200
+
+export type { CommentAnchor }
 
 export class CommentError extends Error {}
 
@@ -29,6 +34,46 @@ export function checkBody(value: unknown): { body: string } | { error: string } 
   if (!body) return { error: 'Write something first.' }
   if (body.length > MAX_COMMENT_LENGTH) return { error: `Keep a comment under ${MAX_COMMENT_LENGTH.toLocaleString('en')} characters.` }
   return { body }
+}
+
+// Any control character. Anchors are picked inside the page's frame, whose scripts can send anything,
+// so nothing but plain text is stored.
+const ANY_CONTROL_RE = /\p{Cc}/u
+const HTML_PATH_RE = /\.html?$/i
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
+const fraction = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1 ? Math.round(v * 10_000) / 10_000 : null)
+
+// The element a new thread is about, checked as untrusted input. null or undefined is a comment on the
+// whole page. Only the known fields are kept; the version must be one the page has.
+export function checkAnchor(value: unknown, currentVersion: number): { anchor: CommentAnchor | null } | { error: string } {
+  if (value === undefined || value === null) return { anchor: null }
+  if (!isRecord(value)) return { error: 'The element to pin the comment to is not valid. Pick it again, or comment on the whole page.' }
+  const version = value.version === undefined ? currentVersion : value.version
+  if (typeof version !== 'number' || !Number.isInteger(version) || version < 1 || version > currentVersion) {
+    return { error: `Pin the comment to a version the page has, from 1 to ${currentVersion}.` }
+  }
+  const selector = typeof value.selector === 'string' ? value.selector.trim() : ''
+  if (!selector) return { error: 'Say which element the comment is about with a CSS selector.' }
+  if (selector.length > MAX_SELECTOR_LENGTH)
+    return { error: `Keep the selector under ${MAX_SELECTOR_LENGTH} characters. Pick an element nearer the top of the page.` }
+  if (ANY_CONTROL_RE.test(selector)) return { error: "The selector can't contain control characters." }
+  if (value.snippet !== undefined && typeof value.snippet !== 'string') return { error: "The element's text must be text." }
+  const snippet = (value.snippet ?? '').replace(/\s+/g, ' ').trim()
+  if (snippet.length > MAX_SNIPPET_LENGTH) return { error: `Keep the element's text under ${MAX_SNIPPET_LENGTH} characters.` }
+  if (ANY_CONTROL_RE.test(snippet)) return { error: "The element's text can't contain control characters." }
+  const path = value.path === undefined ? 'index.html' : value.path
+  const checked = checkPath(path)
+  if ('error' in checked || !HTML_PATH_RE.test(checked.path) || ANY_CONTROL_RE.test(checked.path)) {
+    return { error: 'The file the element is in must be one of the page\'s HTML files, like "index.html".' }
+  }
+  const anchor: CommentAnchor = { version, selector, snippet, path: checked.path }
+  if (value.rect !== undefined && value.rect !== null) {
+    const r = isRecord(value.rect) ? value.rect : {}
+    const [x, y, w, h] = [fraction(r.x), fraction(r.y), fraction(r.w), fraction(r.h)]
+    if (x === null || y === null || w === null || h === null) return { error: "The element's position must be four numbers from 0 to 1 (x, y, w and h)." }
+    anchor.rect = { x, y, w, h }
+  }
+  return { anchor }
 }
 
 // Comments need a signed-in person who can open the page; editors of the page also moderate them.
@@ -59,7 +104,14 @@ export async function threadOf(artifact: Artifact, comment: Comment): Promise<Co
 const isForeignKeyViolation = (err: unknown) => (err as { code?: string }).code === '23503' || (err as { cause?: { code?: string } }).cause?.code === '23503'
 
 // A reply to a reply joins the same thread, so threads stay one level deep. Replying reopens a resolved thread.
-export async function addComment(artifact: Artifact, by: Author, body: string, opts: { replyTo?: Comment | null; postedWith?: string | null } = {}) {
+// Only a thread's first comment has an anchor; replies are about what their thread is about.
+export async function addComment(
+  artifact: Artifact,
+  by: Author,
+  body: string,
+  opts: { replyTo?: Comment | null; postedWith?: string | null; anchor?: CommentAnchor | null } = {},
+) {
+  if (opts.replyTo && opts.anchor) throw new CommentError("A reply can't be pinned to an element. Start a new comment instead.")
   const thread = opts.replyTo ? await threadOf(artifact, opts.replyTo) : null
   if (opts.replyTo && !thread) throw new CommentError('That comment was deleted.')
   let row: Comment
@@ -73,6 +125,7 @@ export async function addComment(artifact: Artifact, by: Author, body: string, o
         body,
         version: artifact.currentVersion,
         postedWith: opts.postedWith ?? null,
+        anchor: opts.anchor ?? null,
       })
       .returning()
   } catch (err) {

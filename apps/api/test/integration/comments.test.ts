@@ -418,3 +418,121 @@ describe('comments over MCP', () => {
     expect(refused.text).toContain('limit of 1 comments per hour')
   })
 })
+
+describe('comments on an element', () => {
+  const anchor = {
+    version: 1,
+    selector: '#revenue > h2',
+    snippet: '  Revenue\n by   month ',
+    path: 'index.html',
+    rect: { x: 0.1, y: 0.25123456, w: 0.5, h: 0.05 },
+  }
+  type Anchored = { anchor: unknown }
+
+  it('stores the anchor of a new thread and returns it', async () => {
+    const p = await people()
+    const res = await post(p.page.slug, p.member, { body: 'Wrong axis', anchor: { ...anchor, extra: 'dropped' } })
+    expect(res.status).toBe(201)
+    const created = await res.json()
+    const stored = { version: 1, selector: '#revenue > h2', snippet: 'Revenue by month', path: 'index.html', rect: { x: 0.1, y: 0.2512, w: 0.5, h: 0.05 } }
+    expect(created.anchor).toEqual(stored)
+    const { threads } = await list(p.page.slug, p.viewer)
+    expect((threads[0] as Thread & Anchored).anchor).toEqual(stored)
+    // Whole-page comments have none
+    const plain = await comment(p.page.slug, p.member, 'Looks good')
+    expect((plain as Comment & Anchored).anchor).toBeNull()
+  })
+
+  it('checks the anchor as untrusted input', async () => {
+    const p = await people()
+    const bad: [unknown, RegExp][] = [
+      ['#a', /not valid/],
+      [[anchor], /not valid/],
+      [{ ...anchor, version: 2 }, /version the page has, from 1 to 1/],
+      [{ ...anchor, version: 0 }, /version the page has/],
+      [{ ...anchor, version: 1.5 }, /version the page has/],
+      [{ ...anchor, selector: '' }, /CSS selector/],
+      [{ ...anchor, selector: 42 }, /CSS selector/],
+      [{ ...anchor, selector: 'a'.repeat(501) }, /under 500 characters/],
+      [{ ...anchor, selector: 'h1\u0000' }, /control characters/],
+      [{ ...anchor, selector: 'h1\u001b[31m' }, /control characters/],
+      [{ ...anchor, snippet: 'x'.repeat(201) }, /under 200 characters/],
+      [{ ...anchor, snippet: 'bell\u0007' }, /control characters/],
+      [{ ...anchor, snippet: 7 }, /must be text/],
+      [{ ...anchor, path: '../secret.html' }, /HTML files/],
+      [{ ...anchor, path: 'style.css' }, /HTML files/],
+      [{ ...anchor, path: '/index.html' }, /HTML files/],
+      [{ ...anchor, rect: { x: 2, y: 0, w: 0, h: 0 } }, /four numbers from 0 to 1/],
+      [{ ...anchor, rect: { x: 0, y: 0, w: 0 } }, /four numbers/],
+      [{ ...anchor, rect: 'top' }, /four numbers/],
+    ]
+    for (const [value, error] of bad) {
+      const res = await post(p.page.slug, p.member, { body: 'Hi', anchor: value })
+      expect(res.status, JSON.stringify(value)).toBe(400)
+      const json = await res.json()
+      expect(json.field).toBe('anchor')
+      expect(json.error).toMatch(error)
+    }
+    // Whitespace in the snippet is folded, not refused; a missing path and version mean the entry and the current one
+    const ok = await post(p.page.slug, p.member, { body: 'Hi', anchor: { selector: 'main', snippet: 'a\tb\nc' } })
+    expect(ok.status).toBe(201)
+    expect((await ok.json()).anchor).toEqual({ version: 1, selector: 'main', snippet: 'a b c', path: 'index.html' })
+    expect((await list(p.page.slug, p.owner)).threads).toHaveLength(1)
+  })
+
+  it("won't pin a reply, and only people who can open the page can pin", async () => {
+    const p = await people()
+    const t = await comment(p.page.slug, p.member, 'Start')
+    const reply = await post(p.page.slug, p.member, { body: 'Reply', replyTo: t.id, anchor })
+    expect(reply.status).toBe(400)
+    expect((await reply.json()).error).toMatch(/reply can't be pinned/)
+    expect((await post(p.page.slug, p.outsider, { body: 'Hi', anchor })).status).toBe(404)
+    expect((await post(p.page.slug, null, { body: 'Hi', anchor })).status).toBe(401)
+  })
+
+  it('accepts anchors on older versions, and keeps them when the comment is edited', async () => {
+    const p = await people()
+    await publish({
+      userId: p.owner.id,
+      email: p.owner.email,
+      organizationId: p.org.id,
+      clientName: 'test',
+      title: 'Launch plan',
+      html: '<p>v2</p>',
+      slug: p.page.slug,
+    })
+    const res = await post(p.page.slug, p.member, { body: 'On the old one', anchor: { ...anchor, version: 1, path: 'pages/team.htm' } })
+    expect(res.status).toBe(201)
+    const created = await res.json()
+    expect(created).toMatchObject({ version: 2, anchor: { version: 1, path: 'pages/team.htm' } })
+    const edited = await call(`${base(p.page.slug)}/${created.id}`, { method: 'PATCH', cookie: p.member.cookie, json: { body: 'Edited' } })
+    expect((await edited.json()).anchor).toMatchObject({ selector: '#revenue > h2' })
+  })
+
+  it('gives agents the anchor, and lets them pin a comment', async () => {
+    const p = await people()
+    await post(p.page.slug, p.member, { body: 'Wrong axis', anchor })
+    const { access_token: token } = await connectAgent(p.owner, p.org.id, 'claude-code')
+    const listed = await callTool(token, 'list_comments', { artifact_id: p.page.slug })
+    expect(listed.text).toContain(
+      '[about the element "#revenue > h2" in index.html of version 1, which read "Revenue by month", 10% across and 25% down the page]',
+    )
+    expect(listed.text).toContain('    Wrong axis')
+
+    const added = await callTool(token, 'add_comment', {
+      artifact_id: p.page.slug,
+      body: 'Fixed the axis',
+      anchor: { selector: '#revenue canvas', snippet: 'Chart' },
+    })
+    expect(added.isError).toBe(false)
+    expect(added.text).toContain('pinned to "#revenue canvas" in index.html')
+    const { threads } = await list(p.page.slug, p.member)
+    expect((threads.at(-1) as Thread & Anchored).anchor).toEqual({ version: 1, selector: '#revenue canvas', snippet: 'Chart', path: 'index.html' })
+
+    const refused = await callTool(token, 'add_comment', { artifact_id: p.page.slug, body: 'x', anchor: { selector: 'h1', version: 3 } })
+    expect(refused.isError).toBe(true)
+    expect(refused.text).toMatch(/version the page has/)
+    const control = await callTool(token, 'add_comment', { artifact_id: p.page.slug, body: 'x', anchor: { selector: 'h1', snippet: 'a\u0000b' } })
+    expect(control.isError).toBe(true)
+  })
+})

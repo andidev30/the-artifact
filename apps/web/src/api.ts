@@ -239,6 +239,15 @@ export async function updateLink(
 
 export const MAX_COMMENT_LENGTH = 5000
 
+// Picked in the page's frame and checked by the server; the selector and snippet are shown as text
+export type CommentAnchor = {
+  version: number
+  selector: string
+  snippet: string
+  path: string
+  rect?: { x: number; y: number; w: number; h: number }
+}
+
 export type PageComment = {
   id: string
   // Plain text: always rendered as text, never as HTML
@@ -250,6 +259,8 @@ export type PageComment = {
   mine: boolean
   // The agent that posted it for its person; null when written in the app
   postedWith: string | null
+  // The element of the page a thread is about; null for the whole page and for replies
+  anchor: CommentAnchor | null
   createdAt: string
   editedAt: string | null
   canEdit: boolean
@@ -276,9 +287,9 @@ export function listComments(slug: string, cursor?: string | null) {
   return request<CommentList>(`${commentsPath(slug)}${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`)
 }
 
-export async function addComment(slug: string, body: string, replyTo?: string): Promise<PageComment> {
+export async function addComment(slug: string, body: string, opts: { replyTo?: string; anchor?: CommentAnchor } = {}): Promise<PageComment> {
   try {
-    return await request<PageComment>(commentsPath(slug), { method: 'POST', json: { body, replyTo } })
+    return await request<PageComment>(commentsPath(slug), { method: 'POST', json: { body, replyTo: opts.replyTo, anchor: opts.anchor } })
   } catch (err) {
     throw err instanceof ApiError ? new FieldError(err.message, err.field) : err
   }

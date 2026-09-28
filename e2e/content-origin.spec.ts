@@ -26,7 +26,8 @@ test('pages load from the content origin with a token, and the app keeps its coo
   await expect(frame.getByRole('heading', { name: 'Quarterly numbers' })).toBeVisible()
   await expect(frame.locator('body')).toHaveAttribute('data-ran', 'yes')
   await expect(frame.getByRole('heading', { name: 'Quarterly numbers' })).toHaveCSS('color', 'rgb(1, 2, 3)')
-  expect(viewerFrame(page)?.url()).toMatch(new RegExp(`^${contentOrigin}/api/artifacts/${slug}/v/1/~[^/]+/$`))
+  // Signed in, so the comment helper's mark follows the token
+  expect(viewerFrame(page)?.url()).toMatch(new RegExp(`^${contentOrigin}/api/artifacts/${slug}/v/1/~[^/]+/~comments/$`))
 
   const cookies = await page.context().cookies()
   expect(cookies.some((c) => c.name === 'session' && baseURL?.includes(c.domain))).toBe(true)

@@ -10,6 +10,18 @@ Choose **Reply** under a comment to answer it. Threads are one level deep: repli
 
 Comments are plain text, up to 5,000 characters. Line breaks are kept; nothing else is formatted, and links aren't clickable.
 
+## Pinning a comment to an element
+
+Feedback like "this chart is wrong" is easier to act on when it points at the chart. Under the box for a new comment, choose **Pin to an element**, then click the part of the page the comment is about. Links and buttons on the page don't react while you pick. **Pinned to** shows the element's text; write the comment and choose **Comment**. **Unpin** makes it a comment on the whole page again, and **Cancel** (or Escape) stops picking.
+
+Without a mouse: after **Pin to an element**, focus is on the page. The arrow keys move between its headings, paragraphs, list items, images, tables and other parts (Home and End go to the first and last), a screen reader reads out each one, and Enter chooses. Escape cancels. A comment on the whole page is always the other way to say the same thing.
+
+While the comments are open, each open thread about an element has a numbered pin on the page, at that element, with the same number next to the thread. Choosing a pin goes to its thread, and **Show on page** under a thread scrolls the page to its element. Resolved threads have no pin.
+
+A pinned comment remembers the element's place in the page, its text (up to 200 characters), the version and, for a page with several HTML files, which file. In a later version, the pin finds the element by its place, or by its text if it moved. When neither is there any more, the thread says "The element this comment is about has changed" and quotes the text it had. A thread about an element in another of the page's files says which file.
+
+Only the first comment of a thread is pinned; replies are about what their thread is about. Pinning uses a small helper the viewer adds to the page; on a page whose own scripts stop it, **Pin to an element** doesn't show, and comments on the whole page still work. How the helper is kept apart from the app is in [Security](/docs/security#comments-on-an-element).
+
 ## Who can comment
 
 Anyone who is signed in and can open the page can read its comments and write one: the owner, people it is shared with (viewers too), organization members when it is shared with the organization, and anyone signed in who opens a page shared with **Anyone with the link**.
@@ -45,6 +57,6 @@ Without email, nothing is sent; new comments show in the app.
 
 ## From your agent
 
-Agents read comments with `list_comments` and answer with `reply_comment`, and can start a thread with `add_comment` and resolve one with `resolve_comment` (see [Publishing](/docs/publishing#list-comments)). They are told to read the open comments before publishing a new version, so you can say "deal with the comments on the launch plan".
+Agents read comments with `list_comments` and answer with `reply_comment`, and can start a thread with `add_comment` and resolve one with `resolve_comment` (see [Publishing](/docs/publishing#list-comments)). For a pinned comment, `list_comments` also gives the element's selector, file, version and text, so the agent knows exactly what to change, and `add_comment` can pin a comment to an element too. They are told to read the open comments before publishing a new version, so you can say "deal with the comments on the launch plan".
 
 A comment from an agent is posted as the person it is connected as, marked with the agent's name, like "via claude-code". It follows that person's access: an agent can comment wherever they can, and resolve what they could resolve in the app.

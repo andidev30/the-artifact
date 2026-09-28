@@ -7,10 +7,12 @@ import {
   markCommentsSeen,
   MAX_COMMENT_LENGTH,
   resolveComment,
+  type CommentAnchor,
   type CommentThread,
   type PageComment,
 } from '../api'
 import { timeAgo } from '../time'
+import type { AnchoredThread, FrameHelper, PinStatus } from './PagePins'
 import './HistoryPanel.css'
 import './CommentsPanel.css'
 
@@ -24,6 +26,19 @@ type Props = {
   onSeen: () => void
   // Comments added (1) or removed (minus how many), for the count on the button
   onTotalChange: (delta: number) => void
+  // The comment helper in the page's frame, for pinning comments to elements and showing the pins
+  helper?: FrameHelper
+  // A pin chosen on the page: its thread is scrolled to and focused
+  focusThread?: { id: string } | null
+}
+
+const excerpt = (text: string) => (text.length > 80 ? `${text.slice(0, 79)}…` : text)
+
+// Open threads about an element, numbered in the order they are listed, as their pins are
+function anchoredThreads(threads: CommentThread[] | null): AnchoredThread[] {
+  return (threads ?? [])
+    .filter((t): t is CommentThread & { anchor: CommentAnchor } => t.anchor !== null && !t.resolved)
+    .map((t, i) => ({ id: t.id, anchor: t.anchor, number: i + 1, label: excerpt(t.body.replace(/\s+/g, ' ')) }))
 }
 
 const errorText = (err: unknown, fallback: string) => (err instanceof Error ? err.message : fallback)
@@ -31,7 +46,7 @@ const errorText = (err: unknown, fallback: string) => (err instanceof Error ? er
 // Comments on the page, one level of threads, oldest first. Bodies are plain text rendered as text
 // (never as HTML): they come from anyone who can open the page and show inside the app, outside the
 // page's sandbox.
-export function CommentsPanel({ slug, currentVersion, onClose, onSeen, onTotalChange }: Props) {
+export function CommentsPanel({ slug, currentVersion, onClose, onSeen, onTotalChange, helper, focusThread }: Props) {
   const [threads, setThreads] = useState<CommentThread[] | null>(null)
   const [next, setNext] = useState<string | null>(null)
   const [seenAt, setSeenAt] = useState<string | null>(null)
@@ -40,6 +55,33 @@ export function CommentsPanel({ slug, currentVersion, onClose, onSeen, onTotalCh
   const [announce, setAnnounce] = useState('')
   const heading = useRef<HTMLHeadingElement>(null)
   const list = useRef<HTMLDivElement>(null)
+  const newCommentId = useId()
+  const pinButtonId = useId()
+
+  const anchored = anchoredThreads(threads)
+  const numbers = new Map(anchored.map((a) => [a.id, a]))
+  const setAnchored = helper?.setAnchored
+  const anchoredKey = JSON.stringify(anchored)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: anchoredKey stands for anchored
+  useEffect(() => setAnchored?.(anchored), [anchoredKey, setAnchored])
+  useEffect(() => () => setAnchored?.([]), [setAnchored])
+
+  // When picking ends, focus comes back to the panel: to the comment being written once an element
+  // is pinned, or to the button that started it
+  const picking = helper?.picking ?? false
+  const hasDraft = Boolean(helper?.draft)
+  const wasPicking = useRef(false)
+  useEffect(() => {
+    if (wasPicking.current && !picking) document.getElementById(hasDraft ? newCommentId : pinButtonId)?.focus()
+    wasPicking.current = picking
+  }, [picking, hasDraft, newCommentId, pinButtonId])
+
+  useEffect(() => {
+    if (!focusThread) return
+    const item = list.current?.querySelector<HTMLElement>(`[data-thread="${CSS.escape(focusThread.id)}"]`)
+    item?.scrollIntoView({ block: 'nearest' })
+    item?.focus()
+  }, [focusThread])
 
   useEffect(() => {
     heading.current?.focus()
@@ -83,7 +125,12 @@ export function CommentsPanel({ slug, currentVersion, onClose, onSeen, onTotalCh
   }
 
   async function start(body: string) {
-    const created = await addComment(slug, body)
+    const draft = helper?.draft
+    const anchor = draft
+      ? { version: draft.version, selector: draft.selector, snippet: draft.snippet, path: draft.path, ...(draft.rect ? { rect: draft.rect } : {}) }
+      : undefined
+    const created = await addComment(slug, body, { anchor })
+    helper?.clearDraft()
     setThreads((ts) => [...(ts ?? []), { ...created, resolved: null, canResolve: true, replies: [] }])
     onTotalChange(1)
     setAnnounce('Comment added.')
@@ -93,7 +140,13 @@ export function CommentsPanel({ slug, currentVersion, onClose, onSeen, onTotalCh
   const isNew = (c: PageComment) => !c.mine && (seenAt === null || c.createdAt > seenAt)
 
   return (
-    <aside id="comments-panel" className="comments-panel" aria-labelledby="comments-title" onKeyDown={(e) => e.key === 'Escape' && onClose()}>
+    <aside
+      id="comments-panel"
+      className="comments-panel"
+      aria-labelledby="comments-title"
+      data-picking={picking || undefined}
+      onKeyDown={(e) => e.key === 'Escape' && onClose()}
+    >
       <div className="comments-head">
         <h2 id="comments-title" ref={heading} tabIndex={-1}>
           Comments
@@ -130,6 +183,12 @@ export function CommentsPanel({ slug, currentVersion, onClose, onSeen, onTotalCh
                 onChange={(change) => updateThread(t.id, change)}
                 onTotalChange={onTotalChange}
                 onAnnounce={setAnnounce}
+                pin={
+                  t.anchor
+                    ? { number: numbers.get(t.id)?.number ?? null, status: helper && numbers.has(t.id) ? helper.status(numbers.get(t.id)!) : undefined }
+                    : null
+                }
+                onShow={helper ? () => helper.show(t.id) : undefined}
               />
             ))}
           </ol>
@@ -141,7 +200,14 @@ export function CommentsPanel({ slug, currentVersion, onClose, onSeen, onTotalCh
         )}
       </div>
       <div className="comments-compose">
-        <Composer label="New comment" placeholder="Add a comment" submitLabel="Comment" onSubmit={start} />
+        <Composer
+          id={newCommentId}
+          label="New comment"
+          placeholder="Add a comment"
+          submitLabel="Comment"
+          onSubmit={start}
+          extra={helper?.path ? <PinChoice helper={helper} buttonId={pinButtonId} /> : null}
+        />
       </div>
       <span className="visually-hidden" role="status">
         {announce}
@@ -158,9 +224,12 @@ type ThreadProps = {
   onChange: (change: (t: CommentThread) => CommentThread | null) => void
   onTotalChange: (delta: number) => void
   onAnnounce: (message: string) => void
+  // For a thread about an element: its number while open, and where its element is on the page shown
+  pin: { number: number | null; status: PinStatus | undefined } | null
+  onShow?: () => void
 }
 
-function Thread({ slug, thread, currentVersion, isNew, onChange, onTotalChange, onAnnounce }: ThreadProps) {
+function Thread({ slug, thread, currentVersion, isNew, onChange, onTotalChange, onAnnounce, pin, onShow }: ThreadProps) {
   const [replying, setReplying] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -182,7 +251,7 @@ function Thread({ slug, thread, currentVersion, isNew, onChange, onTotalChange, 
   }
 
   async function reply(body: string) {
-    const created = await addComment(slug, body, thread.id)
+    const created = await addComment(slug, body, { replyTo: thread.id })
     // A reply reopens a resolved thread, on the server too
     onChange((t) => ({ ...t, resolved: null, replies: [...t.replies, created] }))
     onTotalChange(1)
@@ -207,7 +276,8 @@ function Thread({ slug, thread, currentVersion, isNew, onChange, onTotalChange, 
   }
 
   return (
-    <li className="comment-thread" data-resolved={thread.resolved ? '' : undefined}>
+    <li className="comment-thread" data-resolved={thread.resolved ? '' : undefined} data-thread={thread.id} tabIndex={-1}>
+      {thread.anchor && pin && <AnchorNote anchor={thread.anchor} pin={pin} onShow={onShow} />}
       {thread.resolved && (
         <p className="comment-resolved-note">
           Resolved{thread.resolved.by ? ` by ${thread.resolved.by}` : ''} {timeAgo(thread.resolved.at)}
@@ -366,6 +436,7 @@ function Item({ slug, comment: c, currentVersion, isNew, replies, onEdited, onDe
 }
 
 type ComposerProps = {
+  id?: string
   label: string
   placeholder?: string
   initial?: string
@@ -373,9 +444,11 @@ type ComposerProps = {
   autoFocus?: boolean
   onSubmit: (body: string) => Promise<void>
   onCancel?: () => void
+  // More controls next to the submit button
+  extra?: ReactNode
 }
 
-function Composer({ label, placeholder, initial = '', submitLabel, autoFocus, onSubmit, onCancel }: ComposerProps) {
+function Composer({ id, label, placeholder, initial = '', submitLabel, autoFocus, onSubmit, onCancel, extra }: ComposerProps) {
   const [body, setBody] = useState(initial)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -415,6 +488,7 @@ function Composer({ label, placeholder, initial = '', submitLabel, autoFocus, on
   return (
     <form className="comment-form" onSubmit={submit}>
       <textarea
+        id={id}
         ref={field}
         aria-label={label}
         placeholder={placeholder}
@@ -433,6 +507,7 @@ function Composer({ label, placeholder, initial = '', submitLabel, autoFocus, on
         </p>
       )}
       <div className="comment-form-actions">
+        {extra}
         {onCancel && (
           <button type="button" className="comment-action" onClick={onCancel}>
             Cancel
@@ -443,5 +518,65 @@ function Composer({ label, placeholder, initial = '', submitLabel, autoFocus, on
         </button>
       </div>
     </form>
+  )
+}
+
+// Pinning the comment being written to an element of the page, or what it is pinned to
+function PinChoice({ helper, buttonId }: { helper: FrameHelper; buttonId: string }) {
+  if (helper.draft) {
+    return (
+      <p className="comment-pinned">
+        <span className="comment-pinned-text">{helper.draft.snippet ? `Pinned to “${helper.draft.snippet}”` : 'Pinned to an element'}</span>
+        <button type="button" className="comment-action" onClick={helper.clearDraft}>
+          Unpin
+        </button>
+      </p>
+    )
+  }
+  if (helper.picking) {
+    return (
+      <p className="comment-pinned">
+        <span className="comment-pinned-text">Choosing an element on the page</span>
+        <button type="button" className="comment-action" onClick={helper.stopPick}>
+          Cancel
+        </button>
+      </p>
+    )
+  }
+  return (
+    <button id={buttonId} type="button" className="comment-action comment-pin-start" onClick={helper.startPick}>
+      Pin to an element
+    </button>
+  )
+}
+
+// What a thread is about, and whether its element is still on the page
+function AnchorNote({ anchor, pin, onShow }: { anchor: CommentAnchor; pin: { number: number | null; status: PinStatus | undefined }; onShow?: () => void }) {
+  const what = anchor.snippet ? `“${anchor.snippet}”` : 'an element'
+  return (
+    <div className="comment-anchor">
+      {pin.number !== null && (
+        <span className="comment-pin" aria-hidden="true">
+          {pin.number}
+        </span>
+      )}
+      <p>
+        {pin.status === 'changed' ? (
+          <>The element this comment is about has changed. It was {what}.</>
+        ) : pin.status === 'elsewhere' ? (
+          <>
+            About {what} in {anchor.path}
+          </>
+        ) : (
+          <>About {what}</>
+        )}
+        {pin.number !== null && <span className="visually-hidden">, pin {pin.number} on the page</span>}
+      </p>
+      {pin.status === 'shown' && onShow && (
+        <button type="button" className="comment-action" onClick={onShow}>
+          Show on page
+        </button>
+      )}
+    </div>
   )
 }
