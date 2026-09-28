@@ -9,7 +9,7 @@ import { contentCsp } from '../../src/content.js'
 import { env } from '../../src/env.js'
 import { forgetRecentViews, totalViews } from '../../src/views.js'
 import { mountWeb } from '../../src/web.js'
-import { call, createPage, createUser, registerClient, type TestUser } from './helpers.js'
+import { call, createPage, createUser, flushViews, registerClient, type TestUser } from './helpers.js'
 
 const CONTENT = 'http://content.test'
 const INDEX = '<!doctype html><html><head><title>The Artifact</title></head><body><div id="root"></div></body></html>'
@@ -80,6 +80,7 @@ describe('with CONTENT_ORIGIN', () => {
     expect(await res.text()).toBe('<h1>Signups</h1>')
     expect(res.headers.get('content-security-policy')).toBe(contentCsp())
     expect(res.headers.get('vary')).toBeNull()
+    await flushViews()
     expect(await totalViews(page)).toBe(1)
 
     // Subresource requests and people's own cookies change nothing there

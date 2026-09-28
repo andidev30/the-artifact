@@ -6,6 +6,7 @@ import { hashToken, randomToken } from '../../src/auth/session.js'
 import { db, schema } from '../../src/db/index.js'
 import { env } from '../../src/env.js'
 import type { Role, Visibility } from '../../src/db/schema.js'
+import { flushViewCounts } from '../../src/views.js'
 
 type RequestOptions = {
   method?: string
@@ -79,6 +80,12 @@ export async function createPage(owner: TestUser, opts: { organizationId?: strin
     html: opts.html ?? '<!doctype html><h1>Hello</h1>',
     visibility: opts.visibility,
   })
+}
+
+// View counts are batched in memory as on a long-running server (setup.ts); write them before
+// reading counts
+export async function flushViews() {
+  await flushViewCounts()
 }
 
 export function pkcePair() {
