@@ -6,6 +6,18 @@ Sharing works like a Google Doc. Open a page and choose **Share**.
 
 Add people by email as **Viewer** or **Editor**. They get an email with the link. People who don't have an account yet get access as soon as they sign up with that email address.
 
+Until the share counts for someone, the list shows them as "invited, not signed in yet", without a name. Names come from the person's account once it does, so a name you see was never chosen by someone who only typed the address.
+
+### People who aren't emailed
+
+When you turn off **Notify people by email**, when the server doesn't send email, or when an email can't be sent, **Share** lists a link for each person under **Links to send**. Send each person their own link however you like. It opens the page once they sign in with that address, and it works once. Sharing with the same address again gives a new link, and the earlier one stops working. An address that got 10 invitation and share emails in a day, from everyone together, isn't emailed again that day; its link is listed instead (the `invite-recipient` [rate limit](/docs/configuration#rate-limits)).
+
+### Addresses nobody has checked
+
+A share goes to an email address, so it counts for an account only once that account has shown the address is really theirs: by signing in with an email link, an admin's sign-in link, Google or single sign-on. On a [server without email](/docs/self-hosting#running-without-email), people who sign up with a password on their own, or from an invitation link, typed their address and nobody checked it. Someone could have signed up with a colleague's address before anything was shared with it. So for those accounts, a share counts only after they open its link from **Links to send**, signed in with that address. Until then the page looks as if it weren't shared with them, and it isn't in their **Shared with you**. Once they sign in in one of the ways above, every share with their address counts.
+
+Adding and removing people is [rate limited](/docs/configuration#rate-limits) per account (`invite`, whether or not anyone is emailed, and `unshare`), so the list can't be used to find out which addresses have an account.
+
 | Role | Can |
 | --- | --- |
 | Viewer | Open the page |

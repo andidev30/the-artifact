@@ -189,7 +189,7 @@ When the page is shared by link, the answer ends with its `Public link`, to hand
 
 ### share_artifact
 
-Shares a page with people by email, as `viewer` or `editor`, with an optional message. They get an email with the link. For people who can edit the page. It counts toward the `invite` [rate limit](#limits), with invitations in the app.
+Shares a page with people by email, as `viewer` or `editor`, with an optional message. They get an email with the link. When someone isn't emailed (the server doesn't send email, the email failed, or the address got many emails today), the answer lists a link for each of them to pass on; see [People who aren't emailed](/docs/sharing#people-who-arent-emailed). For people who can edit the page. It counts toward the `invite` [rate limit](#limits), with invitations in the app.
 
 | Argument | Required | Meaning |
 | --- | --- | --- |

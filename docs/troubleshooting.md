@@ -30,7 +30,7 @@ The organization's owners require a passkey or an authenticator app. Add one und
 
 ## "For your security, sign in again to change how you sign in"
 
-Adding or removing passkeys and the authenticator app, making new recovery codes, and adding a password to an account that has none, need a sign-in from the last hour. Choose **Sign in again**, sign in, and you return to where you were in **Account settings**.
+Adding or removing passkeys and the authenticator app, making new recovery codes, adding a password to an account that has none, and creating an access token ("sign in again to create an access token"), need a sign-in from the last hour. Choose **Sign in again**, sign in, and you return to where you were in **Account settings**.
 
 ## "Your personal workspace has … pages" or "… past … of storage"
 
