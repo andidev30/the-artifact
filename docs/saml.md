@@ -2,7 +2,7 @@
 
 **Enterprise feature.** SAML works on a self-hosted install with an Enterprise license key; see [The license](/docs/sso#the-license). It isn't available on the hosted service.
 
-SAML 2.0 is the other protocol [single sign-on](/docs/sso) speaks, next to OpenID Connect: for identity providers (IdPs) and IT teams that set up apps with SAML, such as Okta, Microsoft Entra ID and Google Workspace. A SAML provider is one more **Continue with** button on the sign-in page and works like an OIDC one: the same email domains, organization for new people, **Require single sign-on** and account matching (see [How it works](/docs/sso#how-it-works)). Pair it with [SCIM provisioning](/docs/scim) to create and suspend accounts from the IdP before people sign in.
+SAML 2.0 is the other protocol [single sign-on](/docs/sso) speaks, next to OpenID Connect: for identity providers (IdPs) and IT teams that set up apps with SAML, such as Okta, Microsoft Entra ID and Google Workspace. A SAML provider is one more **Continue with** button on the sign-in page and works like an OIDC one: the same email domains, organization for new people, **Require single sign-on** and account matching (see [How it works](/docs/sso#how-it-works)). A SAML IdP doesn't say whether it verified an address, so list its email domains for people who already have an account to sign in through it (see [Linking existing accounts](/docs/sso#linking-existing-accounts)). Pair it with [SCIM provisioning](/docs/scim) to create and suspend accounts from the IdP before people sign in.
 
 ## What your IdP needs from this server
 

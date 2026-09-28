@@ -15,7 +15,7 @@ When someone chooses the button:
 3. The server checks that the provider says the address is verified (`email_verified`), unless you turned on **Trust addresses** for it. Without that, the sign-in is refused, for existing and new accounts alike.
 4. The server finds the account:
    - the account this person signed in to through this provider before, found by the provider's stable id for them (`sub`), even if their address changed since;
-   - otherwise the account with the same email address, which is then linked to the provider;
+   - otherwise the account with the same email address, which is then linked to the provider, when [linking it is allowed](#linking-existing-accounts);
    - otherwise a new account.
 5. As with every other way in, an account with a passkey or an authenticator app is asked for it next (see [Two-factor sign-in](/docs/signing-in#two-factor-sign-in)).
 
@@ -27,6 +27,16 @@ New accounts follow these rules:
 | No | Follow the sign-up policy, like any other sign-up |
 
 Addresses outside a provider's domains can't sign in through it at all.
+
+### Linking existing accounts
+
+The first time someone signs in through a provider, it takes over the account with their address, so the server only links an account when the provider can be trusted with that address:
+
+- **Instance admins' accounts are never linked.** Admins always sign in the other ways they have (see [Requiring single sign-on](#requiring-single-sign-on)), so a provider can't sign in as one either, whatever address it sends. An admin who already signed in through a provider before they became an admin keeps that link.
+- **A provider that lists its email domains** links accounts at those domains.
+- **A provider that lists none** links an account only when the provider marked the address as verified itself (`email_verified`), or when it created the account over [SCIM](/docs/scim). Not with **Trust addresses** turned on, and not for [SAML](/docs/saml) providers, which don't say whether they verified an address: without domains, nothing limits which addresses they could send.
+
+When linking isn't allowed, the sign-in page says so and the person signs in the way they did before; the server log records `sso.link_refused` (see [The security log](/docs/security#the-security-log)). To let those accounts sign in through the provider, list its email domains.
 
 ## Set it up
 
@@ -134,7 +144,7 @@ Nothing is deleted: accounts, their links to the provider and the provider setti
 
 - The client secret is encrypted at rest (AES-256-GCM) with a key the server keeps in its `server_secrets` table, like authenticator app secrets. A full database backup holds both, so protect backups like the database.
 - The redirect URI is built from `APP_URL`, never from the request's `Host` header, and the page people return to after signing in is always on this server.
-- Addresses link to existing accounts only when the provider says they are verified, or when you turned on **Trust addresses** for it. Anyone who controls the provider can sign in as any account at its domains, instance admins included; treat admin access to the provider like admin access to this server.
+- Addresses link to existing accounts only as [Linking existing accounts](#linking-existing-accounts) describes: never an instance admin's, and without domains only for addresses the provider verified. Anyone who controls the provider can still sign in as any other account at its domains; treat admin access to the provider like admin access to this server.
 - Adding, changing and removing providers is written to the server log with the admin who did it (see [The security log](/docs/security#the-security-log)).
 - Issuer URLs must use HTTPS. Plain HTTP is accepted only while `APP_URL` is HTTP too, for trying it locally.
 - Starting and finishing single sign-on is rate limited per network (`sso-ip` under [Rate limits](/docs/configuration#rate-limits)).

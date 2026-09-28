@@ -11,6 +11,9 @@ export const SSO_ERRORS: Record<string, string> = {
   sso_unverified: 'Your identity provider hasn’t verified your email address, so it can’t sign you in here. Ask your IT team.',
   sso_no_email: 'Your identity provider didn’t share your email address, so it can’t sign you in here. Ask your IT team.',
   sso_domain: 'Your email address isn’t one this server accepts through single sign-on. Ask an admin of this server.',
+  sso_admin: 'Your account is an admin of this server, and single sign-on can’t start signing in to it. Sign in the way you usually do.',
+  sso_link:
+    'An account with your email address already exists here, and this single sign-on can’t link to it. Sign in the way you usually do, or ask an admin of this server.',
   sso_required: 'Your organization signs in through single sign-on. Use the single sign-on button below.',
 }
 

@@ -270,13 +270,46 @@ describe('SSO with OpenID Connect', () => {
     delete provider.claims.email_verified
     expect((await signIn(conn.id)).location).toBe(`${APP}/login?error=sso_unverified`)
 
-    const res = await call(`/api/admin/sso/${conn.id}`, {
-      method: 'PUT',
-      cookie: admin.cookie,
-      json: { name: 'Entra ID', issuer: provider.issuer, clientId: provider.clientId, trustEmail: true, enabled: true },
-    })
-    expect(res.status).toBe(200)
+    const trust = (allowedDomains: string[]) =>
+      call(`/api/admin/sso/${conn.id}`, {
+        method: 'PUT',
+        cookie: admin.cookie,
+        json: { name: 'Entra ID', issuer: provider.issuer, clientId: provider.clientId, trustEmail: true, enabled: true, allowedDomains },
+      })
+    // Trusted but open to any domain, it could name any address, so it doesn't link existing accounts
+    expect((await trust([])).status).toBe(200)
+    expect((await signIn(conn.id)).location).toBe(`${APP}/login?error=sso_link`)
+    expect((await trust(['acme.example'])).status).toBe(200)
     expect((await signIn(conn.id)).session).toBeTruthy()
+  })
+
+  it('never links an existing instance admin’s account, with or without domains', async () => {
+    await license()
+    const admin = await adminUser()
+    const withDomains = await addConnection(admin, { allowedDomains: ['acme.example'] })
+    const anyDomain = await addConnection(admin, { name: 'Okta 2' })
+    provider.claims = { ...provider.claims, email: admin.email }
+    for (const conn of [withDomains, anyDomain]) {
+      const { location, session } = await signIn(conn.id)
+      expect(location).toBe(`${APP}/login?error=sso_admin`)
+      expect(session).toBeNull()
+    }
+    expect(await db.select().from(schema.ssoIdentities)).toHaveLength(0)
+  })
+
+  it('without domains, links existing accounts only for addresses the provider verified or accounts it provisioned', async () => {
+    await license()
+    const admin = await adminUser()
+    const ada = await createUser({ email: 'ada@acme.example' })
+    const conn = await addConnection(admin, { trustEmail: true })
+    provider.claims = { ...provider.claims, email_verified: false }
+    expect((await signIn(conn.id)).location).toBe(`${APP}/login?error=sso_link`)
+    expect(await db.select().from(schema.ssoIdentities)).toHaveLength(0)
+
+    // An account the IdP made over SCIM is its own to sign in to
+    await db.insert(schema.scimUsers).values({ userId: ada.id, userName: ada.email })
+    const { session } = await signIn(conn.id)
+    expect((await (await call('/api/me', { cookie: session! })).json()).id).toBe(ada.id)
   })
 
   it('refuses addresses outside the connection’s domains', async () => {

@@ -153,4 +153,5 @@ Only releases that need you to do something are listed. Each section is copied i
 
 ## Upgrading to 1.0.0
 
+- **Single sign-on no longer links some existing accounts.** The first sign-in through a provider never takes over an instance admin's account, and a provider that lists no email domains links an existing account only when it marked the address as verified itself or created the account over SCIM. People with an account who haven't signed in through such a provider yet (a [SAML](/docs/saml) provider, or an OIDC one with **Trust addresses**) now see a message to sign in the way they did before. If they should use single sign-on, list the provider's email domains under **Server admin** → **Single sign-on**; accounts already linked keep working. See [Linking existing accounts](/docs/sso#linking-existing-accounts).
 - **Keep the server log if you need a record of what admins do.** Admin actions, deleted accounts and organizations, and changes to people's sign-in are written to it as JSON lines with an `event` field; there is no instance-level audit log in the app. See [The security log](/docs/security#the-security-log).

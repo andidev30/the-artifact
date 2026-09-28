@@ -178,6 +178,7 @@ Organizations have an [audit log](/docs/audit-log) on installs with an Enterpris
 | `license.changed`, `license.removed` | An admin enters or removes the license key |
 | `scim_token.created`, `scim_token.revoked` | An admin creates or revokes a [SCIM](/docs/scim) token |
 | `sso_connection.added`, `sso_connection.changed`, `sso_connection.removed` | An admin changes a [single sign-on](/docs/sso) provider, with its domains and whether it is on and required. Never its secret |
+| `sso.link_refused` | Single sign-on refused to sign in to an existing account it isn't linked to yet (see [How it works](/docs/sso#how-it-works)) |
 | `account.deleted` | Someone deletes their own account |
 | `account.password_changed`, `account.password_added` | Someone changes or adds their password, or a sign-in link sets it |
 | `account.passkey_added`, `account.passkey_removed`, `account.authenticator_added`, `account.authenticator_removed`, `account.recovery_codes_created` | Someone changes their two-factor sign-in |

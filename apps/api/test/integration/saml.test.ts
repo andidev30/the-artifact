@@ -127,8 +127,11 @@ describe('SAML sign-in', () => {
   })
 
   it('signs in to an existing account with the same email, and later by NameID', async () => {
-    await configure()
     const existing = await createUser({ email: 'jane@acme.example' })
+    // Without domains the IdP could name any address, so it doesn't link existing accounts
+    await configure()
+    expect((await signIn()).headers.get('location')).toBe(`${env.appUrl}/login?error=sso_link`)
+    await configure({ allowedDomains: ['acme.example'] })
     const first = await signIn()
     expect(sessionCookie(first)).toBeTruthy()
     const second = await signIn({ email: 'jane.doe@acme.example', nameId: 'jane@acme.example' })
@@ -136,6 +139,14 @@ describe('SAML sign-in', () => {
     expect(await db.select().from(schema.users)).toHaveLength(2)
     const [identity] = await db.select().from(schema.ssoIdentities)
     expect(identity.userId).toBe(existing.id)
+  })
+
+  it('never signs in to an instance admin’s existing account', async () => {
+    await configure({ allowedDomains: ['acme.example'] })
+    const res = await signIn({ email: admin.email })
+    expect(res.headers.get('location')).toBe(`${env.appUrl}/login?error=sso_admin`)
+    expect(sessionCookie(res)).toBeNull()
+    expect(await db.select().from(schema.ssoIdentities)).toHaveLength(0)
   })
 
   it('creates accounts when sign-up is closed only for a connection with domains', async () => {
