@@ -160,4 +160,23 @@ img.account-avatar {
   .account {
     margin-left: auto;
   }
+
+  /* Docs and the avatar are small and fixed; the workspace switcher beside the wordmark gives way instead */
+  .app-account {
+    flex: none;
+    gap: 10px;
+  }
+
+  .nav:has(.app-account),
+  .nav:has(.app-account) .nav-start {
+    gap: 10px;
+  }
+}
+
+/* Small phones: a smaller wordmark leaves the workspace name readable */
+@media (max-width: 400px) {
+  .nav:has(.app-account) .wordmark {
+    gap: 8px;
+    font-size: var(--step-0);
+  }
 }

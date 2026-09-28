@@ -1,3 +1,9 @@
+/* On a phone the button goes under the wordmark rather than squeezing onto two lines */
+.nav:has(.docs-home) {
+  flex-wrap: wrap;
+  row-gap: 12px;
+}
+
 .docs-home {
   padding: 3px 10px;
   font-size: var(--step--1);

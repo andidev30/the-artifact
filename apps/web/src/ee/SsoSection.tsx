@@ -97,13 +97,16 @@ export function SsoSection() {
           Single sign-on <span className="admin-badge">Enterprise</span>
         </h2>
         <p>
-          People sign in through your identity provider with OpenID Connect or SAML: Google Workspace, Microsoft Entra ID, Okta, Keycloak and others.{' '}
+          People sign in through your identity provider with OpenID Connect or SAML: Google Workspace, Microsoft Entra ID, Okta, Keycloak and others. How to set
+          up{' '}
           <Link className="text-link" to="/docs/sso">
-            How to set it up
+            OpenID Connect
           </Link>{' '}
+          or{' '}
           <Link className="text-link" to="/docs/saml">
             SAML
           </Link>
+          .
         </p>
       </header>
 

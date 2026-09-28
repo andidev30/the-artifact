@@ -16,6 +16,10 @@ main,
   padding-block: 24px;
 }
 
+.nav .button {
+  white-space: nowrap;
+}
+
 .wordmark {
   flex: none;
   white-space: nowrap;
