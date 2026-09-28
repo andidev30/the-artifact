@@ -161,6 +161,9 @@ export function ContactSales() {
               <button type="submit" className="button" disabled={status.kind === 'sending'}>
                 {status.kind === 'sending' ? 'Sending' : 'Send message'}
               </button>
+              <p className="contact-privacy">
+                We use what you send only to reply to you. See the <Link to="/legal/privacy#contact-sales">Privacy Policy</Link>.
+              </p>
             </form>
           </section>
         )}

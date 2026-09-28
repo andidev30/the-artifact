@@ -1,14 +1,12 @@
 import { lazy, StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
-import { SpeedInsights } from '@vercel/speed-insights/react'
-import { Analytics } from '@vercel/analytics/react'
 import './index.css'
 import './App.css'
 import { AppHome } from './pages/AppHome.tsx'
 import { Auth } from './pages/Auth.tsx'
 import { Authorize } from './pages/Authorize.tsx'
-import { ContactSalesPage, Home } from './pages/Home.tsx'
+import { ContactSalesPage, Home, HostedInsights, LegalPage } from './pages/Home.tsx'
 import { NotFound } from './pages/NotFound.tsx'
 import { Onboarding } from './pages/Onboarding.tsx'
 import { Viewer } from './pages/Viewer.tsx'
@@ -39,6 +37,7 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/signup" element={<Auth mode="signup" />} />
         <Route path="/login/two-factor" element={<TwoFactor />} />
         <Route path="/contact-sales" element={<ContactSalesPage />} />
+        <Route path="/legal/:doc" element={<LegalPage />} />
         <Route path="/auth/confirm" element={<ConfirmSignIn />} />
         <Route path="/app" element={<AppHome />} />
         <Route path="/onboarding" element={<Onboarding />} />
@@ -82,8 +81,7 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/self-hosting" element={<Navigate to="/docs/self-hosting" replace />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
-      <SpeedInsights />
     </BrowserRouter>
-    <Analytics />
+    <HostedInsights />
   </StrictMode>,
 )

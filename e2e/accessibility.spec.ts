@@ -21,6 +21,17 @@ test('signed-out screens', async ({ page }) => {
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
   await expectAccessible(page, 'contact sales')
 
+  for (const [doc, title] of [
+    ['terms', 'Terms of Service'],
+    ['privacy', 'Privacy Policy'],
+    ['subprocessors', 'Sub-processors'],
+    ['dpa', 'Data Processing Addendum'],
+  ]) {
+    await page.goto(`/legal/${doc}`)
+    await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible()
+    await expectAccessible(page, title)
+  }
+
   await page.goto('/docs/introduction')
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
   await expectAccessible(page, 'docs')

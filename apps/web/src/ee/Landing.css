@@ -507,6 +507,20 @@
   color: var(--ink);
 }
 
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+}
+
+.footer-links a {
+  color: var(--ink-soft);
+}
+
+.footer-links a:hover {
+  color: var(--ink);
+}
+
 /* Pricing */
 
 .section-lede {

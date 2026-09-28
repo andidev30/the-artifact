@@ -33,6 +33,8 @@ test('someone who signs up after the first account starts in their personal work
   const visited = urlsVisited(page)
   await page.goto('/signup')
   await expect(page.getByText('Create an account on this server.')).toBeVisible()
+  // The hosted service's terms are not this server's
+  await expect(page.getByRole('link', { name: 'Terms of Service' })).toHaveCount(0)
   await page.getByLabel('Email').fill(email)
   await page.getByRole('button', { name: 'Email me a sign-up link' }).click()
   await expect(page.getByRole('heading', { name: 'Check your inbox' })).toBeVisible()
@@ -82,4 +84,16 @@ test('an admin who has not set the server up yet can skip naming an organization
   await expect(page.getByText('Your workspace is ready.')).toBeVisible()
   await page.getByRole('link', { name: 'Go to your pages' }).click()
   await expectPersonalWorkspace(page)
+})
+
+test('the hosted service legal pages and Vercel analytics are not on a self-hosted install', async ({ page }) => {
+  const vercel: string[] = []
+  page.on('request', (req) => {
+    if (req.url().includes('/_vercel/')) vercel.push(req.url())
+  })
+  for (const doc of ['terms', 'privacy', 'subprocessors', 'dpa']) {
+    await page.goto(`/legal/${doc}`)
+    await expect(page.getByRole('heading', { name: /This page doesn.t exist/ })).toBeVisible()
+  }
+  expect(vercel).toEqual([])
 })

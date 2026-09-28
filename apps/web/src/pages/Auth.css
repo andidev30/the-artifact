@@ -46,6 +46,15 @@
   color: var(--ink-soft);
 }
 
+/* Under the sign-up box on the hosted service, closer to it than the main's gap */
+.auth-terms {
+  width: min(440px, 100%);
+  margin-top: -24px;
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+  text-align: center;
+}
+
 .auth-box .button {
   text-align: center;
 }

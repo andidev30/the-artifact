@@ -84,3 +84,24 @@ test('unknown paths show the 404 page', async ({ page }) => {
   await page.goto('/definitely/not/here')
   await expect(page.getByRole('heading', { name: "This page doesn't exist" })).toBeVisible()
 })
+
+test('the footer and sign-up link to the legal pages', async ({ page }) => {
+  await page.goto('/')
+  const footer = page.getByRole('navigation', { name: 'Legal' })
+  await footer.getByRole('link', { name: 'Privacy Policy' }).click()
+  await expect(page).toHaveURL(/\/legal\/privacy$/)
+  await expect(page.getByRole('heading', { level: 1, name: 'Privacy Policy' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'andidev30.personal@gmail.com' }).first()).toHaveAttribute('href', 'mailto:andidev30.personal@gmail.com')
+
+  await page.getByRole('complementary', { name: 'Legal pages' }).getByRole('link', { name: 'Data Processing Addendum' }).click()
+  await expect(page.getByRole('heading', { level: 1, name: 'Data Processing Addendum' })).toBeVisible()
+  await page.getByRole('main').getByRole('link', { name: 'Sub-processors' }).first().click()
+  await expect(page.getByRole('heading', { level: 1, name: 'Sub-processors' })).toBeVisible()
+
+  await page.goto('/legal/nothing-here')
+  await expect(page.getByRole('heading', { name: /This page doesn.t exist/ })).toBeVisible()
+
+  await page.goto('/signup')
+  await expect(page.getByRole('link', { name: 'Terms of Service' })).toHaveAttribute('href', '/legal/terms')
+  await expect(page.getByRole('link', { name: 'Privacy Policy' })).toHaveAttribute('href', '/legal/privacy')
+})

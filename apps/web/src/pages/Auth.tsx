@@ -121,6 +121,12 @@ export function Auth({ mode }: { mode: Mode }) {
         {header}
         <main id="main" className="auth-main">
           {form}
+          {/* The hosted service's own terms; a self-hosted install has none of ours */}
+          {config && !config.selfHosted && (
+            <p className="auth-terms">
+              By creating an account, you agree to the <Link to="/legal/terms">Terms of Service</Link> and the <Link to="/legal/privacy">Privacy Policy</Link>.
+            </p>
+          )}
         </main>
       </div>
       <SignupPanel />

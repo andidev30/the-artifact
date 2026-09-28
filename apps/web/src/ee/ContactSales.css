@@ -152,3 +152,8 @@
     max-width: 560px;
   }
 }
+
+.contact-privacy {
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+}
