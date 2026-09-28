@@ -297,7 +297,7 @@ Resolves the thread of a comment, or reopens it. For the person who started the 
 
 ## Publishing by direct upload
 
-With `publish_artifact`, a page travels inside the MCP call, so it is limited by what the agent and the server can send in one request. Hosts like Vercel refuse requests over about 4.5 MB. Agents that can run shell commands or make HTTP requests (Claude Code, Cursor, Codex and other coding agents) can use `prepare_upload` and `publish_upload` instead, and the files go straight to storage:
+With `publish_artifact`, a page travels inside the MCP call, so it is limited by what the agent and the server can send in one request: the server takes MCP requests up to 4 MB, and hosts like Vercel refuse requests over about 4.5 MB. Agents that can run shell commands or make HTTP requests (Claude Code, Cursor, Codex and other coding agents) can use `prepare_upload` and `publish_upload` instead, and the files go straight to storage:
 
 1. The agent lists the files with their sizes and hashes. The server checks them against the same rules and limits as above, and nothing is published yet.
 2. The agent uploads each file to its link, for example with `curl -T`.
