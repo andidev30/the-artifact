@@ -14,7 +14,7 @@ Claude Code, Cursor, Codex or any MCP client publishes a page and gets a link ba
 [![Image](https://img.shields.io/badge/image-ghcr.io-1c2b4b?logo=docker&logoColor=white)](https://github.com/andidev30/the-artifact/pkgs/container/the-artifact)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-ffe066)](LICENSE)
 
-[Quick start](#quick-start) · [Documentation](docs/introduction.md) · [Self-hosting](docs/self-hosting.md) · [Kubernetes](docs/kubernetes.md) · [Roadmap](https://github.com/users/andidev30/projects/2) · [Contributing](CONTRIBUTING.md)
+[Try it in the cloud](https://the-artifact-pi.vercel.app) · [Quick start](#quick-start) · [Documentation](docs/introduction.md) · [Self-hosting](docs/self-hosting.md) · [Kubernetes](docs/kubernetes.md) · [Roadmap](https://github.com/users/andidev30/projects/2) · [Contributing](CONTRIBUTING.md)
 
 <br>
 
@@ -71,17 +71,32 @@ Their sources are in [`examples/`](examples/).
 
 ## Features
 
-- **One link per page, every version kept.** Republishing keeps the address; restore any older version from the history.
-- **Single files or small sites.** A page can bring its own CSS, JavaScript, images, fonts and data, loaded by relative paths.
-- **Private until you share it.** Restricted, organization-wide, or anyone with the link, plus people added by email.
-- **Organizations** with owners, admins and members, invitations, and a shared gallery.
-- **A gallery with real thumbnails,** rendered in headless Chromium that has no network of its own.
-- **Works with any MCP client.** Streamable HTTP with OAuth 2.1 sign-in (PKCE, dynamic registration); setup steps for Claude Code, Cursor and Codex are in the docs.
-- **Publishing from CI, without an agent.** Access tokens, `POST /api/publish`, and a CLI: `npx @the-artifact/cli publish ./dist` (see [Command line](docs/publishing.md#command-line)).
+**Publishing**
+- **One link per page, every version kept.** Republishing keeps the address; restore any older version, or compare two side by side or as a line diff.
+- **Single files or small sites.** A page can bring its own CSS, JavaScript, images, fonts and data, loaded by relative paths. Update just one file, like a dashboard's `data.json`, without sending the rest.
+- **Agents can check their own work.** `inspect_artifact` returns a screenshot, console errors, broken links and accessibility problems before the page is shared.
+- **Works with any MCP client.** Streamable HTTP with OAuth 2.1 sign-in (PKCE, dynamic registration); setup for Claude Code, Claude Desktop, Cursor, VS Code, Codex and Windsurf is in the docs.
+- **Publishing from CI or a terminal, without an agent.** Access tokens, `POST /api/publish`, and a CLI: `npx @the-artifact/cli publish ./dist`, with `--watch` to republish on every save while an open page updates itself (see [Command line](docs/publishing.md#command-line)).
+
+**Sharing and feedback**
+- **Private until you share it.** Restricted, organization-wide, or anyone with the link, plus people added by email. Links can expire, need a password, or be reset.
+- **Comments,** on the whole page or pinned to an element, which agents read over MCP to know exactly what to change.
+- **Views:** how often a page and each version were opened, and who opened a shared page.
+- **Webhooks** to Slack, Discord or any URL when a page is published, commented on or opened.
+- **Embeds** in Notion, Confluence and anything that speaks oEmbed, with link previews.
+
+**Organizing**
+- **A gallery with real thumbnails,** rendered in headless Chromium that has no network of its own, with folders, tags and search that looks inside pages' text.
+- **Organizations** with owners, admins and members, invitations, and a shared gallery. Duplicate a page or move it between workspaces.
+- **Export everything:** a zip of your pages, versions and comments, or a whole organization's.
+
+**Running it**
+- **Small footprint.** One Docker image (amd64 and arm64), Postgres and any S3-compatible storage; one worker process per CPU. Docker Compose, Kubernetes manifests and a Helm chart.
+- **Isolated pages.** Every page runs in a sandbox, optionally from a separate domain, so a page can never reach your session.
 - **Runs with or without email.** Without SMTP, people sign in with a password and admins pass sign-up links on by hand.
-- **Passkeys and two-factor sign-in.** Sign in with a passkey, or add one or an authenticator app as a second factor, with recovery codes; organizations can require it. Account settings list your sessions.
-- **Server admin area:** people, organizations, suspensions and the sign-up policy.
-- **Small footprint.** One Docker image (amd64 and arm64), Postgres and any S3-compatible storage.
+- **Passkeys and two-factor sign-in.** Sign in with a passkey, or add one or an authenticator app as a second factor, with recovery codes; organizations can require it.
+- **Server admin area:** people, organizations, suspensions, the sign-up policy, and a notice when a new release is out.
+- **Enterprise features with a license key:** single sign-on (OpenID Connect and SAML), SCIM provisioning, an audit log and version retention. Everything else is free under AGPL-3.0.
 
 ## Quick start
 
@@ -140,7 +155,9 @@ Arguments and limits are in [Publishing pages](docs/publishing.md).
 | [Publishing pages](docs/publishing.md) | [Configuration reference](docs/configuration.md) |
 | [Sharing and permissions](docs/sharing.md) | [Backup and restore](docs/backups.md) |
 | [Organizations and members](docs/organizations.md) | [Security](docs/security.md) |
-| [Version history](docs/version-history.md) | [Troubleshooting](docs/troubleshooting.md) |
+| [Version history](docs/version-history.md) | [Upgrading](docs/upgrading.md) |
+| [Comments](docs/comments.md) | [Licenses and enterprise features](docs/licenses.md) |
+| [Exporting your data](docs/exporting-your-data.md) | [Troubleshooting](docs/troubleshooting.md) |
 
 The same pages are built into every install at `/docs`.
 
