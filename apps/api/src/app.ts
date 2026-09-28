@@ -9,6 +9,7 @@ import { clearPending, passkeySignIn, twoFactor } from './auth/twofactor.js'
 import { db, schema } from './db/index.js'
 import { contact } from './ee/contact.js'
 import { historyCron, personalPlan } from './ee/plans.js'
+import { embeds } from './embeds.js'
 import { env, mailEnabled } from './env.js'
 import { hasAccounts, instanceSettings, isInstanceAdmin } from './instance.js'
 import { checkRateLimits } from './limits.js'
@@ -49,6 +50,9 @@ app.route('/', oauth)
 app.route('/mcp', mcp)
 // Bearer tokens only, outside the cookie-authenticated routes below
 app.route('/api/publish', publishApi)
+
+// /e/<slug> and /api/oembed, outside the session middleware: embeds never look at who is signed in
+app.route('/', embeds)
 
 const api = new Hono<AuthEnv>()
 api.use(loadUser)

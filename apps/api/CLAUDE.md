@@ -16,7 +16,8 @@ Hono on Node 26, Drizzle ORM over `postgres`, S3 via `@aws-sdk/client-s3`, MCP v
 | `src/files.ts` | Multi-file page validation and size limits |
 | `src/storage.ts`, `src/gc.ts` | Content-addressed blobs in S3 and the sweep that deletes unreferenced ones |
 | `src/thumbnails.ts` | Gallery screenshots of untrusted HTML with no network of its own |
-| `src/previews.ts` | Link preview (Open Graph) tags in the HTML shell of `/a/<slug>`, for link-shared pages only; mounted by `src/web.ts` and by `api/index.js` on Vercel |
+| `src/previews.ts` | Link preview (Open Graph) tags in the HTML shell of `/a/<slug>`, for link-shared pages only; mounted by `src/web.ts` and by `api/index.js` on Vercel. `SHELL_FRAMING` keeps the app itself out of other sites' frames |
+| `src/embeds.ts` | Embeds: `/e/<slug>` (a link-shared page without the app, framable by other sites, or a sign-in card) and `GET /api/oembed` |
 | `src/folders.ts` | Folders of a workspace: who organizes them (`belongsTo`, `canFile`), names, filing pages. They never change access |
 | `src/sharing.ts` | Per-person shares by email |
 | `src/comments.ts`, `src/routes/comments.ts` | Comments on a page: one level of threads, moderation by editors, emails throttled by the `comment-email` limit, unread counts from `comment_reads`. Signed-in people who can open the page only |
@@ -46,7 +47,7 @@ Hono on Node 26, Drizzle ORM over `postgres`, S3 via `@aws-sdk/client-s3`, MCP v
 - **Every first factor ends in `continueSignIn`** (`src/auth/twofactor.ts`), never `startSession`: an account with a passkey or an authenticator app gets a pending sign-in, and the session starts after the second factor. Only new accounts and a passkey on its own call `startSession` directly. Web-session users carry `blockedOrgs` (organizations that require a second factor they lack); pass the user, not just its id, to `accessLevel`, `belongsTo` and `folderFor` so those organizations stay closed in the app.
 - **Email links must survive mail scanners.** Opening a sign-in link only shows a confirmation page; the POST on Continue uses it up.
 - **New accounts.** Creating accounts and changing admins take `lockAdmins(tx)`. Insert new users with `...(await newAccountFields(tx))`: on a self-hosted install the first account becomes admin and goes through onboarding, and later ones start onboarded in their personal workspace.
-- **Untrusted HTML.** Page content is served with `CONTENT_CSP` (sandbox, opaque origin) on every file, never with the app's cookies. Thumbnails intercept every request; see the header comment in `src/thumbnails.ts` before touching it.
+- **Untrusted HTML.** Page content is served with `contentCsp()` (sandbox, opaque origin, framing as `EMBED_FRAME_ANCESTORS` allows) on every file, never with the app's cookies. Thumbnails intercept every request; see the header comment in `src/thumbnails.ts` before touching it.
 - **Limits.** New endpoints that send email or create accounts, clients or content go through `limitRequest` (or `hit`) from `src/limits.ts`, with a limit added to its list and to `docs/configuration.md`. Anything that adds a version calls `checkQuota` inside its transaction.
 - Shared helpers: `EMAIL_RE` and `UUID_RE` in `src/validation.ts`, `likeTerm` in `src/artifacts.ts` for escaped `ILIKE` searches, `checkTitle` for page names.
 

@@ -68,7 +68,7 @@ export function headingId(text: string) {
     .replace(/^-+|-+$/g, '')
 }
 
-const LANG_LABEL: Record<string, string> = { sh: 'Terminal', json: 'JSON', toml: 'TOML', yaml: 'YAML' }
+const LANG_LABEL: Record<string, string> = { sh: 'Terminal', html: 'HTML', json: 'JSON', toml: 'TOML', yaml: 'YAML' }
 
 const markdown = new Marked({
   gfm: true,

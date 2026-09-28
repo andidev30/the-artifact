@@ -24,7 +24,7 @@ pnpm install
 pnpm services                  # Postgres :5432, MinIO :9000/:9001, Mailpit :1025/:8025
 cp apps/api/.env.example apps/api/.env
 pnpm db:migrate
-pnpm dev                       # API :3000, web :5173 (proxies /api, /mcp, /oauth, /.well-known)
+pnpm dev                       # API :3000, web :5173 (proxies /api, /mcp, /oauth, /.well-known, /e/)
 
 pnpm lint                      # Biome (lint + format check) + tsc over the API, its tests and the web app
 pnpm format                    # Biome: format and apply safe fixes
