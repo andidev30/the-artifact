@@ -7,7 +7,7 @@
   "bump-patch-for-minor-pre-major": false,
   "separate-pull-requests": true,
   "pull-request-title-pattern": "chore: release ${version}",
-  "pull-request-header": "Merging this pull request tags the release, publishes the image and the release notes. Before merging, check that every change that needs action on upgrade has a section in `docs/upgrading.md` (see CONTRIBUTING.md).",
+  "pull-request-header": "Merging this pull request tags the release, publishes the image, the Helm chart and the release notes. Before merging, check that every change that needs action on upgrade has a section in `docs/upgrading.md` (see CONTRIBUTING.md).",
   "changelog-sections": [
     { "type": "feat", "section": "Features" },
     { "type": "fix", "section": "Bug fixes" },
@@ -25,7 +25,12 @@
     ".": {
       "package-name": "the-artifact",
       "changelog-path": "CHANGELOG.md",
-      "extra-files": ["deploy/docker-compose/docker-compose.yml", "deploy/docker-compose/.env.example", "deploy/kubernetes/kustomization.yaml"],
+      "extra-files": [
+        "deploy/docker-compose/docker-compose.yml",
+        "deploy/docker-compose/.env.example",
+        "deploy/kubernetes/kustomization.yaml",
+        { "type": "generic", "path": "deploy/helm/the-artifact/Chart.yaml" }
+      ],
       "exclude-paths": ["packages/cli"]
     },
     "packages/cli": {

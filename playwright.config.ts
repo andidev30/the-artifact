@@ -41,6 +41,7 @@ function servers(ports: { api: number; web: number }, selfHosted: boolean, datab
         // The limits themselves are covered by apps/api/test/integration/limits.test.ts.
         RATE_LIMITS: 'off',
         TRUST_PROXY: '',
+        EMBED_FRAME_ANCESTORS: '',
         WORKSPACE_MAX_PAGES: '',
         WORKSPACE_MAX_VERSIONS: '',
         WORKSPACE_MAX_STORAGE: '',

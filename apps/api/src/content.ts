@@ -19,7 +19,15 @@ import { zip } from './zip.js'
 // token. The token names the viewer and expires; access is checked again on every request, so
 // removing someone from a page locks them out of its files at once.
 
-export const CONTENT_CSP = 'sandbox allow-scripts allow-forms allow-popups allow-modals allow-downloads'
+const CONTENT_SANDBOX = 'sandbox allow-scripts allow-forms allow-popups allow-modals allow-downloads'
+
+// Pages are framed by the app's viewer and by embeds (/e/<slug>) on other sites, so they may be framed
+// wherever embeds may; the sandbox is what keeps them from reaching anything. With no allowlist there is
+// no frame-ancestors at all rather than "*", which doesn't match a sandboxed or data: ancestor (no origin).
+export function contentCsp() {
+  return env.embedFrameAncestors ? `${CONTENT_SANDBOX}; frame-ancestors ${env.embedFrameAncestors}` : CONTENT_SANDBOX
+}
+
 // Versions never change; this bounds how long a browser keeps a page someone has since lost access to
 const CACHE = 'private, max-age=3600'
 export const TOKEN_HOURS = 12
@@ -149,7 +157,7 @@ export async function serveVersion(c: Context<AuthEnv>) {
   const headers: Record<string, string> = {
     'Content-Type': contentType,
     // Every file, not just HTML: an SVG or HTML file opened on its own is sandboxed too
-    'Content-Security-Policy': CONTENT_CSP,
+    'Content-Security-Policy': contentCsp(),
     'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'no-referrer',
     // The sandboxed page has an opaque origin, so its fetch(), module scripts and web fonts are

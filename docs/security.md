@@ -18,6 +18,13 @@ Each version is served as its own document tree, so a page's files resolve by re
 - Files are sent with `Access-Control-Allow-Origin: *` so the sandboxed page can `fetch()` its own data and load its fonts. Browsers never combine `*` with credentials, so this exposes nothing a signed-out visitor couldn't already open.
 - Versions never change, so files are cached privately in your browser for an hour and revalidated by hash.
 
+## Framing and embeds
+
+- **The app can't be framed by other sites.** Every page of the app, `/a/<id>` included, is sent with `Content-Security-Policy: frame-ancestors 'self'` and `X-Frame-Options: SAMEORIGIN`, so another site can't lay it out under its own buttons (clickjacking).
+- **Embeds can.** `/e/<id>` is a small document of its own, without the app: no app scripts, no session, only a sandboxed frame of the page's current version and a link to open it. Its policy is `default-src 'none'; style-src 'unsafe-inline'; frame-src 'self'; base-uri 'none'; form-action 'none'`. Page content (`/api/artifacts/<id>/v/<version>/`) is framed by the app and by embeds, so the same sites may frame both.
+- **Who may embed.** By default any site; `EMBED_FRAME_ANCESTORS` narrows that to a list of origins, sent as `frame-ancestors 'self' <origins>` on embeds and page content (see the [configuration reference](/docs/configuration)). With the default, no `frame-ancestors` is sent at all, since `*` wouldn't match sites that frame embeds from a sandboxed frame of their own.
+- **Embeds are never signed in.** Access is checked as a visitor who isn't signed in, ignoring any session cookie, so an embed shows the same thing to everyone. Only pages shared with **Anyone with the link** are embedded. Every other page, and every page that doesn't exist, gets the same "Sign in to view this page" card with no title, content or screenshot, and `GET /api/oembed` answers 404 for them. This also means a site can't use your session to show you a restricted page inside its own frame.
+
 For the strongest isolation on a public install, serve The Artifact on a domain of its own rather than a subdomain of sites that share cookies.
 
 ## Thumbnails are rendered without network access

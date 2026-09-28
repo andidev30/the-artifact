@@ -1,0 +1,152 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "the-artifact.fullname" . }}
+  labels:
+    {{- include "the-artifact.labels" . | nindent 4 }}
+    app.kubernetes.io/component: app
+spec:
+  # One pod: it migrates the database on start and keeps the wrong-password limits in memory.
+  # Recreate stops the old pod before the new one starts, so two never migrate at once.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "the-artifact.selectorLabels" (list . "app") | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        # Restarts the app when a secret setting changes
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "the-artifact.labels" . | nindent 8 }}
+        app.kubernetes.io/component: app
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "the-artifact.serviceAccountName" . }}
+      # The app doesn't call the Kubernetes API
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- with .Values.podSecurityContext }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- if not .Values.podSecurityContext.seccompProfile }}
+        {{- if .Values.thumbnails.enabled }}
+        # Docker's default profile plus the namespace calls Chromium's sandbox needs to render
+        # thumbnails of untrusted pages safely. It has to be on every node that can run this pod
+        # (see docs/kubernetes.md), or the pod doesn't start.
+        seccompProfile:
+          type: Localhost
+          localhostProfile: {{ .Values.thumbnails.seccompProfile }}
+        {{- else }}
+        seccompProfile:
+          type: RuntimeDefault
+        {{- end }}
+        {{- end }}
+      initContainers:
+        # Waits until the database and object storage accept connections, so the first start
+        # doesn't crash while Postgres is still starting. Reads their addresses from the settings,
+        # so it works with your own Postgres or S3 too.
+        - name: wait-for-services
+          image: {{ include "the-artifact.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          envFrom:
+            {{- include "the-artifact.envFrom" . | nindent 12 }}
+          env:
+            {{- include "the-artifact.env" . | nindent 12 }}
+          command:
+            - node
+            - -e
+            - |
+              const net = require('node:net')
+              const targets = [process.env.DATABASE_URL, process.env.S3_ENDPOINT]
+                .filter(Boolean)
+                .map((u) => new URL(u))
+                .map((u) => ({ host: u.hostname, port: Number(u.port) || (u.protocol === 'https:' ? 443 : u.protocol === 'http:' ? 80 : 5432) }))
+              const open = ({ host, port }) => new Promise((ok) => {
+                const s = net.connect({ host, port, timeout: 2000 }, () => { s.end(); ok(true) })
+                s.on('error', () => ok(false)).on('timeout', () => { s.destroy(); ok(false) })
+              })
+              ;(async () => {
+                for (const t of targets) {
+                  while (!(await open(t))) {
+                    console.log(`Waiting for ${t.host}:${t.port}`)
+                    await new Promise((r) => setTimeout(r, 2000))
+                  }
+                }
+              })()
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      containers:
+        - name: app
+          image: {{ include "the-artifact.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          envFrom:
+            {{- include "the-artifact.envFrom" . | nindent 12 }}
+          env:
+            {{- include "the-artifact.env" . | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 3000
+          {{- with .Values.startupProbe }}
+          startupProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            # Chromium's profile and temp files, since the root filesystem is read-only
+            - name: tmp
+              mountPath: /tmp
+            # Chromium keeps shared memory here; the runtime's default 64 MB is tight
+            - name: shm
+              mountPath: /dev/shm
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 512Mi
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 256Mi
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
