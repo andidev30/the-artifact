@@ -19,7 +19,7 @@ Markdown that ships inside the app at `/docs/<file name>` (bundled by `apps/web/
 ## Links
 
 - Between pages: `/docs/<slug>` or `/docs/<slug>#<heading-anchor>`. `<slug>.md` links also work and are rewritten.
-- Anchors are the heading lowercased with runs of other characters turned into `-` (`## 3. The seccomp profile` → `#3-the-seccomp-profile`). Renaming a heading breaks links to it, so search for the old anchor.
+- Anchors are made the way GitHub makes them, so a link works in the app and on GitHub: the heading lowercased, punctuation other than `-` and `_` dropped, each space turned into `-` (`## 3. The seccomp profile` → `#3-the-seccomp-profile`, `### update_files` → `#update_files`, `## Webhooks can't reach private networks` → `#webhooks-cant-reach-private-networks`). Renaming a heading breaks links to it, so search for the old anchor.
 - Repository files are referenced by path in backticks (`deploy/docker-compose/docker-compose.yml`), not linked.
 
 ## Keeping it true
