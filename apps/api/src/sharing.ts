@@ -99,7 +99,7 @@ export async function sharePeople(artifact: Artifact, inviter: Inviter, emails: 
       targets.map((to) => sendShareNotice(to, { from, title: artifact.title, link: artifactUrl(artifact.slug), role, message: message?.slice(0, 500) })),
     )
     const failed = targets.filter((_, i) => results[i].status === 'rejected')
-    if (failed.length) log.error('Share notice failed', { recipients: failed })
+    if (failed.length) log.error('Share notice failed', { artifactId: artifact.id, failed: failed.length })
     return { shared: targets, notifyFailed: failed }
   }
   return { shared: targets, notifyFailed: [] }

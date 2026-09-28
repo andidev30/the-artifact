@@ -14,7 +14,7 @@ import type { Passkey } from '../db/schema.js'
 import { hit, clearHits, limitRequest } from '../limits.js'
 import { log } from '../log.js'
 import { instanceSettings } from '../instance.js'
-import { UUID_RE } from '../validation.js'
+import { CONTROL_CHARS_ERROR, hasControlChars, UUID_RE } from '../validation.js'
 
 // How you sign in, mounted at /api/me/security: passkeys, the authenticator app and recovery codes.
 // Changes need a recent sign-in (requireRecentSignIn); new recovery codes are in the response only.
@@ -67,6 +67,7 @@ security.post('/passkeys/options', requireRecentSignIn, async (c) => {
 function checkName(value: unknown): { name: string } | { error: string } {
   const name = typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : ''
   if (!name) return { error: 'Give the passkey a name.' }
+  if (hasControlChars(name)) return { error: CONTROL_CHARS_ERROR }
   if (name.length > MAX_PASSKEY_NAME) return { error: `Keep the name under ${MAX_PASSKEY_NAME} characters.` }
   return { name }
 }

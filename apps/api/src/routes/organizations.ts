@@ -3,6 +3,7 @@ import { Hono } from 'hono'
 import { requireUser, type AuthEnv } from '../auth/session.js'
 import { track } from '../analytics.js'
 import { db, schema } from '../db/index.js'
+import { CONTROL_CHARS_ERROR, hasControlChars } from '../validation.js'
 
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$/
 // Paths the web app already uses, so an organization can't take them
@@ -73,6 +74,7 @@ organizations.post('/', async (c) => {
   const slug = typeof body?.slug === 'string' ? body.slug.trim().toLowerCase() : ''
 
   if (name.length < 2 || name.length > 60) return c.json({ error: 'Use 2 to 60 characters for the name.', field: 'name' }, 400)
+  if (hasControlChars(name)) return c.json({ error: CONTROL_CHARS_ERROR, field: 'name' }, 400)
   const problem = slugProblem(slug)
   if (problem) return c.json({ error: problem, field: 'slug' }, 400)
 

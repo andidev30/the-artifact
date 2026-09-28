@@ -105,6 +105,9 @@ describe('isAllowedRedirect', () => {
     ['vbscript', 'vbscript:msgbox(1)'],
     ['data', 'data:text/html,hi'],
     ['file', 'file:///etc/passwd'],
+    ['blob', 'blob:https://client.example.com/0b6e0a4e-3f3a-4c1e-9e53-5d7c2a4f8b10'],
+    ['about', 'about:blank'],
+    ['a user name and password', 'https://user:pass@client.example.com/cb'],
     ['not a URL', 'not a url'],
     ['empty', ''],
   ])('rejects %s', (_, uri) => {

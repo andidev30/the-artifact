@@ -3,6 +3,7 @@ import { audit } from './audit.js'
 import { hashToken, randomToken } from './auth/session.js'
 import { db, schema } from './db/index.js'
 import type { McpAuth } from './oauth/server.js'
+import { CONTROL_CHARS_ERROR, hasControlChars } from './validation.js'
 
 // Access tokens: made in account settings for CI and scripts, used as a bearer token on /mcp and
 // POST /api/publish. Each acts for one person in one workspace, like an OAuth connection, and is
@@ -26,6 +27,7 @@ export function newToken(): string {
 export function checkTokenName(value: unknown): { name: string } | { error: string } {
   const name = typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : ''
   if (name.length < 1 || name.length > MAX_TOKEN_NAME) return { error: `Use 1 to ${MAX_TOKEN_NAME} characters for the name.` }
+  if (hasControlChars(name)) return { error: CONTROL_CHARS_ERROR }
   return { name }
 }
 

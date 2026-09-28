@@ -209,7 +209,7 @@ With `publish_artifact`, a page travels inside the MCP call, so it is limited by
 2. The agent uploads each file to its link, for example with `curl -T`.
 3. On `publish_upload`, the server hashes every uploaded file itself. A file that is missing, or whose bytes don't match its size and hash, stops the publish with a message, and nothing is published.
 
-Files whose content is already stored, like the images of a page you publish a new version of, need no upload. Uploads that are never published are deleted after an hour.
+Files already stored in one of your own pages, like the images of a page you publish a new version of, need no upload. Uploads that are never published are deleted after an hour.
 
 Agents that can't make requests of their own keep using `publish_artifact`.
 

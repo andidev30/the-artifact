@@ -3,7 +3,7 @@ import { canEdit, pagesInWorkspace, type Viewer } from './artifacts.js'
 import { db, schema } from './db/index.js'
 import type { Artifact, Folder } from './db/schema.js'
 import type { Workspace } from './quota.js'
-import { UUID_RE } from './validation.js'
+import { CONTROL_CHARS_ERROR, hasControlChars, UUID_RE } from './validation.js'
 
 // Folders group the pages of one workspace. They are organization only: who can open a page never
 // depends on its folder, and people who only have a page shared with them never see its folder.
@@ -21,6 +21,7 @@ const f = schema.folders
 export function checkFolderName(value: unknown): { name: string } | { error: string } {
   const name = typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : ''
   if (!name) return { error: 'Give the folder a name.' }
+  if (hasControlChars(name)) return { error: CONTROL_CHARS_ERROR }
   if (name.length > MAX_FOLDER_NAME) return { error: `Keep the folder name under ${MAX_FOLDER_NAME} characters.` }
   return { name }
 }

@@ -9,6 +9,7 @@ import { env } from './env.js'
 import { checkPath, ENTRY_PATH } from './files.js'
 import { clientIp } from './limits.js'
 import { isGrant, linkPassFor, signGrant, verifyGrant } from './links.js'
+import { onUnhandledError } from './metrics.js'
 import { serverSecret } from './secrets.js'
 import { recordView } from './views.js'
 import { zip } from './zip.js'
@@ -260,6 +261,7 @@ export const contentHost = new Hono<AuthEnv>()
 contentHost.get('/api/artifacts/:slug/v/:version', (c) => c.redirect(`${new URL(c.req.url).pathname}/`, 301))
 contentHost.get('/api/artifacts/:slug/v/:version/*', serveVersion)
 contentHost.notFound(notFound)
+contentHost.onError(onUnhandledError)
 
 // "Signups by week" → "signups-by-week-v3.zip"; titles with no Latin letters or digits fall back to the page id
 function zipName(artifact: Artifact, version: number) {

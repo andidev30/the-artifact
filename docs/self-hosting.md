@@ -99,7 +99,7 @@ Pages are untrusted HTML. They already run in a sandbox with no origin of their 
    With nginx, add the name to `server_name` and the certificate, and pass the host on with `proxy_set_header Host $host;`. On Kubernetes, add the host and its TLS secret to the ingress.
 4. Set `CONTENT_ORIGIN=https://artifact-content.example.net` in `app.env` and restart with `docker compose up -d`.
 
-The app tells the two apart by the `Host` header, or by `X-Forwarded-Host` when `TRUST_PROXY` is set, so the proxy must pass the host the browser asked for. The content host answers only page files under `/api/artifacts/<page id>/v/<version>/`; sign-in, the API, MCP, OAuth and the web app answer 404 there. People keep using the app's address for everything: when the viewer or an embed opens a page, the app checks access with your session, the link's key or its password, and sends the frame on to the content host with a short-lived link token in the address. Nothing else changes: page links, embeds, downloads, screenshots and link previews stay on `APP_URL`.
+The app tells the two apart by the `Host` header, or by `X-Forwarded-Host` when `TRUST_PROXY` is set, so the proxy must pass the host the browser asked for. With `TRUST_PROXY`, have the proxy set `X-Forwarded-Host` itself (nginx: `proxy_set_header X-Forwarded-Host $host;`) rather than pass on what the browser sent. The content host answers only page files under `/api/artifacts/<page id>/v/<version>/`; sign-in, the API, MCP, OAuth and the web app answer 404 there. People keep using the app's address for everything: when the viewer or an embed opens a page, the app checks access with your session, the link's key or its password, and sends the frame on to the content host with a short-lived link token in the address. Nothing else changes: page links, embeds, downloads, screenshots and link previews stay on `APP_URL`.
 
 ## 4. Connect agents
 
@@ -163,7 +163,7 @@ Leave `SMTP_HOST` empty and The Artifact sends no email:
 - **Logging in**: with email and password, or with Google when it is configured.
 - **Signing up on their own**: under the **Anyone** or **Email domains** policy, the sign-up page asks for an email and a password. Nobody checks that the address belongs to the person typing it, so an address someone invited or shared a page with can't be taken there; that person uses their invitation link or a sign-up link. If people you don't trust can reach the server, choose **Invited people only**.
 - **Adding people**: under **Server admin**, **People**, enter their address and choose **Make sign-up link**. Send them the link however you like; it works once, for 7 days, and asks them to choose a password. It creates their account whatever the sign-up policy says.
-- **Organization invitations**: inviting someone gives you the invitation link to pass on. Someone without an account creates one from that page with a password.
+- **Organization invitations**: inviting someone gives you the invitation link to pass on. Someone without an account creates one from that page with a password. People who signed up on their own join only through that link: nobody checked their address, so invitations to it don't show up in the app for them.
 - **Forgotten passwords**: an admin opens the person under **People** and chooses **Password reset link**. Using it signs them out everywhere else. If they use [two-factor sign-in](/docs/signing-in), it is still asked for after the new password; a lost second factor is reset separately with **Reset two-factor sign-in**.
 - **Sharing pages**: people are added without an email; send them the page link.
 - **Comments**: nobody is emailed about new ones. They show as new on gallery cards and on the page's **Comments** button.
@@ -246,7 +246,7 @@ Both return JSON, e.g. `{"status":"ok","checks":{"database":"ok","storage":"ok"}
 
 ### Logs
 
-The app logs one JSON object per line: one per request, with `requestId`, `method`, `route`, `status` and `durationMs`, and others for things like failed emails or thumbnails. `route` is the pattern that matched (`/api/artifacts/:slug`), never the address itself, so page links and tokens stay out of the log. Every response has an `X-Request-Id` header with the request's id. When your reverse proxy sends its own `X-Request-Id` (letters, digits, `.`, `_`, `:` and `-`, up to 128 characters), the app uses that instead, so you can follow one request through both logs. Probes and scrapes that succeed aren't logged.
+The app logs one JSON object per line: one per request, with `requestId`, `method`, `route`, `status` and `durationMs`, and others for things like failed emails or thumbnails. An error the app didn't expect is logged as `unhandled error` with the request's id and route; for a failed database query that is the query and what Postgres said, never the values it was run with. `route` is the pattern that matched (`/api/artifacts/:slug`), never the address itself, so page links and tokens stay out of the log. Every response has an `X-Request-Id` header with the request's id. When your reverse proxy sends its own `X-Request-Id` (letters, digits, `.`, `_`, `:` and `-`, up to 128 characters), the app uses that instead, so you can follow one request through both logs. Probes and scrapes that succeed aren't logged.
 
 ```sh
 docker compose logs app | grep '"status":5'

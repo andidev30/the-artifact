@@ -243,6 +243,36 @@ describe('organization invitations', () => {
     expect(res.status).toBe(409)
     expect((await login('taken@example.com', 'their password')).status).toBe(200)
   })
+
+  it('an account that signed up on its own joins only with the invitation link', async () => {
+    const owner = await createUser()
+    const org = await createOrg(owner)
+    const signUp = await call('/api/auth/password/sign-up', { json: { email: 'later@example.com', password: 'their password' } })
+    expect(signUp.status).toBe(201)
+    const cookie = sessionCookie(signUp)!
+    const body = await (
+      await call(`/api/organizations/${org.id}/invitations`, { cookie: owner.cookie, json: { email: 'later@example.com', role: 'admin' } })
+    ).json()
+    const [invitation] = await db.select().from(schema.invitations)
+
+    expect(await (await call('/api/me/invitations', { cookie })).json()).toEqual([])
+    expect((await call(`/api/me/invitations/${invitation.id}/accept`, { cookie, method: 'POST' })).status).toBe(404)
+    expect(await db.select().from(schema.memberships).where(eq(schema.memberships.organizationId, org.id))).toHaveLength(1)
+
+    const token = new URL(body.link).pathname.split('/').pop()!
+    const joined = await call(`/api/invitations/${token}/accept`, { cookie, method: 'POST' })
+    expect(joined.status).toBe(200)
+    expect(await joined.json()).toMatchObject({ id: org.id, role: 'admin' })
+  })
+
+  it('lists invitations in the app for accounts whose address was checked', async () => {
+    const owner = await createUser()
+    const org = await createOrg(owner)
+    const member = await createUser({ email: 'checked@example.com' })
+    await call(`/api/organizations/${org.id}/invitations`, { cookie: owner.cookie, json: { email: 'checked@example.com', role: 'member' } })
+    const [listed] = await (await call('/api/me/invitations', { cookie: member.cookie })).json()
+    expect((await call(`/api/me/invitations/${listed.id}/accept`, { cookie: member.cookie, method: 'POST' })).status).toBe(200)
+  })
 })
 
 describe('sharing and settings', () => {

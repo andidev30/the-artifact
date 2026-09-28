@@ -24,7 +24,7 @@ An organization always keeps at least one owner. The last owner can't leave, be 
 
 Open the organization's settings (the gear next to it in the workspace menu, or *organization name* **settings** in the menu under your name), and under **Members** enter an email address and pick **Admin** or **Member**. The invitation link works for 7 days and only for someone signed in with that email address. Inviting the same address again sends a fresh link and cancels the old one. Pending invitations can be resent or revoked. One person can invite, or share pages with, up to 200 people an hour (see [Rate limits](/docs/configuration#rate-limits)).
 
-You don't need the email to accept. When you are signed in with the invited address, pending invitations show at the top of your pages, in the workspace switcher and (on the hosted service) on the first step of onboarding, so a new account can join the team instead of starting on its own. **Join** adds you with the invited role and switches to that workspace; **Decline** removes the invitation.
+You don't need the email to accept. When you are signed in with the invited address, pending invitations show at the top of your pages, in the workspace switcher and (on the hosted service) on the first step of onboarding, so a new account can join the team instead of starting on its own. **Join** adds you with the invited role and switches to that workspace; **Decline** removes the invitation. On a server without email, an account someone created on their own with a password doesn't see them: it joins with the invitation link (see [Running without email](/docs/self-hosting#running-without-email)).
 
 ## Switching workspaces
 

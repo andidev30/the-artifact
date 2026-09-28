@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
+import { DrizzleQueryError } from 'drizzle-orm'
 
 // One JSON object per line, so log collectors (Loki, CloudWatch, Vercel) can filter by field. Lines
 // written while a request is handled carry its id, which is also sent back as X-Request-Id.
@@ -8,8 +9,14 @@ type Fields = Record<string, unknown>
 
 export const requestContext = new AsyncLocalStorage<{ requestId: string }>()
 
+// A failed query's message (and so its stack) lists the values it was run with: link keys, comment
+// text, email addresses. Only the query itself and what Postgres said about it are logged.
 function describe(err: unknown): Fields {
-  if (err instanceof Error) return { error: err.message, stack: err.stack }
+  if (err instanceof DrizzleQueryError) {
+    const cause = err.cause as (Error & { code?: unknown }) | undefined
+    return { error: cause?.message ?? 'Query failed', errorName: err.name, code: cause?.code, query: err.query, stack: cause?.stack }
+  }
+  if (err instanceof Error) return { error: err.message, errorName: err.name, stack: err.stack }
   return { error: String(err) }
 }
 

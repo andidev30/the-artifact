@@ -219,13 +219,13 @@ function buildServer(auth: McpAuth) {
           'First step of publishing a page by uploading its files yourself, for agents that can run shell commands or make HTTP requests. ' +
           'List every file of the page with its size and sha256, including index.html (the page itself). Returns an upload_id and a link per file: ' +
           "PUT each file's exact bytes to its link, then call publish_upload with the upload_id and the same files. " +
-          `Files already stored need no upload. The same limits as publish_artifact apply: html up to ${MAX_HTML_BYTES / 1024 / 1024} MB, ` +
+          `Files already stored in your own pages need no upload. The same limits as publish_artifact apply: html up to ${MAX_HTML_BYTES / 1024 / 1024} MB, ` +
           `each file up to ${MAX_FILE_BYTES / 1024 / 1024} MB, ${MAX_TOTAL_BYTES / 1024 / 1024} MB and ${MAX_FILES} files in total. Allowed types: ${ALLOWED_EXTENSIONS.join(', ')}.`,
         inputSchema: z.object({ files: manifest.describe('Every file of the page, index.html included') }),
       },
       limited(async ({ files }) => {
         try {
-          const { uploadId, uploads, stored } = await prepareUpload(files)
+          const { uploadId, uploads, stored } = await prepareUpload(files, auth.userId)
           const commands = uploads.map((u) => `curl -fsS -T '${u.paths[0]}' '${u.url}'${u.paths.length > 1 ? `  # also ${u.paths.slice(1).join(', ')}` : ''}`)
           return text(
             `upload_id: ${uploadId}\n` +

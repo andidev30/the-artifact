@@ -7,6 +7,7 @@ import { db, schema } from '../db/index.js'
 import { env } from '../env.js'
 import { clientIp, hit, tooManyRequests, waitText } from '../limits.js'
 import { authenticateToken, TOKEN_RE } from '../tokens.js'
+import { hasControlChars } from '../validation.js'
 
 // OAuth 2.1 authorization server for MCP clients, following the MCP authorization spec:
 // discovery (RFC 9728 + RFC 8414), dynamic client registration (RFC 7591), and
@@ -54,10 +55,10 @@ oauth.get('/.well-known/oauth-authorization-server', (c) =>
 export function isAllowedRedirect(uri: string): boolean {
   try {
     const url = new URL(uri)
-    if (url.hash) return false
+    if (url.hash || url.username || url.password) return false
     if (url.protocol === 'https:') return true
     if (url.protocol === 'http:') return ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
-    return /^[a-z][a-z0-9+.-]*:$/.test(url.protocol) && !['javascript:', 'vbscript:', 'data:', 'file:'].includes(url.protocol)
+    return /^[a-z][a-z0-9+.-]*:$/.test(url.protocol) && !['javascript:', 'vbscript:', 'data:', 'file:', 'blob:', 'about:'].includes(url.protocol)
   } catch {
     return false
   }
@@ -77,6 +78,7 @@ oauth.post('/oauth/register', async (c) => {
     return c.json({ error: 'invalid_redirect_uri', error_description: 'Provide at least one https, loopback or app-scheme redirect URI.' }, 400)
   }
   const name = typeof body?.client_name === 'string' && body.client_name.trim() ? body.client_name.trim().slice(0, 80) : 'MCP client'
+  if (hasControlChars(name)) return c.json({ error: 'invalid_client_metadata', error_description: "client_name can't contain control characters." }, 400)
   const id = randomToken()
   await db.insert(schema.oauthClients).values({ id, name, redirectUris })
   return c.json(

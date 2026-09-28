@@ -1,4 +1,4 @@
-import { sql } from 'drizzle-orm'
+import { DrizzleQueryError, sql } from 'drizzle-orm'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { db, poolStats } from '../../src/db/index.js'
 import { env } from '../../src/env.js'
@@ -39,6 +39,49 @@ describe('health checks', () => {
     const res = await call('/readyz')
     expect(res.status).toBe(503)
     expect(Date.now() - started).toBeLessThan(4_000)
+  })
+})
+
+describe('unexpected errors', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('are logged in the JSON format without query parameters, and answer a plain 500', async () => {
+    const user = await createUser()
+    const printed: string[] = []
+    vi.spyOn(console, 'error').mockImplementation((line: unknown) => {
+      printed.push(String(line))
+    })
+    const cause = Object.assign(new Error('connection lost'), { code: '08006' })
+    vi.spyOn(db, 'select').mockImplementationOnce(() => {
+      throw new DrizzleQueryError('select "id" from "sessions" where "id" = $1', ['secret-session-value'], cause)
+    })
+
+    const res = await call('/api/me', { cookie: user.cookie })
+    expect(res.status).toBe(500)
+    expect(await res.json()).toEqual({ error: 'Something went wrong. Try again in a moment.' })
+    expect(printed.join('\n')).not.toContain('secret-session-value')
+    const entry = printed.map((l) => JSON.parse(l)).find((l) => l.msg === 'unhandled error')
+    expect(entry).toMatchObject({
+      level: 'error',
+      requestId: res.headers.get('x-request-id'),
+      error: 'connection lost',
+      code: '08006',
+      query: 'select "id" from "sessions" where "id" = $1',
+    })
+  })
+
+  it('refuse control characters in titles and names with a 400', async () => {
+    const user = await createUser()
+    const page = await createPage(user)
+    const res = await call(`/api/artifacts/${page.slug}`, { method: 'PATCH', cookie: user.cookie, json: { title: 'secret\u0000value' } })
+    expect(res.status).toBe(400)
+    expect(await res.json()).toEqual({ error: "The name can't contain control characters.", field: 'title' })
+    const named = await call('/api/me', { method: 'PATCH', cookie: user.cookie, json: { name: 'Ada\u001bLovelace' } })
+    expect(named.status).toBe(400)
+    expect(await named.json()).toMatchObject({ field: 'name' })
+    expect((await call('/api/artifacts?q=%00', { cookie: user.cookie })).status).toBe(200)
   })
 })
 

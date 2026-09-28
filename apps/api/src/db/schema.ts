@@ -25,6 +25,9 @@ export const users = pgTable('users', {
   googleSub: text('google_sub').unique(),
   // scrypt hash (see src/auth/password.ts); only set on installs without email, or once someone chooses one
   passwordHash: text('password_hash'),
+  // Signed up on their own with a password on a server without email, so nobody checked the address.
+  // Cleared by a sign-in that proves it (email link, Google, single sign-on).
+  emailUnverified: boolean('email_unverified').notNull().default(false),
   // Set once the person finishes choosing a personal or organization workspace
   onboardedAt: timestamp('onboarded_at', { withTimezone: true }),
   // Instance administrator (see src/instance.ts)

@@ -27,7 +27,7 @@ import { addPruner } from './gc.js'
 import { hasAccounts, instanceSettings, isInstanceAdmin } from './instance.js'
 import { checkRateLimits } from './limits.js'
 import { mcp } from './mcp.js'
-import { observeRequests } from './metrics.js'
+import { observeRequests, onUnhandledError } from './metrics.js'
 import { consent } from './oauth/consent.js'
 import { oauth } from './oauth/server.js'
 import { setPlanQuota } from './quota.js'
@@ -48,6 +48,7 @@ export const app = new Hono<AuthEnv>()
 
 // First, so every request gets an id, a log line and its timing
 app.use(observeRequests)
+app.onError(onUnhandledError)
 // CONTENT_ORIGIN serves page files and nothing else: a page that escaped its sandbox there finds no app
 app.use(async (c, next) => {
   if (onContentHost(c)) return contentHost.fetch(c.req.raw, c.env)
