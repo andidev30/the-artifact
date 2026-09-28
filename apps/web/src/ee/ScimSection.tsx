@@ -27,7 +27,7 @@ function OrganizationSelect({
 }) {
   return (
     <select id={id} className="settings-select" value={value} onChange={(e) => onChange(e.target.value)} aria-describedby={`${id}-hint`}>
-      <option value="">No organization</option>
+      <option value="">Every account on this server</option>
       {organizations.map((o) => (
         <option key={o.id} value={o.id}>
           {o.name}
@@ -153,7 +153,7 @@ export function ScimSection() {
                   <span className="settings-who">
                     <strong>{t.name}</strong>
                     <span>
-                      {t.organizationName ? `New people join ${t.organizationName}` : 'New people start in a personal workspace'}, created{' '}
+                      {t.organizationName ? `Manages the people in ${t.organizationName}` : 'Manages every account on this server'}, created{' '}
                       {timeAgo(t.createdAt)}
                     </span>
                     <span>{t.lastUsedAt ? `Last used ${timeAgo(t.lastUsedAt)}` : 'Not used yet'}</span>
@@ -195,7 +195,7 @@ export function ScimSection() {
                 />
               </div>
               <div className="field">
-                <label htmlFor="scim-org">Organization for new people</label>
+                <label htmlFor="scim-org">Organization</label>
                 <OrganizationSelect id="scim-org" value={organizationId} onChange={setOrganizationId} organizations={state.data.organizations} />
               </div>
               <button type="submit" className="button button-small" disabled={busy}>
@@ -203,7 +203,8 @@ export function ScimSection() {
               </button>
             </div>
             <p id="scim-org-hint" className="field-hint">
-              Accounts the IdP creates join this organization as members. Deleting a user in the IdP suspends the account here.
+              With an organization, the token reaches only its members, and accounts the IdP creates join it. Without one, it reaches every account on this
+              server. Deleting a user in the IdP suspends the account here; see the docs for accounts in more than one organization.
             </p>
           </form>
           <p id="scim-status" className="field-hint" data-tone={status?.tone} aria-live="polite" role={status?.tone === 'bad' ? 'alert' : undefined}>

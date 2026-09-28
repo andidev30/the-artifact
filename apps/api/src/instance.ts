@@ -119,6 +119,15 @@ export async function revokeAccess(tx: Tx, user: Pick<User, 'id' | 'email'>) {
   await tx.delete(schema.emailTokens).where(eq(schema.emailTokens.email, user.email))
 }
 
+// Takes someone out of an organization, with everything that acted for them there: agents
+// connected to it, agent approvals not yet exchanged for tokens, and access tokens for it
+export async function removeMembership(tx: Tx, organizationId: string, userId: string) {
+  await tx.delete(schema.memberships).where(and(eq(schema.memberships.organizationId, organizationId), eq(schema.memberships.userId, userId)))
+  await tx.delete(schema.oauthTokens).where(and(eq(schema.oauthTokens.organizationId, organizationId), eq(schema.oauthTokens.userId, userId)))
+  await tx.delete(schema.oauthGrants).where(and(eq(schema.oauthGrants.organizationId, organizationId), eq(schema.oauthGrants.userId, userId)))
+  await tx.delete(schema.accessTokens).where(and(eq(schema.accessTokens.organizationId, organizationId), eq(schema.accessTokens.userId, userId)))
+}
+
 export const lastAdminError = {
   error: 'You are the only admin of this instance. Make someone else an admin before you delete your account.',
   code: 'last_admin',

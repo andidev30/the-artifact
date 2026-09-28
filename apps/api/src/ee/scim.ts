@@ -1,4 +1,4 @@
-import { and, asc, count, eq, ne, sql, type SQL } from 'drizzle-orm'
+import { and, asc, count, eq, exists, ne, sql, type SQL } from 'drizzle-orm'
 import { Hono, type Context } from 'hono'
 import { createMiddleware } from 'hono/factory'
 import { audit } from '../audit.js'
@@ -7,7 +7,7 @@ import { hashToken, randomToken } from '../auth/session.js'
 import { db, schema } from '../db/index.js'
 import type { User } from '../db/schema.js'
 import { env } from '../env.js'
-import { activeAdminCount, isInstanceAdmin, lockAdmins, newAccountFields, revokeAccess } from '../instance.js'
+import { activeAdminCount, isInstanceAdmin, lockAdmins, newAccountFields, removeMembership, revokeAccess } from '../instance.js'
 import { enterpriseRequired, hasEnterprise, requireEnterprise } from '../license.js'
 import { defineLimit, hit, waitText } from '../limits.js'
 import { EMAIL_RE, UUID_RE } from '../validation.js'
@@ -15,6 +15,13 @@ import { EMAIL_RE, UUID_RE } from '../validation.js'
 // SCIM 2.0 (RFC 7643, RFC 7644) at /scim/v2, for an IdP (Okta, Entra ID) to create, update and
 // deactivate accounts. Users only: the app has no groups for SCIM Groups to map to. Deleting a user
 // suspends the account instead, so the pages it owns stay; an instance admin can delete it for good.
+//
+// A token made for an organization reaches only that organization's members: it lists, reads and
+// changes them, and creates accounts in it. Suspending an account and changing its name or email
+// address reach beyond the organization (the person's own pages, other organizations, the server),
+// so a token does that only to accounts that are in no other organization and aren't instance
+// admins. Deactivating anyone else takes them out of the token's organization instead. A token
+// without an organization, which only an instance admin can make, reaches every account.
 //
 // Errors here are SCIM Error messages ({ schemas, status, scimType?, detail }, RFC 7644 section 3.12)
 // instead of the app's usual { error }: IdPs parse this shape, and nobody reads these in the app.
@@ -135,9 +142,20 @@ function resource(row: Row) {
 const selectRows = () =>
   db.select({ user: schema.users, scim: schema.scimUsers }).from(schema.users).leftJoin(schema.scimUsers, eq(schema.scimUsers.userId, schema.users.id))
 
-async function findRow(id: string): Promise<Row | null> {
+// The accounts a token reaches: the members of its organization, or all of them
+function reach(token: ScimToken): SQL | undefined {
+  if (!token.organizationId) return undefined
+  return exists(
+    db
+      .select({ one: sql`1` })
+      .from(schema.memberships)
+      .where(and(eq(schema.memberships.userId, schema.users.id), eq(schema.memberships.organizationId, token.organizationId))),
+  )
+}
+
+async function findRow(token: ScimToken, id: string): Promise<Row | null> {
   if (!UUID_RE.test(id)) return null
-  const [row] = await selectRows().where(eq(schema.users.id, id))
+  const [row] = await selectRows().where(and(eq(schema.users.id, id), reach(token)))
   return row ?? null
 }
 
@@ -158,19 +176,20 @@ function parseFilter(filter: string): SQL | null | 'invalid' {
 }
 
 scim.get('/Users', async (c) => {
-  const where = parseFilter(c.req.query('filter') ?? '')
-  if (where === 'invalid') return scimError(c, 400, 'Only "eq" filters on userName, externalId, id or emails are supported.', 'invalidFilter')
+  const filter = parseFilter(c.req.query('filter') ?? '')
+  if (filter === 'invalid') return scimError(c, 400, 'Only "eq" filters on userName, externalId, id or emails are supported.', 'invalidFilter')
   const startIndex = Math.max(1, Number.parseInt(c.req.query('startIndex') ?? '1', 10) || 1)
   const requested = Number.parseInt(c.req.query('count') ?? String(MAX_PAGE), 10)
   const size = Math.min(MAX_PAGE, Math.max(0, Number.isNaN(requested) ? MAX_PAGE : requested))
+  const where = and(filter ?? undefined, reach(c.get('scimToken')))
   const [{ total }] = await db
     .select({ total: count() })
     .from(schema.users)
     .leftJoin(schema.scimUsers, eq(schema.scimUsers.userId, schema.users.id))
-    .where(where ?? undefined)
+    .where(where)
   const rows = size
     ? await selectRows()
-        .where(where ?? undefined)
+        .where(where)
         .orderBy(asc(schema.users.createdAt), asc(schema.users.id))
         .limit(size)
         .offset(startIndex - 1)
@@ -179,7 +198,7 @@ scim.get('/Users', async (c) => {
 })
 
 scim.get('/Users/:id', async (c) => {
-  const row = await findRow(c.req.param('id'))
+  const row = await findRow(c.get('scimToken'), c.req.param('id'))
   if (!row) return scimError(c, 404, 'No user with this id.', 'noTarget')
   return scimJson(c, resource(row))
 })
@@ -360,12 +379,55 @@ async function create(token: ScimToken, changes: Changes): Promise<string> {
   return user.id
 }
 
-// PUT replaces what the resource says (replace = true); PATCH changes only what it names
-async function update(token: ScimToken, id: string, changes: Changes, replace: boolean) {
-  const { user, set } = await db.transaction(async (tx) => {
+// Whether a token may suspend this account and change its name and email address: see the top of this file
+async function manages(tx: Tx, token: ScimToken, user: User): Promise<boolean> {
+  if (!token.organizationId) return true
+  if (user.isAdmin) return false
+  const [other] = await tx
+    .select({ id: schema.memberships.organizationId })
+    .from(schema.memberships)
+    .where(and(eq(schema.memberships.userId, user.id), ne(schema.memberships.organizationId, token.organizationId)))
+    .limit(1)
+  return !other
+}
+
+// Deactivating someone the token doesn't manage: they leave the token's organization, as when an
+// owner removes them, and keep their account
+async function removeFromOrganization(tx: Tx, organizationId: string, userId: string) {
+  const [target] = await tx
+    .select({ role: schema.memberships.role })
+    .from(schema.memberships)
+    .where(and(eq(schema.memberships.organizationId, organizationId), eq(schema.memberships.userId, userId)))
+    .for('update')
+  if (!target) return null
+  if (target.role === 'owner') {
+    const [{ owners }] = await tx
+      .select({ owners: count() })
+      .from(schema.memberships)
+      .where(and(eq(schema.memberships.organizationId, organizationId), eq(schema.memberships.role, 'owner')))
+    if (owners <= 1)
+      throw new ScimProblem(409, 'This is the only owner of the organization, so it can’t be removed. Make someone else an owner first.', 'mutability')
+  }
+  await removeMembership(tx, organizationId, userId)
+  return target.role
+}
+
+// PUT replaces what the resource says (replace = true); PATCH changes only what it names. Answers
+// false when the person was taken out of the token's organization instead of being changed.
+async function update(token: ScimToken, id: string, changes: Changes, replace: boolean): Promise<boolean> {
+  const { user, set, removed } = await db.transaction(async (tx) => {
     await lockAdmins(tx)
-    const [user] = await tx.select().from(schema.users).where(eq(schema.users.id, id)).for('update')
+    const [user] = await tx
+      .select()
+      .from(schema.users)
+      .where(and(eq(schema.users.id, id), reach(token)))
+      .for('update')
     if (!user) throw new ScimProblem(404, 'No user with this id.', 'noTarget')
+    if (!(await manages(tx, token, user))) {
+      // Name and address changes are left out rather than refused, so the IdP's routine updates go through
+      const removed = changes.active === false ? await removeFromOrganization(tx, token.organizationId!, id) : null
+      return { user, set: {} as Partial<User>, removed }
+    }
     const [current] = await tx.select().from(schema.scimUsers).where(eq(schema.scimUsers.userId, id))
 
     const set: Partial<User> = {}
@@ -392,8 +454,18 @@ async function update(token: ScimToken, id: string, changes: Changes, replace: b
       .insert(schema.scimUsers)
       .values({ userId: id, ...next })
       .onConflictDoUpdate({ target: schema.scimUsers.userId, set: { ...next, updatedAt: new Date() } })
-    return { user, set }
+    return { user, set, removed: null }
   })
+  if (removed) {
+    audit({
+      action: 'member.removed',
+      organizationId: token.organizationId,
+      actor: null,
+      target: { type: 'member', id: user.id, label: user.email },
+      details: { role: removed, via: 'SCIM', token: token.name },
+    })
+    return false
+  }
   // Told to every organization the account is in
   if ('suspendedAt' in set) {
     audit({
@@ -404,6 +476,15 @@ async function update(token: ScimToken, id: string, changes: Changes, replace: b
       details: { via: 'SCIM', token: token.name },
     })
   }
+  return true
+}
+
+// What PUT and PATCH answer: the account as it is now, or, for someone just taken out of the
+// token's organization, as the IdP left it (deactivated)
+async function updated(c: Context<ScimEnv>, id: string, kept: boolean) {
+  if (kept) return scimJson(c, resource((await findRow(c.get('scimToken'), id))!))
+  const [row] = await selectRows().where(eq(schema.users.id, id))
+  return scimJson(c, { ...resource(row), active: false })
 }
 
 async function body(c: Context): Promise<Record<string, unknown>> {
@@ -420,7 +501,7 @@ function handle(c: Context, err: unknown) {
 scim.post('/Users', async (c) => {
   try {
     const id = await create(c.get('scimToken'), fromResource(await body(c)))
-    const row = (await findRow(id))!
+    const row = (await findRow(c.get('scimToken'), id))!
     return scimJson(c, resource(row), 201, { Location: `${env.appUrl}/scim/v2/Users/${id}` })
   } catch (err) {
     return handle(c, err)
@@ -433,8 +514,7 @@ scim.put('/Users/:id', async (c) => {
   try {
     const changes = fromResource(await body(c))
     if (!changes.userName) throw new ScimProblem(400, 'userName is required.', 'invalidValue')
-    await update(c.get('scimToken'), id, changes, true)
-    return scimJson(c, resource((await findRow(id))!))
+    return updated(c, id, await update(c.get('scimToken'), id, changes, true))
   } catch (err) {
     return handle(c, err)
   }
@@ -444,15 +524,15 @@ scim.patch('/Users/:id', async (c) => {
   const id = c.req.param('id')
   if (!UUID_RE.test(id)) return scimError(c, 404, 'No user with this id.', 'noTarget')
   try {
-    await update(c.get('scimToken'), id, fromPatch(await body(c)), false)
-    return scimJson(c, resource((await findRow(id))!))
+    return updated(c, id, await update(c.get('scimToken'), id, fromPatch(await body(c)), false))
   } catch (err) {
     return handle(c, err)
   }
 })
 
 // Deactivates rather than deletes: the account's pages and organizations stay, and an instance admin
-// can restore or delete it under Server admin
+// can restore or delete it under Server admin. Someone the token doesn't manage leaves its
+// organization instead.
 scim.delete('/Users/:id', async (c) => {
   const id = c.req.param('id')
   if (!UUID_RE.test(id)) return scimError(c, 404, 'No user with this id.', 'noTarget')

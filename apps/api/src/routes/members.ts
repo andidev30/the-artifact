@@ -10,6 +10,7 @@ import { db, schema } from '../db/index.js'
 import type { InviteRole, Role, User } from '../db/schema.js'
 import { ssoRequiredError, ssoRequiredFor } from '../ee/sso/connections.js'
 import { env, mailEnabled } from '../env.js'
+import { removeMembership } from '../instance.js'
 import { limitInvites } from '../limits.js'
 import { log } from '../log.js'
 import { sendInvitation } from '../mail.js'
@@ -355,10 +356,7 @@ members.delete('/members/:userId', async (c) => {
       if (target.role === 'owner' && owners <= 1) {
         throw new RuleError(leaving ? 'You are the only owner. Make someone else an owner before you leave.' : 'An organization needs at least one owner.', 409)
       }
-      await tx.delete(schema.memberships).where(and(eq(schema.memberships.organizationId, me.org.id), eq(schema.memberships.userId, targetId)))
-      // Agents connected to this organization, and access tokens for it, stop publishing there
-      await tx.delete(schema.oauthTokens).where(and(eq(schema.oauthTokens.organizationId, me.org.id), eq(schema.oauthTokens.userId, targetId)))
-      await tx.delete(schema.accessTokens).where(and(eq(schema.accessTokens.organizationId, me.org.id), eq(schema.accessTokens.userId, targetId)))
+      await removeMembership(tx, me.org.id, targetId)
       return target
     })
     audit({
