@@ -2,7 +2,7 @@
 
 | Suite | Tool | Where | Needs |
 | --- | --- | --- | --- |
-| Unit | Vitest | `apps/api/test/unit`, `apps/web/src/**/*.test.ts` | nothing |
+| Unit | Vitest | `apps/api/test/unit`, `apps/web/src/**/*.test.ts`, `packages/cli/test` | nothing |
 | Integration | Vitest + Hono `app.request()` | `apps/api/test/integration` | Postgres, MinIO |
 | End-to-end | Playwright | `e2e/` | Postgres, MinIO, Mailpit, Google Chrome |
 
@@ -22,12 +22,15 @@ pnpm test:e2e                                    # Playwright
 pnpm --filter @the-artifact/api test:unit        # API unit tests only, no database
 pnpm --filter @the-artifact/api test:integration
 pnpm --filter @the-artifact/web test
+pnpm --filter @the-artifact/cli test             # CLI unit tests; its runs against the API are in the API's integration tests
 pnpm lint                                        # includes a type check of the API tests
 ```
 
 ## Integration tests
 
 They call the Hono app in-process, so no server runs. Every table in the `public` schema is truncated before each test, and files run one at a time because they share the database. Email is mocked (`vi.mock` of `src/mail.ts`), so Mailpit isn't needed; tests assert on the mocked `sendSignInLink` and `sendShareNotice` calls. Helpers in `test/integration/helpers.ts` create signed-in users, organizations, pages and complete MCP OAuth connections. `vitest.config.ts` pins `SELF_HOSTED` and the SMTP settings to their hosted defaults so a local `.env` can't leak in; tests that need other values change the `env` object and restore it afterwards (see `admin.test.ts`, and `no-email.test.ts`, which empties `env.smtp.host`).
+
+`cli.test.ts` is the exception that listens on a port: it serves the app on a free port of `127.0.0.1` and runs the CLI from `packages/cli/src` as a child process against it (Node runs the TypeScript sources directly, so nothing is built first). It plays the browser for `login` by approving the consent request through the API.
 
 Thumbnails are off in tests (`CHROME_PATH` is empty). `thumbnails.test.ts` turns them on with the installed Google Chrome (override with `TEST_CHROME_PATH`) to check rendering, serving and network isolation; without Chrome those tests are skipped.
 
