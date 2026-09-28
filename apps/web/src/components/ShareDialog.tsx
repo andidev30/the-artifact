@@ -69,9 +69,12 @@ const endOfDay = (date: string) => new Date(`${date}T23:59:59.999`).toISOString(
 const longDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })
 
 function linkStatus(link: LinkSettings) {
-  const until = link.expiresAt ? (link.expired ? `The link expired on ${longDate(link.expiresAt)}.` : `The link works until ${longDate(link.expiresAt)}.`) : ''
-  const password = link.password ? 'People who open it enter a password.' : ''
-  return [until, password].filter(Boolean).join(' ')
+  const until = !link.expiresAt
+    ? 'The link never expires.'
+    : link.expired
+      ? `The link expired on ${longDate(link.expiresAt)}.`
+      : `The link works until ${longDate(link.expiresAt)}.`
+  return link.password ? `${until} People who open it enter a password.` : until
 }
 
 // Anyone-with-the-link options: when the link stops working, a password, and a reset
@@ -88,14 +91,15 @@ function LinkOptions({
   announce: (message: string | null) => void
 }) {
   const saved = link.expiresAt ? localDate(new Date(link.expiresAt)) : ''
-  const [expires, setExpires] = useState(saved)
+  const [expiry, setExpiry] = useState<'never' | 'date'>(saved ? 'date' : 'never')
+  const [date, setDate] = useState(saved)
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<{ message: string; field: 'expires' | 'password' | null } | null>(null)
   const [confirmNew, setConfirmNew] = useState(false)
   const newLinkButton = useRef<HTMLButtonElement>(null)
-  const changed = expires !== saved || password !== ''
-  const status = linkStatus(link)
+  const expires = expiry === 'date' ? date : ''
+  const changed = expiry !== (saved ? 'date' : 'never') || expires !== saved || password !== ''
 
   async function apply(change: Parameters<typeof updateLink>[1], done: string) {
     setBusy(true)
@@ -119,6 +123,11 @@ function LinkOptions({
 
   function onSave(e: FormEvent) {
     e.preventDefault()
+    if (expiry === 'date' && !date) {
+      announce(null)
+      setError({ message: 'Choose the last day the link works, or choose Never.', field: 'expires' })
+      return
+    }
     const change: Parameters<typeof updateLink>[1] = {}
     if (expires !== saved) change.linkExpiresAt = expires ? endOfDay(expires) : null
     if (password) change.linkPassword = password
@@ -129,21 +138,38 @@ function LinkOptions({
 
   return (
     <div className="share-link">
-      {status && <p className="share-link-status">{status}</p>}
+      <p className="share-link-status">{linkStatus(link)}</p>
       <form className="share-link-form" onSubmit={onSave} noValidate>
-        <div className="share-link-field">
-          <label htmlFor="share-expires">Link expires</label>
-          <input
-            id="share-expires"
-            type="date"
-            value={expires}
-            min={localDate(new Date())}
-            onChange={(e) => setExpires(e.target.value)}
-            aria-invalid={error?.field === 'expires' || undefined}
-            aria-describedby={describe('expires', 'share-expires-hint')}
-          />
-          <p id="share-expires-hint">At the end of this day. Leave empty to keep it working.</p>
-        </div>
+        <fieldset className="share-link-field">
+          <legend>Link expires</legend>
+          <div className="share-expiry">
+            <label>
+              <input type="radio" name="share-expiry" value="never" checked={expiry === 'never'} onChange={() => setExpiry('never')} />
+              Never
+            </label>
+            <label>
+              <input type="radio" name="share-expiry" value="date" checked={expiry === 'date'} onChange={() => setExpiry('date')} />
+              On a date
+            </label>
+            {expiry === 'date' && (
+              <>
+                <label className="visually-hidden" htmlFor="share-expires">
+                  Last day the link works
+                </label>
+                <input
+                  id="share-expires"
+                  type="date"
+                  value={date}
+                  min={localDate(new Date())}
+                  onChange={(e) => setDate(e.target.value)}
+                  aria-invalid={error?.field === 'expires' || undefined}
+                  aria-describedby={describe('expires', 'share-expires-hint')}
+                />
+              </>
+            )}
+          </div>
+          <p id="share-expires-hint">{expiry === 'date' ? 'It stops working at the end of that day.' : 'It keeps working until you change this.'}</p>
+        </fieldset>
         <div className="share-link-field">
           <label htmlFor="share-link-password">{link.password ? 'New link password' : 'Link password'}</label>
           <input
@@ -173,7 +199,7 @@ function LinkOptions({
           )}
           <button
             type="button"
-            className="button button-quiet"
+            className="button button-quiet share-link-reset"
             ref={newLinkButton}
             aria-expanded={confirmNew}
             aria-controls="share-new-link"
@@ -233,7 +259,6 @@ export function ShareDialog({ slug, title, currentUserEmail, onClose, onVisibili
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
   useReturnFocus()
 
   useEffect(() => {
@@ -297,10 +322,11 @@ export function ShareDialog({ slug, title, currentUserEmail, onClose, onVisibili
       // Shared by link, people without access of their own need the link's key
       const link = sharing?.visibility === 'link' ? sharing.link.url : `${window.location.origin}/a/${slug}`
       await navigator.clipboard.writeText(link)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1800)
+      setError(null)
+      setNotice('Link copied.')
     } catch {
-      setCopied(false)
+      setNotice(null)
+      setError('The link could not be copied. Copy it from the address bar.')
     }
   }
 
@@ -310,154 +336,165 @@ export function ShareDialog({ slug, title, currentUserEmail, onClose, onVisibili
 
   return (
     <dialog ref={dialog} className="share-dialog" aria-labelledby="share-title" onClose={onClose} onCancel={onClose}>
-      <h2 id="share-title">Share “{title}”</h2>
+      <div className="share-body">
+        <h2 id="share-title">Share “{title}”</h2>
 
-      <form className="share-invite" onSubmit={onInvite}>
-        <label className="visually-hidden" htmlFor="share-emails">
-          Add people by email
-        </label>
-        <input id="share-emails" value={emails} onChange={(e) => setEmails(e.target.value)} placeholder="Add people by email" autoComplete="email" autoFocus />
-        <label className="visually-hidden" htmlFor="share-role">
-          Role for people you add
-        </label>
-        <select id="share-role" value={role} onChange={(e) => setRole(e.target.value as ShareRole)}>
-          <option value="viewer">Viewer</option>
-          <option value="editor">Editor</option>
-        </select>
-        <button type="submit" className="button" disabled={!typing || busy}>
-          Share
-        </button>
-      </form>
-
-      {typing && canEmail && (
-        <div className="share-notify">
-          <label>
-            <input type="checkbox" checked={notifyChoice} onChange={(e) => setNotify(e.target.checked)} />
-            Notify people by email
+        <form className="share-invite" onSubmit={onInvite}>
+          <label className="visually-hidden" htmlFor="share-emails">
+            Add people by email
           </label>
-          {notify && (
-            <textarea
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              aria-label="Message for the email"
-              placeholder="Message (optional)"
-              rows={2}
-              maxLength={500}
-            />
-          )}
-        </div>
-      )}
+          <input
+            id="share-emails"
+            value={emails}
+            onChange={(e) => setEmails(e.target.value)}
+            placeholder="Add people by email"
+            autoComplete="email"
+            autoFocus
+          />
+          <label className="visually-hidden" htmlFor="share-role">
+            Role for people you add
+          </label>
+          <select id="share-role" value={role} onChange={(e) => setRole(e.target.value as ShareRole)}>
+            <option value="viewer">Viewer</option>
+            <option value="editor">Editor</option>
+          </select>
+          <button type="submit" className="button" disabled={!typing || busy}>
+            Share
+          </button>
+        </form>
 
-      {error && (
-        <p className="share-message share-error" role="alert">
-          {error}
-        </p>
-      )}
-      {notice && (
-        <p className="share-message" role="status">
-          {notice}
-        </p>
-      )}
+        {typing && canEmail && (
+          <div className="share-notify">
+            <label>
+              <input type="checkbox" checked={notifyChoice} onChange={(e) => setNotify(e.target.checked)} />
+              Notify people by email
+            </label>
+            {notify && (
+              <textarea
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                aria-label="Message for the email"
+                placeholder="Message (optional)"
+                rows={2}
+                maxLength={500}
+              />
+            )}
+          </div>
+        )}
 
-      {loadError && (
-        <p className="share-message share-error" role="alert">
-          Sharing settings could not be loaded. Close and try again.
-        </p>
-      )}
+        {loadError && (
+          <p className="share-message share-error" role="alert">
+            Sharing settings could not be loaded. Close and try again.
+          </p>
+        )}
 
-      {sharing && access && (
-        <>
-          <h3>People with access</h3>
-          <ul className="share-people">
-            <li>
-              <Avatar name={sharing.owner.name} email={sharing.owner.email} src={sharing.owner.avatarUrl} />
-              <span className="share-person">
-                <strong>
-                  {sharing.owner.name ?? sharing.owner.email}
-                  {sharing.owner.email === currentUserEmail ? ' (you)' : ''}
-                </strong>
-                {sharing.owner.name && <span>{sharing.owner.email}</span>}
-              </span>
-              <span className="share-owner">Owner</span>
-            </li>
-            {sharing.people.map((p) => (
-              <li key={p.email}>
-                <Avatar name={p.name} email={p.email} src={p.avatarUrl} />
+        {sharing && access && (
+          <>
+            <h3>People with access</h3>
+            <ul className="share-people">
+              <li>
+                <Avatar name={sharing.owner.name} email={sharing.owner.email} src={sharing.owner.avatarUrl} />
                 <span className="share-person">
                   <strong>
-                    {p.name ?? p.email}
-                    {p.email === currentUserEmail ? ' (you)' : ''}
+                    {sharing.owner.name ?? sharing.owner.email}
+                    {sharing.owner.email === currentUserEmail ? ' (you)' : ''}
                   </strong>
-                  <span>{p.pending ? `${p.name ? `${p.email}, ` : ''}invited, no account yet` : p.name ? p.email : ''}</span>
+                  {sharing.owner.name && <span>{sharing.owner.email}</span>}
                 </span>
-                <label className="visually-hidden" htmlFor={`role-${p.email}`}>
-                  Role for {p.email}
-                </label>
-                <select className="share-quiet" id={`role-${p.email}`} value={p.role} onChange={(e) => onRole(p.email, e.target.value)} disabled={busy}>
-                  <option value="viewer">{ROLE_LABEL.viewer}</option>
-                  <option value="editor">{ROLE_LABEL.editor}</option>
-                  <option value="remove">Remove access</option>
-                </select>
+                <span className="share-owner">Owner</span>
               </li>
-            ))}
-          </ul>
+              {sharing.people.map((p) => (
+                <li key={p.email}>
+                  <Avatar name={p.name} email={p.email} src={p.avatarUrl} />
+                  <span className="share-person">
+                    <strong>
+                      {p.name ?? p.email}
+                      {p.email === currentUserEmail ? ' (you)' : ''}
+                    </strong>
+                    <span>{p.pending ? `${p.name ? `${p.email}, ` : ''}invited, no account yet` : p.name ? p.email : ''}</span>
+                  </span>
+                  <label className="visually-hidden" htmlFor={`role-${p.email}`}>
+                    Role for {p.email}
+                  </label>
+                  <select className="share-quiet" id={`role-${p.email}`} value={p.role} onChange={(e) => onRole(p.email, e.target.value)} disabled={busy}>
+                    <option value="viewer">{ROLE_LABEL.viewer}</option>
+                    <option value="editor">{ROLE_LABEL.editor}</option>
+                    <option value="remove">Remove access</option>
+                  </select>
+                </li>
+              ))}
+            </ul>
 
-          <h3>General access</h3>
-          <div className="share-general">
-            <AccessIcon v={sharing.visibility} />
-            <div>
-              <label className="visually-hidden" htmlFor="share-general">
-                Who can open with the link
-              </label>
-              <select
-                className="share-quiet"
-                id="share-general"
-                value={sharing.visibility}
-                onChange={(e) => onGeneral(e.target.value as Visibility)}
-                disabled={busy}
-              >
-                {generalOptions.map((v) => (
-                  <option key={v} value={v}>
-                    {generalAccess(v, sharing.organizationName).label}
-                  </option>
-                ))}
-              </select>
-              <p>{access.detail}</p>
+            <h3>General access</h3>
+            <div className="share-general">
+              <AccessIcon v={sharing.visibility} />
+              <div>
+                <label className="visually-hidden" htmlFor="share-general">
+                  Who can open with the link
+                </label>
+                <select
+                  className="share-quiet"
+                  id="share-general"
+                  value={sharing.visibility}
+                  onChange={(e) => onGeneral(e.target.value as Visibility)}
+                  disabled={busy}
+                >
+                  {generalOptions.map((v) => (
+                    <option key={v} value={v}>
+                      {generalAccess(v, sharing.organizationName).label}
+                    </option>
+                  ))}
+                </select>
+                <p>{access.detail}</p>
+              </div>
             </div>
-          </div>
-          {sharing.visibility === 'link' && (
-            <LinkOptions
-              slug={slug}
-              link={sharing.link}
-              onChange={(link) => setSharing((s) => (s ? { ...s, link } : s))}
-              announce={(message) => {
-                setNotice(message)
-                setError(null)
-              }}
-            />
-          )}
+            {sharing.visibility === 'link' && (
+              <LinkOptions
+                slug={slug}
+                link={sharing.link}
+                onChange={(link) => setSharing((s) => (s ? { ...s, link } : s))}
+                announce={(message) => {
+                  setNotice(message)
+                  setError(null)
+                }}
+              />
+            )}
 
-          <h3>Embed</h3>
-          {sharing.visibility === 'link' && sharing.link.password ? (
-            <p className="share-embed-note">Embeds show a sign-in card while the link has a password.</p>
-          ) : sharing.visibility === 'link' ? (
-            <div className="share-embed">
-              <p>Paste the link into Notion or Confluence and choose Embed, or add this code to any site.</p>
-              <CopyCommand command={embedCode(sharing.link.embedUrl, title)} label="Copy embed code" plain />
-            </div>
-          ) : (
-            <p className="share-embed-note">Embedding needs Anyone with the link. Until then, an embed shows a sign-in card instead of the page.</p>
-          )}
-        </>
-      )}
+            <h3>Embed</h3>
+            {sharing.visibility === 'link' && sharing.link.password ? (
+              <p className="share-embed-note">Embeds show a sign-in card while the link has a password.</p>
+            ) : sharing.visibility === 'link' ? (
+              <div className="share-embed">
+                <p>Paste the link into Notion or Confluence and choose Embed, or add this code to any site.</p>
+                <CopyCommand command={embedCode(sharing.link.embedUrl, title)} label="Copy embed code" plain />
+              </div>
+            ) : (
+              <p className="share-embed-note">Embedding needs Anyone with the link. Until then, an embed shows a sign-in card instead of the page.</p>
+            )}
+          </>
+        )}
+      </div>
 
+      {/* Outside the scrolling part, so what an action did shows wherever it was taken */}
       <div className="share-footer">
-        <button type="button" className="button button-quiet" onClick={copyLink}>
-          {copied ? 'Link copied' : 'Copy link'}
-        </button>
-        <button type="button" className="button" onClick={() => dialog.current?.close()}>
-          Done
-        </button>
+        {error && (
+          <p className="share-message share-error" role="alert">
+            {error}
+          </p>
+        )}
+        {notice && (
+          <p className="share-message" role="status">
+            {notice}
+          </p>
+        )}
+        <div className="share-footer-actions">
+          <button type="button" className="button button-quiet" onClick={copyLink}>
+            Copy link
+          </button>
+          <button type="button" className="button" onClick={() => dialog.current?.close()}>
+            Done
+          </button>
+        </div>
       </div>
     </dialog>
   )

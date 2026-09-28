@@ -1,12 +1,26 @@
 .share-dialog {
   width: min(540px, 100% - 32px);
   max-height: calc(100dvh - 48px);
-  padding: 24px 24px 20px;
+  padding: 0;
   color: var(--ink);
   background: var(--white);
   border: 1.5px solid var(--ink);
   border-radius: 4px;
   box-shadow: 8px 8px 0 var(--marker);
+}
+
+/* The body scrolls and the footer stays in view, so Done, Copy link and the status line are always on screen */
+.share-dialog[open] {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.share-body {
+  flex: 1;
+  min-height: 0;
+  padding: 24px 24px 4px;
+  overflow-y: auto;
 }
 
 .share-dialog::backdrop {
@@ -135,12 +149,16 @@
 }
 
 .share-message {
-  margin-top: 12px;
+  margin: 0;
   padding: 8px 12px;
   font-size: var(--step--1);
   background: #eef6f0;
   border: 1.5px solid #1d6b3a;
   border-radius: 3px;
+}
+
+.share-body > .share-message {
+  margin-top: 12px;
 }
 
 .share-error {
@@ -271,9 +289,11 @@
 
 .share-link {
   display: grid;
-  gap: 10px;
-  margin: 12px 0 0 48px;
+  gap: 14px;
+  margin: 14px 0 0 48px;
+  padding-top: 14px;
   font-size: var(--step--1);
+  border-top: 1.5px dashed var(--grid);
 }
 
 .share-link-status {
@@ -283,21 +303,27 @@
 
 .share-link-form {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 14px;
 }
 
 .share-link-field {
   display: grid;
   align-content: start;
-  gap: 4px;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
 
-.share-link-field label {
+.share-link-field label,
+.share-link-field legend {
+  padding: 0;
   font-weight: 700;
 }
 
-.share-link-field input {
+.share-link-field input[type='password'],
+.share-link-field input[type='date'] {
   height: 38px;
   min-width: 0;
   padding: 0 10px;
@@ -308,40 +334,74 @@
   border-radius: 3px;
 }
 
+/* Never, On a date, and the date itself on one line; the date drops below on narrow screens */
+.share-expiry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  min-height: 38px;
+}
+
+.share-link-field .share-expiry label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.share-expiry input[type='radio'] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--ink);
+}
+
 .share-link-field p,
 .share-link-confirm p {
   margin: 0;
   color: var(--ink-soft);
 }
 
-.share-link-form > .share-message,
-.share-link-form > .share-link-actions {
-  grid-column: 1 / -1;
-  margin-top: 0;
-}
-
 .share-link-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
 }
 
-.share-link-actions .button {
-  height: 36px;
-  padding: 0 14px;
+.share-link-actions .button,
+.share-footer .button {
+  height: 38px;
+  padding: 0 16px;
   font: 700 var(--step--1) var(--sans);
   cursor: pointer;
+  box-shadow: 3px 3px 0 var(--ink);
+}
+
+.share-link-actions .button:hover,
+.share-footer .button:hover {
+  box-shadow: 1px 1px 0 var(--ink);
 }
 
 .share-link-actions .button:disabled {
   color: var(--ink-soft);
+  background: var(--paper);
+  border-color: var(--grid);
+  box-shadow: none;
   cursor: not-allowed;
+  transform: none;
+}
+
+/* Reset changes the address itself, so it sits apart from saving */
+.share-link-reset {
+  margin-left: auto;
 }
 
 .share-link-confirm {
   display: grid;
-  gap: 8px;
-  padding: 10px 12px;
+  gap: 10px;
+  padding: 12px;
   background: var(--paper);
   border: 1.5px dashed var(--ink);
   border-radius: 3px;
@@ -351,6 +411,7 @@
 
 .share-embed {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
 }
 
@@ -367,25 +428,25 @@
 }
 
 .share-footer {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
   gap: 12px;
-  margin-top: 24px;
-  padding-top: 16px;
+  padding: 14px 24px 20px;
   border-top: 1.5px dashed var(--grid);
 }
 
-.share-footer .button {
-  height: 40px;
-  padding: 0 18px;
-  font: 700 var(--step--1) var(--sans);
-  cursor: pointer;
-  box-shadow: 3px 3px 0 var(--ink);
+.share-footer-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 @media (max-width: 520px) {
-  .share-dialog {
-    padding: 18px;
+  .share-body {
+    padding: 18px 18px 4px;
+  }
+
+  .share-footer {
+    padding: 12px 18px 16px;
   }
 
   .share-invite {
@@ -404,7 +465,7 @@
     margin-left: 0;
   }
 
-  .share-link-form {
-    grid-template-columns: minmax(0, 1fr);
+  .share-link-actions .button {
+    flex: 1 1 auto;
   }
 }
