@@ -113,6 +113,28 @@ export async function accessLevel(artifact: Artifact, viewer: Viewer | null, lin
   return level
 }
 
+// accessLevel for requests that come back every few seconds, like an open page asking whether it has a
+// newer version. The page row is read fresh by the caller, so the owner, general access and the link
+// always count as they are now; only what the viewer is to the page (a share, a role in its
+// organization) may be up to RECENT_ACCESS_MS old. Per process, like every cache in src/cache.ts.
+const RECENT_ACCESS_MS = 10_000
+const recentAccess = new Lru<string, { access: Access; at: number }>(20_000, 20_000, () => 1)
+
+export async function recentAccessLevel(artifact: Artifact, viewer: Viewer | null, link: LinkPass = {}, now = Date.now()): Promise<Access> {
+  const byLink: Access = linkLetsIn(artifact, link) ? 'view' : null
+  if (!viewer) return byLink
+  const key = [artifact.id, artifact.ownerId, artifact.organizationId, artifact.visibility, viewer.id, viewer.email, viewer.blockedOrgs?.join(',')].join('|')
+  const hit = recentAccess.get(key)
+  let access: Access
+  if (hit && now - hit.at < RECENT_ACCESS_MS) access = hit.access
+  else {
+    access = await accessLevel(artifact, viewer)
+    recentAccess.set(key, { access, at: now })
+  }
+  // A viewer's own access is never less than view, so it wins over the link's
+  return access ?? byLink
+}
+
 export async function canView(artifact: Artifact, viewer: Viewer | null, link: LinkPass = {}): Promise<boolean> {
   return (await accessLevel(artifact, viewer, link)) !== null
 }
