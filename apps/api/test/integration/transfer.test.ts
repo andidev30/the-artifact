@@ -109,7 +109,9 @@ describe('duplicating a page', () => {
     const outside = await duplicate(viewer, source.slug, { workspace: other.id })
     expect(outside.status).toBe(404)
     expect(await outside.json()).toMatchObject({ field: 'workspace' })
-    expect((await duplicate(viewer, source.slug, { workspace: 'nope' })).status).toBe(400)
+    const unnamed = await duplicate(viewer, source.slug, { workspace: 'nope' })
+    expect(unnamed.status).toBe(400)
+    expect(await unnamed.json()).toEqual({ error: 'Choose a workspace: personal or one of your organizations.', field: 'workspace' })
     expect((await duplicate(viewer, source.slug, { workspace: org.id, title: '' })).status).toBe(400)
     expect((await call(`/api/artifacts/${source.slug}/duplicate`, { json: { workspace: 'personal' } })).status).toBe(401)
   })
@@ -201,7 +203,9 @@ describe('moving a page to another workspace', () => {
     const details = await (await call(`/api/artifacts/${source.slug}`, { cookie: owner.cookie })).json()
     expect(details).toMatchObject({ inOrganization: true, canMove: true, workspace: org.id })
 
-    expect((await move(owner, source.slug, { workspace: org.id })).status).toBe(400)
+    const already = await move(owner, source.slug, { workspace: org.id })
+    expect(already.status).toBe(400)
+    expect(await already.json()).toEqual({ error: 'The page is already in that workspace.', field: 'workspace' })
   })
 
   it('makes an organization page restricted when it moves to Personal, and records both sides', async () => {
@@ -261,7 +265,9 @@ describe('moving a page to another workspace', () => {
     expect(await notYours.json()).toMatchObject({ field: 'workspace' })
     // An organization the mover isn't in
     expect((await move(owner, orgPage.slug, { workspace: other.id })).status).toBe(404)
-    expect((await move(owner, orgPage.slug, { workspace: 'bad' })).status).toBe(400)
+    const bad = await move(owner, orgPage.slug, { workspace: 'bad' })
+    expect(bad.status).toBe(400)
+    expect(await bad.json()).toMatchObject({ field: 'workspace' })
     expect((await page(orgPage.slug)).organizationId).toBe(org.id)
 
     // An admin of both moves it; the owner stays the owner

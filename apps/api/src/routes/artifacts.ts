@@ -291,10 +291,7 @@ artifacts.post('/:slug/unlock', async (c) => {
 
 function transferFailed(c: Context<AuthEnv>, err: unknown) {
   if (err instanceof TransferError) {
-    return c.json(
-      { error: err.message, ...(err.blockedOrg ? { code: 'two_factor_required' } : {}), ...(err.status === 400 ? {} : { field: 'workspace' }) },
-      err.status,
-    )
+    return c.json({ error: err.message, ...(err.blockedOrg ? { code: 'two_factor_required' } : {}), ...(err.field ? { field: err.field } : {}) }, err.status)
   }
   // The workspace is full
   if (err instanceof PublishError) return c.json({ error: err.message, field: 'workspace' }, 403)
