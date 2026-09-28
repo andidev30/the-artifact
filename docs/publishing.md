@@ -229,7 +229,7 @@ or installed once with `npm install -g @the-artifact/cli`, then run as `the-arti
 the-artifact login --server {{APP_URL}}
 ```
 
-opens your browser at the same sign-in and workspace choice as [connecting an agent](/docs/connect-your-agent#choosing-a-workspace). The CLI then shows under **Account settings → Connected agents** as **The Artifact CLI**, and pages it publishes are marked with that name in the [history](/docs/version-history). The server you sign in to becomes the default, so later commands don't need `--server`.
+opens your browser at the same sign-in and workspace choice as [connecting an agent](/docs/connect-your-agent#choosing-a-workspace). The CLI then shows under **Account settings → Connected agents** as **The Artifact CLI**, and pages it publishes are marked with that name in the [history](/docs/version-history). The server you sign in to becomes the default, so later commands don't need `--server`. With no `--server`, no `THE_ARTIFACT_URL` and no sign-in, the CLI uses the hosted service, https://the-artifact-pi.vercel.app.
 
 | Command | What it does |
 | --- | --- |

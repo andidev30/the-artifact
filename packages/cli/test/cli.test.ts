@@ -91,9 +91,9 @@ describe('servers and credentials', () => {
     expect(configDir({ XDG_CONFIG_HOME: '/home/a/.cfg' }, 'linux')).toBe('/home/a/.cfg/the-artifact')
   })
 
-  it('takes the server from the flag, the environment, then the last sign-in', async () => {
+  it('takes the server from the flag, the environment, the last sign-in, then the hosted service', async () => {
     const env = { THE_ARTIFACT_CONFIG_DIR: join(tmp, 'config') }
-    await expect(resolveServer(undefined, env)).rejects.toThrow('Which server?')
+    expect(await resolveServer(undefined, env)).toBe('https://the-artifact-pi.vercel.app')
     await writeCredentials(env, { default: 'https://saved.example', servers: {} })
     expect(await resolveServer(undefined, env)).toBe('https://saved.example')
     expect(await resolveServer(undefined, { ...env, THE_ARTIFACT_URL: 'https://env.example/' })).toBe('https://env.example')

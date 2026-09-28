@@ -5,8 +5,11 @@ Publish HTML pages to [The Artifact](https://github.com/andidev30/the-artifact) 
 Needs Node.js 20 or later. No dependencies.
 
 ```sh
-npx @the-artifact/cli publish ./dist --server https://artifact.example.com
+npx @the-artifact/cli login
+npx @the-artifact/cli publish ./dist
 ```
+
+Commands go to the hosted service, https://the-artifact-pi.vercel.app, unless you name another server. For a self-hosted install, pass `--server https://your-server` once to `login`; later commands use the server you signed in to.
 
 or install it once:
 
@@ -18,10 +21,10 @@ the-artifact --help
 ## Sign in
 
 ```sh
-the-artifact login --server https://artifact.example.com
+the-artifact login
 ```
 
-opens your browser to sign in and pick the workspace to publish to. The sign-in is saved per server in `~/.config/the-artifact/credentials.json` (`%APPDATA%\the-artifact` on Windows), readable only by you, and the server becomes the default for later commands. It shows under **Account settings → Connected agents** as **The Artifact CLI**.
+opens your browser to sign in and pick the workspace to publish to. Add `--server https://your-server` to sign in to a self-hosted install instead of the hosted service. The sign-in is saved per server in `~/.config/the-artifact/credentials.json` (`%APPDATA%\the-artifact` on Windows), readable only by you, and the server becomes the default for later commands. It shows under **Account settings → Connected agents** as **The Artifact CLI**.
 
 On a machine without a browser, create an access token in **Account settings → Access tokens** and save it:
 
@@ -68,7 +71,7 @@ Set `THE_ARTIFACT_URL` to the server and `THE_ARTIFACT_TOKEN` to an access token
 ```yaml
 - name: Publish the report
   env:
-    THE_ARTIFACT_URL: https://artifact.example.com
+    THE_ARTIFACT_URL: https://the-artifact-pi.vercel.app
     THE_ARTIFACT_TOKEN: ${{ secrets.ARTIFACT_TOKEN }}
   run: |
     url=$(npx @the-artifact/cli publish report --title "Test report" --id "${{ vars.REPORT_PAGE_ID }}")
