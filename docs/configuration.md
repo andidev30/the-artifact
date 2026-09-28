@@ -111,6 +111,8 @@ Each limit counts something for one key (an email address, an account, or a netw
 | `two-factor` | Wrong authenticator app and recovery codes for one account, when signing in or turning the app on. Entering a right one resets it. | 10 per hour |
 | `two-factor-ip` | [Second-factor steps](/docs/security#two-factor-sign-in) and passkey sign-ins from one network | 100 per 15 minutes |
 | `sso-ip` | [Single sign-on](/docs/sso) sign-ins started and finished from one network | 100 per 15 minutes |
+| `saml-ip` | Answers from [SAML](/docs/saml) identity providers arriving from one network | 100 per 15 minutes |
+| `scim` | [SCIM](/docs/scim) requests with one token | 2,000 per 10 minutes |
 | `two-factor-setup` | Passkeys, authenticator app set-ups and new recovery codes one account asks for in **Account settings** | 30 per hour |
 | `oauth-register-ip` | Agents registering with the server (`POST /oauth/register`) from one network, which each agent does once when it connects | 60 per hour |
 | `invite` | People one account invites to an organization or shares a page with by email, in the app or through an agent | 200 per hour |

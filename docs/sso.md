@@ -2,7 +2,7 @@
 
 **Enterprise feature.** Single sign-on works on a self-hosted install with an Enterprise license key; see [The license](#the-license). It isn't available on the hosted service.
 
-With single sign-on, people sign in through your identity provider (IdP) with OpenID Connect (OIDC): Google Workspace, Microsoft Entra ID, Okta, Keycloak, or any other provider that supports OIDC discovery. The sign-in page shows a **Continue with** button for each provider you turn on.
+With single sign-on, people sign in through your identity provider (IdP) with OpenID Connect (OIDC): Google Workspace, Microsoft Entra ID, Okta, Keycloak, or any other provider that supports OIDC discovery. Providers that you set up with SAML work the same way; see [SAML single sign-on](/docs/saml). To create and suspend accounts from the IdP, add [SCIM provisioning](/docs/scim). The sign-in page shows a **Continue with** button for each provider you turn on.
 
 ## How it works
 
