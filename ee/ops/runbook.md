@@ -42,13 +42,15 @@ A rollback only changes code. If the bad release ran a migration, read the next 
 
 ## Rolling back a migration
 
-Migrations only go forward (Drizzle has no down migrations), and the Vercel function never runs them: someone runs them by hand from a checkout of the release, with Supabase's **session** pooler URL (port 5432):
+Migrations only go forward (Drizzle has no down migrations), and the Vercel function never runs them. **Hosted migrate** (`.github/workflows/hosted-migrate.yml`) does, on every push to `main`: it counts the migrations the database hasn't applied, and when there are any it backs up the database (kept as the `database-before-migrate` artifact for 90 days) and runs `pnpm db:migrate` with `HOSTED_DATABASE_URL`. Pushes without a new migration finish in about a minute.
+
+Vercel builds the same push at the same time. So that a release never goes live before its migrations, make Vercel wait for the check: in the Vercel project, **Settings** → **Deployment Checks** → **Add Checks** → GitHub → **Hosted migrate / migrate**. Production deployments are then promoted only after it passes. A failed migration leaves the previous deployment live.
+
+To run migrations by hand (a failed run, or before the workflow existed), use a checkout of the release and Supabase's **session** pooler URL (port 5432). Back up first with `gh workflow run hosted-backup.yml`, then `gh run watch`:
 
 ```sh
 DATABASE_URL='postgresql://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres' pnpm db:migrate
 ```
-
-Before a release with a migration, start a backup and wait for it: `gh workflow run hosted-backup.yml`, then `gh run watch`.
 
 When a migration causes trouble:
 
