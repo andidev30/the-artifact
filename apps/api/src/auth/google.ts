@@ -97,6 +97,7 @@ google.get('/callback', async (c) => {
       name: profile.name,
       avatarUrl: profile.picture,
       googleSub: profile.sub,
+      method: 'google',
     })
     return c.redirect(await continueSignIn(c, user, afterSignInUrl(plan, next), 'google'))
   } catch (err) {

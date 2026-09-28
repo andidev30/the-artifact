@@ -26,8 +26,8 @@ async function me(user: TestUser) {
 describe('first account becomes the instance admin', () => {
   it('makes only the first account an admin when self-hosted', async () => {
     env.selfHosted = true
-    await findOrCreateUser({ email: 'first@example.com' })
-    await findOrCreateUser({ email: 'second@example.com' })
+    await findOrCreateUser({ email: 'first@example.com', method: 'email_link' })
+    await findOrCreateUser({ email: 'second@example.com', method: 'email_link' })
     expect(await isAdminInDb('first@example.com')).toBe(true)
     expect(await isAdminInDb('second@example.com')).toBe(false)
   })
@@ -35,7 +35,7 @@ describe('first account becomes the instance admin', () => {
   it('gives exactly one of many simultaneous sign-ups admin', async () => {
     env.selfHosted = true
     const emails = Array.from({ length: 8 }, (_, i) => `racer${i}@example.com`)
-    const users = await Promise.all(emails.map((email) => findOrCreateUser({ email })))
+    const users = await Promise.all(emails.map((email) => findOrCreateUser({ email, method: 'email_link' })))
     expect(users.filter((u) => u.isAdmin)).toHaveLength(1)
     const rows = await db.select().from(schema.users)
     expect(rows).toHaveLength(8)
@@ -44,14 +44,17 @@ describe('first account becomes the instance admin', () => {
 
   it('creates one account when the same person signs up twice at once', async () => {
     env.selfHosted = true
-    const [a, b] = await Promise.all([findOrCreateUser({ email: 'twice@example.com' }), findOrCreateUser({ email: 'twice@example.com' })])
+    const [a, b] = await Promise.all([
+      findOrCreateUser({ email: 'twice@example.com', method: 'email_link' }),
+      findOrCreateUser({ email: 'twice@example.com', method: 'email_link' }),
+    ])
     expect(a.id).toBe(b.id)
     expect(a.isAdmin).toBe(true)
   })
 
   it('does nothing on the hosted service', async () => {
     env.selfHosted = false
-    const user = await findOrCreateUser({ email: 'cloud@example.com' })
+    const user = await findOrCreateUser({ email: 'cloud@example.com', method: 'email_link' })
     expect(user.isAdmin).toBe(false)
   })
 
@@ -204,7 +207,7 @@ describe('suspension', () => {
     expect((await mcpRequest(tokens.access_token, 'tools/list')).status).toBe(401)
     const refresh = await call('/oauth/token', { form: { grant_type: 'refresh_token', refresh_token: tokens.refresh_token } })
     expect(refresh.status).toBe(400)
-    await expect(findOrCreateUser({ email: 'bob@example.com' })).rejects.toBeInstanceOf(AccountSuspendedError)
+    await expect(findOrCreateUser({ email: 'bob@example.com', method: 'email_link' })).rejects.toBeInstanceOf(AccountSuspendedError)
     // No sign-in link is sent to a suspended account
     const link = await call('/api/auth/email', { json: { email: 'BOB@example.com' } })
     expect(link.status).toBe(403)
@@ -216,7 +219,7 @@ describe('suspension', () => {
 
     const back = await call(`/api/admin/users/${bob.id}`, { method: 'PATCH', cookie: admin.cookie, json: { suspended: false } })
     expect(await back.json()).toMatchObject({ suspended: false })
-    expect((await findOrCreateUser({ email: 'bob@example.com' })).id).toBe(bob.id)
+    expect((await findOrCreateUser({ email: 'bob@example.com', method: 'email_link' })).id).toBe(bob.id)
   })
 
   it('blocks MCP calls even with a token issued before a manual suspension', async () => {
@@ -363,7 +366,7 @@ describe('sign-up policy', () => {
     expect((await request('reader@example.com')).status).toBe(204)
     // Existing accounts still sign in
     expect((await request(admin.email)).status).toBe(204)
-    await expect(findOrCreateUser({ email: 'stranger@example.com' })).rejects.toThrow()
+    await expect(findOrCreateUser({ email: 'stranger@example.com', method: 'email_link' })).rejects.toThrow()
   })
 
   it('validates the form', async () => {

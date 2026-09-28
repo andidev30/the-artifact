@@ -4,6 +4,7 @@ import { deleteCookie } from 'hono/cookie'
 import { hashPassword, passwordProblem, verifyPassword } from '../auth/password.js'
 import { twoFactorRequiredError } from '../auth/factors.js'
 import { requireUser, startSession, type AuthEnv } from '../auth/session.js'
+import { track } from '../analytics.js'
 import { db, schema } from '../db/index.js'
 import { isLastAdmin, lastAdminError } from '../instance.js'
 import { limitRequest } from '../limits.js'
@@ -122,6 +123,7 @@ settings.post('/access-tokens', async (c) => {
   if (busy) return busy
   const { token, row } = await createToken({ userId: user.id, organizationId: organizationId as string | null, name: name.name, expiresAt: expiry.expiresAt })
   auditToken('access_token.created', row, user)
+  track({ event: 'agent_connected', userId: user.id, detail: 'access_token' })
   return c.json({ token, accessToken: await describeToken(row.id) }, 201)
 })
 

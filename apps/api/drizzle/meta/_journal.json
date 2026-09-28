@@ -169,6 +169,13 @@
       "when": 1790599389092,
       "tag": "0023_saml_scim",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1790604110613,
+      "tag": "0024_product_analytics",
+      "breakpoints": true
     }
   ]
 }

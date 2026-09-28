@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { and, eq } from 'drizzle-orm'
 import { Hono, type Context } from 'hono'
 import { hashToken, randomToken } from '../auth/session.js'
+import { track } from '../analytics.js'
 import { db, schema } from '../db/index.js'
 import { env } from '../env.js'
 import { clientIp, hit, tooManyRequests, waitText } from '../limits.js'
@@ -187,7 +188,9 @@ oauth.post('/oauth/token', async (c) => {
     if (params.client_id && params.client_id !== grant.clientId) return tokenError(c, 'invalid_grant', 'The code was issued to another client.')
     if (params.redirect_uri && params.redirect_uri !== grant.redirectUri) return tokenError(c, 'invalid_grant', 'redirect_uri does not match.')
     if (!pkceMatches(params.code_verifier, grant.codeChallenge)) return tokenError(c, 'invalid_grant', 'PKCE verification failed.')
-    return c.json(await issueTokens(grant.clientId, grant.userId, grant.organizationId))
+    const tokens = await issueTokens(grant.clientId, grant.userId, grant.organizationId)
+    track({ event: 'agent_connected', userId: grant.userId, detail: 'oauth' })
+    return c.json(tokens)
   }
 
   if (params.grant_type === 'refresh_token') {

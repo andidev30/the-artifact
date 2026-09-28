@@ -35,8 +35,8 @@ describe('new accounts on a self-hosted install', () => {
 
   it('lets the first account set the server up, and starts everyone after it in a personal workspace', async () => {
     env.selfHosted = true
-    const first = await findOrCreateUser({ email: 'first@example.com' })
-    const second = await findOrCreateUser({ email: 'second@example.com' })
+    const first = await findOrCreateUser({ email: 'first@example.com', method: 'email_link' })
+    const second = await findOrCreateUser({ email: 'second@example.com', method: 'email_link' })
     expect(first.isAdmin).toBe(true)
     expect(await onboarded('first@example.com')).toBe(false)
     expect(second.isAdmin).toBe(false)
@@ -45,8 +45,8 @@ describe('new accounts on a self-hosted install', () => {
 
   it('lets everyone choose a workspace on the hosted service', async () => {
     env.selfHosted = false
-    await findOrCreateUser({ email: 'first@example.com' })
-    await findOrCreateUser({ email: 'second@example.com' })
+    await findOrCreateUser({ email: 'first@example.com', method: 'email_link' })
+    await findOrCreateUser({ email: 'second@example.com', method: 'email_link' })
     expect(await onboarded('first@example.com')).toBe(false)
     expect(await onboarded('second@example.com')).toBe(false)
   })

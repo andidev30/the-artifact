@@ -1,6 +1,7 @@
 import { randomBytes, scrypt, timingSafeEqual, type ScryptOptions } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
+import { track } from '../analytics.js'
 import { db, schema } from '../db/index.js'
 import { mailEnabled } from '../env.js'
 import { hasAccounts, instanceSettings, lockAdmins, newAccountFields } from '../instance.js'
@@ -115,6 +116,7 @@ password.post('/setup', async (c) => {
     return user
   })
   if (!created) return c.json({ error: 'This server is already set up. Log in instead.', code: 'already_set_up' }, 409)
+  track({ event: 'signed_up', userId: created.id, detail: 'password' })
   await startSession(c, created.id)
   return c.json({ redirect: afterSignInUrl(null, null) }, 201)
 })

@@ -113,7 +113,7 @@ export async function accountFor(conn: SsoConnection, identity: SsoIdentity & { 
     return linked.user
   }
 
-  const user = await findOrCreateUser({ email: identity.email, name: identity.name, approved: conn.allowedDomains.length > 0 })
+  const user = await findOrCreateUser({ email: identity.email, name: identity.name, approved: conn.allowedDomains.length > 0, method: 'sso' })
   const [created] = await db
     .insert(schema.ssoIdentities)
     .values({ connectionId: conn.id, userId: user.id, subject: identity.subject, email: identity.email })
