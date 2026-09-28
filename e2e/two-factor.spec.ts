@@ -2,7 +2,7 @@ import { createHmac } from 'node:crypto'
 import { expect, test, type Page } from '@playwright/test'
 import { forgetSignInLinks } from '../apps/api/test/e2e-db.ts'
 import { expectAccessible } from './axe'
-import { openSignInLink, signUpPersonal, uniqueEmail } from './helpers'
+import { fromApp, openSignInLink, signUpPersonal, uniqueEmail } from './helpers'
 
 const MAILPIT = process.env.MAILPIT_URL ?? 'http://localhost:8025'
 
@@ -51,7 +51,7 @@ function totp(secret: Buffer, step: number) {
 }
 
 async function logOut(page: Page) {
-  await page.request.post('/api/auth/logout')
+  await page.request.post('/api/auth/logout', { headers: fromApp(page) })
   await page.context().clearCookies()
 }
 

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { connectAgent, publishViaMcp, signUpPersonal, uniqueEmail } from './helpers'
+import { fromApp, connectAgent, publishViaMcp, signUpPersonal, uniqueEmail } from './helpers'
 
 const HTML = '<!doctype html><title>Roadmap</title><h1>Roadmap</h1>'
 
@@ -8,7 +8,10 @@ test('owners see how often a page was opened and who opened it', async ({ page, 
   await signUpPersonal(page, uniqueEmail('views-owner'))
   const token = await connectAgent(page)
   const slug = await publishViaMcp(page.request, token, { title: 'Roadmap', html: HTML })
-  const shared = await page.request.post(`/api/artifacts/${slug}/sharing/people`, { data: { emails: [friend], role: 'viewer', notify: false } })
+  const shared = await page.request.post(`/api/artifacts/${slug}/sharing/people`, {
+    headers: fromApp(page),
+    data: { emails: [friend], role: 'viewer', notify: false },
+  })
   expect(shared.ok()).toBe(true)
 
   // Someone it was shared with opens it; people who can only view don't see the views

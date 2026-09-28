@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
 import { createHostedOrganization, forgetSignInLinks, grantInstanceAdmin } from '../apps/api/test/e2e-db.ts'
-import { connectAgent, latestMail, licensedSso, mockAuditLog, mockRetention, publishViaMcp, signUpPersonal, uniqueEmail } from './helpers'
+import { fromApp, connectAgent, latestMail, licensedSso, mockAuditLog, mockRetention, publishViaMcp, signUpPersonal, uniqueEmail } from './helpers'
 
 // Every flow here is driven with the keyboard alone: no clicks, no fill()
 
@@ -28,7 +28,7 @@ const focusLost = (page: Page) => page.evaluate(() => document.activeElement ===
 test('sign in with a sign-in link', async ({ page }) => {
   const email = uniqueEmail('kb-sign-in')
   await signUpPersonal(page, email)
-  await page.request.post('/api/auth/logout')
+  await page.request.post('/api/auth/logout', { headers: fromApp(page) })
   await page.context().clearCookies()
   await forgetSignInLinks(email)
 

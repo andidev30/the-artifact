@@ -5,6 +5,7 @@ import { setProductEventStore } from './analytics.js'
 import { setAuditStore } from './audit.js'
 import { email } from './auth/email.js'
 import { google } from './auth/google.js'
+import { sameOriginWrites } from './auth/origin.js'
 import { password, passwordSignUpOpen } from './auth/password.js'
 import { hasSecondFactor } from './auth/factors.js'
 import { endSession, loadUser, requireUser, type AuthEnv } from './auth/session.js'
@@ -88,6 +89,8 @@ app.route('/scim/v2', scim)
 app.route('/', embeds)
 
 const api = new Hono<AuthEnv>()
+// Before anything reads the session: writes come from the web app itself (see src/auth/origin.ts)
+api.use(sameOriginWrites)
 api.use(loadUser)
 
 // What the web app needs to know about this install
