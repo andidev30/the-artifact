@@ -75,7 +75,7 @@ Publish a page in two steps, with the files going straight to storage. Available
 
 With `update: true`, `files` lists only the files to add or replace, and `index.html` only if it changes too.
 
-It answers with an `upload_id` and a link for each file that isn't stored yet. The agent sends each file's bytes to its link with an HTTP `PUT` within 15 minutes, then calls `publish_upload`:
+It answers with an `upload_id` and a link for each file that isn't stored yet, as text and as structured content (`upload_id`, `uploads` with the `paths`, `size` and `url` of each link, and `stored`). The agent sends each file's bytes to its link with an HTTP `PUT` within 15 minutes, then calls `publish_upload`:
 
 | Argument | Required | Meaning |
 | --- | --- | --- |
@@ -88,6 +88,8 @@ It answers with an `upload_id` and a link for each file that isn't stored yet. T
 | `update` | no | `true` keeps the files of the current version that `files` leaves out, as [`update_files`](#update_files) does. Needs `artifact_id`. |
 | `remove` | no | With `update`: paths to leave out of the new version |
 | `base_version` | no | With `update`: the version the changes start from, as for `update_files` |
+
+Its structured content is the same as the answer of [`POST /api/publish`](#publishing-without-an-agent): `{ id, url, title, version, visibility, folder }`.
 
 ### list_artifacts
 
@@ -327,6 +329,8 @@ publishes `dist/index.html` as the page and every other file in the folder next 
 | `--remove <path>` | Remove this file from the page and keep the others; repeat for more |
 | `--save` | Remember the page in `.the-artifact.json` in the current folder, so publishing the same path again publishes a new version of it. Commit the file to share it. |
 | `--new` | Publish a new page even when `.the-artifact.json` has one for this path |
+| `--watch` | Keep watching, and publish a new version whenever files change. See [Watching a folder](#watching-a-folder). |
+| `--poll` | With `--watch`, look for changes every second instead of waiting for file events |
 | `--dry-run` | List what would be sent, and send nothing |
 
 The link is the only thing printed on standard output, so `url=$(the-artifact publish dist)` captures it. Progress and notes go to standard error.
@@ -352,6 +356,24 @@ THE_ARTIFACT_TOKEN=$(cat token.txt) npx @the-artifact/cli publish site --id k3v9
 ```
 
 Each run is a new version in the [history](/docs/version-history), with the same limits and quota as any other, and the page's link stays the same. Storage counts every version in full, so a job that runs often reaches a workspace's storage or version [quota](#limits) sooner, where the server sets one; [version retention](/docs/retention) keeps the history short.
+
+### Watching a folder
+
+```sh
+the-artifact publish ./dist --watch
+```
+
+publishes the page, then keeps watching the folder while you work. Half a second after the last change, it publishes a new version of the same page and prints its link again (one line per version; with `--json`, one JSON object per line). Anyone who has the page open sees the new version within a few seconds without reloading (see [Version history](/docs/version-history#live-updates)).
+
+- It publishes to the page from `--id` or `.the-artifact.json` when there is one, otherwise to the page its first publish creates. `--save` remembers that page.
+- Files `publish` leaves out (hidden files and folders, `node_modules`, `--ignore` patterns) and `.the-artifact.json` never trigger a publish. Saving a file without changing it publishes nothing.
+- `--visibility` and `--folder` apply to the first publish only, so changes made in the app meanwhile stay.
+- A publish that fails, like a folder with no `index.html` halfway through a build or a [limit](#limits) reached, prints the message and waits for the next change. Only a refused sign-in ends the watch.
+- When the server takes [direct uploads](#publishing-by-direct-upload), each version sends only the files that changed; the others are already stored. Otherwise the whole page is sent each time.
+- It always sends the whole folder, so it doesn't go with `--only` or `--remove`.
+- Ctrl+C stops watching. `--poll` looks for changes every second instead of waiting for file events, for network drives and mounted folders where those don't arrive.
+
+Each version counts toward the server's publish [limit](#limits), so a build that writes files for a long time is better watched once it's done: point `--watch` at the build's output folder rather than at the sources.
 
 ### Listing and sharing
 

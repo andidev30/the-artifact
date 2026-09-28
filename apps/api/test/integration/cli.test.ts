@@ -9,6 +9,7 @@ import { eq } from 'drizzle-orm'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { app } from '../../src/app.js'
 import { db, schema } from '../../src/db/index.js'
+import { env } from '../../src/env.js'
 import { sendShareNotice } from '../../src/mail.js'
 import { createToken, revokeToken } from '../../src/tokens.js'
 import { approve, createUser, type TestUser } from './helpers.js'
@@ -223,6 +224,75 @@ describe('the-artifact publish', () => {
     const notSignedIn = await run(['publish', 'site'])
     expect(notSignedIn.code).toBe(1)
     expect(notSignedIn.stderr).toContain(`You're not signed in to ${origin}`)
+  })
+})
+
+describe('the-artifact publish --watch', () => {
+  afterEach(() => {
+    env.storage.publicEndpoint = process.env.S3_PUBLIC_ENDPOINT ?? ''
+  })
+
+  async function until(check: () => boolean, what: string) {
+    const end = Date.now() + 15_000
+    while (!check()) {
+      if (Date.now() > end) throw new Error(`timed out waiting for ${what}`)
+      await new Promise((resolve) => setTimeout(resolve, 25))
+    }
+  }
+
+  async function versions(slug: string) {
+    const page = await pageBySlug(slug)
+    return db.select().from(schema.artifactVersions).where(eq(schema.artifactVersions.artifactId, page.id)).orderBy(schema.artifactVersions.version)
+  }
+
+  it('publishes new versions of the same page as files change, uploading only what changed, until Ctrl+C', async () => {
+    const user = await createUser()
+    const { token } = await tokenFor(user)
+    const id = crypto.randomUUID()
+    const dir = await site({
+      'index.html': `<!doctype html><title>Live</title><link rel="stylesheet" href="site.css"><h1>${id}</h1>`,
+      'site.css': `/* ${id} */`,
+    })
+    const watch = start(['publish', 'site', '--watch'], { env: { THE_ARTIFACT_TOKEN: token } })
+    await until(() => watch.out.stderr.includes('Watching site for changes'), 'the first publish')
+    const slug = pageId(watch.out.stdout)
+
+    await writeFile(join(dir, 'site.css'), `/* ${id} */ h1 { color: green }`)
+    await until(() => watch.out.stderr.includes('Published version 2 of "Live"'), 'version 2')
+    expect(watch.out.stderr).toContain('Sent 1 of 2 files; the others were already stored.')
+    // Hidden files never publish
+    await writeFile(join(dir, '.notes'), 'x')
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+    expect(await versions(slug)).toHaveLength(2)
+
+    watch.child.kill('SIGINT')
+    const res = await watch.done
+    expect(res.code).toBe(0)
+    expect(res.stderr).toContain('Stopped watching.')
+    expect(res.stdout.trim().split('\n').map(pageId)).toEqual([slug, slug])
+    const [, second] = await versions(slug)
+    expect(second.publishedWith).toBe('GitHub Actions')
+  })
+
+  it('sends whole pages to a server without direct uploads, and keeps going after a refused one', async () => {
+    env.storage.publicEndpoint = ''
+    const user = await createUser()
+    const { token } = await tokenFor(user)
+    const dir = await site({ 'index.html': '<!doctype html><title>Plain</title><h1>One</h1>' })
+    const watch = start(['publish', 'site', '--watch', '--json'], { env: { THE_ARTIFACT_TOKEN: token } })
+    await until(() => watch.out.stderr.includes('Watching site'), 'the first publish')
+    const first = JSON.parse(watch.out.stdout.trim())
+    expect(first).toMatchObject({ title: 'Plain', version: 1 })
+
+    // An empty page is refused; the watch reports it and waits
+    await writeFile(join(dir, 'index.html'), '')
+    await until(() => watch.out.stderr.includes('index.html is empty.'), 'the refusal')
+    await writeFile(join(dir, 'index.html'), '<!doctype html><title>Plain</title><h1>Two</h1>')
+    await until(() => watch.out.stdout.trim().split('\n').length === 2, 'version 2')
+    expect(JSON.parse(watch.out.stdout.trim().split('\n')[1])).toMatchObject({ id: first.id, version: 2 })
+
+    watch.child.kill('SIGINT')
+    expect((await watch.done).code).toBe(0)
   })
 })
 

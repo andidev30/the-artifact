@@ -54,6 +54,8 @@ prints the page's link. Hidden files and folders, `node_modules`, and file types
 | `--remove <path>` | Remove this file from the page and keep the others; repeat for more |
 | `--save` | Remember the page in `.the-artifact.json`, so publishing the same path again publishes a new version |
 | `--new` | Publish a new page even when `.the-artifact.json` has one for this path |
+| `--watch` | Keep watching, and publish a new version of the page whenever files change (see below) |
+| `--poll` | With `--watch`, look for changes every second instead of waiting for file events |
 | `--dry-run` | List what would be sent, and send nothing |
 
 ### Updating some files
@@ -75,6 +77,16 @@ cd /opt/dashboard
 ./export-metrics > site/data.json
 THE_ARTIFACT_TOKEN=$(cat token.txt) npx @the-artifact/cli publish site --id k3v9x2m8pq --only data.json
 ```
+
+## Watch while you work
+
+```sh
+the-artifact publish ./dist --watch
+```
+
+publishes the page, then keeps watching the folder. Half a second after you stop saving, it publishes a new version of the same page and prints its link, and anyone who has the page open sees the new version within a few seconds, without reloading. Files that `publish` leaves out (hidden files, `node_modules`, `--ignore` patterns) and `.the-artifact.json` never trigger a publish, and saving a file without changing it publishes nothing. A publish that fails, like a folder without `index.html` halfway through a build, prints the message and waits for the next change. Ctrl+C stops watching.
+
+It publishes to the page from `--id` or `.the-artifact.json` if there is one, otherwise to the page its first publish creates. `--visibility` and `--folder` apply to the first publish only, so changes you make in the app meanwhile stay. When the server takes [direct uploads](https://github.com/andidev30/the-artifact/blob/main/docs/publishing.md#publishing-by-direct-upload), only the files that changed are sent. Use `--poll` on network drives, in containers with mounted folders, or anywhere file events don't arrive.
 
 ## List and share
 

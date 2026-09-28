@@ -44,7 +44,7 @@ export const ALLOWED_EXTENSIONS = new Set([
   'wasm',
 ])
 
-const SKIPPED_FOLDERS = new Set(['node_modules'])
+export const SKIPPED_FOLDERS = new Set(['node_modules'])
 
 export type PageFile = { path: string; abs: string; size: number }
 export type Skipped = { path: string; reason: string }
