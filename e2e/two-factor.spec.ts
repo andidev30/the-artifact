@@ -1,6 +1,7 @@
 import { createHmac } from 'node:crypto'
 import { expect, test, type Page } from '@playwright/test'
 import { forgetSignInLinks } from '../apps/api/test/e2e-db.ts'
+import { expectAccessible } from './axe'
 import { openSignInLink, signUpPersonal, uniqueEmail } from './helpers'
 
 const MAILPIT = process.env.MAILPIT_URL ?? 'http://localhost:8025'
@@ -105,6 +106,7 @@ test('add a passkey, sign in with it alone, and use it as the second factor', as
   const row = section.getByRole('listitem').filter({ hasText: 'Test laptop' })
   await expect(row).toContainText('Not used yet')
   await expect(section).toContainText('10 of 10 left.')
+  await expectAccessible(page, 'sign-in security with a passkey')
 
   // Without an email address
   await logOut(page)
@@ -115,6 +117,7 @@ test('add a passkey, sign in with it alone, and use it as the second factor', as
   // An email link is one factor; the passkey is the second
   await logOut(page)
   await emailLinkSignIn(page, email)
+  await expectAccessible(page, 'two-factor step, passkey')
   await page.getByRole('button', { name: 'Use your passkey' }).click()
   await expect(page).toHaveURL(/\/app$/)
 
@@ -143,11 +146,13 @@ test('set up an authenticator app, then sign in with a code and with a recovery 
   await expect(codes.locator('code')).toHaveCount(10)
   const recovery = ((await codes.locator('code').first().textContent()) ?? '').trim()
   expect(recovery).toMatch(/^[a-z2-9]{5}-[a-z2-9]{5}$/)
+  await expectAccessible(page, 'recovery codes')
   await codes.getByRole('button', { name: 'I saved them' }).click()
   await expect(section).toContainText('On. Signing in asks for a 6-digit code')
 
   await logOut(page)
   await emailLinkSignIn(page, email)
+  await expectAccessible(page, 'two-factor step')
   // The enrolment code can't be used again, so this is the next step's code (one step of drift is allowed)
   await page.getByLabel('6-digit code').fill(totp(secret, Math.max(stepNow(), enrolled + 1)))
   await page.getByRole('button', { name: 'Continue' }).click()
@@ -156,6 +161,8 @@ test('set up an authenticator app, then sign in with a code and with a recovery 
   await logOut(page)
   await emailLinkSignIn(page, email)
   await page.getByRole('button', { name: 'Use a recovery code' }).click()
+  await expect(page.getByLabel('Recovery code')).toBeVisible()
+  await expectAccessible(page, 'two-factor step, recovery code')
   await page.getByLabel('Recovery code').fill(recovery)
   await page.getByRole('button', { name: 'Continue' }).click()
   await expect(page).toHaveURL(/\/app$/)
