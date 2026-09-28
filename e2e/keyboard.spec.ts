@@ -422,12 +422,21 @@ test('single sign-on: the sign-in button and adding a provider in Server admin',
   await signUpPersonal(page, email)
   await grantInstanceAdmin(email)
   await licensedSso(page)
-  await page.goto('/admin#sso')
+  await page.goto('/admin')
   const sso = page.locator('section#sso')
+  await expect(sso.getByRole('button', { name: 'Add a provider' })).toBeVisible()
+
+  // The section rail jumps there, so the lists above (which grow with every account on the server)
+  // don't decide how many Tabs it takes
+  const railLink = page.getByRole('navigation', { name: 'Admin sections' }).getByRole('link', { name: 'Single sign-on' })
+  await tabTo(page, railLink)
+  await expectFocusRing(railLink)
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(/#sso$/)
 
   // Adding a provider: the form takes focus, and saving puts it back on the button that opened it
   const add = sso.getByRole('button', { name: 'Add a provider' })
-  await tabTo(page, add)
+  await tabTo(page, add, { max: 20 })
   await expectFocusRing(add)
   await page.keyboard.press('Enter')
   await expect(sso.getByLabel('Name on the button')).toBeFocused()
