@@ -5,6 +5,7 @@ import { env } from './env.js'
 import { keyQuery, publicLink } from './links.js'
 import { log } from './log.js'
 import { currentThumbnails } from './thumbnails.js'
+import { SLUG_RE } from './validation.js'
 
 // Link previews: chat apps and mail clients don't run the app's JavaScript, so the Open Graph tags
 // for /a/<slug> go into the HTML shell the server returns.
@@ -18,7 +19,6 @@ import { currentThumbnails } from './thumbnails.js'
 export const SITE = 'The Artifact'
 // Thumbnails are stored at half the render viewport (see thumbnails.ts)
 export const IMAGE = { type: 'image/webp', width: 640, height: 360 }
-export const SLUG_RE = /^[a-z0-9]{1,64}$/
 
 // The app itself is never framed by other sites (clickjacking); only /e/<slug> and page content are
 // (see embeds.ts). Both headers, for browsers that predate frame-ancestors.

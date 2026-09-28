@@ -24,6 +24,7 @@ import { clientIp } from './limits.js'
 import { isGrant, linkPassFor, signGrant, verifyGrant } from './links.js'
 import { onUnhandledError } from './metrics.js'
 import { serverSecret } from './secrets.js'
+import { parseVersion } from './validation.js'
 import { recordView } from './views.js'
 import { zip } from './zip.js'
 
@@ -141,8 +142,8 @@ function notFound(c: Context) {
 // GET /api/artifacts/:slug/v/:version/<path>
 export async function serveVersion(c: Context<AuthEnv>) {
   const slug = c.req.param('slug')!
-  const version = Number(c.req.param('version'))
-  if (!Number.isInteger(version) || version < 1) return notFound(c)
+  const version = parseVersion(c.req.param('version'))
+  if (version === null) return notFound(c)
 
   const base = `/api/artifacts/${slug}/v/${version}/`
   const pathname = new URL(c.req.url).pathname
@@ -281,6 +282,8 @@ export async function serveVersion(c: Context<AuthEnv>) {
 export const contentHost = new Hono<AuthEnv>()
 contentHost.get('/api/artifacts/:slug/v/:version', (c) => c.redirect(`${new URL(c.req.url).pathname}/`, 301))
 contentHost.get('/api/artifacts/:slug/v/:version/*', serveVersion)
+// Page files are for the people a page is shared with, never for search engines
+contentHost.get('/robots.txt', (c) => c.text('User-agent: *\nDisallow: /\n', 200, { 'Cache-Control': 'public, max-age=3600' }))
 contentHost.notFound(notFound)
 contentHost.onError(onUnhandledError)
 
@@ -308,8 +311,8 @@ export async function downloadVersion(c: Context<AuthEnv>) {
   const artifact = await findBySlug(c.req.param('slug')!)
   if (!artifact) return notFound(c)
   const asked = c.req.query('version')
-  const version = asked === undefined ? artifact.currentVersion : Number(asked)
-  if (!Number.isInteger(version) || version < 1) return notFound(c)
+  const version = asked === undefined ? artifact.currentVersion : parseVersion(asked)
+  if (version === null) return notFound(c)
 
   let viewer: Viewer | null = c.get('user')
   const token = c.req.query('token')

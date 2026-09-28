@@ -110,6 +110,12 @@ export function redirectMatches(registered: string[], requested: string): boolea
   }
 }
 
+// Client ids are randomToken()s; anything else is an unknown client without asking the database
+const CLIENT_ID_RE = /^[A-Za-z0-9_-]{1,128}$/
+// RFC 6749: state is printable ASCII. RFC 7636: an S256 challenge is 43 base64url characters.
+const STATE_RE = /^[\x20-\x7e]+$/
+const CHALLENGE_RE = /^[A-Za-z0-9_-]{43}$/
+
 function authorizeError(message: string) {
   const url = new URL('/authorize', env.appUrl)
   url.searchParams.set('error', message)
@@ -118,18 +124,24 @@ function authorizeError(message: string) {
 
 oauth.get('/oauth/authorize', async (c) => {
   const q = c.req.query()
-  const [client] = q.client_id ? await db.select().from(schema.oauthClients).where(eq(schema.oauthClients.id, q.client_id)) : []
+  const [client] =
+    q.client_id && CLIENT_ID_RE.test(q.client_id) ? await db.select().from(schema.oauthClients).where(eq(schema.oauthClients.id, q.client_id)) : []
   // Without a trusted redirect URI we can't send errors back to the client, so show them here
   if (!client) return c.redirect(authorizeError('unknown_client'))
   if (!q.redirect_uri || !redirectMatches(client.redirectUris, q.redirect_uri)) return c.redirect(authorizeError('bad_redirect'))
 
   const back = new URL(q.redirect_uri)
+  if (q.state && !STATE_RE.test(q.state)) {
+    back.searchParams.set('error', 'invalid_request')
+    back.searchParams.set('error_description', 'state must be printable ASCII.')
+    return c.redirect(back.toString())
+  }
   if (q.state) back.searchParams.set('state', q.state)
   if (q.response_type !== 'code') {
     back.searchParams.set('error', 'unsupported_response_type')
     return c.redirect(back.toString())
   }
-  if (!q.code_challenge || q.code_challenge_method !== 'S256') {
+  if (!q.code_challenge || q.code_challenge_method !== 'S256' || !CHALLENGE_RE.test(q.code_challenge)) {
     back.searchParams.set('error', 'invalid_request')
     back.searchParams.set('error_description', 'PKCE with S256 is required.')
     return c.redirect(back.toString())

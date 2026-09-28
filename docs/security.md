@@ -33,7 +33,7 @@ Without `CONTENT_ORIGIN`, pages are served from `APP_URL`, isolated by the sandb
 
 ## Framing and embeds
 
-- **The app can't be framed by other sites.** Every page of the app, `/a/<id>` included, is sent with `Content-Security-Policy: frame-ancestors 'self'` and `X-Frame-Options: SAMEORIGIN`, so another site can't lay it out under its own buttons (clickjacking).
+- **The app can't be framed by other sites.** Every page of the app, `/a/<id>` included, is sent with `Content-Security-Policy: frame-ancestors 'self'` and `X-Frame-Options: SAMEORIGIN`, so another site can't lay it out under its own buttons (clickjacking). Every response of the app and the API also carries `X-Content-Type-Options: nosniff`, so browsers never read a file as a type other than the one it is sent with.
 - **Embeds can.** `/e/<id>` is a small document of its own, without the app: no app scripts, no session, only a sandboxed frame of the page's current version and a link to open it. Its policy is `default-src 'none'; style-src 'unsafe-inline'; frame-src 'self'; base-uri 'none'; form-action 'none'`, with the content origin added to `frame-src` when there is one. Page content (`/api/artifacts/<id>/v/<version>/`) is framed by the app and by embeds, so the same sites may frame both.
 - **Who may embed.** By default any site; `EMBED_FRAME_ANCESTORS` narrows that to a list of origins, sent as `frame-ancestors 'self' <origins>` on embeds and page content (see the [configuration reference](/docs/configuration)). With the default, no `frame-ancestors` is sent at all, since `*` wouldn't match sites that frame embeds from a sandboxed frame of their own.
 - **Embeds are never signed in.** Access is checked as a visitor who isn't signed in, ignoring any session cookie, so an embed shows the same thing to everyone. Only pages shared with **Anyone with the link**, with no password and not expired, are embedded. Every other page, and every page that doesn't exist, gets the same "Sign in to view this page" card with no title, content or screenshot, and `GET /api/oembed` answers 404 for them. This also means a site can't use your session to show you a restricted page inside its own frame.
@@ -55,6 +55,8 @@ Screenshots are served with the same access rules as the page, from `/api/artifa
 ## Private by default
 
 A page in a personal workspace is restricted until you share it. A page that someone can't open looks the same as one that doesn't exist.
+
+Pages are kept out of search engines. `/robots.txt` asks crawlers to stay away from page links (`/a/`), embeds (`/e/`), page content and the API; a self-hosted install asks them to stay off the whole server, and a separate domain for pages does the same. Chat apps and social sites that unfurl links (Slack, Discord, LinkedIn, X and others) may still read the preview of a page shared with **Anyone with the link**, and only of those.
 
 ## Sign-in
 
@@ -144,4 +146,4 @@ Opening a page is counted, and for pages shared with specific people or an organ
 
 ## Self-hosted data
 
-Everything lives in your own Postgres database and object storage: accounts and version history in Postgres, page HTML, files and thumbnails in the bucket. Nothing is sent to us. The bucket should stay private; pages are only ever served through the app, which checks access and adds the sandbox headers. While rendering thumbnails, the server may fetch scripts and fonts that pages load from the public CDNs listed above; set `THUMBNAIL_CDN_HOSTS=none` to turn that off.
+Everything lives in your own Postgres database and object storage: accounts and version history in Postgres, page HTML, files and thumbnails in the bucket. Nothing is sent to us, and the app's own fonts and scripts are served by your server rather than a CDN. The bucket should stay private; pages are only ever served through the app, which checks access and adds the sandbox headers. While rendering thumbnails, the server may fetch scripts and fonts that pages load from the public CDNs listed above; set `THUMBNAIL_CDN_HOSTS=none` to turn that off.

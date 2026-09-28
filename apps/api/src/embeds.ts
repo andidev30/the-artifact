@@ -2,7 +2,8 @@ import { Hono } from 'hono'
 import type { Artifact } from './db/schema.js'
 import { env } from './env.js'
 import { embedLink, keyQuery, publicLink } from './links.js'
-import { escapeHtml, IMAGE, linkSharedPage, SITE, SLUG_RE } from './previews.js'
+import { escapeHtml, IMAGE, linkSharedPage, SITE } from './previews.js'
+import { SLUG_RE } from './validation.js'
 import { currentThumbnails } from './thumbnails.js'
 
 // Embeds: /e/<slug> is a page on its own, without the app, for other sites to frame (Notion,
