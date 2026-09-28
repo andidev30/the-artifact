@@ -27,6 +27,7 @@ import { CopyCommand } from '../components/CopyCommand'
 import { ReleaseNotice } from '../components/ReleaseNotice'
 import { ScimSection } from '../ee/ScimSection'
 import { SsoSection } from '../ee/SsoSection'
+import { useConfirmFocus } from '../focus'
 import { useConfig } from '../useConfig'
 import { timeAgo } from '../time'
 import { useMe } from '../useMe'
@@ -537,8 +538,10 @@ function UserPanel({ id, user: u, onUpdated, onDeleted }: { id: string; user: Ad
     setBusy(false)
   }
 
+  const scope = useConfirmFocus<HTMLDivElement>(confirm)
+
   return (
-    <div id={id} className="admin-panel">
+    <div ref={scope} id={id} className="admin-panel">
       <dl className="admin-facts">
         <div>
           <dt>Joined</dt>
@@ -567,7 +570,7 @@ function UserPanel({ id, user: u, onUpdated, onDeleted }: { id: string; user: Ad
       {confirm === null && (
         <div className="admin-panel-actions">
           {u.isAdmin ? (
-            <button type="button" className="button button-small button-quiet" disabled={busy} onClick={() => setConfirm('demote')}>
+            <button type="button" className="button button-small button-quiet" disabled={busy} data-confirms="demote" onClick={() => setConfirm('demote')}>
               Remove admin
             </button>
           ) : (
@@ -591,7 +594,7 @@ function UserPanel({ id, user: u, onUpdated, onDeleted }: { id: string; user: Ad
                 Unsuspend
               </button>
             ) : (
-              <button type="button" className="button button-small button-quiet" disabled={busy} onClick={() => setConfirm('suspend')}>
+              <button type="button" className="button button-small button-quiet" disabled={busy} data-confirms="suspend" onClick={() => setConfirm('suspend')}>
                 Suspend
               </button>
             ))}
@@ -601,12 +604,18 @@ function UserPanel({ id, user: u, onUpdated, onDeleted }: { id: string; user: Ad
             </button>
           )}
           {!u.isYou && u.twoFactor && (
-            <button type="button" className="button button-small button-quiet" disabled={busy} onClick={() => setConfirm('reset-two-factor')}>
+            <button
+              type="button"
+              className="button button-small button-quiet"
+              disabled={busy}
+              data-confirms="reset-two-factor"
+              onClick={() => setConfirm('reset-two-factor')}
+            >
               Reset two-factor sign-in
             </button>
           )}
           {!u.isYou && (
-            <button type="button" className="auth-reset admin-delete-link" onClick={() => setConfirm('delete')}>
+            <button type="button" className="auth-reset admin-delete-link" data-confirms="delete" onClick={() => setConfirm('delete')}>
               Delete account
             </button>
           )}
@@ -666,7 +675,7 @@ function Confirm({ text, action, busy, onConfirm, onCancel }: { text: ReactNode;
     <div className="admin-confirm" role="group" aria-label={`Confirm: ${action}`}>
       <p>{text}</p>
       <div className="admin-panel-actions">
-        <button type="button" className="button button-small button-danger" disabled={busy} onClick={onConfirm}>
+        <button type="button" className="button button-small button-danger" disabled={busy} onClick={onConfirm} autoFocus>
           {busy ? 'Working' : action}
         </button>
         <button type="button" className="auth-reset" onClick={onCancel}>
@@ -730,7 +739,7 @@ function DeleteUser({ user: u, onDeleted, onCancel }: { user: AdminUser; onDelet
           {p.blockedBy.length === 1 ? ' that organization' : ' those organizations'} below, then try again.
         </p>
         <div className="admin-panel-actions">
-          <button type="button" className="auth-reset" onClick={onCancel}>
+          <button type="button" className="auth-reset" onClick={onCancel} autoFocus>
             Back
           </button>
         </div>
@@ -749,7 +758,7 @@ function DeleteUser({ user: u, onDeleted, onCancel }: { user: AdminUser; onDelet
         <label htmlFor={inputId}>
           Type <strong>{u.email}</strong> to confirm
         </label>
-        <input id={inputId} value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" spellCheck={false} />
+        <input id={inputId} value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" spellCheck={false} autoFocus />
       </div>
       {problem && (
         <p className="auth-notice" role="alert">
@@ -800,8 +809,10 @@ function OrganizationsSection({ onChanged }: { onChanged: () => void }) {
     onChanged()
   }
 
+  const scope = useConfirmFocus<HTMLElement>(open)
+
   return (
-    <section id="organizations" className="settings-card" aria-labelledby="orgs-title">
+    <section ref={scope} id="organizations" className="settings-card" aria-labelledby="orgs-title">
       <header className="settings-card-head">
         <h2 id="orgs-title">Organizations</h2>
         <p>Every organization on this instance. Deleting one removes its pages and memberships; the people in it keep their accounts.</p>
@@ -859,6 +870,7 @@ function OrganizationsSection({ onChanged }: { onChanged: () => void }) {
                   type="button"
                   className="button button-small button-quiet"
                   aria-expanded={open === o.id}
+                  data-confirms={o.id}
                   onClick={() => setOpen(open === o.id ? null : o.id)}
                 >
                   {open === o.id ? 'Cancel' : 'Delete'}

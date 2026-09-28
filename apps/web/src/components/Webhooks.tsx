@@ -13,6 +13,7 @@ import {
   type WebhookEvent,
   type WebhookFormat,
 } from '../api'
+import { useConfirmFocus } from '../focus'
 import { timeAgo } from '../time'
 import { CopyCommand } from './CopyCommand'
 import './SignInSecurity.css'
@@ -229,9 +230,10 @@ function WebhookRow({
   }
 
   const last = hook.lastDelivery
+  const scope = useConfirmFocus<HTMLLIElement>(confirming ? 'delete' : null)
 
   return (
-    <li className="webhook-item">
+    <li ref={scope} className="webhook-item">
       <div className="webhook-row">
         <span className="webhook-who">
           <strong>
@@ -260,7 +262,7 @@ function WebhookRow({
           </button>
           {confirming ? (
             <>
-              <button type="button" className="button button-small button-danger" onClick={remove}>
+              <button type="button" className="button button-small button-danger" onClick={remove} autoFocus>
                 Delete
               </button>
               <button type="button" className="auth-reset" onClick={() => setConfirming(false)}>
@@ -268,7 +270,13 @@ function WebhookRow({
               </button>
             </>
           ) : (
-            <button type="button" className="button button-small button-quiet" aria-label={`Delete webhook to ${host}`} onClick={() => setConfirming(true)}>
+            <button
+              type="button"
+              className="button button-small button-quiet"
+              aria-label={`Delete webhook to ${host}`}
+              data-confirms="delete"
+              onClick={() => setConfirming(true)}
+            >
               Delete
             </button>
           )}

@@ -28,6 +28,24 @@ export function useReturnFocus() {
   }, [])
 }
 
+// For a control that swaps in place for a confirmation (Delete, then Delete and Cancel): the
+// confirmation takes focus with autoFocus, but closing it removes the focused button, so focus would
+// fall back to the document. Returns a ref for an element around both; when `open` (which confirmation
+// is showing) goes back to null with focus lost, the control marked data-confirms="<that kind>" gets it.
+export function useConfirmFocus<T extends HTMLElement>(open: string | null) {
+  const scope = useRef<T>(null)
+  const last = useRef(open)
+  useEffect(() => {
+    const was = last.current
+    last.current = open
+    if (was === null || open !== null) return
+    const active = document.activeElement
+    if (active && active !== document.body && active.isConnected) return
+    scope.current?.querySelector<HTMLElement>(`[data-confirms="${was}"]`)?.focus()
+  }, [open])
+  return scope
+}
+
 const FOCUSABLE = 'a[href], button:not([disabled])'
 
 // Arrow keys, Home and End move between the links and buttons of an open popup (the account menu,

@@ -11,6 +11,7 @@ import {
   type CommentThread,
   type PageComment,
 } from '../api'
+import { useConfirmFocus } from '../focus'
 import { timeAgo } from '../time'
 import type { AnchoredThread, FrameHelper, PinStatus } from './PagePins'
 import './HistoryPanel.css'
@@ -379,9 +380,10 @@ function Item({ slug, comment: c, currentVersion, isNew, replies, onEdited, onDe
   }
 
   const version = c.version === currentVersion ? `on version ${c.version}` : `on version ${c.version} (now ${currentVersion})`
+  const scope = useConfirmFocus<HTMLElement>(confirming ? 'delete' : null)
 
   return (
-    <article className="comment" data-new={isNew || undefined}>
+    <article ref={scope} className="comment" data-new={isNew || undefined}>
       <p className="comment-byline">
         <strong>{c.author ?? 'Deleted account'}</strong>
         {c.postedWith && <span className="comment-agent">via {c.postedWith}</span>}
@@ -400,9 +402,10 @@ function Item({ slug, comment: c, currentVersion, isNew, replies, onEdited, onDe
         <p className="comment-body">{c.body}</p>
       )}
       {confirming ? (
-        <div className="comment-confirm" role="group" aria-label="Delete comment">
+        // Keyed, so React mounts it anew instead of reusing the buttons of the actions for it
+        <div key="confirm" className="comment-confirm" role="group" aria-label="Delete comment">
           <span>{replies ? `Delete this comment and its ${replies === 1 ? 'reply' : `${replies} replies`}?` : 'Delete this comment?'}</span>
-          <button type="button" className="comment-action comment-danger" onClick={remove} disabled={busy}>
+          <button type="button" className="comment-action comment-danger" onClick={remove} disabled={busy} autoFocus>
             {busy ? 'Deleting' : 'Delete'}
           </button>
           <button type="button" className="comment-action" onClick={() => setConfirming(false)} disabled={busy}>
@@ -411,7 +414,7 @@ function Item({ slug, comment: c, currentVersion, isNew, replies, onEdited, onDe
         </div>
       ) : (
         !editing && (
-          <div className="comment-actions">
+          <div key="actions" className="comment-actions">
             {children}
             {c.canEdit && (
               <button type="button" className="comment-action" onClick={() => setEditing(true)}>
@@ -419,7 +422,7 @@ function Item({ slug, comment: c, currentVersion, isNew, replies, onEdited, onDe
               </button>
             )}
             {c.canDelete && (
-              <button type="button" className="comment-action" onClick={() => setConfirming(true)}>
+              <button type="button" className="comment-action" data-confirms="delete" onClick={() => setConfirming(true)}>
                 Delete
               </button>
             )}
