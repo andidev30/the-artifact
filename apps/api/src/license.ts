@@ -20,7 +20,10 @@ const DAY = 24 * 60 * 60 * 1000
 // Public keys that sign license keys, by key id (licenseKeyId of the public key). Keep old keys in
 // the list after a rotation so keys they signed keep working until they expire. Add one with
 // `pnpm --filter @the-artifact/api license:keygen` (see docs/licenses.md).
-export const LICENSE_PUBLIC_KEYS: Record<string, string> = {}
+export const LICENSE_PUBLIC_KEYS: Record<string, string> = {
+  // The hosted service's first signing key, made 2026-09-28
+  L3QcVWmRQLfb: 'esNEzdgObEdUmR5aFVyBmtYQqZVN6cbbq+0/6TQAUds=',
+}
 
 export type LicensePayload = {
   v: number
