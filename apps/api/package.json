@@ -17,6 +17,7 @@
     "thumbnails:backfill": "tsx src/scripts/backfill-thumbnails.ts",
     "storage:sweep": "tsx src/scripts/sweep-storage.ts",
     "admin:grant": "tsx src/scripts/make-admin.ts",
+    "two-factor:reset": "tsx src/scripts/reset-two-factor.ts",
     "load:seed": "tsx test/load/seed.ts"
   },
   "dependencies": {

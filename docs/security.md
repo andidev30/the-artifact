@@ -74,7 +74,7 @@ Ten single-use codes, each 10 characters from an alphabet without look-alike cha
 
 ### Losing every factor
 
-There is no self-service way around the second factor: that would be the way in for an attacker too. An instance admin can **Reset two-factor sign-in** for someone else under **Server admin**, **People**. It deletes their passkeys, authenticator app, recovery codes and pending sign-ins, signs them out everywhere, and writes a warning to the log with both account ids. Admins can't do it for themselves (they use their own settings, or another admin). Organization owners and admins can't reset anyone's second factor.
+There is no self-service way around the second factor: that would be the way in for an attacker too. An instance admin can **Reset two-factor sign-in** for someone else under **Server admin**, **People**. It deletes their passkeys, authenticator app, recovery codes and pending sign-ins, signs them out everywhere, and writes a warning to the log with both account ids. Admins can't do it for themselves (they use their own settings, or another admin). With a shell on the server, `reset-two-factor.js` does the same for any account, so the only admin isn't locked out for good (see [An existing install without an admin](/docs/self-hosting#an-existing-install-without-an-admin)). Organization owners and admins can't reset anyone's second factor.
 
 ### Organizations that require it
 

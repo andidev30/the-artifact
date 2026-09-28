@@ -127,6 +127,12 @@ docker compose exec app node dist/scripts/make-admin.js you@example.com
 
 It also restores the account if it was suspended. On a server without email it prints a link that sets a new password, so it doubles as the way back in when the only admin forgot theirs. It needs a shell on the server, so it gives nobody more access than they already have.
 
+If the only admin lost their passkeys, authenticator app and recovery codes, reset their two-factor sign-in the same way:
+
+```sh
+docker compose exec app node dist/scripts/reset-two-factor.js you@example.com
+```
+
 The automatic first-account admin applies unless `SELF_HOSTED=false`, which only the hosted service sets.
 
 ## Running without email

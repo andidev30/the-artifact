@@ -40,7 +40,8 @@ settings.put('/password', async (c) => {
     await tx.delete(schema.sessions).where(eq(schema.sessions.userId, user.id))
     await tx.delete(schema.pendingSignIns).where(eq(schema.pendingSignIns.userId, user.id))
   })
-  await startSession(c, user.id)
+  // Without a current password to check, setting one proves nothing new, so it doesn't count as a fresh sign-in
+  await startSession(c, user.id, user.passwordHash ? undefined : (c.get('session')?.createdAt ?? undefined))
   return c.body(null, 204)
 })
 

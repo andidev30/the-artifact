@@ -100,6 +100,9 @@ Commands from the other pages run with `kubectl exec`:
 # Make someone an instance admin (prints a password link on a server without email)
 kubectl -n the-artifact exec deploy/the-artifact -c app -- node dist/scripts/make-admin.js you@example.com
 
+# Reset someone's two-factor sign-in when no other admin can
+kubectl -n the-artifact exec deploy/the-artifact -c app -- node dist/scripts/reset-two-factor.js you@example.com
+
 # Remove unreferenced content now instead of at the next sweep
 kubectl -n the-artifact exec deploy/the-artifact -c app -- node dist/scripts/sweep-storage.js
 ```

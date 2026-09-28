@@ -41,6 +41,15 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+// The last session cookie a response sets: renewing the old session can come first
+function newSession(res: Response): string {
+  return res.headers
+    .getSetCookie()
+    .filter((c) => c.startsWith('session='))
+    .at(-1)!
+    .split(';')[0]
+}
+
 function pendingCookie(res: Response): string | null {
   const header = res.headers.getSetCookie().find((c) => c.startsWith('sign_in_pending='))
   const value = header?.split(';')[0]
@@ -274,6 +283,22 @@ describe('changing sign-in security', () => {
       expect(await res.json()).toMatchObject({ code: 'reauth_required' })
     }
     expect((await (await call('/api/me/security', { cookie: user.cookie })).json()).recentSignIn).toBe(false)
+  })
+
+  it("isn't made fresh by setting a first password, which needs no current one", async () => {
+    const user = await createUser()
+    await db
+      .update(schema.sessions)
+      .set({ createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000) })
+      .where(eq(schema.sessions.userId, user.id))
+    const res = await call('/api/me/password', { method: 'PUT', cookie: user.cookie, json: { password: 'a new password here' } })
+    expect(res.status).toBe(204)
+    const cookie = newSession(res)
+    expect((await call('/api/me/security/totp', { method: 'POST', cookie })).status).toBe(403)
+
+    // Knowing the current password does count
+    const again = await call('/api/me/password', { method: 'PUT', cookie, json: { currentPassword: 'a new password here', password: 'another password' } })
+    expect((await call('/api/me/security/totp', { method: 'POST', cookie: newSession(again) })).status).toBe(200)
   })
 })
 

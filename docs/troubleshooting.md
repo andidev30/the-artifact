@@ -18,7 +18,7 @@ The server limits how often one address, account or network can ask for sign-in 
 
 ## I lost my phone or my passkey
 
-On **Confirm it’s you**, choose **Use a recovery code** and enter one of the codes you saved when you set up two-factor sign-in. Once you are in, remove the lost passkey or set up the authenticator app again under **Account settings**, **Sign-in security**, and make new recovery codes. Without a recovery code, ask an admin of this server to reset your two-factor sign-in; see [If you lose your second factor](/docs/signing-in#if-you-lose-your-second-factor).
+On **Confirm it’s you**, choose **Use a recovery code** and enter one of the codes you saved when you set up two-factor sign-in. Once you are in, remove the lost passkey or set up the authenticator app again under **Account settings**, **Sign-in security**, and make new recovery codes. Without a recovery code, ask an admin of this server to reset your two-factor sign-in; see [If you lose your second factor](/docs/signing-in#if-you-lose-your-second-factor). If you are the only admin of a self-hosted server, run the reset script on the server; see [An existing install without an admin](/docs/self-hosting#an-existing-install-without-an-admin).
 
 ## "That code is wrong or was already used"
 

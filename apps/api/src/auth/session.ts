@@ -39,11 +39,14 @@ export function sessionRef(id: string): string {
   return createHash('sha256').update(`session:${id}`).digest('base64url').slice(0, 22)
 }
 
-export async function startSession(c: Context, userId: string) {
+// signedInAt: when the person last proved who they are, if not now (it decides RECENT_SIGN_IN)
+export async function startSession(c: Context, userId: string, signedInAt?: Date) {
   const token = randomToken()
   const expiresAt = new Date(Date.now() + SESSION_TTL)
   const userAgent = c.req.header('user-agent')?.slice(0, MAX_USER_AGENT) || null
-  await db.insert(schema.sessions).values({ id: hashToken(token), userId, expiresAt, userAgent, lastActiveAt: new Date() })
+  await db
+    .insert(schema.sessions)
+    .values({ id: hashToken(token), userId, expiresAt, userAgent, lastActiveAt: new Date(), ...(signedInAt ? { createdAt: signedInAt } : {}) })
   setSessionCookie(c, token, expiresAt)
 }
 
