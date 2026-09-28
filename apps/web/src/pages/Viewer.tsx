@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { downloadUrl, fetchMe, getArtifact, logout, versionUrl, type ArtifactPage, type Visibility } from '../api'
+import { CommentsPanel } from '../components/CommentsPanel'
 import { HistoryPanel, OldVersionBar, type Viewing } from '../components/HistoryPanel'
 import { DeleteDialog, PageMenu, RenameDialog, type MenuItem } from '../components/PageActions'
 import { ShareDialog } from '../components/ShareDialog'
@@ -125,7 +126,18 @@ function PageFrame({ page, email, onChange }: { page: ArtifactPage; email: strin
   const navigate = useNavigate()
   const [copied, setCopied] = useState(false)
   const [sharing, setSharing] = useState(false)
-  const [historyOpen, setHistoryOpen] = useState(false)
+  // Comment counts change after the panel's requests finish, by then this render's page may be stale
+  const pageRef = useRef(page)
+  pageRef.current = page
+  // One side panel at a time. Links in comment emails end in ?comments, which opens that one.
+  const [panel, setPanel] = useState<'history' | 'comments' | null>(() =>
+    page.comments && new URLSearchParams(window.location.search).has('comments') ? 'comments' : null,
+  )
+  const toggle = (which: 'history' | 'comments') => setPanel((p) => (p === which ? null : which))
+  // Once opened, drop ?comments so Copy link hands on the page's plain address
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).has('comments')) navigate({ search: '' }, { replace: true })
+  }, [navigate])
   const [viewing, setViewing] = useState<Viewing | null>(null)
   const [dialog, setDialog] = useState<'rename' | 'delete' | null>(null)
   const [announce, setAnnounce] = useState('')
@@ -169,13 +181,32 @@ function PageFrame({ page, email, onChange }: { page: ArtifactPage; email: strin
           <span className="viewer-badge" data-visibility={page.visibility}>
             {VISIBILITY_LABEL[page.visibility]}
           </span>
+          {page.comments && (
+            <button
+              type="button"
+              className="viewer-history viewer-comments"
+              aria-expanded={panel === 'comments'}
+              aria-controls="comments-panel"
+              onClick={() => toggle('comments')}
+            >
+              Comments
+              {page.comments.unread > 0 ? (
+                <span className="viewer-count" data-unread="">
+                  {page.comments.unread}
+                  <span className="visually-hidden"> new</span>
+                </span>
+              ) : (
+                page.comments.total > 0 && <span className="viewer-count">{page.comments.total}</span>
+              )}
+            </button>
+          )}
           {page.canEdit && (
             <button
               type="button"
               className="viewer-history"
-              aria-expanded={historyOpen}
+              aria-expanded={panel === 'history'}
               aria-controls="history-panel"
-              onClick={() => setHistoryOpen((o) => !o)}
+              onClick={() => toggle('history')}
             >
               History
             </button>
@@ -212,13 +243,25 @@ function PageFrame({ page, email, onChange }: { page: ArtifactPage; email: strin
           sandbox={SANDBOX}
           src={versionUrl(page.slug, viewing ? viewing.version : page.version)}
         />
-        {historyOpen && (
+        {panel === 'history' && (
           <HistoryPanel
             slug={page.slug}
             currentVersion={page.version}
             selected={viewing?.version ?? page.version}
             onSelect={setViewing}
-            onClose={() => setHistoryOpen(false)}
+            onClose={() => setPanel(null)}
+          />
+        )}
+        {panel === 'comments' && page.comments && (
+          <CommentsPanel
+            slug={page.slug}
+            currentVersion={page.version}
+            onClose={() => setPanel(null)}
+            onSeen={() => onChange({ ...pageRef.current, comments: { total: pageRef.current.comments?.total ?? 0, unread: 0 } })}
+            onTotalChange={(delta) => {
+              const counts = pageRef.current.comments ?? { total: 0, unread: 0 }
+              onChange({ ...pageRef.current, comments: { ...counts, total: Math.max(0, counts.total + delta) } })
+            }}
           />
         )}
       </div>

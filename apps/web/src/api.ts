@@ -90,6 +90,10 @@ export type ArtifactSummary = {
   role?: 'viewer' | 'editor'
   // Set in a workspace's own list (not on pages shared with you): the folder it is filed in
   folder?: { id: string; name: string } | null
+  // Missing from servers older than comments
+  comments?: number
+  // Written by others since you last opened the page's comments
+  unreadComments?: number
 }
 
 export type ArtifactPage = {
@@ -102,6 +106,8 @@ export type ArtifactPage = {
   inOrganization: boolean
   canEdit: boolean
   isOwner: boolean
+  // null when signed out: only signed-in people see comments
+  comments?: { total: number; unread: number } | null
 }
 
 export type ArtifactList = {
@@ -179,6 +185,76 @@ export async function setVisibility(slug: string, visibility: Visibility): Promi
     body: JSON.stringify({ visibility }),
   })
   if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Visibility could not be changed.')
+}
+
+export const MAX_COMMENT_LENGTH = 5000
+
+export type PageComment = {
+  id: string
+  // Plain text: always rendered as text, never as HTML
+  body: string
+  // The page's version when it was written
+  version: number
+  // null once the author's account is deleted
+  author: string | null
+  mine: boolean
+  // The agent that posted it for its person; null when written in the app
+  postedWith: string | null
+  createdAt: string
+  editedAt: string | null
+  canEdit: boolean
+  canDelete: boolean
+}
+
+export type CommentThread = PageComment & {
+  resolved: { at: string; by: string | null } | null
+  canResolve: boolean
+  replies: PageComment[]
+}
+
+export type CommentList = {
+  threads: CommentThread[]
+  next: string | null
+  // When you last opened the comments, to mark newer ones
+  seenAt: string | null
+  currentVersion: number
+}
+
+const commentsPath = (slug: string) => `/artifacts/${encodeURIComponent(slug)}/comments`
+
+export function listComments(slug: string, cursor?: string | null) {
+  return request<CommentList>(`${commentsPath(slug)}${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`)
+}
+
+export async function addComment(slug: string, body: string, replyTo?: string): Promise<PageComment> {
+  try {
+    return await request<PageComment>(commentsPath(slug), { method: 'POST', json: { body, replyTo } })
+  } catch (err) {
+    throw err instanceof ApiError ? new FieldError(err.message, err.field) : err
+  }
+}
+
+export async function editComment(slug: string, id: string, body: string): Promise<PageComment> {
+  try {
+    return await request<PageComment>(`${commentsPath(slug)}/${encodeURIComponent(id)}`, { method: 'PATCH', json: { body } })
+  } catch (err) {
+    throw err instanceof ApiError ? new FieldError(err.message, err.field) : err
+  }
+}
+
+export function deleteComment(slug: string, id: string) {
+  return request<null>(`${commentsPath(slug)}/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
+export function resolveComment(slug: string, id: string, resolved: boolean) {
+  return request<{ id: string; resolved: { at: string; by: string | null } | null }>(`${commentsPath(slug)}/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    json: { resolved },
+  })
+}
+
+export function markCommentsSeen(slug: string) {
+  return request<null>(`${commentsPath(slug)}/seen`, { method: 'POST' })
 }
 
 export type ConsentRequest = {

@@ -8,6 +8,7 @@ vi.mock('../../src/mail.js', () => ({
   sendSignInLink: vi.fn(async () => {}),
   sendShareNotice: vi.fn(async () => {}),
   sendInvitation: vi.fn(async () => {}),
+  sendCommentNotice: vi.fn(async () => {}),
 }))
 vi.mock('../../src/ee/mail.js', () => ({
   sendSalesInquiry: vi.fn(async () => {}),

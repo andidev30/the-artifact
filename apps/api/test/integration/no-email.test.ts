@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { hashPassword } from '../../src/auth/password.js'
 import { db, schema } from '../../src/db/index.js'
 import { env } from '../../src/env.js'
-import { sendInvitation, sendShareNotice } from '../../src/mail.js'
+import { sendCommentNotice, sendInvitation, sendShareNotice } from '../../src/mail.js'
 import { call, createOrg, createPage, createUser, sessionCookie, type TestUser } from './helpers.js'
 
 // A server without SMTP_HOST: passwords instead of emailed links, and links admins pass on by hand
@@ -255,6 +255,17 @@ describe('sharing and settings', () => {
     })
     expect(res.status).toBe(200)
     expect(sendShareNotice).not.toHaveBeenCalled()
+  })
+
+  it('takes comments without emailing anyone; new ones show as unread instead', async () => {
+    const owner = await createUser()
+    const reader = await createUser()
+    const page = await createPage(owner, { visibility: 'link' })
+    const res = await call(`/api/artifacts/${page.slug}/comments`, { cookie: reader.cookie, json: { body: 'Nice page' } })
+    expect(res.status).toBe(201)
+    expect(sendCommentNotice).not.toHaveBeenCalled()
+    const details = await (await call(`/api/artifacts/${page.slug}`, { cookie: owner.cookie })).json()
+    expect(details.comments).toEqual({ total: 1, unread: 1 })
   })
 
   it('changes the password, checking the current one', async () => {

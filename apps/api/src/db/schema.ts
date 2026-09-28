@@ -263,6 +263,49 @@ export const artifactShares = pgTable(
   (t) => [primaryKey({ columns: [t.artifactId, t.email] }), index('artifact_shares_email_idx').on(t.email)],
 )
 
+// Comments on a page, from anyone signed in who can open it. One level of threads: a comment with no
+// parent starts a thread and replies point at it, never at another reply. Deleting a thread's first
+// comment deletes its replies.
+export const artifactComments = pgTable(
+  'artifact_comments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    artifactId: uuid('artifact_id')
+      .notNull()
+      .references(() => artifacts.id, { onDelete: 'cascade' }),
+    parentId: uuid('parent_id').references((): AnyPgColumn => artifactComments.id, { onDelete: 'cascade' }),
+    // Null once the author's account is deleted; the comment stays for the others in the thread
+    authorId: uuid('author_id').references(() => users.id, { onDelete: 'set null' }),
+    // Plain text, never rendered as HTML
+    body: text('body').notNull(),
+    // The page's current version when it was written
+    version: integer('version').notNull(),
+    // MCP client that posted it for its person; null for comments written in the web app
+    postedWith: text('posted_with'),
+    editedAt: timestamp('edited_at', { withTimezone: true }),
+    // Only set on the first comment of a thread
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+    resolvedBy: uuid('resolved_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('artifact_comments_artifact_idx').on(t.artifactId, t.createdAt, t.id), index('artifact_comments_parent_idx').on(t.parentId)],
+)
+
+// When someone last opened a page's comments, for the count of new ones on cards and in the viewer
+export const commentReads = pgTable(
+  'comment_reads',
+  {
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    artifactId: uuid('artifact_id')
+      .notNull()
+      .references(() => artifacts.id, { onDelete: 'cascade' }),
+    seenAt: timestamp('seen_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.artifactId] })],
+)
+
 export const signupPolicyEnum = pgEnum('signup_policy', ['open', 'domains', 'invite-only'])
 
 // Settings the instance admin edits in the web app. At most one row (id 1); without it anyone
@@ -297,6 +340,7 @@ export type SignupPolicy = (typeof signupPolicyEnum.enumValues)[number]
 export type ShareRole = (typeof shareRoleEnum.enumValues)[number]
 export type Artifact = typeof artifacts.$inferSelect
 export type Folder = typeof folders.$inferSelect
+export type Comment = typeof artifactComments.$inferSelect
 export type Visibility = (typeof visibilityEnum.enumValues)[number]
 export type Role = (typeof roleEnum.enumValues)[number]
 export type InviteRole = (typeof inviteRoleEnum.enumValues)[number]

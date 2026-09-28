@@ -143,6 +143,46 @@ Returns a link that downloads a version of a page as a zip: `index.html` and eve
 
 The link needs no sign-in, but it only works for the person the agent is connected as, for that version, and for 12 hours. Access is checked again each time it is used, so it stops working if that person loses access to the page.
 
+### list_comments
+
+Reads the [comments](/docs/comments) on a page: threads oldest first, each with its replies, the author, the agent it was posted through (if any) and the version that was current when it was written. Resolved threads are left out unless `include_resolved` is set. For anyone who can open the page. Agents are told to read comments before publishing a new version, and `get_artifact` says how many threads are open.
+
+| Argument | Required | Meaning |
+| --- | --- | --- |
+| `artifact_id` | yes | Id or link of the page |
+| `include_resolved` | no | `true` to list resolved threads too |
+| `limit` | no | How many threads, 1 to 100; 50 when left out |
+| `cursor` | no | The cursor from the end of the previous answer, for the next threads |
+
+### add_comment
+
+Starts a new comment thread on a page, for example to say what a new version changed. The comment is posted as the person the agent is connected as, marked with the agent's name.
+
+| Argument | Required | Meaning |
+| --- | --- | --- |
+| `artifact_id` | yes | Id or link of the page |
+| `body` | yes | Plain text, up to 5,000 characters |
+
+### reply_comment
+
+Replies in the thread of a comment, as the connected person, marked with the agent's name. Replying to a reply adds to the same thread, and a reply reopens a resolved thread.
+
+| Argument | Required | Meaning |
+| --- | --- | --- |
+| `artifact_id` | yes | Id or link of the page |
+| `comment_id` | yes | A `comment_id` from `list_comments` |
+| `body` | yes | Plain text, up to 5,000 characters |
+
+### resolve_comment
+
+Resolves the thread of a comment, or reopens it. For the person who started the thread and people who can edit the page.
+
+| Argument | Required | Meaning |
+| --- | --- | --- |
+| `artifact_id` | yes | Id or link of the page |
+| `comment_id` | yes | A `comment_id` from `list_comments`; a reply's id resolves its thread |
+| `resolved` | no | `false` reopens the thread; `true` when left out |
+
 ## Publishing by direct upload
 
 With `publish_artifact`, a page travels inside the MCP call, so it is limited by what the agent and the server can send in one request. Hosts like Vercel refuse requests over about 4.5 MB. Agents that can run shell commands or make HTTP requests (Claude Code, Cursor, Codex and other coding agents) can use `prepare_upload` and `publish_upload` instead, and the files go straight to storage:
@@ -164,6 +204,7 @@ Besides the size of each page, a server limits how fast an account uses these to
 | Tool calls, by every agent of one account together | 600 per 10 minutes |
 | New pages and versions (`publish_artifact`, `publish_upload`, `restore_version`) | 200 per hour |
 | People shared with by email (`share_artifact`, counted with invitations in the app) | 200 per hour |
+| Comments and replies (`add_comment`, `reply_comment`, counted with comments in the app) | 120 per hour |
 | Pages, versions and storage in a self-hosted workspace | None, unless the server sets them |
 | A personal workspace on the hosted service's free Personal plan | 50 pages and 1 GB of storage; versions older than 7 days are removed |
 
@@ -171,7 +212,7 @@ A rate limit ends on its own: the message says how long to wait. For a full work
 
 ## Updating a page
 
-Ask for the change in the same conversation ("make the chart a line chart"). The agent reads the page with `get_artifact` (and any file it needs with `path`), edits it and publishes with the same `artifact_id` and the full set of files. The link stays the same, the version number goes up, and the old version stays in the [history](/docs/version-history).
+Ask for the change in the same conversation ("make the chart a line chart"), or point the agent at the page's comments ("deal with the open comments on the launch plan"). The agent reads the page with `get_artifact` (and any file it needs with `path`) and the feedback with `list_comments`, edits it and publishes with the same `artifact_id` and the full set of files. The link stays the same, the version number goes up, and the old version stays in the [history](/docs/version-history).
 
 ## Managing pages in the app
 

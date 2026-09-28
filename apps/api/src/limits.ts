@@ -30,6 +30,10 @@ const CORE = {
   // MCP tool calls by one account, and the ones among them that publish a version
   mcp: { max: 600, seconds: 10 * MINUTE },
   publish: { max: 200, seconds: HOUR },
+  // Comments and replies one account writes, in the app or through agents
+  comment: { max: 120, seconds: HOUR },
+  // Emails about new comments to one person for one page; comments past it only show in the app
+  'comment-email': { max: 1, seconds: 15 * MINUTE },
 } satisfies Record<string, Rule>
 
 const defaults = new Map<string, Rule>(Object.entries(CORE))

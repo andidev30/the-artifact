@@ -29,7 +29,7 @@ Numbers and names here come from code; check them when you change it:
 | Doc | Source of truth |
 | --- | --- |
 | `configuration.md` env vars and defaults | `apps/api/src/env.ts`, `Dockerfile`, `deploy/` |
-| `configuration.md` limits | `apps/api/src/files.ts`, `artifacts.ts`, `sharing.ts`, `auth/`, `oauth/server.ts`, `thumbnails.ts`, `limits.ts`, `quota.ts`, `ee/plans.ts` |
+| `configuration.md` limits | `apps/api/src/files.ts`, `artifacts.ts`, `sharing.ts`, `comments.ts`, `auth/`, `oauth/server.ts`, `thumbnails.ts`, `limits.ts`, `quota.ts`, `ee/plans.ts` |
 | `publishing.md` tools and arguments | `apps/api/src/mcp.ts` |
 | `sharing.md`, `organizations.md` roles | `apps/api/src/artifacts.ts` (`accessLevel`), `routes/members.ts` |
 | `security.md` | `apps/api/src/content.ts`, `thumbnails.ts`, `auth/` |

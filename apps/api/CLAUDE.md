@@ -19,10 +19,11 @@ Hono on Node 26, Drizzle ORM over `postgres`, S3 via `@aws-sdk/client-s3`, MCP v
 | `src/previews.ts` | Link preview (Open Graph) tags in the HTML shell of `/a/<slug>`, for link-shared pages only; mounted by `src/web.ts` and by `api/index.js` on Vercel |
 | `src/folders.ts` | Folders of a workspace: who organizes them (`belongsTo`, `canFile`), names, filing pages. They never change access |
 | `src/sharing.ts` | Per-person shares by email |
+| `src/comments.ts`, `src/routes/comments.ts` | Comments on a page: one level of threads, moderation by editors, emails throttled by the `comment-email` limit, unread counts from `comment_reads`. Signed-in people who can open the page only |
 | `src/limits.ts` | Rate limits: counters in Postgres (`hit`, `limitRequest` for a 429 with `Retry-After`), `RATE_LIMITS` overrides, the client address (`clientIp`, `TRUST_PROXY`) |
 | `src/quota.ts` | Pages, versions and storage per workspace, checked when a page or version is added; `WORKSPACE_MAX_*` and the plan hook for `ee/` |
 | `src/instance.ts` | Instance admins, sign-up policy and instance settings |
-| `src/mcp.ts` | The MCP tools (`publish_artifact`, `list_artifacts`, `list_folders`, `move_artifact`, `get_artifact`, `rename_artifact`, `set_artifact_visibility`, `share_artifact`, `delete_artifact`, `list_versions`, `restore_version`, `download_artifact`, and `prepare_upload`/`publish_upload` when `S3_PUBLIC_ENDPOINT` is set) |
+| `src/mcp.ts` | The MCP tools (`publish_artifact`, `list_artifacts`, `list_folders`, `move_artifact`, `get_artifact`, `rename_artifact`, `set_artifact_visibility`, `share_artifact`, `delete_artifact`, `list_versions`, `restore_version`, `download_artifact`, `list_comments`, `add_comment`, `reply_comment`, `resolve_comment`, and `prepare_upload`/`publish_upload` when `S3_PUBLIC_ENDPOINT` is set) |
 | `src/uploads.ts` | Publishing by direct upload: upload links, then checking and claiming what arrived |
 | `src/oauth/` | OAuth 2.1 server for MCP clients (discovery, dynamic registration, PKCE) and the consent API |
 | `src/auth/` | Sessions, email links, passwords, Google sign-in, account lookup/creation |

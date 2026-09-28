@@ -19,6 +19,7 @@ import { admin } from './routes/admin.js'
 import { cron } from './routes/cron.js'
 import { health } from './routes/health.js'
 import { artifacts } from './routes/artifacts.js'
+import { comments } from './routes/comments.js'
 import { folders } from './routes/folders.js'
 import { invitations, members, myInvitations } from './routes/members.js'
 import { onboarding, organizations } from './routes/organizations.js'
@@ -73,6 +74,7 @@ api.post('/auth/logout', async (c) => {
 api.route('/organizations', organizations)
 api.route('/onboarding', onboarding)
 api.route('/oauth/requests', consent)
+api.route('/artifacts/:slug/comments', comments)
 api.route('/artifacts', artifacts)
 api.route('/folders', folders)
 api.route('/contact-sales', contact)
