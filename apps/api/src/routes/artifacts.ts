@@ -27,7 +27,7 @@ import { requireUser, type AuthEnv } from '../auth/session.js'
 import { commentCounts, type CommentCount } from '../comments.js'
 import { belongsTo, canFile, fileInto, folderIn, workspaceOf } from '../folders.js'
 import { db, schema } from '../db/index.js'
-import { atLimit, clientIp, hit, limitInvites, limitRequest, tooManyRequests, waitText } from '../limits.js'
+import { clientIp, hit, limitInvites, limitRequest, refund, tooManyRequests, waitText } from '../limits.js'
 import {
   accessFor,
   checkLinkPassword,
@@ -238,12 +238,11 @@ artifacts.post('/:slug/unlock', async (c) => {
   if (!artifact || !needsPassword(artifact) || !keyMatches(artifact, key)) return c.json({ error: 'Not found' }, 404)
   const given = typeof body.password === 'string' ? body.password : ''
   if (!given) return c.json({ error: 'Enter the password.', field: 'password' }, 400)
-  const locked = await atLimit('link-password', artifact.id)
+  // Counted before the check, so attempts sent at once can't all be checked; a right one is taken back
+  const locked = await hit('link-password', artifact.id)
   if (locked) return tooManyRequests(c, `Too many wrong passwords for this page. Try again in ${waitText(locked)}.`, locked)
-  if (!(await verifyPassword(given, artifact.linkPasswordHash))) {
-    await hit('link-password', artifact.id)
-    return c.json({ error: WRONG_LINK_PASSWORD, field: 'password' }, 401)
-  }
+  if (!(await verifyPassword(given, artifact.linkPasswordHash))) return c.json({ error: WRONG_LINK_PASSWORD, field: 'password' }, 401)
+  await refund('link-password', artifact.id)
   await setGrantCookie(c, artifact)
   return c.body(null, 204)
 })

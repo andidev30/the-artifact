@@ -7,7 +7,7 @@ import { audit } from '../audit.js'
 import { db, schema } from '../db/index.js'
 import type { User } from '../db/schema.js'
 import { env, isProduction } from '../env.js'
-import { atLimit, clearHits, clientIp, hit, limitRequest, tooManyRequests, waitText } from '../limits.js'
+import { clearHits, clientIp, hit, limitRequest, tooManyRequests, waitText } from '../limits.js'
 import { log } from '../log.js'
 import { hasSecondFactor, organizationsRequiringFactor } from './factors.js'
 import { authenticationOptions, PasskeyError, verifyAuthentication } from './passkeys.js'
@@ -155,9 +155,10 @@ export async function useTotpCode(userId: string, code: string, opts: { confirme
 const TOO_MANY_TRIES = 'Too many sign-in attempts from your network.'
 const EXPIRED = { error: 'Your sign-in has expired. Sign in again.', code: 'sign_in_expired' }
 
-// Wrong codes for one account count against the two-factor limit; a right one clears it
-export async function codeLimited(c: Context, userId: string) {
-  const locked = await atLimit('two-factor', userId)
+// Counts a code attempt against the account's two-factor limit before the code is checked, so
+// attempts sent at once can't all be checked; a right code clears the count
+export async function countCodeAttempt(c: Context, userId: string) {
+  const locked = await hit('two-factor', userId)
   if (!locked) return null
   return tooManyRequests(c, `Too many wrong codes. Try again in ${waitText(locked)}, or use a passkey.`, locked, { code: 'too_many_attempts' })
 }
@@ -191,13 +192,12 @@ twoFactor.post('/code', async (c) => {
   const body = (await c.req.json().catch(() => null)) as { code?: unknown } | null
   const code = typeof body?.code === 'string' ? body.code.trim() : ''
   if (!code) return c.json({ error: 'Enter the code.', field: 'code' }, 400)
-  const limited = await codeLimited(c, row.user.id)
+  const limited = await countCodeAttempt(c, row.user.id)
   if (limited) return limited
 
   const digits = /^\d{6}$/.test(code.replace(/\s/g, ''))
   const ok = digits ? await useTotpCode(row.user.id, code) : await useRecoveryCode(row.user.id, code)
   if (!ok) {
-    await hit('two-factor', row.user.id)
     signInFailed(row.user, digits ? 'wrong authenticator code' : 'wrong recovery code')
     return c.json(
       { error: digits ? 'That code is wrong or was already used. Wait for the next one.' : 'That recovery code is wrong or was already used.', field: 'code' },

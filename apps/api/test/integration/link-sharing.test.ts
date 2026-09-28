@@ -250,6 +250,22 @@ describe('link password', () => {
     expect(limited.headers.get('retry-after')).toBeTruthy()
     expect((await limited.json()).error).toMatch(/^Too many wrong passwords for this page\. Try again in/)
   })
+
+  it('checks no more wrong passwords than the limit when they arrive at the same time', async () => {
+    env.rateLimits = 'link-password=5/15m'
+    const { page } = await protectedPage()
+    const statuses = await Promise.all(Array.from({ length: 20 }, (_, i) => unlock(page.slug, `wrong ${i} guess`).then((r) => r.status)))
+    expect(statuses.filter((s) => s === 401)).toHaveLength(5)
+    expect(statuses.filter((s) => s === 429)).toHaveLength(15)
+  })
+
+  it('does not count right passwords against the limit', async () => {
+    env.rateLimits = 'link-password=3/15m'
+    const { page } = await protectedPage()
+    for (let i = 0; i < 6; i++) expect((await unlock(page.slug, 'correct horse')).status).toBe(204)
+    for (let i = 0; i < 3; i++) expect((await unlock(page.slug, `wrong ${i} guess`)).status).toBe(401)
+    expect((await unlock(page.slug, 'correct horse')).status).toBe(429)
+  })
 })
 
 describe('resetting the link', () => {

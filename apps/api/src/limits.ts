@@ -19,7 +19,7 @@ const CORE = {
   // Sign-in links emailed to one address (on top of one per 60 seconds, see src/auth/email.ts)
   'sign-in-link': { max: 10, seconds: HOUR },
   'sign-in-link-ip': { max: 30, seconds: HOUR },
-  // Wrong passwords for one address; a right one clears the count
+  // Wrong passwords for one address, at sign-in or when changing the password; a right one clears the count
   password: { max: 10, seconds: 15 * MINUTE },
   // Password sign-in, sign-up and setup attempts from one address
   'password-ip': { max: 100, seconds: 15 * MINUTE },
@@ -40,7 +40,7 @@ const CORE = {
   'access-token': { max: 20, seconds: HOUR },
   // Comments and replies one account writes, in the app or through agents
   comment: { max: 120, seconds: HOUR },
-  // Wrong passwords for one link-shared page, from anyone
+  // Wrong passwords for one link-shared page, from anyone; a right one takes its own try back
   'link-password': { max: 30, seconds: 15 * MINUTE },
   // Link password attempts from one address, right or wrong
   'link-password-ip': { max: 100, seconds: 15 * MINUTE },
@@ -131,15 +131,15 @@ export async function hit(name: string, key: string, cost = 1): Promise<number |
   return current?.wait ?? 1
 }
 
-// Like hit, for limits that count only failures: whether the key is already at its limit, without counting
-export async function atLimit(name: string, key: string): Promise<number | null> {
-  const r = rule(name)
-  if (!r) return null
-  const [row] = await db.execute<{ hits: number; wait: number }>(sql`
-    select hits, ${WAIT} as wait
-    from ${schema.rateLimits}
+// For limits that count only failures (wrong passwords and codes): count the attempt with hit before
+// checking it, then clearHits or refund once it turns out right. Counting after the check would let
+// many requests sent at once all be checked before any of them is counted.
+
+// Takes back one hit, for an attempt that turned out right where a right one shouldn't clear the count
+export async function refund(name: string, key: string) {
+  await db.execute(sql`
+    update ${schema.rateLimits} set hits = greatest(hits - 1, 0)
     where bucket = ${name} and key = ${hashKey(key)} and resets_at > now()`)
-  return row && row.hits >= r.max ? row.wait : null
 }
 
 export async function clearHits(name: string, key: string) {

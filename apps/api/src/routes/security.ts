@@ -8,10 +8,10 @@ import { hasSecondFactor, organizationsRequiringFactor } from '../auth/factors.j
 import { MAX_PASSKEYS, PasskeyError, passkeysOf, registrationOptions, verifyRegistration } from '../auth/passkeys.js'
 import { hashToken, RECENT_SIGN_IN, requireRecentSignIn, requireUser, sessionRef, type AuthEnv } from '../auth/session.js'
 import { base32Encode, newTotpSecret, otpauthUrl, sealSecret } from '../auth/totp.js'
-import { codeLimited, dropCodesWithoutFactor, recoveryCodesLeft, replaceRecoveryCodes, useTotpCode } from '../auth/twofactor.js'
+import { countCodeAttempt, dropCodesWithoutFactor, recoveryCodesLeft, replaceRecoveryCodes, useTotpCode } from '../auth/twofactor.js'
 import { db, schema } from '../db/index.js'
 import type { Passkey } from '../db/schema.js'
-import { hit, clearHits, limitRequest } from '../limits.js'
+import { clearHits, limitRequest } from '../limits.js'
 import { log } from '../log.js'
 import { instanceSettings } from '../instance.js'
 import { CONTROL_CHARS_ERROR, hasControlChars, UUID_RE } from '../validation.js'
@@ -159,12 +159,11 @@ security.post('/totp/confirm', requireRecentSignIn, async (c) => {
   const body = (await c.req.json().catch(() => null)) as { code?: unknown } | null
   const code = typeof body?.code === 'string' ? body.code.trim() : ''
   if (!code) return c.json({ error: 'Enter the 6-digit code from the app.', field: 'code' }, 400)
-  const limited = await codeLimited(c, user.id)
-  if (limited) return limited
   if (await totpEnabled(user.id)) return c.json({ error: 'Your authenticator app is already set up.' }, 409)
+  const limited = await countCodeAttempt(c, user.id)
+  if (limited) return limited
   const hadFactor = await hasSecondFactor(user.id)
   if (!(await useTotpCode(user.id, code, { confirmed: false }))) {
-    await hit('two-factor', user.id)
     return c.json({ error: 'That code is wrong. Check the time on your phone, and enter the newest code.', field: 'code' }, 400)
   }
   await clearHits('two-factor', user.id)
