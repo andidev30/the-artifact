@@ -264,7 +264,7 @@ An agent is also disconnected when it leaves an organization's workspace (you le
 
 A CI job (a test report, a nightly dashboard) can't open a browser to sign in. Give it an access token instead.
 
-1. Open **Account settings → Access tokens**, enter a name, pick the workspace it publishes to and when it expires (7, 30 or 90 days, 1 year, or no expiry; 90 days unless you choose), and choose **Create token**.
+1. Open **Account settings → Access tokens**, enter a name, pick the workspace it publishes to and when it expires (7, 30 or 90 days, 1 year, or no expiry; 90 days unless you choose), and choose **Create token**. It needs a sign-in from the last hour; if yours is older, choose **Sign in again** first.
 2. Copy the token. It starts with `art_` and is shown once; only a hash of it is stored.
 3. Save it as a secret where the job runs, e.g. a GitHub Actions secret named `ARTIFACT_TOKEN`.
 

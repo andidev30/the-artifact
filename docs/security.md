@@ -97,7 +97,16 @@ Pages are kept out of search engines. `/robots.txt` asks crawlers to stay away f
 - **Changes come from the app itself.** Every `POST`, `PUT`, `PATCH` and `DELETE` under `/api` must come from the app's own pages: the browser's `Sec-Fetch-Site` header must say `same-origin` (or `none`, which browsers send only for something you did yourself, such as reloading), or, in browsers that don't send it, `Origin` must be `APP_URL`'s origin (a `CONTENT_ORIGIN` or any other host on the same site doesn't count). A request with neither header is refused. A request with a body type must send JSON (`application/json` or another `+json` type); one with no `Content-Type` at all, usually one without a body, is accepted. So another site can't sign you in to an account of its choosing or act with your session, even from a form. Requests with a bearer token (agents, access tokens, SCIM) aren't browser sessions and are exempt, and so is the SAML response an identity provider posts back.
 - **After signing in, only this app.** Where to go next (`?next=`, SAML's `RelayState`) must be a path on `APP_URL`. Anything with a backslash or a control character, raw or percent-encoded, or that would resolve to another host, is dropped, and sign-in continues to the gallery.
 - Google sign-in uses the authorization code flow with state and PKCE, and only accepts verified Google email addresses.
+- **Sign-in doesn't say which accounts exist.** A wrong password gets the same answer for an address with an account, one without a password, and one with no account. Asking for a sign-in link answers the same for a suspended account as for any other; only using the link, from the mailbox, says the account is suspended. (Where sign-up is closed, asking for a link for an address with no account says so, because there is nothing to send.)
 - [Single sign-on](/docs/sso) (Enterprise) uses OpenID Connect with PKCE, state and nonce, checks the ID token's signature against the provider's keys, and refuses any sign-in whose address the provider didn't verify, new accounts included, unless you chose to trust its addresses; so it links to an existing account only by a verified or trusted address. Client secrets are encrypted at rest. An instance admin can always sign in without it.
+
+### Unverified accounts
+
+On a server without email, an account made by signing up with a password, or from an invitation link passed on by hand, has an address nobody checked. Anyone could have typed someone else's address first. So:
+
+- Pages shared with the address open for such an account only through the share's own link, and invitations to it don't show up in the app; see [Addresses nobody has checked](/docs/sharing#addresses-nobody-has-checked).
+- **Whoever proves the address takes the account over.** The first sign-in with an email link, an admin's sign-in link, Google or single sign-on marks the address as checked, and removes everything the account's earlier holder could get back in with: its password (an admin's link sets a new one), every session and pending sign-in, connected agents and access tokens, passkeys, the authenticator app and recovery codes, and the personal workspace's webhooks. Its pages, folders, comments and organizations stay. If this happens to your own account, set up your passkey or authenticator app again, reconnect your agents, and look through the account's pages and organizations for anything you don't recognize.
+- Deleting such an account leaves pages shared with the address, and invitations to it, waiting for the address's real owner.
 
 ## Two-factor sign-in
 
@@ -146,6 +155,7 @@ Owners and admins can turn on **Require two-factor sign-in** once they have a se
 - A session lasts 30 days and is extended while it is used. **Account settings**, **Sessions** lists yours with the browser and system (from the `User-Agent` at sign-in; no IP addresses or locations are kept) and when each one signed in and was last active, which is updated at most every 5 minutes.
 - **Sign out** ends one session and **Sign out other devices** ends every other one, at once. The list names sessions by a value derived from the stored hash, never the hash or the token.
 - Changing your password ends every other session, and so does a password set with an admin's link. Suspension and an admin's two-factor reset end all of them.
+- Changing your password leaves connected agents and access tokens working, since scripts and CI depend on them. Tick **Also disconnect agents and revoke access tokens** when you change it because someone else may have used your account.
 
 ## Agent access
 
@@ -157,7 +167,7 @@ Owners and admins can turn on **Require two-factor sign-in** once they have a se
 
 ## Access tokens
 
-- [Access tokens](/docs/connect-your-agent#publishing-from-ci) for CI are made in **Account settings** by someone signed in to the app, never by another token. Making them is [rate limited](/docs/configuration#rate-limits) per account.
+- [Access tokens](/docs/connect-your-agent#publishing-from-ci) for CI are made in **Account settings** by someone signed in to the app, never by another token, with a session that signed in within the last hour, so an older session someone got hold of can't be turned into a token that outlives it. Making them is [rate limited](/docs/configuration#rate-limits) per account.
 - A token is `art_` followed by 32 random bytes in base64url, so secret scanners can recognize one that leaks. It is shown once; the server stores only its SHA-256 hash.
 - It acts for one person in one workspace with that person's permissions, on `/mcp` and `POST /api/publish` only. The app's cookie-authenticated routes ignore it.
 - Every request checks the token against the database, with nothing cached: a revoked or expired token is refused on its next request. So is a token for an organization its owner is no longer in or that requires a second factor its owner hasn't set up, or of a suspended account. Leaving an organization, being removed from it, and suspension also delete the tokens they affect.
