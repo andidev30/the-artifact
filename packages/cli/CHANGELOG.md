@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.0](https://github.com/andidev30/the-artifact/compare/cli-v0.4.0...cli-v0.5.0) (2026-09-28)
+
+
+### Features
+
+* **cli:** publish --only and --remove to update some files of a page ([eeb61ca](https://github.com/andidev30/the-artifact/commit/eeb61ca847d83414de6c7f9b73422388ad7f79fe))
+* **cli:** publish --watch publishes a new version whenever files change ([4ee03a4](https://github.com/andidev30/the-artifact/commit/4ee03a4bac247fad026a3a90d04647ed7eaedb5d))
+* publish --watch with live updates in the viewer ([a40d1be](https://github.com/andidev30/the-artifact/commit/a40d1bebd921ad9f4b8eab0abb3d11464a50102a))
+* tags on pages, and search inside page content ([99cf7cc](https://github.com/andidev30/the-artifact/commit/99cf7cc5344f27b3cc900104f19fb0cef973baec)), closes [#145](https://github.com/andidev30/the-artifact/issues/145)
+* update one file of a page without republishing all of it ([8939c76](https://github.com/andidev30/the-artifact/commit/8939c76fa28014719fa15886cc3dcb8c6b8a09d9))
+* webhooks, tags and search inside pages (includes [#155](https://github.com/andidev30/the-artifact/issues/155)) ([5e16c7c](https://github.com/andidev30/the-artifact/commit/5e16c7c7bead28665af0436bdf05822a297c5a61))
+
 ## [0.4.0](https://github.com/andidev30/the-artifact/compare/cli-v0.3.0...cli-v0.4.0) (2026-09-28)
 
 
