@@ -1,0 +1,92 @@
+# A production-like server to load test on one machine: the Docker image built from this checkout,
+# Postgres and MinIO, as in deploy/docker-compose, with rate limits off and metrics on. From the
+# repository root:
+#   docker compose -f load/docker-compose.yml up -d --build
+#   docker compose -f load/docker-compose.yml --profile metrics up -d     # adds Prometheus on :9090
+# A project and volumes of its own, so it never touches a real install or the dev services. Postgres
+# and MinIO are published on the host (55432, 59000) for the seeding script. Remove everything with
+#   docker compose -f load/docker-compose.yml down -v
+name: the-artifact-load
+
+services:
+  app:
+    build:
+      context: ..
+    image: the-artifact:load
+    ports:
+      - '${LOAD_PORT:-8090}:3000'
+    # Docker's default seccomp profile plus what Chromium's sandbox needs, as in deploy/docker-compose
+    security_opt:
+      - seccomp=../deploy/seccomp-chromium.json
+    # What one production box might have; change them to match the machine you size for
+    cpus: ${APP_CPUS:-2}
+    mem_limit: ${APP_MEMORY:-2g}
+    environment:
+      APP_URL: http://localhost:${LOAD_PORT:-8090}
+      DATABASE_URL: postgres://artifact:artifact@db:5432/artifact_load
+      S3_ENDPOINT: http://minio:9000
+      S3_REGION: us-east-1
+      S3_BUCKET: artifact-load
+      S3_ACCESS_KEY_ID: artifact
+      S3_SECRET_ACCESS_KEY: artifact-secret
+      # k6 sends everything from one address and a few accounts, which the limits are there to stop.
+      # Set high limits instead (e.g. mcp=1000000/10m,publish=1000000/1h) to include their cost.
+      RATE_LIMITS: ${RATE_LIMITS:-off}
+      METRICS_TOKEN: ${METRICS_TOKEN:-load-test-metrics}
+      # Empty turns thumbnails off
+      CHROME_PATH: ${CHROME_PATH-/usr/bin/chromium-headless-shell}
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://localhost:3000/readyz').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      start_period: 2m
+    depends_on:
+      db:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: artifact
+      POSTGRES_PASSWORD: artifact
+      POSTGRES_DB: artifact_load
+    ports:
+      - '${LOAD_DB_PORT:-55432}:5432'
+    volumes:
+      - load-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U artifact']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: pgsty/minio
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: artifact
+      MINIO_ROOT_PASSWORD: artifact-secret
+    ports:
+      - '${LOAD_S3_PORT:-59000}:9000'
+    volumes:
+      - load-content:/data
+    healthcheck:
+      test: ['CMD', 'curl', '-fs', 'http://localhost:9000/minio/health/live']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  prometheus:
+    image: prom/prometheus
+    profiles: [metrics]
+    ports:
+      - '${LOAD_PROMETHEUS_PORT:-9090}:9090'
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+
+volumes:
+  load-data:
+  load-content:

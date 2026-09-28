@@ -1,0 +1,13 @@
+# Scrapes the app in load/docker-compose.yml (docker compose --profile metrics up). Against another
+# server, change the target and the token to its METRICS_TOKEN.
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: the-artifact
+    metrics_path: /metrics
+    authorization:
+      type: Bearer
+      credentials: load-test-metrics
+    static_configs:
+      - targets: ['app:3000']

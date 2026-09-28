@@ -47,3 +47,7 @@ The hosted database is never emptied, so its first account is long taken; specs 
 Playwright uses the installed Google Chrome (`channel: 'chrome'`). Without Chrome, run `npx playwright install chromium` and set `PW_CHROMIUM=1`.
 
 On failure, traces are kept in `test-results/`; open one with `npx playwright show-trace <file>`.
+
+## Load tests
+
+k6 scripts for opening pages, publishing through MCP, the gallery and the thumbnail queue are in `load/`, with a Compose file for a production-like server and a seeding script. They aren't part of `pnpm test`; see `load/README.md`.

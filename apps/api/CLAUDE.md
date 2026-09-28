@@ -57,6 +57,7 @@ Hono on Node 26, Drizzle ORM over `postgres`, S3 via `@aws-sdk/client-s3`, MCP v
 
 - `test/unit/` — pure functions, no services.
 - `test/integration/` — calls `app.request()` in-process against `artifact_test` and the `artifact-test` bucket. Every table is truncated before each test and files run serially.
+- `test/load/seed.ts` (`pnpm --filter @the-artifact/api load:seed`) seeds a test or staging server for the k6 scripts in `load/`; it refuses other databases.
 - Use the helpers in `test/integration/helpers.ts` (`createUser`, `createOrg`, `createPage`, `connectAgent`, `callTool`, `call`) rather than building requests by hand.
 - `src/mail.ts` is replaced by a mock in `test/integration/setup.ts` that only has the send functions. Keep non-mail code out of `mail.ts`, and add any new send function to that mock (`src/ee/mail.ts` has a mock of its own).
 - `vitest.config.ts` pins `SELF_HOSTED=false` and SMTP on. Tests that need other modes change the `env` object and restore it in `afterEach` (see `admin.test.ts`, `no-email.test.ts`).
