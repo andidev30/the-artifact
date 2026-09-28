@@ -47,6 +47,8 @@ describe('publishing by direct upload', () => {
     const uploadId = prepared.text.match(/upload_id: ([0-9a-f]+)/)![1]
     const urls = links(prepared.text)
     expect([...urls.keys()].sort()).toEqual(['img/big.png', 'index.html', 'site.css'])
+    // MinIO ignores a signed checksum of the empty body; AWS S3 refuses the upload
+    for (const url of urls.values()) expect(new URL(url).searchParams.has('x-amz-checksum-crc32')).toBe(false)
     for (const [path, url] of urls) await put(url, files[path])
 
     const res = await callTool(token, 'publish_upload', { title: 'Big page', upload_id: uploadId, files: manifest })

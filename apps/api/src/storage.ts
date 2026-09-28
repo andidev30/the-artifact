@@ -33,6 +33,11 @@ function client(endpoint: string) {
     ...(endpoint ? { endpoint } : {}),
     // A custom endpoint (MinIO and most other stores) wants bucket/key paths, not bucket.host names
     forcePathStyle: Boolean(endpoint),
+    // By default the SDK signs a CRC32 of the request body into presigned upload links, and at signing
+    // time that body is empty, so AWS S3 would refuse every real upload. Many S3-compatible stores
+    // don't support the default checksums either. Integrity is ours: the API hashes what arrives.
+    requestChecksumCalculation: 'WHEN_REQUIRED',
+    responseChecksumValidation: 'WHEN_REQUIRED',
     ...(env.storage.accessKeyId ? { credentials: { accessKeyId: env.storage.accessKeyId, secretAccessKey: env.storage.secretAccessKey } } : {}),
   })
 }
