@@ -189,7 +189,7 @@ export function Landing() {
             </div>
             <div>
               <dt>Pages run in a sandbox</dt>
-              <dd>Each page loads in an isolated frame, so scripts in an artifact can't reach the rest of the site.</dd>
+              <dd>Each page loads in an isolated frame, so scripts in a page can't reach the rest of the site.</dd>
             </div>
             <div>
               <dt>Private until you share it</dt>
