@@ -4,7 +4,9 @@ import { securityLog } from '../audit.js'
 import { db, schema } from '../db/index.js'
 import type { User } from '../db/schema.js'
 import { env } from '../env.js'
-import { instanceSettings, lockAdmins, newAccountFields } from '../instance.js'
+import { instanceSettings, lockAdmins, newAccountFields, revokeAccess } from '../instance.js'
+import { log } from '../log.js'
+import { deleteSecondFactors } from './factors.js'
 import { sameOriginPath } from './next.js'
 
 type Profile = {
@@ -59,6 +61,33 @@ export async function userExists(email: string): Promise<boolean> {
   return Boolean(row)
 }
 
+// The person who proves the address takes over an account whose address nobody checked. Whoever made it
+// may have typed someone else's address to be there first (pre-hijacking), so everything they could get
+// back in with goes: the password, sessions and pending sign-ins, agents and access tokens, passkeys, the
+// authenticator app and recovery codes, and the personal workspace's webhooks, which would keep sending
+// them events. Pages, folders, comments and memberships stay.
+async function claimAccount(user: User): Promise<User> {
+  const claimed = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(schema.users)
+      .set({ emailUnverified: false, passwordHash: null })
+      .where(and(eq(schema.users.id, user.id), eq(schema.users.emailUnverified, true)))
+      .returning()
+    if (!row) return null
+    await revokeAccess(tx, row)
+    await deleteSecondFactors(tx, row.id)
+    await tx.delete(schema.webhooks).where(eq(schema.webhooks.userId, row.id))
+    return row
+  })
+  if (!claimed) {
+    // Another sign-in claimed it at the same moment
+    const [current] = await db.select().from(schema.users).where(eq(schema.users.id, user.id))
+    return current
+  }
+  log.info('Unverified account claimed by a sign-in that proves its address', { userId: claimed.id })
+  return claimed
+}
+
 // Signing in and signing up are the same step: find the account by Google id or email, or create it
 export async function findOrCreateUser(profile: Profile): Promise<User> {
   const email = profile.email.toLowerCase()
@@ -76,9 +105,7 @@ export async function findOrCreateUser(profile: Profile): Promise<User> {
     if (found.suspendedAt) throw new AccountSuspendedError()
     await profile.checkExisting?.(found)
     // Every way in here proves the address: an email link, Google's verified email, or single sign-on
-    const byEmail = found.emailUnverified
-      ? (await db.update(schema.users).set({ emailUnverified: false }).where(eq(schema.users.id, found.id)).returning())[0]
-      : found
+    const byEmail = found.emailUnverified ? await claimAccount(found) : found
     if (profile.passwordHash) {
       // A new password signs the person out everywhere else
       await db.delete(schema.sessions).where(eq(schema.sessions.userId, byEmail.id))

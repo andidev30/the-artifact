@@ -29,13 +29,11 @@ email.post('/', async (c) => {
   const busy = await limitRequest(c, 'sign-in-link-ip', clientIp(c), 'Too many sign-in links were asked for from your network.')
   if (busy) return busy
   if (!isAccountEmail(address)) return c.json({ error: 'Enter a valid email address.' }, 400)
-  const [existing] = await db.select({ suspendedAt: schema.users.suspendedAt }).from(schema.users).where(eq(schema.users.email, address))
+  const [existing] = await db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, address))
   // An account from before EMAIL_RE was tightened still gets its link; a new address has to pass it
   if (!existing && !isEmail(address)) return c.json({ error: 'Enter a valid email address.' }, 400)
-  // A link a suspended person can't use is not worth an email
-  if (existing?.suspendedAt) {
-    return c.json({ error: 'This account is suspended. Ask an admin of this server to restore it.', code: 'account_suspended' }, 403)
-  }
+  // A suspended account gets its link like any other, and using it says the account is suspended: only
+  // whoever reads the mailbox learns that, not anyone who types the address here
   if (!existing && !(await canSignUp(address))) {
     return c.json(
       { error: 'This server only accepts accounts from invited people and certain email domains. Ask an admin to invite you.', code: 'signup_closed' },
