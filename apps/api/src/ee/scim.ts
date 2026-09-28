@@ -1,7 +1,7 @@
 import { and, asc, count, eq, exists, ne, sql, type SQL } from 'drizzle-orm'
 import { Hono, type Context } from 'hono'
 import { createMiddleware } from 'hono/factory'
-import { audit } from '../audit.js'
+import { audit, securityLog } from '../audit.js'
 import type { AuthEnv } from '../auth/session.js'
 import { hashToken, randomToken } from '../auth/session.js'
 import { db, schema } from '../db/index.js'
@@ -596,12 +596,17 @@ scimAdmin.post('/tokens', async (c) => {
     organizationId = org.id
   }
   const token = TOKEN_PREFIX + randomToken()
-  await db.insert(schema.scimTokens).values({ name, organizationId, tokenHash: hashToken(token), createdBy: c.get('user')!.id })
+  const [row] = await db
+    .insert(schema.scimTokens)
+    .values({ name, organizationId, tokenHash: hashToken(token), createdBy: c.get('user')!.id })
+    .returning({ id: schema.scimTokens.id })
+  securityLog('scim_token.created', { actorId: c.get('user')!.id, targetId: row.id, organizationId })
   return c.json({ token, ...(await describeTokens()) }, 201)
 })
 
 scimAdmin.delete('/tokens/:id', async (c) => {
   const id = c.req.param('id')
-  if (UUID_RE.test(id)) await db.delete(schema.scimTokens).where(eq(schema.scimTokens.id, id))
+  const deleted = UUID_RE.test(id) ? await db.delete(schema.scimTokens).where(eq(schema.scimTokens.id, id)).returning({ id: schema.scimTokens.id }) : []
+  if (deleted.length) securityLog('scim_token.revoked', { actorId: c.get('user')!.id, targetId: id })
   return c.json(await describeTokens())
 })

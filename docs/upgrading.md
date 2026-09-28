@@ -150,3 +150,7 @@ Only releases that need you to do something are listed. Each section is copied i
   - From a checkout: `pnpm --filter @the-artifact/api search:backfill`
 
   It reads each page's HTML from object storage, so it takes a while on a large server; the app keeps serving meanwhile, and running it again picks up where it stopped. See [Search](/docs/publishing#search).
+
+## Upgrading to 1.0.0
+
+- **Keep the server log if you need a record of what admins do.** Admin actions, deleted accounts and organizations, and changes to people's sign-in are written to it as JSON lines with an `event` field; there is no instance-level audit log in the app. See [The security log](/docs/security#the-security-log).

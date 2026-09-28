@@ -155,9 +155,10 @@ export function canDelete(artifact: Artifact, viewer: Viewer): boolean {
 }
 
 // Its versions, files, shares and thumbnails go with it; the storage sweep removes blobs nothing uses any more
-export async function deleteArtifact(artifact: Artifact) {
+export async function deleteArtifact(artifact: Artifact, actor: { id: string; email: string }) {
   await db.delete(schema.artifacts).where(eq(schema.artifacts.id, artifact.id))
   forgetPageFiles(artifact.id)
+  audit({ action: 'page.deleted', organizationId: artifact.organizationId, actor, target: pageTarget(artifact) })
 }
 
 export async function findBySlug(slug: string) {

@@ -4,6 +4,7 @@ import { Hono, type Context } from 'hono'
 import { blockedOrganizations, twoFactorRequiredError } from '../auth/factors.js'
 import { hashToken, randomToken } from '../auth/session.js'
 import { track } from '../analytics.js'
+import { audit } from '../audit.js'
 import { db, schema } from '../db/index.js'
 import { env } from '../env.js'
 import { clientIp, hit, tooManyRequests, waitText } from '../limits.js'
@@ -199,9 +200,40 @@ export async function workspaceRefusal(userId: string, organizationId: string | 
   return null
 }
 
+// For the audit log of each organization an agent was connected to or disconnected from
+export async function auditAgent(
+  action: 'agent.connected' | 'agent.disconnected',
+  clientId: string,
+  userId: string,
+  organizationIds: (string | null)[],
+  details: Record<string, unknown> = {},
+) {
+  const orgs = [...new Set(organizationIds.filter((id): id is string => Boolean(id)))]
+  if (!orgs.length) return
+  const [row] = await db
+    .select({ client: schema.oauthClients.name, email: schema.users.email })
+    .from(schema.oauthClients)
+    .innerJoin(schema.users, eq(schema.users.id, userId))
+    .where(eq(schema.oauthClients.id, clientId))
+  if (!row) return
+  for (const organizationId of orgs) {
+    audit({ action, organizationId, actor: { id: userId, email: row.email }, target: { type: 'agent', id: clientId, label: row.client }, details })
+  }
+}
+
 // Ends a connection: every token one client holds for one person, as Disconnect in settings does
-async function endConnection(clientId: string, userId: string) {
-  await db.delete(schema.oauthTokens).where(and(eq(schema.oauthTokens.clientId, clientId), eq(schema.oauthTokens.userId, userId)))
+async function endConnection(clientId: string, userId: string, via: 'agent' | 'token_reused') {
+  const ended = await db
+    .delete(schema.oauthTokens)
+    .where(and(eq(schema.oauthTokens.clientId, clientId), eq(schema.oauthTokens.userId, userId)))
+    .returning({ organizationId: schema.oauthTokens.organizationId })
+  await auditAgent(
+    'agent.disconnected',
+    clientId,
+    userId,
+    ended.map((t) => t.organizationId),
+    { via },
+  )
 }
 
 oauth.post('/oauth/token', async (c) => {
@@ -247,7 +279,7 @@ oauth.post('/oauth/token', async (c) => {
       .where(and(where, isNull(schema.oauthTokens.usedAt)))
       .returning()
     if (!old) {
-      await endConnection(found.clientId, found.userId)
+      await endConnection(found.clientId, found.userId, 'token_reused')
       return tokenError(c, 'invalid_grant', 'The refresh token was already used. Connect again.')
     }
     return c.json(await issueTokens(old.clientId, old.userId, old.organizationId))
@@ -267,7 +299,7 @@ oauth.post('/oauth/revoke', async (c) => {
     .select({ clientId: schema.oauthTokens.clientId, userId: schema.oauthTokens.userId })
     .from(schema.oauthTokens)
     .where(eq(schema.oauthTokens.id, hashToken(params.token)))
-  if (found && (!params.client_id || params.client_id === found.clientId)) await endConnection(found.clientId, found.userId)
+  if (found && (!params.client_id || params.client_id === found.clientId)) await endConnection(found.clientId, found.userId, 'agent')
   return c.body(null, 200)
 })
 

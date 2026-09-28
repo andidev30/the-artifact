@@ -8,7 +8,8 @@ import { pruneAuditEvents } from '../../src/ee/audit.js'
 import { readSigningKey, signLicense } from '../../src/ee/licenses.js'
 import { env } from '../../src/env.js'
 import { LICENSE_PUBLIC_KEYS } from '../../src/license.js'
-import { addMember, call, createOrg, createPage, createUser, type TestUser } from './helpers.js'
+import { buildExport } from '../../src/exports.js'
+import { addMember, call, callTool, connectAgent, createOrg, createPage, createUser, type TestUser } from './helpers.js'
 
 const DAY = 24 * 60 * 60 * 1000
 const original = { selfHosted: env.selfHosted, trustProxy: env.trustProxy, retention: env.auditLogRetentionDays, cronSecret: env.cronSecret }
@@ -250,6 +251,79 @@ describe('audit log recording', () => {
   })
 })
 
+describe('audit log recording of pages, retention, exports and agents', () => {
+  it('records deleted pages, retention changes, organization exports and agents connecting and disconnecting', async () => {
+    await license()
+    const owner = await createUser()
+    const org = await createOrg(owner)
+    const [gone, byAgent] = [
+      await createPage(owner, { organizationId: org.id, title: 'Roadmap' }),
+      await createPage(owner, { organizationId: org.id, title: 'Draft' }),
+    ]
+    const personal = await createPage(owner, { title: 'Mine' })
+
+    expect((await call(`/api/artifacts/${gone.slug}`, { method: 'DELETE', cookie: owner.cookie })).status).toBe(204)
+    expect((await call(`/api/artifacts/${personal.slug}`, { method: 'DELETE', cookie: owner.cookie })).status).toBe(204)
+    const retention = (json: Record<string, unknown>) => call(`/api/organizations/${org.id}/retention`, { method: 'PUT', cookie: owner.cookie, json })
+    expect((await retention({ keepDays: 30, keepVersions: null })).status).toBe(200)
+    // Saving the same policy again changes nothing, so nothing is recorded
+    expect((await retention({ keepDays: 30, keepVersions: null })).status).toBe(200)
+
+    const requested = await call('/api/exports', { cookie: owner.cookie, json: { organizationId: org.id, versions: 'current' } })
+    expect(requested.status).toBe(202)
+    const { export: created } = (await requested.json()) as { export: { id: string } }
+    expect(await buildExport(created.id)).toBe('done')
+    const { export: ready } = (await (await call(`/api/exports?organizationId=${org.id}`, { cookie: owner.cookie })).json()) as {
+      export: { downloadUrl: string }
+    }
+    expect([200, 302]).toContain((await call(ready.downloadUrl, { cookie: owner.cookie })).status)
+    // An account's own export is nobody's organization's business
+    expect((await call('/api/exports', { cookie: owner.cookie, json: { versions: 'current' } })).status).toBe(202)
+
+    const tokens = await connectAgent(owner, org.id, 'Claude Code')
+    expect((await callTool(tokens.access_token, 'delete_artifact', { artifact_id: byAgent.slug })).isError).toBeFalsy()
+    const [agent] = (await (await call('/api/me/agents', { cookie: owner.cookie })).json()) as { clientId: string }[]
+    expect((await call(`/api/me/agents/${agent.clientId}`, { method: 'DELETE', cookie: owner.cookie })).status).toBe(204)
+
+    const { events } = await log(owner, org.id)
+    expect(events.map((e) => e.action).sort()).toEqual(
+      [
+        'page.deleted',
+        'organization.retention_changed',
+        'organization.export_requested',
+        'organization.export_downloaded',
+        'agent.connected',
+        'page.deleted',
+        'agent.disconnected',
+      ].sort(),
+    )
+    const by = (action: string) => events.filter((e) => e.action === action)
+    expect(by('page.deleted').map((e) => e.target)).toEqual(
+      expect.arrayContaining([
+        { type: 'page', id: gone.slug, label: 'Roadmap' },
+        { type: 'page', id: byAgent.slug, label: 'Draft' },
+      ]),
+    )
+    expect(by('page.deleted').every((e) => e.actor?.id === owner.id)).toBe(true)
+    expect(by('organization.retention_changed')[0].details).toEqual({ keepDays: { from: null, to: 30 } })
+    expect(by('organization.export_requested')[0].details).toEqual({ exportId: created.id, versions: 'current' })
+    expect(by('organization.export_downloaded')[0].details).toEqual({ exportId: created.id, versions: 'current' })
+    expect(by('agent.connected')[0]).toMatchObject({ actor: { id: owner.id }, target: { type: 'agent', id: agent.clientId, label: 'Claude Code' } })
+    expect(by('agent.disconnected')[0]).toMatchObject({ target: { type: 'agent', id: agent.clientId }, details: { via: 'settings' } })
+  })
+
+  it('records an agent that signs itself out', async () => {
+    await license()
+    const owner = await createUser()
+    const org = await createOrg(owner)
+    const tokens = await connectAgent(owner, org.id)
+    const res = await call('/oauth/revoke', { form: { token: tokens.refresh_token } })
+    expect(res.status).toBe(200)
+    const { events } = await log(owner, org.id)
+    expect(events.find((e) => e.action === 'agent.disconnected')).toMatchObject({ actor: { id: owner.id }, details: { via: 'agent' } })
+  })
+})
+
 describe('audit log access', () => {
   it('is for owners and admins; everyone else gets a 404', async () => {
     await license()
@@ -301,7 +375,7 @@ describe('audit log filters and paging', () => {
     expect(dates(second)).toEqual(['2026-03-01'])
     expect(second.next).toBeNull()
 
-    const bad = await call(`/api/organizations/${org.id}/audit-log?action=page.deleted`, { cookie: owner.cookie })
+    const bad = await call(`/api/organizations/${org.id}/audit-log?action=page.destroyed`, { cookie: owner.cookie })
     expect(bad.status).toBe(400)
     expect(await bad.json()).toMatchObject({ field: 'action' })
     expect((await call(`/api/organizations/${org.id}/audit-log?from=yesterday`, { cookie: owner.cookie })).status).toBe(400)

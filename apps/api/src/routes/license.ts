@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import { securityLog } from '../audit.js'
 import type { AuthEnv } from '../auth/session.js'
 import { db, schema } from '../db/index.js'
 import { env } from '../env.js'
@@ -54,6 +55,12 @@ license.put('/', async (c) => {
     .insert(schema.instanceSettings)
     .values({ id: 1, signupPolicy: 'open', ...set })
     .onConflictDoUpdate({ target: schema.instanceSettings.id, set })
+  securityLog('license.changed', {
+    actorId: c.get('user')!.id,
+    targetId: parsed.license.id,
+    customer: parsed.license.customer,
+    expiresAt: parsed.license.expiresAt.toISOString(),
+  })
   return c.json(await describe())
 })
 
@@ -61,5 +68,6 @@ license.put('/', async (c) => {
 license.delete('/', async (c) => {
   const set = { licenseKey: null, licenseUpdatedBy: c.get('user')!.id, licenseUpdatedAt: new Date() }
   await db.update(schema.instanceSettings).set(set)
+  securityLog('license.removed', { actorId: c.get('user')!.id, targetId: null })
   return c.json(await describe())
 })

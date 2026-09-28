@@ -1,7 +1,7 @@
 import { and, eq, sql } from 'drizzle-orm'
 import { Hono, type Context } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
-import { audit } from '../../audit.js'
+import { audit, securityLog } from '../../audit.js'
 import type { AuthEnv } from '../../auth/session.js'
 import { continueSignIn } from '../../auth/twofactor.js'
 import { AccountSuspendedError, afterSignInUrl, findOrCreateUser, safeNext, signInErrorUrl, SignupClosedError } from '../../auth/users.js'
@@ -245,6 +245,16 @@ ssoAdmin.get('/test-result', (c) => {
   return c.json(result)
 })
 
+// What the security log line of a change says about the connection: never its secret
+const logged = (conn: SsoConnection) => ({
+  name: conn.name,
+  protocol: conn.protocol,
+  enabled: conn.enabled,
+  required: conn.required,
+  allowedDomains: conn.allowedDomains,
+  organizationId: conn.organizationId,
+})
+
 const describe = (conn: SsoConnection) => (conn.protocol === 'saml' ? describeSaml(conn) : describeConnection(conn))
 
 // A SAML connection, added (existing null) or changed; the IdP comes from its metadata
@@ -271,7 +281,7 @@ async function saveSaml(c: Context, existing: SsoConnection | null): Promise<Res
         .insert(schema.ssoConnections)
         .values({ protocol: 'saml', createdBy: c.get('user')!.id, ...values })
         .returning()
-  log.info(existing ? 'SSO connection changed' : 'SSO connection added', { connectionId: row.id, userId: c.get('user')!.id })
+  securityLog(existing ? 'sso_connection.changed' : 'sso_connection.added', { actorId: c.get('user')!.id, targetId: row.id, ...logged(row) })
   return c.json(describeSaml(row), existing ? 200 : 201)
 }
 
@@ -314,7 +324,7 @@ ssoAdmin.post('/', async (c) => {
       createdBy: c.get('user')!.id,
     })
     .returning()
-  log.info('SSO connection added', { connectionId: row.id, userId: c.get('user')!.id })
+  securityLog('sso_connection.added', { actorId: c.get('user')!.id, targetId: row.id, ...logged(row) })
   return c.json(describeConnection(row), 201)
 })
 
@@ -346,7 +356,7 @@ ssoAdmin.put('/:id', async (c) => {
     })
     .where(eq(schema.ssoConnections.id, conn.id))
     .returning()
-  log.info('SSO connection changed', { connectionId: row.id, userId: c.get('user')!.id })
+  securityLog('sso_connection.changed', { actorId: c.get('user')!.id, targetId: row.id, ...logged(row) })
   return c.json(describeConnection(row))
 })
 
@@ -355,7 +365,7 @@ ssoAdmin.delete('/:id', async (c) => {
   const conn = await findConnection(c.req.param('id'))
   if (!conn) return c.json({ error: 'This connection no longer exists.' }, 404)
   await db.delete(schema.ssoConnections).where(eq(schema.ssoConnections.id, conn.id))
-  log.info('SSO connection removed', { connectionId: conn.id, userId: c.get('user')!.id })
+  securityLog('sso_connection.removed', { actorId: c.get('user')!.id, targetId: conn.id })
   return c.body(null, 204)
 })
 

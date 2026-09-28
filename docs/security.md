@@ -122,7 +122,7 @@ Ten single-use codes, each 10 characters from an alphabet without look-alike cha
 
 ### Losing every factor
 
-There is no self-service way around the second factor: that would be the way in for an attacker too. An instance admin can **Reset two-factor sign-in** for someone else under **Server admin**, **People**. It deletes their passkeys, authenticator app, recovery codes and pending sign-ins, signs them out everywhere, and writes a warning to the log with both account ids. Admins can't do it for themselves (they use their own settings, or another admin). With a shell on the server, `reset-two-factor.js` does the same for any account, so the only admin isn't locked out for good (see [An existing install without an admin](/docs/self-hosting#an-existing-install-without-an-admin)). Organization owners and admins can't reset anyone's second factor.
+There is no self-service way around the second factor: that would be the way in for an attacker too. An instance admin can **Reset two-factor sign-in** for someone else under **Server admin**, **People**. It deletes their passkeys, authenticator app, recovery codes and pending sign-ins, signs them out everywhere, and writes a warning to the log with both account ids (`user.two_factor_reset` in [The security log](#the-security-log)). Admins can't do it for themselves (they use their own settings, or another admin). With a shell on the server, `reset-two-factor.js` does the same for any account, so the only admin isn't locked out for good (see [An existing install without an admin](/docs/self-hosting#an-existing-install-without-an-admin)). Organization owners and admins can't reset anyone's second factor.
 
 ### Organizations that require it
 
@@ -160,8 +160,31 @@ Owners and admins can turn on **Require two-factor sign-in** once they have a se
 - On a self-hosted install the first account becomes the instance admin; more can be added from the admin area, or from the server with the make-admin script. See [The instance admin](/docs/self-hosting#the-instance-admin).
 - Admins manage accounts and organizations. They can't read private pages through the admin area: it shows counts, not page content.
 - Suspending someone deletes their sessions, agent tokens and access tokens at once, and refuses their sign-in links, Google sign-in, passkeys and MCP calls until they are unsuspended. Links to page content made for them (the sandboxed frame's link and an agent's download link) are signed rather than stored, so they are checked against suspension each time they are used and stop working at once too.
-- Resetting someone's two-factor sign-in is logged; see [Losing every factor](#losing-every-factor).
-- The last admin can't be removed, suspended or deleted, so an install always keeps a way in.
+- Everything admins do in the admin area is written to the server log; see [The security log](#the-security-log). There is no instance-level audit log in the app.
+- The last admin can't be removed, suspended or deleted, so an install always keeps a way in. Changes to admins, and deleting accounts, happen one at a time and check again under a lock, so two admins demoting or deleting each other at the same moment still leave one. Deleting an account locks the owners of its organizations the same way leaving and changing roles do, so two owners deleting their accounts at once, or one deleting while the other leaves, can't leave an organization with people but no owner.
+
+## The security log
+
+Organizations have an [audit log](/docs/audit-log) on installs with an Enterprise license. Events that belong to no organization, or that remove one, are written to the server log instead, on every install, as one JSON line each (with Docker Compose, `docker compose logs app` shows it). Each line has an `event`, the account that did it (`actorId`, empty for scripts run on the server), what it was about (`targetId`), the request's `ip`, and the request id. Admin actions and deletions are warnings (`"level":"warn"`); people's own sign-in changes are information.
+
+| `event` | When |
+| --- | --- |
+| `admin.granted`, `admin.revoked` | An admin makes someone an admin or removes it, or `make-admin.js` runs on the server |
+| `user.suspended`, `user.reactivated`, `user.deleted` | An admin suspends, reactivates or deletes someone |
+| `user.two_factor_reset` | An admin, or `reset-two-factor.js` on the server, resets someone's two-factor sign-in |
+| `user.sign_in_link_created` | An admin makes a sign-in link on a server without email. For an existing account (`newAccount: false`) the link sets a new password, so treat it like a password reset |
+| `organization.deleted` | An admin deletes an organization, or it goes with the account of its only member. Its audit log goes with it, so this line is what is left |
+| `instance.settings_changed` | An admin changes the sign-up policy, its domains or the instance name, with what changed |
+| `license.changed`, `license.removed` | An admin enters or removes the license key |
+| `scim_token.created`, `scim_token.revoked` | An admin creates or revokes a [SCIM](/docs/scim) token |
+| `sso_connection.added`, `sso_connection.changed`, `sso_connection.removed` | An admin changes a [single sign-on](/docs/sso) provider, with its domains and whether it is on and required. Never its secret |
+| `account.deleted` | Someone deletes their own account |
+| `account.password_changed`, `account.password_added` | Someone changes or adds their password, or a sign-in link sets it |
+| `account.passkey_added`, `account.passkey_removed`, `account.authenticator_added`, `account.authenticator_removed`, `account.recovery_codes_created` | Someone changes their two-factor sign-in |
+| `account.sessions_revoked` | Someone signs out their other sessions |
+| `access_token.created`, `access_token.revoked` | An access token is made or revoked, personal ones included |
+
+The log holds account ids rather than names, except the address a sign-in link was made for. Keep it as long as you need this record, for example by sending it to a log collector; the server itself doesn't keep it.
 
 ## Page views
 

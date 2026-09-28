@@ -1,5 +1,6 @@
 import { and, eq, gt } from 'drizzle-orm'
 import { track, type SignUpMethod } from '../analytics.js'
+import { securityLog } from '../audit.js'
 import { db, schema } from '../db/index.js'
 import type { User } from '../db/schema.js'
 import { env } from '../env.js'
@@ -80,6 +81,7 @@ export async function findOrCreateUser(profile: Profile): Promise<User> {
       await db.delete(schema.sessions).where(eq(schema.sessions.userId, byEmail.id))
       await db.delete(schema.pendingSignIns).where(eq(schema.pendingSignIns.userId, byEmail.id))
       const [updated] = await db.update(schema.users).set({ passwordHash: profile.passwordHash }).where(eq(schema.users.id, byEmail.id)).returning()
+      securityLog('account.password_changed', { actorId: byEmail.id, targetId: byEmail.id, via: 'sign-in link' })
       return updated
     }
     if (profile.googleSub && !byEmail.googleSub) {

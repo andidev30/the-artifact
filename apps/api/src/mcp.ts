@@ -915,7 +915,7 @@ function buildServer(auth: McpAuth) {
     limited(async ({ artifact_id }) => {
       const artifact = await findBySlug(parseArtifactRef(artifact_id))
       if (!artifact || !canDelete(artifact, viewer)) return text(`No page you own has the id "${artifact_id}". Only the owner of a page can delete it.`, true)
-      await deleteArtifact(artifact)
+      await deleteArtifact(artifact, viewer)
       return text(`Deleted "${artifact.title}". Its link no longer works.`)
     }),
   )
