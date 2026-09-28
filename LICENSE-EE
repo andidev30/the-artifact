@@ -3,37 +3,49 @@ The Artifact Enterprise License
 Copyright (c) 2026 andidev30
 
 This license applies to every file in a directory named "ee" in this repository
-(currently apps/api/src/ee and apps/web/src/ee) and to nothing else. Everything
-outside those directories is licensed under the GNU Affero General Public
-License version 3, in the LICENSE file.
+(currently apps/api/src/ee, apps/web/src/ee and ee) and to nothing else.
+Everything outside those directories is licensed under the GNU Affero General
+Public License version 3, in the LICENSE file.
 
 1. Definitions
 
 "Licensor" means the copyright holder named above. "Software" means the files
 this license applies to. "Hosted mode" means running the Software with the
 SELF_HOSTED environment variable set to "false", which turns on the features of
-the hosted service (the marketing site, contact sales form and workspace choice
-in onboarding).
+the hosted service (the marketing site, contact sales form, onboarding and
+issuing license keys). "Enterprise features" means the parts of the Software
+that a self-hosted install turns on with a license key, such as single sign-on,
+SCIM provisioning, the audit log and version retention. "License key" means a
+key issued by the Licensor, signed with a signing key the Licensor controls,
+that names a customer, a number of seats and an expiry date.
 
 2. What you may do without an agreement
 
 a. Read, copy and modify the Software to develop and test The Artifact.
 b. Run the Software unmodified as part of a self-hosted install of The Artifact
-   that is not in hosted mode. The Software stays inactive in that case.
+   that is not in hosted mode. Without a valid license key, the enterprise
+   features stay inactive in that case.
 c. Contribute changes back to this repository.
 
-3. What needs an agreement with the Licensor
+3. What needs a license key or an agreement with the Licensor
 
-Running the Software, or a modified version of it, in hosted mode in
-production, or offering it to third parties as a service, requires a separate
-written agreement with the Licensor.
+a. Using the enterprise features of a self-hosted install in production
+   requires a valid license key issued to you by the Licensor, for no more
+   people than its seats and until it expires (plus the grace period the
+   Software allows after expiry). A key issued to someone else, or one you sign
+   yourself, is not a valid license key.
+b. Running the Software, or a modified version of it, in hosted mode in
+   production, or offering it to third parties as a service, requires a
+   separate written agreement with the Licensor.
 
 4. Restrictions
 
 You may not sell, sublicense or distribute the Software, or a modified version
 of it, except as part of an unmodified copy of this repository or as allowed by
-an agreement under section 3. You may not remove or change this license or any
-copyright notice.
+section 3. You may not remove or change this license or any copyright notice.
+You may not turn on the enterprise features without a valid license key, for
+example by changing the Software, by changing the code outside it that checks
+license keys, or by adding keys the Licensor did not issue.
 
 5. Contributions
 
