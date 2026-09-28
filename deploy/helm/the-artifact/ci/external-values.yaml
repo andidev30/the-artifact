@@ -1,0 +1,37 @@
+# Your own Postgres and bucket, credentials in Secrets of your own, no thumbnails, behind an ingress
+appUrl: https://artifact.example.com
+postgresql:
+  enabled: false
+externalDatabase:
+  host: db.example.com
+  user: artifact
+  database: artifact
+  params: sslmode=require
+  existingSecret: artifact-db
+  existingSecretPasswordKey: password
+minio:
+  enabled: false
+externalS3:
+  endpoint: https://account.r2.cloudflarestorage.com
+  region: auto
+  bucket: artifact
+  existingSecret: artifact-s3
+thumbnails:
+  enabled: false
+existingSecret: artifact-settings
+smtp:
+  host: smtp.example.com
+  user: artifact
+ingress:
+  enabled: true
+  className: nginx
+  host: artifact.example.com
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
+metrics:
+  serviceMonitor:
+    enabled: true
+workspaceQuota:
+  maxPages: 500
+  maxStorage: 10GB
+rateLimits: mcp=2000/10m

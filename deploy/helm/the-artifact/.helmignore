@@ -1,0 +1,10 @@
+.DS_Store
+.git/
+*.swp
+*.tmp
+*.orig
+*~
+.idea/
+.vscode/
+# Values files CI renders the chart with
+ci/

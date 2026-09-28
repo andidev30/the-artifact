@@ -28,7 +28,7 @@ A change is breaking when a server or an agent that worked before can stop worki
 | Database | A migration that the previous version can't run on, so going back means restoring a backup rather than starting the older image |
 | Agents | An MCP tool removed or renamed, an argument removed, renamed or made required, or a result that changes shape (see [Publishing pages](/docs/publishing)) |
 | API | A route under `/api` removed or changed in a way that breaks existing callers |
-| Deploy files | A change to `deploy/docker-compose` or `deploy/kubernetes` that needs you to edit your own copy, move a file or change a volume |
+| Deploy files | A change to `deploy/docker-compose` or `deploy/kubernetes` that needs you to edit your own copy, move a file or change a volume, or a Helm value removed, renamed or with a changed default |
 | Requirements | A newer Postgres, Kubernetes or Docker Compose than before |
 
 New settings with a default, new MCP tools and new optional arguments are not breaking. Database changes that only add tables or columns are not breaking either, but they still apply on start, so read [Going back to an older release](#going-back-to-an-older-release).
@@ -49,7 +49,7 @@ Pin a server to a version: `0.2` to get fixes on every pull, or an exact version
 
 ## Before you upgrade
 
-1. Read the release notes of every release between yours and the new one, and the upgrade notes below for each of them. Your version is `ARTIFACT_VERSION` in `.env` (Docker Compose) or `newTag` in `kustomization.yaml` (Kubernetes).
+1. Read the release notes of every release between yours and the new one, and the upgrade notes below for each of them. Your version is `ARTIFACT_VERSION` in `.env` (Docker Compose), the chart version `helm list -n the-artifact` shows (Helm) or `newTag` in `kustomization.yaml` (Kubernetes manifests).
 2. Take a backup of the database and the content storage; see [Backup and restore](/docs/backups). Database changes apply when the new version starts.
 3. Do what the **Upgrading** sections say, in order, oldest release first.
 
@@ -67,6 +67,18 @@ docker compose up -d
 ```
 
 `docker compose up -d` pulls the image and restarts the app with it. Your data stays in its volumes. When you pin a major.minor like `0.2`, get its newest patch with `docker compose pull && docker compose up -d`. See [Updating](/docs/self-hosting#updating) for thumbnails of old pages and for installs that built the image themselves.
+
+## Helm
+
+The chart is published with every release, under the same version, and runs that release's image. Upgrade to the new version with the values you installed with:
+
+```sh
+helm upgrade the-artifact oci://ghcr.io/andidev30/charts/the-artifact --version 0.2.0 \
+  --namespace the-artifact -f values.yaml
+kubectl -n the-artifact rollout status deploy/the-artifact
+```
+
+Upgrade notes that change values say so. See [Upgrading a Helm install](/docs/kubernetes#upgrading-a-helm-install).
 
 ## Kubernetes
 

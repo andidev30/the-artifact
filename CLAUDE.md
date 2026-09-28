@@ -9,7 +9,7 @@ Hosts the HTML pages coding agents build. An agent publishes through the MCP ser
 | `apps/api` | Hono API, MCP server, OAuth 2.1 server, thumbnail renderer | see `apps/api/CLAUDE.md` |
 | `apps/web` | React 19 + Vite single-page app, including the in-app docs | see `apps/web/CLAUDE.md` |
 | `docs/` | User and operator docs, rendered at `/docs` and read on GitHub | see `docs/CLAUDE.md` |
-| `deploy/` | Docker Compose and Kubernetes manifests for self-hosting | see `deploy/CLAUDE.md` |
+| `deploy/` | Docker Compose, Kubernetes manifests and the Helm chart for self-hosting | see `deploy/CLAUDE.md` |
 | `apps/*/src/ee/` | Hosted-service-only code (marketing, contact sales, workspace choice), under `LICENSE-EE` | see `apps/*/src/ee/CLAUDE.md` |
 | `e2e/` | Playwright specs | setup in `TESTING.md` |
 | `load/` | k6 load tests, a Compose file for a production-like server, metrics sampling | see `load/README.md`; seeding in `apps/api/test/load/seed.ts` |

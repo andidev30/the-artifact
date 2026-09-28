@@ -1,6 +1,6 @@
 # Configuration reference
 
-Settings are environment variables. With Docker Compose they go in `deploy/docker-compose/app.env`, except the ones Compose reads itself (`ARTIFACT_VERSION`, `ARTIFACT_PORT`, the passwords and `S3_*`), which go in `.env`. On Kubernetes they all go in `deploy/kubernetes/app.env`. The Docker image sets the ones marked "set by the image".
+Settings are environment variables. With Docker Compose they go in `deploy/docker-compose/app.env`, except the ones Compose reads itself (`ARTIFACT_VERSION`, `ARTIFACT_PORT`, the passwords and `S3_*`), which go in `.env`. On Kubernetes they all go in `deploy/kubernetes/app.env`, or in Helm values, which name them differently (see [Install with Helm](/docs/kubernetes#install-with-helm)); `extraEnv` passes any of them as is. The Docker image sets the ones marked "set by the image".
 
 ## Required
 

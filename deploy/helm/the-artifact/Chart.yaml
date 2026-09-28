@@ -1,0 +1,20 @@
+apiVersion: v2
+name: the-artifact
+description: Hosts the HTML pages coding agents build. The app, with an optional bundled Postgres and MinIO for trying it out.
+type: application
+# The chart is released with the app: the release PR bumps both lines through their markers
+version: 0.1.0 # x-release-please-version
+appVersion: '0.1.0' # x-release-please-version
+kubeVersion: '>=1.27.0-0'
+home: https://github.com/andidev30/the-artifact
+sources:
+  - https://github.com/andidev30/the-artifact
+keywords:
+  - mcp
+  - agents
+  - html
+maintainers:
+  - name: andidev30
+    url: https://github.com/andidev30
+annotations:
+  licenses: AGPL-3.0-only
