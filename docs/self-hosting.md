@@ -106,6 +106,7 @@ Admins see **Server admin** in the menu under their name, which opens `/admin`:
   - **Delete** an account, with the same rules as deleting your own in Account settings: organizations with nobody else in them go with it, and someone who is the only owner of an organization with other members can't be deleted until another owner is chosen or the organization is deleted.
 - **Organizations**: every organization with its owners, member and page counts. Deleting one removes its pages, memberships and invitations; the people keep their accounts.
 - **Sign-up**: who can create an account, and an optional instance name shown next to the logo.
+- **License**: the Enterprise license key, if you have one: who it is for, until when, and the seats in use. The server checks it offline. See [Licenses](/docs/licenses).
 
 ### Sign-up policy
 

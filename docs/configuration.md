@@ -32,6 +32,7 @@ Settings are environment variables. With Docker Compose they go in `deploy/docke
 | `WORKSPACE_MAX_PAGES` | no limit | Most pages one workspace (a personal workspace or an organization) holds. See [Workspace quotas](/docs/configuration#workspace-quotas). |
 | `WORKSPACE_MAX_VERSIONS` | no limit | Most versions of pages, all pages of one workspace together |
 | `WORKSPACE_MAX_STORAGE` | no limit | Most storage one workspace uses, e.g. `10GB` or `500MB` (in powers of 1024) |
+| `LICENSE_SIGNING_KEY` | empty | Hosted service only. The Ed25519 private key that signs [license keys](/docs/licenses#issue-license-keys-on-the-hosted-service) for self-hosted installs, as printed by `license:keygen`. Empty means **Server admin** can't issue keys. A self-hosted install never needs it; it checks keys with the public keys in its code. |
 | `SELF_HOSTED` | `true` | Skips the marketing pages; `/` opens the app. Also makes the first account the instance admin. Only the hosted service sets it to `false`. |
 | `PORT` | `3000` | Port inside the container |
 | `ARTIFACT_VERSION` | the release the compose file was written for | Release of `ghcr.io/andidev30/the-artifact` that `deploy/docker-compose/docker-compose.yml` runs: an exact version like `0.2.0`, or a major.minor like `0.2`. Set it in the `.env` next to the compose file. See [Upgrading](/docs/upgrading). |
@@ -68,6 +69,7 @@ Instance admins change these under **Server admin** (`/admin`); they are stored 
 | --- | --- |
 | Sign-up policy | Anyone, listed email domains, or invited people only. Anyone until it is saved. |
 | Instance name | Optional, up to 60 characters, shown next to the logo in the signed-in header |
+| License key | Self-hosted installs only. Turns on enterprise features; see [Licenses](/docs/licenses) |
 
 ## Limits
 

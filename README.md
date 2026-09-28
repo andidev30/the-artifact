@@ -153,4 +153,4 @@ Contributions are welcome: what's planned is on the [project board](https://gith
 
 The Artifact is free software under the [GNU Affero General Public License v3.0](LICENSE): self-host it, change it and share it. If you run a modified version as a service, share your changes too.
 
-The code in `ee/` folders (`apps/api/src/ee`, `apps/web/src/ee`) powers only the hosted service (its marketing site, contact form and workspace choice) and is under the separate [Enterprise License](LICENSE-EE). A self-hosted install doesn't use it.
+The code in `ee/` folders (`apps/api/src/ee`, `apps/web/src/ee`) is under the separate [Enterprise License](LICENSE-EE). It holds what only the hosted service runs (its marketing site, contact form, workspace choice and issuing license keys) and enterprise features, which a self-hosted install turns on with a license key. Without a key, a self-hosted install does everything described in the docs; the key is checked offline and nothing phones home. See [Licenses](docs/licenses.md).

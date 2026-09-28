@@ -11,7 +11,7 @@ Hosts the HTML pages coding agents build. An agent publishes through the MCP ser
 | `packages/cli` | `@the-artifact/cli` on npm: `publish`, `list`, `share`, `login` over `POST /api/publish`, `/mcp` and the OAuth server. No dependencies | versions on its own (`cli-vX.Y.Z`); its tests against a real server are in `apps/api/test/integration/cli.test.ts` |
 | `docs/` | User and operator docs, rendered at `/docs` and read on GitHub | see `docs/CLAUDE.md` |
 | `deploy/` | Docker Compose, Kubernetes manifests and the Helm chart for self-hosting | see `deploy/CLAUDE.md` |
-| `apps/*/src/ee/` | Hosted-service-only code (marketing, contact sales, workspace choice), under `LICENSE-EE` | see `apps/*/src/ee/CLAUDE.md` |
+| `apps/*/src/ee/` | Hosted-service-only code (marketing, contact sales, workspace choice, issuing license keys) and enterprise features a license key unlocks on a self-hosted install, under `LICENSE-EE` | see `apps/*/src/ee/CLAUDE.md` |
 | `e2e/` | Playwright specs | setup in `TESTING.md` |
 | `load/` | k6 load tests, a Compose file for a production-like server, metrics sampling | see `load/README.md`; seeding in `apps/api/test/load/seed.ts` |
 | `docker-compose.yml` | Dev services only: Postgres, MinIO, Mailpit | not for deploying |
@@ -44,7 +44,9 @@ Create the test database once: `docker compose exec postgres createdb -U artifac
 
 ## Licensing
 
-Everything is AGPL-3.0 (`LICENSE`) except folders named `ee/`, which are under `LICENSE-EE`. Hosted-service-only features go in `ee/`; anything a self-hosted install uses stays outside it. Don't copy code from `ee/` into core.
+Everything is AGPL-3.0 (`LICENSE`) except folders named `ee/`, which are under `LICENSE-EE`, as in GitLab EE. `ee/` holds two kinds of code: hosted-service-only features, and enterprise features that a self-hosted install runs only with a valid license key. Everything a self-hosted install needs without a license stays outside `ee/`, and so does checking license keys (`apps/api/src/license.ts`), because every install runs it. Don't copy code from `ee/` into core.
+
+An enterprise feature asks one gate, `hasEnterprise()` from `apps/api/src/license.ts` (or the `requireEnterprise` middleware on its routes), and does nothing without it. The gate is on while a self-hosted install's license is active and for 14 days after it expires; it is off on the hosted service until its Enterprise plan exists. Turning a feature off never deletes data. See `docs/licenses.md`.
 
 ## Conventions
 
