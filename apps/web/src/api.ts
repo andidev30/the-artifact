@@ -593,6 +593,32 @@ export function deleteAccount(confirmEmail: string) {
   return request<null>('/me', { method: 'DELETE', json: { confirmEmail } })
 }
 
+// A zip of an account's data, or of an organization's for its owners, built in the background
+export type DataExport = {
+  id: string
+  status: 'building' | 'ready' | 'failed'
+  allVersions: boolean
+  createdAt: string
+  finishedAt: string | null
+  // The download link stops working then
+  expiresAt: string | null
+  size: number | null
+  pagesDone: number
+  pagesTotal: number
+  error: string | null
+  downloadUrl: string | null
+}
+
+// organizationId null for your own account
+export async function getDataExport(organizationId: string | null) {
+  const query = organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : ''
+  return (await request<{ export: DataExport | null }>(`/exports${query}`)).export
+}
+
+export async function startDataExport(organizationId: string | null, versions: 'all' | 'current') {
+  return (await request<{ export: DataExport }>('/exports', { method: 'POST', json: { organizationId, versions } })).export
+}
+
 // Page history, renaming, deleting and thumbnails
 
 export type ArtifactVersion = {

@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { Hono, type MiddlewareHandler } from 'hono'
 import { env } from '../env.js'
+import { resumeExports, sweepExports } from '../exports.js'
 import { runPruners, sweepStorage } from '../gc.js'
 import { deleteExpiredLimits } from '../limits.js'
 import { deleteOldViews } from '../views.js'
@@ -25,7 +26,17 @@ export const requireCronSecret: MiddlewareHandler = async (c, next) => {
 
 cron.use(requireCronSecret)
 
+// Also moves on data exports whose settings page was closed while they were built, for a bounded
+// time so the whole run stays within a serverless function's limit
+const EXPORT_BUDGET_MS = 20_000
+
 cron.get('/sweep', async (c) => {
   await runPruners()
-  return c.json({ ...(await sweepStorage()), rateLimits: await deleteExpiredLimits(), views: await deleteOldViews() })
+  return c.json({
+    ...(await sweepStorage()),
+    rateLimits: await deleteExpiredLimits(),
+    views: await deleteOldViews(),
+    exports: await sweepExports(),
+    exportSteps: await resumeExports({ budgetMs: EXPORT_BUDGET_MS }),
+  })
 })

@@ -1,6 +1,6 @@
 # Privacy Policy
 
-Last updated: 28 September 2026
+Last updated: 29 September 2026
 
 This policy explains what personal data The Artifact's hosted service at {{APP_URL}} (the "service") collects, why, who else handles it, how long we keep it, and what you can ask of us.
 
@@ -80,6 +80,10 @@ To see where people get stuck, we record a few steps in our own database, the fi
 
 We don't send these events to any third-party analytics service, and they use no cookies. We keep them for 13 months. They are deleted when you delete your account.
 
+### Data exports
+
+When you ask for an export of your data in **Account settings**, or an owner asks for one of an organization, we build a zip file of it in our file storage and record who asked for it, when, whether it holds every version, and how far the build got. When it is ready we email you a link to settings, where you download it. The zip is kept for 24 hours after it is ready and only the person who asked for it can download it, signed in. See [Exporting your data](/docs/exporting-your-data) for what is in it.
+
 ### Contact sales
 
 If you use the contact sales form, we receive your name, work email, company, team size and message by email. We use it only to reply to you. We don't store it in the service's database. We keep the email as long as we need it to talk with you, and delete it when you ask.
@@ -142,6 +146,7 @@ We use no advertising cookies and no tracking cookies. Website analytics use no 
 - Records of who opened a page: 90 days.
 - Product events: 13 months, or until you delete your account.
 - Rate limit counters: about a day after their window ends.
+- Data exports: the zip can be downloaded for 24 hours, and the daily cleanup deletes it after that. The record that you asked for one goes with it; one that failed goes after a day.
 - Vercel's request logs and website analytics: as long as Vercel keeps them for our plan.
 
 ### Deleting your account
@@ -151,7 +156,7 @@ You can delete your account in **Account settings → Delete account**. Before y
 - Your personal pages are deleted, with their history.
 - Organizations with nobody else in them are deleted, with their pages.
 - Pages you published in organizations with other people stay in those organizations and move to another owner. The organization can keep them.
-- Your sessions, passkeys, authenticator app, recovery codes, agent connections, access tokens, memberships, product events, and shares and invitations to your email address are deleted.
+- Your sessions, passkeys, authenticator app, recovery codes, agent connections, access tokens, memberships, product events, data exports, and shares and invitations to your email address are deleted.
 - Comments you wrote stay on pages that remain, shown as "Deleted account". Versions you published stay without your name.
 
 You can't delete your account while you are the only owner of an organization that has other people in it. Make someone else an owner first, or remove the other people.
@@ -180,7 +185,7 @@ Under UU PDP you can:
 - get your data in a format you can use elsewhere
 - complain to the authority for personal data protection in Indonesia
 
-Much of this you can do yourself: change your name and sign-in methods in **Account settings**, download any page as a zip file, and delete pages or your account. For anything else, email [andidev30.personal@gmail.com](mailto:andidev30.personal@gmail.com) from the address on your account. We may ask you to confirm it's you. We reply within the time limits of UU PDP.
+Much of this you can do yourself: change your name and sign-in methods in **Account settings**, download any page as a zip file, download a copy of all your data (every page you own with its versions, sharing and comments, and your account, as files and JSON you can use elsewhere) in **Account settings → Export your data** (see [Exporting your data](/docs/exporting-your-data)), and delete pages or your account. For anything else, email [andidev30.personal@gmail.com](mailto:andidev30.personal@gmail.com) from the address on your account. We may ask you to confirm it's you. We reply within the time limits of UU PDP.
 
 If you are in the European Economic Area or the United Kingdom, you have similar rights under the GDPR. Email us in the same way. You can also complain to your local data protection authority. We are a small operator in Indonesia and don't have a representative in the EU or the UK.
 

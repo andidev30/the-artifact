@@ -20,6 +20,7 @@ import {
 } from '../api'
 import { AccountHeader } from '../components/AccountHeader'
 import { CopyCommand } from '../components/CopyCommand'
+import { ExportSection } from '../components/ExportSection'
 import { SecuritySection, SessionsSection, signInAgain } from '../components/SignInSecurity'
 import { expiryText, timeAgo } from '../time'
 import { useConfig } from '../useConfig'
@@ -76,6 +77,7 @@ function SettingsPage({ initial }: { initial: Me }) {
     { id: 'sessions', label: 'Sessions' },
     { id: 'agents', label: 'Connected agents' },
     { id: 'tokens', label: 'Access tokens' },
+    { id: 'export', label: 'Export your data' },
     { id: 'delete', label: 'Delete account' },
   ]
 
@@ -118,6 +120,7 @@ function SettingsPage({ initial }: { initial: Me }) {
             <SessionsSection />
             <AgentsSection />
             <TokensSection me={me} defaultWorkspace={org?.id ?? null} />
+            <ExportSection organization={null} />
             <DeleteSection me={me} />
           </div>
         </div>

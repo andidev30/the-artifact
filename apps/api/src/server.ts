@@ -6,6 +6,7 @@ import { app } from './app.js'
 import { auditSettled } from './audit.js'
 import { closeDatabase } from './db/index.js'
 import { env } from './env.js'
+import { buildExportsInProcess, scheduleExportResumes } from './exports.js'
 import { scheduleSweeps } from './gc.js'
 import { log } from './log.js'
 import { collectProcessMetrics, reportClusterMetrics } from './metrics.js'
@@ -58,8 +59,12 @@ export function startServer({ background }: { background: boolean }) {
     else renderThumbnailsElsewhere((versionId) => send({ type: 'artifact:thumbnail', versionId }))
   }
 
+  // Every serving process builds the exports it is asked for; the background one also picks up any
+  // left behind by a process that stopped
+  buildExportsInProcess()
   if (background) {
     scheduleSweeps()
+    scheduleExportResumes()
     if (worker) log.info('Background jobs run in this worker', { worker: cluster.worker?.id })
   }
 

@@ -6,6 +6,7 @@ import { twoFactorRequiredError } from '../auth/factors.js'
 import { requireRecentSignIn, requireUser, startSession, type AuthEnv } from '../auth/session.js'
 import { track } from '../analytics.js'
 import { db, schema } from '../db/index.js'
+import { deleteExportFiles, exportsOf } from '../exports.js'
 import { forgetAccounts, isLastAdmin, lastAdminError } from '../instance.js'
 import { clearHits, hit, limitRequest, tooManyRequests, waitText } from '../limits.js'
 import { auditToken, checkExpiry, checkTokenName, createToken, describeToken, revokeToken, tokensOf } from '../tokens.js'
@@ -222,6 +223,7 @@ async function deletionPlan(userId: string) {
 // people move to a successor, the rest goes with the account. Also used by the admin area.
 export async function deleteAccountData(user: { id: string; email: string }) {
   const { empty, transfers } = await deletionPlan(user.id)
+  const exports = await exportsOf(user.id)
   await db.transaction(async (tx) => {
     // Pages in organizations with other people stay, with their history, under a new owner
     for (const t of transfers) {
@@ -238,6 +240,8 @@ export async function deleteAccountData(user: { id: string; email: string }) {
     // Invitations and shares they sent, and versions they published, keep working without them.
     await tx.delete(schema.users).where(eq(schema.users.id, user.id))
   })
+  // Their data exports' rows went with the account; the zips go now rather than at the next sweep
+  await deleteExportFiles(exports)
   forgetAccounts()
 }
 
