@@ -12,6 +12,7 @@ Hosts the HTML pages coding agents build. An agent publishes through the MCP ser
 | `docs/` | User and operator docs, rendered at `/docs` and read on GitHub | see `docs/CLAUDE.md` |
 | `deploy/` | Docker Compose, Kubernetes manifests and the Helm chart for self-hosting | see `deploy/CLAUDE.md` |
 | `apps/*/src/ee/` | Hosted-service-only code (marketing, contact sales, onboarding welcome, plan limits, issuing license keys) and enterprise features a license key unlocks on a self-hosted install, under `LICENSE-EE` | see `apps/*/src/ee/CLAUDE.md` |
+| `ee/ops/` | Hosted-service operations: on-call runbook, backup and restore scripts run by `.github/workflows/hosted-*.yml` | see `ee/ops/runbook.md`; not in `docs/`, so it never ships in the app |
 | `e2e/` | Playwright specs | setup in `TESTING.md` |
 | `load/` | k6 load tests, a Compose file for a production-like server, metrics sampling | see `load/README.md`; seeding in `apps/api/test/load/seed.ts` |
 | `docker-compose.yml` | Dev services only: Postgres, MinIO, Mailpit | not for deploying |
