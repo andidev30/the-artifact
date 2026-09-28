@@ -132,7 +132,7 @@ Passkeys are WebAuthn credentials, checked with [SimpleWebAuthn](https://simplew
 
 - Codes follow RFC 6238 with the settings every app supports: HMAC-SHA1, 6 digits, 30-second steps. A code is accepted for the step before and after the current one as well, for clocks that are a little off.
 - A code is accepted once. The server records the last step it accepted in the same statement that checks it, so a code, or any older one, can't be used again, even by two requests at the same moment.
-- The secret is 20 random bytes, encrypted at rest with AES-256-GCM under a key the server makes for itself on first use and keeps in the `server_secrets` table. A copy of the other tables, or a query log, doesn't reveal it; a full database backup holds both, so protect backups like the database itself.
+- The secret is 20 random bytes, encrypted at rest with AES-256-GCM under a key the server makes for itself on first use and keeps in the `server_secrets` table. A copy of the other tables, or a query log, doesn't reveal it. Without `ENCRYPTION_KEY`, a full database backup holds both; see [Keys in the database](#keys-in-the-database).
 - It counts only once a first code from the app is confirmed.
 
 ### Recovery codes
@@ -211,6 +211,12 @@ The log holds account ids rather than names, except the address a sign-in link w
 ## Page views
 
 Opening a page is counted, and for pages shared with specific people or an organization, the server records who opened it and when. That record is deleted after 90 days, and only people who can edit the page see it. Visits through a link shared with **Anyone with the link** are counted without recording who made them or their address. See [Who opened a page](/docs/sharing#who-opened-a-page).
+
+## Keys in the database
+
+The server keeps the keys it makes for itself in the `server_secrets` table: the ones that encrypt authenticator app, webhook and single sign-on secrets, and the ones that sign links to page content and data exports. Without `ENCRYPTION_KEY`, they are stored as they are, so one copy of the database, such as a leaked backup or dump, is enough to read every authenticator app secret (and sign in past the second factor), every webhook and single sign-on secret, and to make links that open any private page.
+
+With `ENCRYPTION_KEY` set, those rows are stored encrypted with AES-256-GCM under a key derived from it (HKDF-SHA256), each bound to its row's name. The key lives only in the server's settings, so a copy of the database or its backups alone opens none of them. A server that starts with encrypted rows and without the right key stops with an error instead of making new keys. Set it on every server reachable from the internet, and keep it apart from database backups; see [Encryption key](/docs/configuration#encryption-key).
 
 ## Self-hosted data
 

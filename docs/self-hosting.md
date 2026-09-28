@@ -24,6 +24,7 @@ Everything for Docker Compose is in `deploy/docker-compose`, and every `docker c
 | `APP_URL` | The address people use, e.g. `https://artifact.example.com`. Links in emails and the MCP URL are built from it. |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | Optional. Your mail server. Leave `SMTP_HOST` empty to [run without email](#running-without-email). |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Optional. Without them the **Continue with Google** button is hidden. |
+| `ENCRYPTION_KEY` | Recommended. The output of `openssl rand -base64 32`. It encrypts the keys the server keeps in its database, so a copy of the database alone can't open private pages or sign in past authenticator apps. Keep a copy apart from your backups: the server needs it to start. See [Encryption key](/docs/configuration#encryption-key). |
 
 And `.env`, read by Docker Compose, before the first start (the database and MinIO keep the passwords they were created with):
 

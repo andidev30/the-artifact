@@ -19,6 +19,8 @@ Settings are environment variables. With Docker Compose they go in `deploy/docke
 | `DATABASE_POOL_MAX` | 10 with one worker, 20 shared by more | Database connections each worker may open, from 1 to 1000. Empty gives 10 to a single process, and with more workers about 20 in all, at least 2 each: 10 each for 2, 5 each for 4, 2 each for 8. The server opens at most `WEB_CONCURRENCY` × `DATABASE_POOL_MAX` connections, which has to fit in Postgres's `max_connections` (100 by default) together with everything else that connects to it. A larger pool isn't faster: queries are short, and in a load test a pool of 40 served fewer requests than one of 10. |
 | `CRON_SECRET` | empty | For hosts without a long-running server, like Vercel: turns on `GET /api/cron/sweep`, which a scheduler calls with `Authorization: Bearer <CRON_SECRET>` to run the [storage sweep](/docs/self-hosting#where-content-is-stored), which also deletes records of [who opened a page](/docs/sharing#who-opened-a-page) older than 90 days and expired [data exports](/docs/exporting-your-data), applies [version retention](/docs/retention) and [audit log](/docs/audit-log) retention, retries [webhook](/docs/webhooks) deliveries that failed, indexes up to 500 pages that [search](/docs/publishing#search) missed, and spends up to 20 seconds building exports nobody has the settings page open for. It also turns on `GET /api/cron/webhooks`, which only retries failed webhook deliveries; call it every few minutes where your scheduler allows, since retries are only as frequent as it runs. Each call starts no new work after 40 seconds, so it ends within a 60-second function limit, and leaves the rest for the next call. The Docker image doesn't need either; its server sweeps every 6 hours and sends webhooks within seconds on its own. |
 | `METRICS_TOKEN` | empty | Turns on Prometheus metrics at `GET /metrics`, which answers only requests with `Authorization: Bearer <METRICS_TOKEN>`. Empty means there is no `/metrics`. See [Health checks and metrics](/docs/self-hosting#health-checks-and-metrics). |
+| `ENCRYPTION_KEY` | empty | Recommended. 32 random bytes in base64 or hex, e.g. from `openssl rand -base64 32`, that encrypts the keys the server keeps in its database. Without it, a copy of the database alone is enough to read authenticator app, webhook and single sign-on secrets and to open private pages. See [Encryption key](#encryption-key). |
+| `ENCRYPTION_KEY_PREVIOUS` | empty | Only while changing `ENCRYPTION_KEY`: the key it replaces. See [Changing the key](#changing-the-key). |
 | `SMTP_HOST` | empty | Mail server for sign-in links, invitations, share emails and emails about new comments. Empty runs without email: password sign-in, and links admins pass on themselves. See [Running without email](/docs/self-hosting#running-without-email). |
 | `SMTP_FROM` | `The Artifact <no-reply@localhost>` | Sender, e.g. `"The Artifact <artifact@example.com>"` |
 | `SMTP_PORT` | `587` | |
@@ -56,6 +58,28 @@ The first worker also runs the storage sweep, sends [webhooks](/docs/webhooks), 
 - Whether the server has an account yet, for the setup form: up to a minute old in each worker.
 
 `/metrics` answers for the whole server whichever worker gets the scrape: counters and histograms are added up over the workers, as are the pool gauges (so `artifact_db_pool_max` is the total), and `artifact_nodejs_eventloop_lag_*` is averaged. The primary's own process isn't included.
+
+## Encryption key
+
+The server makes a few random keys for itself and keeps them in its database, in the `server_secrets` table: one encrypts authenticator app secrets, one webhook secrets, one single sign-on client secrets, and two sign the short-lived links that open page content and data exports. Without `ENCRYPTION_KEY` they are stored as they are, so anyone with a copy of the database, such as a leaked backup, can read those secrets, sign in past authenticator apps and make links that open any private page.
+
+With `ENCRYPTION_KEY` set, each of these keys is stored encrypted (AES-256-GCM, with a key derived from yours by HKDF). The server encrypts the rows it already has when it first starts with the key (on Vercel, when it first uses one), and every key it makes later. Nothing else changes: people keep their authenticator apps, webhooks keep their secrets, and links already handed out keep working.
+
+```sh
+openssl rand -base64 32
+```
+
+Put the output in `app.env` as `ENCRYPTION_KEY=...` (in Helm values, `encryptionKey`, or `ENCRYPTION_KEY` in your `existingSecret`; on Vercel, a project environment variable) and restart. Then:
+
+- **Keep the key somewhere other than the database and its backups**, such as a password manager or your secret store. A database backup restored without it can't open these keys. The server then refuses to start rather than make new ones, which would sign everyone out of their authenticator app and change every webhook's signature.
+- **The server refuses to start** when the rows are encrypted and `ENCRYPTION_KEY` is missing or another key, and says so in its log (`Could not open the server secrets`). Start it again with the right key; nothing was changed.
+- **You can't remove it again.** Once the rows are encrypted, the server needs the key to start. Run every server of the install with the same key, and set it only once they all run 1.0.0 or later: older versions can't read encrypted rows.
+
+### Changing the key
+
+1. Make a new key with `openssl rand -base64 32`.
+2. Set it as `ENCRYPTION_KEY`, and the old one as `ENCRYPTION_KEY_PREVIOUS`, then restart. The server encrypts every row again with the new key as it starts.
+3. Remove `ENCRYPTION_KEY_PREVIOUS` and restart. Keep the old key as long as you keep backups taken before the change.
 
 ## Object storage
 
