@@ -7,6 +7,7 @@ import { SSO_ERRORS, SsoButtons } from '../ee/SsoSignIn'
 import { ServerUnreachable } from './Status'
 import { Wordmark } from '../components/Wordmark'
 import { APP_HOST, AUTH_EMAIL_URL, AUTH_GOOGLE_URL, LOGIN_URL, SIGNUP_URL } from '../config'
+import { sameOriginPath } from '../next'
 import './Auth.css'
 
 type Mode = 'login' | 'signup'
@@ -48,8 +49,7 @@ export function Auth({ mode }: { mode: Mode }) {
   const [params] = useSearchParams()
   const plan = params.get('plan')
   // Where to go after signing in, e.g. back to an agent's connection request
-  const nextParam = params.get('next')
-  const next = nextParam?.startsWith('/') && !nextParam.startsWith('//') ? nextParam : null
+  const next = sameOriginPath(params.get('next'), window.location.origin)
   const isOrg = mode === 'signup' && plan === 'organization'
   const copy = COPY[mode]
   const signInError = SIGN_IN_ERRORS[params.get('error') ?? '']

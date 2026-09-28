@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router'
 import { ApiError, confirmSignInLink, getSignInLink, requestSignInLink, type SignInLink } from '../api'
 import { Wordmark } from '../components/Wordmark'
 import { LOGIN_URL } from '../config'
+import { sameOriginPath } from '../next'
 import './Auth.css'
 
 type State =
@@ -21,8 +22,7 @@ export function ConfirmSignIn() {
   const [params] = useSearchParams()
   const token = params.get('token') ?? ''
   const plan = params.get('plan')
-  const nextParam = params.get('next')
-  const next = nextParam?.startsWith('/') && !nextParam.startsWith('//') ? nextParam : null
+  const next = sameOriginPath(params.get('next'), window.location.origin)
   const [state, setState] = useState<State>(token ? { kind: 'loading' } : { kind: 'invalid' })
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
