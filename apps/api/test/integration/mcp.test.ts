@@ -53,6 +53,7 @@ describe('MCP over /mcp', () => {
       'restore_version',
       'set_artifact_visibility',
       'share_artifact',
+      'update_files',
     ])
   })
 
@@ -388,6 +389,7 @@ describe('MCP over /mcp for 2026-07-28 clients', () => {
       'restore_version',
       'set_artifact_visibility',
       'share_artifact',
+      'update_files',
     ])
     expect(tools.find((t) => t.name === 'get_artifact')?.annotations).toEqual({ readOnlyHint: true })
     await client.close()

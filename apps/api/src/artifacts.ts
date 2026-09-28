@@ -5,7 +5,19 @@ import { audit } from './audit.js'
 import { db, schema } from './db/index.js'
 import type { Artifact, Visibility } from './db/schema.js'
 import { env } from './env.js'
-import { checkManifest, MAX_HTML_BYTES, PublishError, type FileInput, type FileMeta, type ManifestEntry } from './files.js'
+import {
+  applyChanges,
+  checkManifest,
+  checkRemovals,
+  ENTRY_PATH,
+  MAX_HTML_BYTES,
+  PublishError,
+  splitEntry,
+  type FileInput,
+  type FileMeta,
+  type ManifestEntry,
+  type PageFiles,
+} from './files.js'
 import { prepare } from './prepare.js'
 import { Lru } from './cache.js'
 import { belongsTo, checkFolderName, ensureFolder, FolderError } from './folders.js'
@@ -17,6 +29,10 @@ import { queueThumbnail } from './thumbnails.js'
 import { CONTROL_CHARS_ERROR, hasControlChars, MAX_VERSION, SLUG_RE, UUID_RE } from './validation.js'
 
 export { MAX_HTML_BYTES, PublishError }
+
+// Published on top of a version other than the one the caller started from (base_version)
+export class VersionConflictError extends PublishError {}
+
 const SLUG_ALPHABET = 'abcdefghijkmnpqrstuvwxyz23456789'
 
 function newSlug(): string {
@@ -161,12 +177,15 @@ type PublishTarget = {
   blockedOrgs?: readonly string[]
   organizationId: string | null
   clientName: string
-  title: string
+  // Left out, an existing page keeps its title
+  title?: string
   slug?: string
   visibility?: Visibility
   // Name of a folder of the connected workspace to file the page into, created when missing; '' for no folder.
   // Left out, a new page goes in no folder and an existing one stays where it is.
   folder?: string
+  // For an existing page: publish only if this is still its current version
+  baseVersion?: number
 }
 
 type PublishInput = PublishTarget & {
@@ -222,6 +241,69 @@ export async function publishUpload(input: PublishTarget & { uploadId: string; f
   })
 }
 
+const ENTRY_TYPE = 'text/html; charset=utf-8'
+
+// The current version's entry and files, read under the page lock
+async function currentFiles(tx: Tx, page: Artifact): Promise<PageFiles> {
+  const v = schema.artifactVersions
+  const [current] = await tx
+    .select({ id: v.id, htmlSha256: v.htmlSha256, htmlSize: v.htmlSize })
+    .from(v)
+    .where(and(eq(v.artifactId, page.id), eq(v.version, page.currentVersion)))
+  if (!current) throw new Error(`Version ${page.currentVersion} of page ${page.id} is missing`)
+  const files = await tx.select(FILE_META).from(f).where(eq(f.versionId, current.id))
+  return { html: { path: ENTRY_PATH, contentType: ENTRY_TYPE, size: current.htmlSize, sha256: current.htmlSha256 }, files }
+}
+
+type Changes = { slug: string; remove?: unknown[] }
+
+function checkChanges(input: PublishTarget & Changes, sent: number): string[] {
+  if (!input.slug) throw new PublishError('Say which page to update with artifact_id.')
+  const remove = checkRemovals(input.remove ?? [])
+  if (sent === 0 && remove.length === 0) throw new PublishError('Send at least one file to add or replace, or a path to remove.')
+  return remove
+}
+
+// A new version of an existing page: its current version with some files added, replaced or removed,
+// so a dashboard whose data changes sends only the data. A file named index.html replaces the entry.
+// Everything else is as for any publish: checks, limits, quota and history.
+export async function updateFiles(input: PublishTarget & Changes & { files?: FileInput[] }): Promise<Artifact> {
+  const sent = input.files ?? []
+  const remove = checkChanges(input, sent.length)
+  const { entry, others } = splitEntry(sent)
+  // Without a new entry, '' stands in for it so the other files are still checked and hashed in one go
+  const prepared = await prepare(entry ?? '', others)
+  const html = entry === undefined ? null : { path: ENTRY_PATH, contentType: ENTRY_TYPE, size: prepared.htmlSize, sha256: prepared.htmlSha256 }
+  return publishContent(input, async (tx, page) => {
+    const merged = applyChanges(await currentFiles(tx, page), { html, files: prepared.files }, remove)
+    return {
+      htmlSha256: merged.html.sha256,
+      htmlSize: merged.html.size,
+      files: merged.files,
+      store: async () => {
+        await Promise.all([...(html ? [putBlob(prepared.html, html.sha256)] : []), ...prepared.files.map((p) => putBlob(p.content, p.sha256))])
+      },
+    }
+  })
+}
+
+// The same with files the agent uploaded itself after prepare_upload. Only the changed files are
+// claimed: the ones kept are already stored for the current version.
+export async function updateUpload(input: PublishTarget & Changes & { uploadId: string; files: ManifestEntry[] }): Promise<Artifact> {
+  const remove = checkChanges(input, input.files.length)
+  const { html, files } = checkManifest(input.files, { partial: true })
+  checkUploadId(input.uploadId)
+  return publishContent(input, async (tx, page) => {
+    const merged = applyChanges(await currentFiles(tx, page), { html, files }, remove)
+    return {
+      htmlSha256: merged.html.sha256,
+      htmlSize: merged.html.size,
+      files: merged.files,
+      store: () => claimUploads(input.uploadId, html ? [html, ...files] : files, input.userId),
+    }
+  })
+}
+
 // undefined: leave the folder as it is; null: no folder
 function folderChoice(folder: string | undefined): string | null | undefined {
   if (folder === undefined) return undefined
@@ -243,9 +325,10 @@ async function folderId(tx: Tx, ws: Workspace, name: string | null, userId: stri
 
 const contentSize = (content: Content) => content.htmlSize + content.files.reduce((sum, f) => sum + f.size, 0)
 
-async function publishContent(input: PublishTarget, content: Content): Promise<Artifact> {
-  if (hasControlChars(input.title)) throw new PublishError("The title can't contain control characters.")
-  const title = input.title.trim().slice(0, 200) || 'Untitled page'
+// content is a function for an update, whose content depends on the current version: it runs under the page's lock
+async function publishContent(input: PublishTarget, content: Content | ((tx: Tx, page: Artifact) => Promise<Content>)): Promise<Artifact> {
+  if (input.title !== undefined && hasControlChars(input.title)) throw new PublishError("The title can't contain control characters.")
+  const title = input.title === undefined ? undefined : input.title.trim().slice(0, 200) || 'Untitled page'
   const folder = folderChoice(input.folder)
 
   if (input.slug) {
@@ -266,14 +349,21 @@ async function publishContent(input: PublishTarget, content: Content): Promise<A
     const { updated, versionId } = await db.transaction(async (tx) => {
       // Lock the page so two publishes (or a publish and a restore) can't pick the same number
       const [locked] = await tx.select().from(schema.artifacts).where(eq(schema.artifacts.id, existing.id)).for('update')
-      await checkQuota(tx, { userId: locked.ownerId, organizationId: locked.organizationId }, { page: false, bytes: contentSize(content) })
+      if (input.baseVersion !== undefined && input.baseVersion !== locked.currentVersion) {
+        throw new VersionConflictError(
+          `This page is at version ${locked.currentVersion}, not ${input.baseVersion}: someone published a new version since. ` +
+            'Read the current version, apply your changes to it, and send its number as base_version.',
+        )
+      }
+      const built = typeof content === 'function' ? await content(tx, locked) : content
+      await checkQuota(tx, { userId: locked.ownerId, organizationId: locked.organizationId }, { page: false, bytes: contentSize(built) })
       const version = locked.currentVersion + 1
-      const versionId = await insertVersion(tx, { artifactId: existing.id, version, publishedWith: input.clientName, publishedBy: input.userId }, content)
+      const versionId = await insertVersion(tx, { artifactId: existing.id, version, publishedWith: input.clientName, publishedBy: input.userId }, built)
       const filed = folder === undefined ? {} : { folderId: await folderId(tx, ws, folder, input.userId) }
       const [updated] = await tx
         .update(schema.artifacts)
         .set({
-          title,
+          ...(title === undefined ? {} : { title }),
           currentVersion: version,
           updatedAt: new Date(),
           publishedWith: input.clientName,
@@ -290,6 +380,7 @@ async function publishContent(input: PublishTarget, content: Content): Promise<A
     return updated
   }
 
+  if (typeof content === 'function') throw new PublishError('Say which page to update with artifact_id.')
   const visibility = input.visibility ?? (input.organizationId ? 'organization' : 'private')
   if (visibility === 'organization' && !input.organizationId) {
     throw new PublishError('Organization visibility needs an organization workspace. Use private (restricted) or link.')
@@ -301,7 +392,7 @@ async function publishContent(input: PublishTarget, content: Content): Promise<A
       .insert(schema.artifacts)
       .values({
         slug: newSlug(),
-        title,
+        title: title ?? 'Untitled page',
         ownerId: input.userId,
         organizationId: input.organizationId,
         visibility,

@@ -169,11 +169,64 @@ export function prepareContent(html: string, files: FileInput[] | undefined): Pr
   return { html: content, htmlSha256: sha256(content), htmlSize, files: prepared }
 }
 
+const isEntry = (path: unknown) => typeof path === 'string' && path.replace(/^\.\//, '').toLowerCase() === ENTRY_PATH
+
+// For an update of some files of a page: index.html among them replaces the entry, as text
+export function splitEntry(files: FileInput[]): { entry: string | undefined; others: FileInput[] } {
+  const entries = files.filter((f) => isEntry(f?.path))
+  if (entries.length > 1) throw new PublishError('Two files have the path "index.html".')
+  const others = files.filter((f) => !isEntry(f?.path))
+  if (!entries.length) return { entry: undefined, others }
+  const bytes = decode(entries[0], ENTRY_PATH, TYPES.html)
+  if (!bytes.toString('utf8').trim()) throw new PublishError('index.html is empty.')
+  return { entry: bytes.toString('utf8'), others }
+}
+
+// The paths an update removes, checked like any path. The entry is the page, so it can't go.
+export function checkRemovals(raw: unknown[]): string[] {
+  if (raw.length > MAX_FILES) throw new PublishError(`A page has at most ${MAX_FILES} files to remove.`)
+  const paths = new Map<string, string>()
+  for (const item of raw) {
+    const checked = checkPath(item)
+    if ('error' in checked) throw new PublishError(checked.error)
+    if (checked.path.toLowerCase() === ENTRY_PATH)
+      throw new PublishError("index.html is the page itself, so it can't be removed. Send a new index.html instead.")
+    paths.set(checked.path.toLowerCase(), checked.path)
+  }
+  return [...paths.values()]
+}
+
+export type PageFiles = { html: FileMeta; files: FileMeta[] }
+
+// A version made of the current one with some files added, replaced or removed, under the same
+// limits as a whole page. Paths match ignoring case, as they must be unique that way.
+export function applyChanges(current: PageFiles, changes: { html: FileMeta | null; files: FileMeta[] }, remove: string[]): PageFiles {
+  const byKey = new Map(current.files.map((f) => [f.path.toLowerCase(), f]))
+  const sent = new Set(changes.files.map((f) => f.path.toLowerCase()))
+  for (const path of remove) {
+    if (sent.has(path.toLowerCase())) throw new PublishError(`"${path}" is both sent and removed. Do one or the other.`)
+    if (!byKey.delete(path.toLowerCase())) throw new PublishError(`"${path}" isn't a file of the current version, so it can't be removed.`)
+  }
+  for (const f of changes.files) byKey.set(f.path.toLowerCase(), f)
+  const html = changes.html ?? current.html
+  const files = [...byKey.values()].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
+  checkCount(files.length)
+  checkSize(
+    ENTRY_PATH,
+    0,
+    files.reduce((sum, f) => sum + f.size, html.size),
+  )
+  return { html, files }
+}
+
 const SHA256 = /^[0-9a-f]{64}$/
 
 // Validates the files an agent is about to upload itself: index.html, which is the page, and the
-// files next to it. The same limits apply as when they are sent inline.
-export function checkManifest(entries: ManifestEntry[]): { html: FileMeta; files: FileMeta[] } {
+// files next to it. The same limits apply as when they are sent inline. A partial manifest, for an
+// update of some files of a page, needn't include index.html; the whole is checked once it is merged.
+export function checkManifest(entries: ManifestEntry[], opts: { partial: true }): { html: FileMeta | null; files: FileMeta[] }
+export function checkManifest(entries: ManifestEntry[], opts?: { partial?: false }): { html: FileMeta; files: FileMeta[] }
+export function checkManifest(entries: ManifestEntry[], opts: { partial?: boolean } = {}): { html: FileMeta | null; files: FileMeta[] } {
   const seen = new Set<string>()
   let html: FileMeta | null = null
   const files: FileMeta[] = []
@@ -186,7 +239,7 @@ export function checkManifest(entries: ManifestEntry[]): { html: FileMeta; files
     if (!Number.isSafeInteger(size) || size < 0) throw new PublishError(`"${shown}" needs its size in bytes, e.g. from wc -c.`)
     total += size
 
-    if (typeof entry.path === 'string' && entry.path.replace(/^\.\//, '').toLowerCase() === ENTRY_PATH) {
+    if (isEntry(entry.path)) {
       if (html) throw new PublishError('Two files have the path "index.html".')
       if (size === 0) throw new PublishError('index.html is empty.')
       checkHtmlSize(size)
@@ -197,7 +250,7 @@ export function checkManifest(entries: ManifestEntry[]): { html: FileMeta; files
     checkSize(path, size, total)
     files.push({ path, contentType: type.type, size, sha256: hash })
   }
-  if (!html) throw new PublishError('Include index.html, the page itself, in files.')
+  if (!html && !opts.partial) throw new PublishError('Include index.html, the page itself, in files.')
   checkCount(files.length)
   checkSize(ENTRY_PATH, 0, total)
   return { html, files }
