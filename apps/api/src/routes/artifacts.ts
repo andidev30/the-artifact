@@ -50,7 +50,7 @@ import { compareVersions } from '../compare.js'
 import { MAX_VIEWERS, pageViewers, totalViews, versionViews, VIEWER_RETENTION_DAYS } from '../views.js'
 import { changeTags, checkTag, TagError, tagsOf } from '../tags.js'
 import { parseVersion } from '../validation.js'
-import { getSharing, MAX_PEOPLE_PER_INVITE, parseEmails, removePerson, setPersonRole, sharePeople, SharingError } from '../sharing.js'
+import { acceptShare, getSharing, MAX_PEOPLE_PER_INVITE, parseEmails, removePerson, setPersonRole, sharePeople, SharingError } from '../sharing.js'
 import { canMove, duplicatePage, movePage, TransferError, workspaceKey } from '../transfer.js'
 
 export const artifacts = new Hono<AuthEnv>()
@@ -516,10 +516,9 @@ artifacts.post('/:slug/sharing/people', requireUser, async (c) => {
   const role = body.role && ROLES.has(body.role) ? body.role : 'viewer'
   const emails = parseEmails(body.emails)
   const notify = body.notify !== false
-  if (notify) {
-    const busy = await limitInvites(c, c.get('user')!.id, Math.min(emails.length, MAX_PEOPLE_PER_INVITE))
-    if (busy) return busy
-  }
+  // Counted with or without an email: the answer says which addresses have an account
+  const busy = await limitInvites(c, c.get('user')!.id, Math.min(emails.length, MAX_PEOPLE_PER_INVITE))
+  if (busy) return busy
   try {
     const result = await sharePeople(artifact, c.get('user')!, emails, role, notify, body.message)
     return c.json({ ...result, sharing: await getSharing(artifact) })
@@ -548,6 +547,18 @@ artifacts.delete('/:slug/sharing/people', requireUser, async (c) => {
   if (!artifact) return c.json({ error: 'Not found' }, 404)
   const email = c.req.query('email')
   if (!email) return c.json({ error: 'Say whose access to remove.' }, 400)
+  const busy = await limitRequest(c, 'unshare', c.get('user')!.id, 'You have removed a lot of people in a short time.')
+  if (busy) return busy
   await removePerson(artifact, email, c.get('user')!)
   return c.json(await getSharing(artifact))
+})
+
+// { token }: the share's link (?share=), opened while signed in with the address it was shared with.
+// Anything else looks like a page that doesn't exist.
+artifacts.post('/:slug/sharing/accept', requireUser, async (c) => {
+  const artifact = await findBySlug(c.req.param('slug'))
+  const body = (await c.req.json().catch(() => null)) as { token?: unknown } | null
+  const token = typeof body?.token === 'string' ? body.token : ''
+  if (!artifact || !token || !(await acceptShare(artifact, token, c.get('user')!))) return c.json({ error: 'Not found' }, 404)
+  return c.body(null, 204)
 })

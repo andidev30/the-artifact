@@ -1,10 +1,12 @@
-import { and, eq, inArray } from 'drizzle-orm'
+import { and, eq, inArray, sql } from 'drizzle-orm'
 import { artifactUrl, pageTarget } from './artifacts.js'
 import { track } from './analytics.js'
 import { audit } from './audit.js'
+import { hashToken, randomToken } from './auth/session.js'
 import { db, schema } from './db/index.js'
 import type { Artifact, ShareRole } from './db/schema.js'
 import { mailEnabled } from './env.js'
+import { mayEmailRecipient } from './limits.js'
 import { linkSettings } from './links.js'
 import { log } from './log.js'
 import { sendShareNotice } from './mail.js'
@@ -23,7 +25,13 @@ export async function getSharing(artifact: Artifact) {
   const shares = await db.select().from(schema.artifactShares).where(eq(schema.artifactShares.artifactId, artifact.id)).orderBy(schema.artifactShares.createdAt)
   const known = shares.length
     ? await db
-        .select({ email: schema.users.email, name: schema.users.name, avatarUrl: schema.users.avatarUrl })
+        .select({
+          id: schema.users.id,
+          email: schema.users.email,
+          name: schema.users.name,
+          avatarUrl: schema.users.avatarUrl,
+          unverified: schema.users.emailUnverified,
+        })
         .from(schema.users)
         .where(
           inArray(
@@ -40,14 +48,19 @@ export async function getSharing(artifact: Artifact) {
 
   return {
     owner,
-    people: shares.map((s) => ({
-      email: s.email,
-      role: s.role,
-      name: byEmail.get(s.email)?.name ?? null,
-      avatarUrl: byEmail.get(s.email)?.avatarUrl ?? null,
-      // Invited before they have an account
-      pending: !byEmail.has(s.email),
-    })),
+    people: shares.map((s) => {
+      const account = byEmail.get(s.email)
+      // The share counts for someone (accessLevel): an account whose address was checked, or the one that
+      // opened the share's link. Until then the name is whatever the person who typed the address chose.
+      const active = account !== undefined && (!account.unverified || s.acceptedBy === account.id)
+      return {
+        email: s.email,
+        role: s.role,
+        name: active ? account.name : null,
+        avatarUrl: active ? account.avatarUrl : null,
+        pending: !active,
+      }
+    }),
     visibility: artifact.visibility,
     link: linkSettings(artifact),
     organizationName: org?.name ?? null,
@@ -68,6 +81,16 @@ export function parseEmails(input: unknown): string[] {
 
 type Inviter = { id: string; name: string | null; email: string }
 
+// The link the sharer passes on when nobody emailed the person. Opening it signed in with the address
+// makes the share count for that account, even one whose address nobody checked (acceptShare).
+export type ShareLink = { email: string; link: string }
+
+function shareUrl(slug: string, token: string) {
+  const url = new URL(artifactUrl(slug))
+  url.searchParams.set('share', token)
+  return url.toString()
+}
+
 export async function sharePeople(artifact: Artifact, inviter: Inviter, emails: string[], role: ShareRole, notify: boolean, message?: string) {
   if (emails.length === 0) throw new SharingError('Add at least one email address.')
   if (emails.length > MAX_PEOPLE_PER_INVITE) throw new SharingError(`Share with up to ${MAX_PEOPLE_PER_INVITE} people at a time.`)
@@ -78,10 +101,15 @@ export async function sharePeople(artifact: Artifact, inviter: Inviter, emails: 
   const targets = emails.filter((e) => e !== owner?.email)
   if (targets.length === 0) throw new SharingError('The owner already has access.')
 
+  // Sharing with an address again makes a new link, and the one before stops working
+  const tokens = new Map(targets.map((email) => [email, randomToken()]))
   await db
     .insert(schema.artifactShares)
-    .values(targets.map((email) => ({ artifactId: artifact.id, email, role, invitedBy: inviter.id })))
-    .onConflictDoUpdate({ target: [schema.artifactShares.artifactId, schema.artifactShares.email], set: { role } })
+    .values(targets.map((email) => ({ artifactId: artifact.id, email, role, invitedBy: inviter.id, tokenHash: hashToken(tokens.get(email)!) })))
+    .onConflictDoUpdate({
+      target: [schema.artifactShares.artifactId, schema.artifactShares.email],
+      set: { role, tokenHash: sql`excluded.token_hash` },
+    })
   audit({
     action: 'page.shared',
     organizationId: artifact.organizationId,
@@ -91,18 +119,42 @@ export async function sharePeople(artifact: Artifact, inviter: Inviter, emails: 
   })
   track({ event: 'page_shared', userId: inviter.id, detail: 'person' })
 
-  // Without email there is nothing to send; the sharer passes the link on
+  // Without email there is nothing to send; the sharer passes the links on
+  const emailed = new Set<string>()
+  const notifyFailed: string[] = []
   if (notify && mailEnabled()) {
     const from = inviter.name ?? inviter.email
+    // An address that got many invitations and shares today isn't emailed again; its link goes back to the sharer
+    const recipients: string[] = []
+    for (const to of targets) if (await mayEmailRecipient(to)) recipients.push(to)
     // One failed address shouldn't undo the share; report it instead
     const results = await Promise.allSettled(
-      targets.map((to) => sendShareNotice(to, { from, title: artifact.title, link: artifactUrl(artifact.slug), role, message: message?.slice(0, 500) })),
+      recipients.map((to) => sendShareNotice(to, { from, title: artifact.title, link: artifactUrl(artifact.slug), role, message: message?.slice(0, 500) })),
     )
-    const failed = targets.filter((_, i) => results[i].status === 'rejected')
-    if (failed.length) log.error('Share notice failed', { artifactId: artifact.id, failed: failed.length })
-    return { shared: targets, notifyFailed: failed }
+    for (const [i, to] of recipients.entries()) {
+      if (results[i].status === 'fulfilled') emailed.add(to)
+      else notifyFailed.push(to)
+    }
+    if (notifyFailed.length) log.error('Share notice failed', { artifactId: artifact.id, failed: notifyFailed.length })
   }
-  return { shared: targets, notifyFailed: [] }
+  const links: ShareLink[] = targets.filter((email) => !emailed.has(email)).map((email) => ({ email, link: shareUrl(artifact.slug, tokens.get(email)!) }))
+  return { shared: targets, notifyFailed, links }
+}
+
+// Opening a share's link while signed in with its address. Links work once.
+export async function acceptShare(artifact: Artifact, token: string, user: { id: string; email: string }): Promise<boolean> {
+  const accepted = await db
+    .update(schema.artifactShares)
+    .set({ acceptedBy: user.id, tokenHash: null })
+    .where(
+      and(
+        eq(schema.artifactShares.artifactId, artifact.id),
+        eq(schema.artifactShares.tokenHash, hashToken(token)),
+        eq(schema.artifactShares.email, user.email.toLowerCase()),
+      ),
+    )
+    .returning({ email: schema.artifactShares.email })
+  return accepted.length > 0
 }
 
 type Actor = { id: string; email: string }

@@ -433,6 +433,12 @@ export const artifactShares = pgTable(
     email: text('email').notNull(),
     role: shareRoleEnum('role').notNull(),
     invitedBy: uuid('invited_by').references(() => users.id, { onDelete: 'set null' }),
+    // The share's own link (src/sharing.ts), for the sharer to pass on when nobody was emailed. Replaced on
+    // every share with the address, cleared once used.
+    tokenHash: text('token_hash').unique(),
+    // The account that opened that link while signed in with the address. A share counts for an account
+    // whose address was checked, or for this one: an unverified account may have typed someone else's address.
+    acceptedBy: uuid('accepted_by').references(() => users.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.artifactId, t.email] }), index('artifact_shares_email_idx').on(t.email)],

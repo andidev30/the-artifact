@@ -11,7 +11,7 @@ import type { InviteRole, Role, User } from '../db/schema.js'
 import { ssoRequiredError, ssoRequiredFor } from '../ee/sso/connections.js'
 import { env, mailEnabled } from '../env.js'
 import { removeMembership } from '../instance.js'
-import { limitInvites } from '../limits.js'
+import { limitInvites, mayEmailRecipient } from '../limits.js'
 import { log } from '../log.js'
 import { sendInvitation } from '../mail.js'
 import { revokeToken, tokensIn } from '../tokens.js'
@@ -21,6 +21,7 @@ const DAY = 24 * 60 * 60 * 1000
 const INVITE_DAYS = 7
 const ROLES = new Set<Role>(['owner', 'admin', 'member'])
 const INVITE_ROLES = new Set<InviteRole>(['admin', 'member'])
+const INVALID = { error: 'This invitation is not valid. It may have been revoked or already accepted.' }
 
 // Owners manage everyone; admins manage admins and members; members manage nobody
 export function canManage(actor: Role, target: Role): boolean {
@@ -223,8 +224,9 @@ members.post('/invitations', async (c) => {
 
   audit({ action: 'member.invited', organizationId: me.org.id, actor: user, target: { type: 'invitation', id: email, label: email }, details: { role } })
   const link = inviteUrl(token)
-  // Without email, the person who invited passes the link on
-  let emailed = mailEnabled()
+  // Without email, the person who invited passes the link on, and so they do for an address that got
+  // many invitations and shares today
+  let emailed = mailEnabled() && (await mayEmailRecipient(email))
   if (emailed) {
     try {
       await sendInvitation(email, { from: user.name ?? user.email, organization: me.org.name, role, link, expiresInDays: INVITE_DAYS })
@@ -428,10 +430,14 @@ invitations.post('/:token/sign-up', async (c) => {
   const name = typeof body?.name === 'string' ? body.name.trim().replace(/\s+/g, ' ').slice(0, 80) || null : null
   if (name && hasControlChars(name)) return c.json({ error: CONTROL_CHARS_ERROR, field: 'name' }, 400)
 
-  const user = await createPasswordAccount(row.invitation.email, name, await hashPassword(body!.password as string))
+  // Unverified: the inviter passed the link on by hand, which vouches for joining this organization and
+  // nothing else, like an account someone made by typing the address (see users.emailUnverified)
+  const user = await createPasswordAccount(row.invitation.email, name, await hashPassword(body!.password as string), true)
   if (!user) return c.json({ error: `${row.invitation.email} already has an account. Log in to accept.`, code: 'account_exists' }, 409)
   await startSession(c, user.id)
-  return c.json(await join(user, row.invitation, row.org), 201)
+  const joined = await join(user, row.invitation, row.org)
+  if (!joined) return c.json(INVALID, 404)
+  return c.json(joined, 201)
 })
 
 invitations.post('/:token/accept', requireUser, async (c) => {
@@ -445,26 +451,37 @@ invitations.post('/:token/accept', requireUser, async (c) => {
     return c.json({ error: `This invitation is for ${row.invitation.email}. You are signed in as ${user.email}.`, code: 'email_mismatch' }, 403)
   }
 
-  return c.json(await join(user, row.invitation, row.org))
+  const joined = await join(user, row.invitation, row.org)
+  return joined ? c.json(joined) : c.json(INVALID, 404)
 })
 
 type InvitationRow = typeof schema.invitations.$inferSelect
 type OrganizationRow = typeof schema.organizations.$inferSelect
 
-// Accepting an invitation, from the email link or from inside the app
+// Accepting an invitation, from the email link or from inside the app. Null when it is no longer there
+// as it was read: revoked, accepted, expired, or replaced by a new invitation to the same address.
 async function join(user: User, invitation: InvitationRow, org: OrganizationRow) {
   const inserted = await db.transaction(async (tx) => {
+    // Used up in the same statement that reads its role, so an accept racing a revoke doesn't join, and one
+    // racing a new invitation at another role (a new link) doesn't join with the old role
+    const [used] = await tx
+      .delete(schema.invitations)
+      .where(
+        and(eq(schema.invitations.id, invitation.id), eq(schema.invitations.tokenHash, invitation.tokenHash), gt(schema.invitations.expiresAt, new Date())),
+      )
+      .returning({ role: schema.invitations.role })
+    if (!used) return null
     // Already a member (joined another way): keep the role they have
     const rows = await tx
       .insert(schema.memberships)
-      .values({ userId: user.id, organizationId: org.id, role: invitation.role })
+      .values({ userId: user.id, organizationId: org.id, role: used.role })
       .onConflictDoNothing()
       .returning({ role: schema.memberships.role })
-    await tx.delete(schema.invitations).where(eq(schema.invitations.id, invitation.id))
     // Joining a team counts as setting up a workspace
     if (!user.onboardedAt) await tx.update(schema.users).set({ onboardedAt: new Date() }).where(eq(schema.users.id, user.id))
     return rows.length > 0
   })
+  if (inserted === null) return null
   const joined = await membershipOf(org.id, user.id)
   if (!user.onboardedAt) track({ event: 'onboarded', userId: user.id, detail: 'invitation' })
   if (inserted) {
@@ -555,11 +572,12 @@ async function ownInvitation(c: Context<AuthEnv>) {
 
 myInvitations.post('/:id/accept', async (c) => {
   const row = await ownInvitation(c)
-  if (!row) return c.json({ error: 'This invitation is not valid. It may have been revoked or already accepted.' }, 404)
+  if (!row) return c.json(INVALID, 404)
   if (row.invitation.expiresAt.getTime() < Date.now()) {
     return c.json({ error: 'This invitation has expired. Ask for a new one.' }, 410)
   }
-  return c.json(await join(c.get('user')!, row.invitation, row.org))
+  const joined = await join(c.get('user')!, row.invitation, row.org)
+  return joined ? c.json(joined) : c.json(INVALID, 404)
 })
 
 myInvitations.post('/:id/decline', async (c) => {
