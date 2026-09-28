@@ -61,9 +61,9 @@ export async function selfHostedAccountCount(): Promise<number> {
 // An account in the state sign-up leaves it in, written directly so specs can reproduce states the
 // server no longer creates for them (an account from before new accounts started onboarded) or only
 // creates once per install (the first account)
-export async function createSelfHostedAccount(email: string, { isAdmin }: { isAdmin: boolean }) {
+export async function createSelfHostedAccount(email: string, { isAdmin, onboarded = false }: { isAdmin: boolean; onboarded?: boolean }) {
   await withDatabase(SELF_HOSTED_DATABASE_URL, async (sql) => {
-    await sql`insert into users (email, is_admin, onboarded_at) values (${email.toLowerCase()}, ${isAdmin}, null)`
+    await sql`insert into users (email, is_admin, onboarded_at) values (${email.toLowerCase()}, ${isAdmin}, ${onboarded ? new Date() : null})`
   })
 }
 
