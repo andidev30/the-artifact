@@ -1,5 +1,7 @@
-# Your own Postgres and bucket, credentials in Secrets of your own, no thumbnails, behind an ingress
+# Your own Postgres and bucket, credentials in Secrets of your own, no thumbnails, behind an ingress,
+# pages on a domain of their own
 appUrl: https://artifact.example.com
+contentOrigin: https://artifact-content.example.net
 postgresql:
   enabled: false
 externalDatabase:

@@ -57,9 +57,29 @@ export function embedFrameAncestors(value: string | undefined): string | null {
   return ["'self'", ...origins].join(' ')
 }
 
+// The origin that serves page files and nothing else, or null to serve them from APP_URL (src/content.ts).
+// It has to be another host: cookies ignore the port, so another port of the app's host would get its cookies.
+export function contentOrigin(value: string | undefined, appUrl: string): string | null {
+  const v = value?.trim().replace(/\/$/, '')
+  if (!v) return null
+  let url: URL | null = null
+  try {
+    url = new URL(v)
+  } catch {}
+  // Checked strictly, since it goes into CSP headers
+  const origin = url?.origin ?? ''
+  if (!url || !/^https?:\/\/[a-z0-9-]+(\.[a-z0-9-]+)*(:\d{1,5})?$/.test(origin) || url.pathname !== '/' || url.username || url.password || /[?#]/.test(v))
+    throw new Error(`CONTENT_ORIGIN must be an origin like https://content.example.com, with no path; got "${v}".`)
+  if (url.hostname === new URL(appUrl).hostname) throw new Error('CONTENT_ORIGIN must be on another host than APP_URL, e.g. https://content.example.com.')
+  return url.origin
+}
+
+const appUrl = required('APP_URL').replace(/\/$/, '')
+
 export const env = {
   port: Number(process.env.PORT ?? 3000),
-  appUrl: required('APP_URL').replace(/\/$/, ''),
+  appUrl,
+  contentOrigin: contentOrigin(process.env.CONTENT_ORIGIN, appUrl),
   databaseUrl: required('DATABASE_URL'),
   // Transaction-mode poolers (PgBouncer, Supabase on port 6543) hand each query to any server
   // connection, so prepared statements made on one aren't there on the next

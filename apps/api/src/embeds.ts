@@ -13,7 +13,9 @@ import { currentThumbnails } from './thumbnails.js'
 // site it sits on. So only a page anyone with the link can open is embedded, asked for with the link's
 // current key (?k=) and without a password; restricted, organization, protected, expired and missing
 // pages all get the same "sign in" card, with no title, content or
-// screenshot. The page itself still loads from /api/artifacts/<slug>/v/<n>/ under its sandbox CSP.
+// screenshot. The page itself still loads from /api/artifacts/<slug>/v/<n>/ under its sandbox CSP, on
+// CONTENT_ORIGIN when there is one. The embed document stays on the app's origin: it is the address
+// people paste, runs no script, and holds nothing of the page but its frame.
 
 // Same as the viewer's frame in the web app (pages/Viewer.tsx)
 const SANDBOX = 'allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads'
@@ -22,7 +24,8 @@ const SIZE = { width: 800, height: 600 }
 // The embed document runs no script and loads nothing but the page's own frame. Any site may frame
 // it unless EMBED_FRAME_ANCESTORS names the ones that may (see contentCsp in content.ts).
 function embedCsp() {
-  const csp = "default-src 'none'; style-src 'unsafe-inline'; frame-src 'self'; base-uri 'none'; form-action 'none'"
+  const frames = env.contentOrigin ? `'self' ${env.contentOrigin}` : "'self'"
+  const csp = `default-src 'none'; style-src 'unsafe-inline'; frame-src ${frames}; base-uri 'none'; form-action 'none'`
   return env.embedFrameAncestors ? `${csp}; frame-ancestors ${env.embedFrameAncestors}` : csp
 }
 
@@ -62,7 +65,8 @@ ${body}
 
 export function embedHtml(artifact: Artifact) {
   const open = publicLink(artifact)
-  const src = `/api/artifacts/${artifact.slug}/v/${artifact.currentVersion}/${keyQuery(artifact)}`
+  // Straight to the content origin when there is one, rather than through the app's redirect
+  const src = `${env.contentOrigin ?? ''}/api/artifacts/${artifact.slug}/v/${artifact.currentVersion}/${keyQuery(artifact)}`
   return embedDocument(
     `${artifact.title} | ${SITE}`,
     `<iframe class="page" src="${escapeHtml(src)}" title="${escapeHtml(artifact.title)}" sandbox="${SANDBOX}" allow="fullscreen"></iframe>

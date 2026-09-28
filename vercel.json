@@ -16,6 +16,19 @@
       "includeFiles": "apps/web/dist/index.html"
     }
   },
+  "redirects": [
+    {
+      "source": "/:path((?!api/).*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "the-artifact-content.vercel.app"
+        }
+      ],
+      "destination": "https://the-artifact-pi.vercel.app/:path",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/:path*",

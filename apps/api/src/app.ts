@@ -18,6 +18,7 @@ import { ssoButtons } from './ee/sso/connections.js'
 import { ssoAdmin, ssoSignIn } from './ee/sso/routes.js'
 import { samlSignIn } from './ee/sso/saml.js'
 import { scim, scimAdmin } from './ee/scim.js'
+import { contentHost, onContentHost } from './content.js'
 import { embeds } from './embeds.js'
 import { env, mailEnabled } from './env.js'
 import { addPruner } from './gc.js'
@@ -45,6 +46,11 @@ export const app = new Hono<AuthEnv>()
 
 // First, so every request gets an id, a log line and its timing
 app.use(observeRequests)
+// CONTENT_ORIGIN serves page files and nothing else: a page that escaped its sandbox there finds no app
+app.use(async (c, next) => {
+  if (onContentHost(c)) return contentHost.fetch(c.req.raw, c.env)
+  await next()
+})
 // Lets audit() read the request (address, user agent) wherever it is called from
 app.use(contextStorage())
 app.route('/', health)
