@@ -201,7 +201,7 @@ artifacts.get('/:slug', async (c) => {
     owner: owner?.name ?? owner?.email ?? null,
     inOrganization: artifact.organizationId !== null,
     canEdit: access === 'edit',
-    isOwner: user?.id === artifact.ownerId,
+    isOwner: user ? await canDelete(artifact, user) : false,
     canMove: movable,
     // 'personal' or the organization's id, for people who belong to it and may move the page
     ...(movable ? { workspace: workspaceKey(artifact.organizationId) } : {}),
@@ -498,7 +498,7 @@ artifacts.post('/:slug/versions/:version/restore', requireUser, async (c) => {
 
 artifacts.delete('/:slug', requireUser, async (c) => {
   const artifact = await findBySlug(c.req.param('slug'))
-  if (!artifact || !canDelete(artifact, c.get('user')!)) return c.json({ error: 'Not found' }, 404)
+  if (!artifact || !(await canDelete(artifact, c.get('user')!))) return c.json({ error: 'Not found' }, 404)
   await deleteArtifact(artifact, c.get('user')!)
   return c.body(null, 204)
 })

@@ -254,6 +254,13 @@ A client that can't do this can send an [access token](#publishing-from-ci) as a
 
 A connection publishes to one workspace: your personal workspace or one of your organizations. To publish somewhere else, disconnect the agent in **Account settings → Connected agents** and connect it again.
 
+The workspace also limits what the agent can do to pages you already have:
+
+- **In its workspace**, it has your permissions: it edits, shares and deletes the pages you own there, and in an organization everything your role allows (owners and admins edit every page, members open pages shared with the organization).
+- **Elsewhere**, it has only what is shared with you directly (as a viewer or editor) or by link, as if someone had sent you the link. Owning a page or being an admin in another organization doesn't count. An agent for your personal workspace can't open or change an organization's pages, and an agent for an organization can't open or change your personal pages, unless they are shared that way.
+
+To work on pages in another workspace, connect a second agent to it. [Access tokens](#publishing-from-ci) follow the same rule.
+
 ## Disconnecting
 
 **Account settings → Connected agents** lists every agent with access, the workspace it publishes to, and when it was last used. **Disconnect** revokes its access at once; the agent has to sign in again to publish.
@@ -268,7 +275,7 @@ A CI job (a test report, a nightly dashboard) can't open a browser to sign in. G
 2. Copy the token. It starts with `art_` and is shown once; only a hash of it is stored.
 3. Save it as a secret where the job runs, e.g. a GitHub Actions secret named `ARTIFACT_TOKEN`.
 
-A token acts for you in that one workspace, with your permissions, like a connected agent. It works as a bearer token for `POST /api/publish` (see [Publishing without an agent](/docs/publishing#publishing-without-an-agent)) and for every MCP tool at `{{MCP_URL}}`. It can't sign in to the app or make other tokens.
+A token acts for you in that one workspace, with your permissions, like a connected agent: outside it, it reaches only pages shared with you directly or by link (see [Choosing a workspace](#choosing-a-workspace)). It works as a bearer token for `POST /api/publish` (see [Publishing without an agent](/docs/publishing#publishing-without-an-agent)) and for every MCP tool at `{{MCP_URL}}`. It can't sign in to the app or make other tokens.
 
 **Account settings → Access tokens** lists your tokens with their workspace, when they were made and last used, and when they expire. **Revoke** stops a token at once: the next request with it is refused. A token also stops working when it expires, when you leave the organization it is for, or when your account is suspended, and while the organization [requires two-factor sign-in](/docs/organizations#requiring-two-factor-sign-in) and you haven't set it up. Owners and admins of an organization can see and revoke its members' tokens for it (see [Organizations](/docs/organizations#access-tokens)).
 

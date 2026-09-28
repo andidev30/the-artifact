@@ -94,40 +94,62 @@ const NAVIGATIONS = new Set(['document', 'iframe', 'frame', 'embed', 'object'])
 
 const linkSecret = () => serverSecret('content-links')
 
-function mac(key: Buffer, userId: string, artifactId: string, version: number, expires: number) {
-  return createHmac('sha256', key).update(`${userId}|${artifactId}|${version}|${expires}`).digest('base64url').slice(0, 32)
+type Scope = Viewer['workspace']
+
+// A link made for a token or agent carries its workspace ("p" for personal, or the organization's id
+// without dashes), so it opens no more than the token could when it is checked again on use. The
+// mac of a link without one is what it was before workspaces were carried, so those links still work.
+const scopeSegment = (scope: Scope) => (scope ? (scope.organizationId?.replaceAll('-', '') ?? 'p') : null)
+
+const toUuid = (hex: string) => `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+
+function mac(key: Buffer, userId: string, artifactId: string, version: number, expires: number, scope: string | null) {
+  const signed = `${userId}|${artifactId}|${version}|${expires}${scope === null ? '' : `|${scope}`}`
+  return createHmac('sha256', key).update(signed).digest('base64url').slice(0, 32)
 }
 
 // Stable for an hour at a time, so the browser cache keeps working between visits
-export async function signContentLink(userId: string, artifact: Artifact, version: number, now = Date.now()): Promise<string> {
+export async function signContentLink(userId: string, artifact: Artifact, version: number, now = Date.now(), scope?: Scope): Promise<string> {
   const hour = 3600_000
   const expires = Math.floor(now / hour) * hour + (TOKEN_HOURS + 1) * hour
   const exp = Math.floor(expires / 1000)
-  return `${userId.replaceAll('-', '')}.${exp.toString(36)}.${mac(await linkSecret(), userId, artifact.id, version, exp)}`
+  const segment = scopeSegment(scope)
+  return `${userId.replaceAll('-', '')}.${exp.toString(36)}.${segment === null ? '' : `${segment}.`}${mac(await linkSecret(), userId, artifact.id, version, exp, segment)}`
 }
 
-// The user id a link token was issued to, or null when it is forged, for another page or expired
-export async function verifyContentLink(token: string, artifact: Artifact, version: number, now = Date.now()): Promise<string | null> {
-  const match = token.match(/^([0-9a-f]{32})\.([0-9a-z]{1,10})\.([A-Za-z0-9_-]{32})$/)
+// Whom a link token was issued to and for which workspace, or null when it is forged, for another page or expired
+export async function verifyContentLink(
+  token: string,
+  artifact: Artifact,
+  version: number,
+  now = Date.now(),
+): Promise<{ userId: string; scope: Scope } | null> {
+  const match = token.match(/^([0-9a-f]{32})\.([0-9a-z]{1,10})\.(?:(p|[0-9a-f]{32})\.)?([A-Za-z0-9_-]{32})$/)
   if (!match) return null
-  const hex = match[1]
-  const userId = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+  const userId = toUuid(match[1])
   const exp = parseInt(match[2], 36)
   if (exp * 1000 < now) return null
-  const expected = Buffer.from(mac(await linkSecret(), userId, artifact.id, version, exp))
-  const given = Buffer.from(match[3])
-  return given.length === expected.length && timingSafeEqual(given, expected) ? userId : null
+  const segment = match[3] ?? null
+  const expected = Buffer.from(mac(await linkSecret(), userId, artifact.id, version, exp, segment))
+  const given = Buffer.from(match[4])
+  if (given.length !== expected.length || !timingSafeEqual(given, expected)) return null
+  return { userId, scope: segment === null ? undefined : { organizationId: segment === 'p' ? null : toUuid(segment) } }
 }
 
 // The person a link token names. Tokens are signed, not stored, so they can't be revoked: suspension
 // and an organization's two-factor requirement are checked here, on every use.
-async function userById(id: string): Promise<Viewer | null> {
+async function userById(id: string, scope: Scope): Promise<Viewer | null> {
   const [u] = await db
     .select({ id: schema.users.id, email: schema.users.email, suspendedAt: schema.users.suspendedAt })
     .from(schema.users)
     .where(eq(schema.users.id, id))
   if (!u || u.suspendedAt) return null
-  return { id: u.id, email: u.email, blockedOrgs: await blockedOrganizations(u.id) }
+  return { id: u.id, email: u.email, blockedOrgs: await blockedOrganizations(u.id), ...(scope ? { workspace: scope } : {}) }
+}
+
+async function linkViewer(token: string, artifact: Artifact, version: number): Promise<Viewer | null> {
+  const signed = await verifyContentLink(token, artifact, version)
+  return signed ? userById(signed.userId, signed.scope) : null
 }
 
 // The current version is for anyone who can open the page; older ones only for its editors,
@@ -190,8 +212,7 @@ export async function serveVersion(c: Context<AuthEnv>) {
     viewer = null
     link = { granted: true }
   } else if (token) {
-    const userId = await verifyContentLink(token, artifact, version)
-    viewer = userId ? await userById(userId) : null
+    viewer = await linkViewer(token, artifact, version)
     if (!viewer) return notFound(c)
   } else if (onContent) {
     link = { key: c.req.query('k') ?? null }
@@ -314,9 +335,10 @@ function zipName(artifact: Artifact, version: number) {
 }
 
 // A download link an agent can fetch without a session. It carries a link token like the sandboxed
-// frame's, so it only works for this person and version, and access is checked again when it is used.
-export async function downloadLink(userId: string, artifact: Artifact, version: number) {
-  const token = await signContentLink(userId, artifact, version)
+// frame's, so it only works for this person and version, and access is checked again when it is used,
+// as for the agent's workspace (scope)
+export async function downloadLink(userId: string, artifact: Artifact, version: number, scope?: Scope) {
+  const token = await signContentLink(userId, artifact, version, Date.now(), scope)
   return `${env.appUrl}/api/artifacts/${artifact.slug}/download?version=${version}&token=${token}`
 }
 
@@ -332,8 +354,7 @@ export async function downloadVersion(c: Context<AuthEnv>) {
   let viewer: Viewer | null = c.get('user')
   const token = c.req.query('token')
   if (token) {
-    const userId = await verifyContentLink(token, artifact, version)
-    viewer = userId ? await userById(userId) : null
+    viewer = await linkViewer(token, artifact, version)
     if (!viewer) return notFound(c)
   }
   const link = token ? {} : await linkPassFor(c, artifact)

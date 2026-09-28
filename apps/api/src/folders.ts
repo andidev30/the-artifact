@@ -1,5 +1,5 @@
 import { and, asc, count, eq, isNull, ne, sql, type SQL } from 'drizzle-orm'
-import { canEdit, pagesInWorkspace, type Viewer } from './artifacts.js'
+import { canEdit, inScope, pagesInWorkspace, type Viewer } from './artifacts.js'
 import { db, schema } from './db/index.js'
 import type { Artifact, Folder } from './db/schema.js'
 import type { Workspace } from './quota.js'
@@ -52,8 +52,9 @@ export async function belongsTo(member: Member, ws: Workspace): Promise<boolean>
 
 // Filing a page changes it, so it takes edit access to the page as well as a place in its workspace.
 // Someone a page is shared with from another workspace can't file it: its folders aren't theirs to see.
+// Nor can a token for another workspace (inScope).
 export async function canFile(artifact: Artifact, viewer: Viewer): Promise<boolean> {
-  return (await belongsTo(viewer, workspaceOf(artifact))) && (await canEdit(artifact, viewer))
+  return inScope(viewer, artifact.organizationId) && (await belongsTo(viewer, workspaceOf(artifact))) && (await canEdit(artifact, viewer))
 }
 
 // With how many of their pages this person sees in each, counted like the gallery lists them

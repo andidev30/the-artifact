@@ -25,6 +25,7 @@ import {
   findBySlug,
   getFile,
   getVersion,
+  inScope,
   listFiles,
   versionHtml,
   listForWorkspace,
@@ -209,7 +210,7 @@ function refusal(name: string, what: string, wait: number) {
 
 // One server per request (stateless), bound to the person and workspace behind the token
 function buildServer(auth: McpAuth) {
-  const viewer = { id: auth.userId, email: auth.email, blockedOrgs: auth.blockedOrgs }
+  const viewer = { id: auth.userId, email: auth.email, blockedOrgs: auth.blockedOrgs, workspace: { organizationId: auth.organizationId } }
   const workspace = { userId: auth.userId, organizationId: auth.organizationId }
   const server = new McpServer({ name: 'the-artifact', version: '0.1.0' })
 
@@ -343,7 +344,7 @@ function buildServer(auth: McpAuth) {
       },
       limited(async ({ files, update }) => {
         try {
-          const { uploadId, uploads, stored } = await prepareUpload(files, auth.userId, { partial: update === true })
+          const { uploadId, uploads, stored } = await prepareUpload(files, { id: auth.userId, blockedOrgs: auth.blockedOrgs }, { partial: update === true })
           const commands = uploads.map((u) => `curl -fsS -T '${u.paths[0]}' '${u.url}'${u.paths.length > 1 ? `  # also ${u.paths.slice(1).join(', ')}` : ''}`)
           return {
             ...text(
@@ -626,6 +627,8 @@ function buildServer(auth: McpAuth) {
       if (folder === undefined && to === undefined) return text('Say where to move the page: folder, workspace or both.', true)
       const lines: string[] = []
       if (to !== undefined && to !== (artifact.organizationId ?? 'personal')) {
+        if (!inScope(viewer, artifact.organizationId))
+          return text('This page is in another workspace than the one this connection publishes to, so it can only be moved from there.', true)
         if (!(await canMove(artifact, viewer, true)))
           return text("This page belongs to a workspace you aren't in, so you can't move it. Its owner or a member of that workspace can.", true)
         try {
@@ -919,7 +922,8 @@ function buildServer(auth: McpAuth) {
     },
     limited(async ({ artifact_id }) => {
       const artifact = await findBySlug(parseArtifactRef(artifact_id))
-      if (!artifact || !canDelete(artifact, viewer)) return text(`No page you own has the id "${artifact_id}". Only the owner of a page can delete it.`, true)
+      if (!artifact || !(await canDelete(artifact, viewer)))
+        return text(`No page you own has the id "${artifact_id}". Only the owner of a page can delete it.`, true)
       await deleteArtifact(artifact, viewer)
       return text(`Deleted "${artifact.title}". Its link no longer works.`)
     }),
@@ -1053,7 +1057,7 @@ function buildServer(auth: McpAuth) {
       const v = await getVersion(artifact, n)
       if (!v) return text(`"${artifact.title}" has no version ${n}.`, true)
       const files = await listFiles(v.id)
-      const link = await downloadLink(auth.userId, artifact, n)
+      const link = await downloadLink(auth.userId, artifact, n, viewer.workspace)
       return text(
         `Version ${n} of "${artifact.title}": index.html${files.length ? ` and ${files.length} more ${files.length === 1 ? 'file' : 'files'}` : ''}.\n` +
           `Download: ${link}\n` +

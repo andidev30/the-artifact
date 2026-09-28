@@ -187,6 +187,30 @@ describe('exporting an account', () => {
     expect(files['comments.json'].toString()).not.toContain('Secret plans')
   })
 
+  it('leaves out pages in organizations the account left or is kept out of', async () => {
+    const me = await createUser()
+    const boss = await createUser()
+    const kept = await createOrg(boss, 'Kept', 'kept')
+    const left = await createOrg(boss, 'Left', 'left')
+    const strict = await createOrg(boss, 'Strict', 'strict')
+    for (const org of [kept, left, strict]) await addMember(org.id, me, 'member')
+    const personal = await createPage(me, { title: 'Personal' })
+    const stays = await createPage(me, { organizationId: kept.id, title: 'Still here' })
+    const gone = await createPage(me, { organizationId: left.id, title: 'Left behind', visibility: 'organization' })
+    const closed = await createPage(me, { organizationId: strict.id, title: 'Needs a factor' })
+    expect((await call(`/api/artifacts/${gone.slug}/comments`, { cookie: me.cookie, json: { body: 'Before I left' } })).status).toBe(201)
+    expect((await call(`/api/organizations/${left.id}/members/${me.id}`, { method: 'DELETE', cookie: me.cookie })).status).toBe(204)
+    await db.update(schema.organizations).set({ requireTwoFactor: true }).where(eq(schema.organizations.id, strict.id))
+
+    const { view, files } = await exportOf(me, { versions: 'current' })
+    expect(view.pagesTotal).toBe(2)
+    const pages = Object.keys(files).filter((p) => p.endsWith('/page.json'))
+    expect(pages.sort()).toEqual([`pages/${personal.slug}/page.json`, `pages/${stays.slug}/page.json`].sort())
+    expect(Object.keys(files).some((p) => p.includes(gone.slug) || p.includes(closed.slug))).toBe(false)
+    // A comment on a page left behind is one written elsewhere, and names no page it can't open
+    expect(parse(files, 'comments.json')).toEqual([expect.objectContaining({ body: 'Before I left', page: null })])
+  })
+
   it('builds in many small steps across parts of the upload, and the zip still opens', async () => {
     const me = await createUser()
     // Random bytes don't compress, so three versions make more than one 8 MB part

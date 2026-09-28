@@ -48,7 +48,7 @@ Owners and admins can add [webhooks](/docs/webhooks) under **Webhooks** in the o
 
 Owners and admins can check **Require two-factor sign-in** under **General** in the organization's settings. You need a passkey or an authenticator app on your own account first (see [Signing in](/docs/signing-in)), so turning it on can't lock you out. **Members** shows who has two-factor sign-in (**2FA on**) and who doesn't yet (**No 2FA**).
 
-Members without it are sent to **Sign-in security** the next time they sign in. Until they add a passkey or an authenticator app, they can't open the organization's gallery, folders or settings in the app, see its pages (except ones shared with them directly or by link), connect a new agent to it or make access tokens for it. The notice on their pages says so. They can still leave the organization.
+Members without it are sent to **Sign-in security** the next time they sign in. Until they add a passkey or an authenticator app, they can't open the organization's gallery, folders or settings in the app, see its pages (except ones shared with them directly or by link, even pages they published there), connect a new agent to it or make access tokens for it. The notice on their pages says so. They can still leave the organization.
 
 Agents they already connected to the organization and access tokens they already made for it stop working too, and their other agents can't reach its pages. So before you turn it on, check under **Members** that people whose CI publishes to the organization have **2FA on**. Nothing is deleted: their agents and tokens work again as soon as they add a second factor, and turning the requirement off lets everyone back in at once.
 
@@ -68,7 +68,7 @@ On a self-hosted server with an Enterprise license, owners and admins see who si
 
 ## Leaving or deleting
 
-Members can leave from the organization's settings, under **Members**. Pages you published there stay in the organization. Agents you connected to it and access tokens you made for it stop working at once.
+Members can leave from the organization's settings, under **Members**. Pages you published there stay in the organization, and so does control of them: once you leave or are removed, you can't open, change, share or delete them unless someone shares them with you, and they are no longer in your account's [data export](/docs/exporting-your-data). The organization's owners and admins keep editing them. Agents you connected to it and access tokens you made for it stop working at once.
 
 Deleting your account (**Account settings → Delete account**) is blocked while you are the only owner of an organization that has other people in it. Otherwise, before you confirm, the page lists what will happen:
 

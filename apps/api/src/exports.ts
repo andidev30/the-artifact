@@ -1,7 +1,7 @@
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
-import { and, asc, count, desc, eq, gt, isNull, lt, ne, or, sql, type SQL } from 'drizzle-orm'
+import { and, asc, count, desc, eq, gt, isNull, lt, not, or, sql, type SQL } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/pg-core'
-import { accessLevel, artifactUrl, loadVersionTree, VISIBILITY_LABEL, type Viewer } from './artifacts.js'
+import { accessLevel, artifactUrl, loadVersionTree, ownedPages, VISIBILITY_LABEL, type Viewer } from './artifacts.js'
 import { blockedOrganizations } from './auth/factors.js'
 import { db, schema } from './db/index.js'
 import type { Artifact, DataExport } from './db/schema.js'
@@ -82,12 +82,17 @@ const prefixOf = (id: string) => `${EXPORTS}${id}/`
 // Rate limit keys: one export of an account, and one of an organization, per window
 export const limitKey = (e: Pick<DataExport, 'userId' | 'organizationId'>) => (e.organizationId ? `org:${e.organizationId}` : `user:${e.userId}`)
 
-function pagesOf(e: Pick<DataExport, 'userId' | 'organizationId'>): SQL {
-  return e.organizationId ? eq(a.organizationId, e.organizationId) : eq(a.ownerId, e.userId)
+// An account's pages are the ones it owns where owning counts: personal ones, and those in
+// organizations it is still a member of and not blocked from. Pages it left behind stay with them.
+async function pagesOf(e: Pick<DataExport, 'userId' | 'organizationId'>): Promise<SQL> {
+  return e.organizationId ? eq(a.organizationId, e.organizationId) : ownedPages(e.userId, await blockedOrganizations(e.userId))
 }
 
 export async function createExport(userId: string, organizationId: string | null, allVersions: boolean): Promise<DataExport> {
-  const [{ n }] = await db.select({ n: count() }).from(a).where(pagesOf({ userId, organizationId }))
+  const [{ n }] = await db
+    .select({ n: count() })
+    .from(a)
+    .where(await pagesOf({ userId, organizationId }))
   const progress: Progress = {
     stage: 'start',
     after: null,
@@ -188,12 +193,12 @@ function readme(e: DataExport, who: { email: string }, org: { name: string } | n
       : 'account.json           Your account: profile, how you sign in, your organizations, connected agents, access tokens and sessions.',
     org
       ? `pages/<page>/          One folder for every page in ${org.name}, named after the page's address (${env.appUrl}/a/<page>).`
-      : `pages/<page>/          One folder for every page you own, in your personal workspace and in organizations, named after the page's address (${env.appUrl}/a/<page>).`,
+      : `pages/<page>/          One folder for every page you own, in your personal workspace and in the organizations you are a member of, named after the page's address (${env.appUrl}/a/<page>).`,
     '  page.json            The page: title, owner, workspace, folder, who can open it, the people it is shared with, and its versions with',
     '                       when and by whom each was published.',
     '  comments.json        The comments on the page, with the display name of each author (null when they have none or deleted their account).',
     '  versions/<n>/        The files of version n: index.html and the files next to it. Open index.html in a browser to see the page.',
-    ...(org ? [] : ["comments.json          Comments you wrote on other people's pages. The page is named only while you can still open it."]),
+    ...(org ? [] : ['comments.json          Comments you wrote on pages not in this export. The page is named only while you can still open it.']),
     '',
     e.allVersions ? 'Every version of every page is included.' : 'Only the current version of each page is included; page.json still lists every version.',
     'A version deleted while the export was being built may be missing.',
@@ -438,7 +443,7 @@ async function pageComments(pageId: string, e: DataExport) {
   }))
 }
 
-// Comments the person wrote on pages they don't own. A page is named only while they can open it.
+// Comments the person wrote on pages outside the export. A page is named only while they can open it.
 async function commentsElsewhere(userId: string) {
   const [user] = await db.select({ id: schema.users.id, email: schema.users.email }).from(schema.users).where(eq(schema.users.id, userId))
   const viewer: Viewer = { id: user.id, email: user.email, blockedOrgs: await blockedOrganizations(user.id) }
@@ -447,7 +452,7 @@ async function commentsElsewhere(userId: string) {
     .select({ comment: c, page: a })
     .from(c)
     .innerJoin(a, eq(c.artifactId, a.id))
-    .where(and(eq(c.authorId, userId), ne(a.ownerId, userId)))
+    .where(and(eq(c.authorId, userId), not(ownedPages(userId, viewer.blockedOrgs))))
     .orderBy(asc(c.createdAt), asc(c.id))
   const open = new Map<string, boolean>()
   const out = []
@@ -500,7 +505,7 @@ async function writeNext(e: DataExport, p: Progress, put: Put) {
     const [page] = await db
       .select()
       .from(a)
-      .where(and(pagesOf(e), p.after ? gt(a.id, p.after) : undefined))
+      .where(and(await pagesOf(e), p.after ? gt(a.id, p.after) : undefined))
       .orderBy(asc(a.id))
       .limit(1)
     if (!page) {
