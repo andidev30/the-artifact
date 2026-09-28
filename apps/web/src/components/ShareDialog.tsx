@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { getSharing, removePerson, setPersonRole, setVisibility, sharePeople, type ShareRole, type Sharing, type Visibility } from '../api'
+import { APP_URL } from '../config'
 import { useConfig } from '../useConfig'
+import { CopyCommand } from './CopyCommand'
 import './ShareDialog.css'
 
 type Props = {
@@ -17,6 +19,15 @@ function generalAccess(v: Visibility, orgName: string | null) {
   if (v === 'private') return { label: 'Restricted', detail: 'Only people with access can open with the link.' }
   if (v === 'organization') return { label: orgName ?? 'Organization', detail: `Anyone in ${orgName ?? 'your organization'} with the link can view.` }
   return { label: 'Anyone with the link', detail: 'Anyone on the internet with the link can view.' }
+}
+
+function attr(value: string) {
+  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+// The frame the oEmbed endpoint describes, at the full width of wherever it is pasted
+function embedCode(slug: string, title: string) {
+  return `<iframe src="${APP_URL}/e/${slug}" width="100%" height="600" style="border:0" title="${attr(title)}" loading="lazy" allowfullscreen></iframe>`
 }
 
 function Avatar({ name, email, src }: { name: string | null; email: string; src: string | null }) {
@@ -232,6 +243,16 @@ export function ShareDialog({ slug, title, currentUserEmail, onClose, onVisibili
               <p>{access.detail}</p>
             </div>
           </div>
+
+          <h3>Embed</h3>
+          {sharing.visibility === 'link' ? (
+            <div className="share-embed">
+              <p>Paste the link into Notion or Confluence and choose Embed, or add this code to any site.</p>
+              <CopyCommand command={embedCode(slug, title)} label="Copy embed code" plain />
+            </div>
+          ) : (
+            <p className="share-embed-note">Embedding needs Anyone with the link. Until then, an embed shows a sign-in card instead of the page.</p>
+          )}
         </>
       )}
 

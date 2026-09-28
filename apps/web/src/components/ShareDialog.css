@@ -267,6 +267,25 @@
   color: var(--ink-soft);
 }
 
+/* Embed */
+
+.share-embed {
+  display: grid;
+  gap: 8px;
+}
+
+.share-embed p,
+.share-embed-note {
+  margin: 0;
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+}
+
+.share-embed .command code {
+  padding: 10px 12px;
+  font-size: 0.8125rem;
+}
+
 .share-footer {
   display: flex;
   justify-content: space-between;
