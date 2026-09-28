@@ -7,7 +7,9 @@ import { db, schema } from './db/index.js'
 import type { Artifact } from './db/schema.js'
 import { env } from './env.js'
 import { checkPath, ENTRY_PATH } from './files.js'
+import { clientIp } from './limits.js'
 import { serverSecret } from './secrets.js'
+import { recordView } from './views.js'
 import { zip } from './zip.js'
 
 // A version is served as a real document tree at /api/artifacts/<slug>/v/<version>/, so the entry
@@ -31,6 +33,9 @@ export function contentCsp() {
 
 // Versions never change; this bounds how long a browser keeps a page someone has since lost access to
 const CACHE = 'private, max-age=3600'
+// The entry HTML is checked again on every open, so each visit reaches the server and can be counted
+// as a view; an unchanged page still gets a 304 without a trip to storage
+const ENTRY_CACHE = 'private, no-cache'
 export const TOKEN_HOURS = 12
 const NAVIGATIONS = new Set(['document', 'iframe', 'frame', 'embed', 'object'])
 
@@ -123,6 +128,19 @@ export async function serveVersion(c: Context<AuthEnv>) {
 
   const v = await getVersion(artifact, version)
   if (!v) return notFound(c)
+  // A browser opening the page, not one of its files. Runs next to the storage read and is awaited
+  // before answering, so serverless hosts don't cut it off.
+  const opened =
+    path === ENTRY_PATH && c.req.method === 'GET' && NAVIGATIONS.has(c.req.header('sec-fetch-dest') ?? '')
+      ? recordView({
+          artifact,
+          version,
+          versionId: v.id,
+          viewerId: viewer?.id ?? null,
+          identified: needsIdentity,
+          visitor: `${clientIp(c) ?? ''}|${c.req.header('user-agent') ?? ''}`,
+        })
+      : null
   let body: Buffer | string
   let contentType: string
   let etag: string
@@ -149,9 +167,10 @@ export async function serveVersion(c: Context<AuthEnv>) {
     // cross-origin requests. "*" never applies to credentialed requests, and a restricted page's
     // files are only reachable under its link token, so this exposes nothing new.
     'Access-Control-Allow-Origin': '*',
-    'Cache-Control': CACHE,
+    'Cache-Control': path === ENTRY_PATH ? ENTRY_CACHE : CACHE,
     ETag: `"${etag}"`,
   }
+  await opened
   if (!token) headers.Vary = 'Cookie'
   if (c.req.header('if-none-match') === `"${etag}"`) return c.body(null, 304, headers)
   return c.body(typeof body === 'string' ? body : new Uint8Array(body), 200, headers)

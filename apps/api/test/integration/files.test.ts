@@ -132,8 +132,10 @@ describe('serving a version as a document tree', () => {
       // The sandboxed frame's fetch() and fonts are cross-origin requests from an opaque origin
       expect(res.headers.get('access-control-allow-origin')).toBe('*')
       expect(res.headers.get('x-content-type-options')).toBe('nosniff')
-      expect(res.headers.get('cache-control')).toBe('private, max-age=3600')
     }
+    // The entry is checked again on every open, so each visit can be counted as a view
+    expect(entry.headers.get('cache-control')).toBe('private, no-cache')
+    expect(css.headers.get('cache-control')).toBe('private, max-age=3600')
 
     const png = await call(`${base}img/dot.png`)
     expect(png.headers.get('content-type')).toBe('image/png')

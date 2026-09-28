@@ -1,0 +1,57 @@
+.views-total {
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+}
+
+.views-total strong {
+  margin-right: 4px;
+  font-size: var(--step-1);
+  color: var(--ink);
+}
+
+.views-section {
+  display: grid;
+  gap: 8px;
+}
+
+.views-section h3 {
+  font-size: var(--step--1);
+  font-weight: 700;
+}
+
+.views-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.views-person {
+  display: grid;
+  gap: 2px;
+  padding: 8px 12px;
+  font-size: var(--step--1);
+  background: var(--white);
+  border: 1.5px solid var(--grid);
+  border-radius: 3px;
+  overflow-wrap: anywhere;
+}
+
+.views-email,
+.views-meta {
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
+}
+
+.views-version {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: var(--step--1);
+}
+
+.views-version .history-current {
+  margin-left: 8px;
+}

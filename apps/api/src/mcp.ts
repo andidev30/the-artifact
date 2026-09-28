@@ -57,6 +57,7 @@ import { MAX_PEOPLE_PER_INVITE, parseEmails, sharePeople, SharingError } from '.
 import { authenticateBearer, RESOURCE_METADATA_URL, type McpAuth } from './oauth/server.js'
 import { directUploads, UPLOAD_TTL_SECONDS } from './storage.js'
 import { prepareUpload } from './uploads.js'
+import { MAX_VIEWERS, pageViewers, REPEAT_MINUTES, versionViews, VIEWER_RETENTION_DAYS } from './views.js'
 
 const visibility = z
   .enum(['private', 'organization', 'link'])
@@ -568,6 +569,41 @@ function buildServer(auth: McpAuth) {
         return `- Version ${v.version}${v.version === artifact.currentVersion ? ' (current)' : ''}: ${when}, ${how}${by ? ` by ${by}` : ''}`
       })
       return text(`Versions of "${artifact.title}", newest first:\n${lines.join('\n')}\nUse restore_version to make an older one current again.`)
+    }),
+  )
+
+  server.registerTool(
+    'list_views',
+    {
+      title: 'See who opened a page',
+      description:
+        'How many times each version of a page was opened, and who opened it in the last ' +
+        `${VIEWER_RETENTION_DAYS} days with when they last did. Visits through a link shared with anyone are counted but anonymous. For people who can edit the page.`,
+      inputSchema: z.object({ artifact_id: z.string().describe('Id or link of the page') }),
+      annotations: { readOnlyHint: true },
+    },
+    limited(async ({ artifact_id }) => {
+      const artifact = await findBySlug(parseArtifactRef(artifact_id))
+      if (!artifact || !(await canEdit(artifact, viewer))) return text(`No page you can edit has the id "${artifact_id}".`, true)
+      const [versions, people] = await Promise.all([versionViews(artifact), pageViewers(artifact, MAX_VIEWERS + 1)])
+      const total = versions.reduce((sum, v) => sum + v.views, 0)
+      const times = (n: number) => `${n} ${n === 1 ? 'view' : 'views'}`
+      const perVersion = versions.map((v) => `- Version ${v.version}${v.version === artifact.currentVersion ? ' (current)' : ''}: ${times(v.views)}`)
+      const who = people
+        .slice(0, MAX_VIEWERS)
+        .map((p) => `- ${p.name ? `${p.name} <${p.email}>` : p.email}: last opened ${utc(p.lastViewedAt)} (version ${p.lastVersion}), ${times(p.visits)}`)
+      const lines = [
+        `Views of "${artifact.title}": ${times(total)} in all. Repeat visits by the same person within ${REPEAT_MINUTES} minutes count once, and the owner's own visits don't count.`,
+        ...perVersion,
+        '',
+        who.length
+          ? `Who opened it in the last ${VIEWER_RETENTION_DAYS} days, most recent first:`
+          : `Nobody opened it as themselves in the last ${VIEWER_RETENTION_DAYS} days.`,
+        ...who,
+      ]
+      if (people.length > MAX_VIEWERS) lines.push(`Only the ${MAX_VIEWERS} most recent are listed.`)
+      if (artifact.visibility === 'link') lines.push('It is shared with anyone who has the link; those visits are counted without saying who.')
+      return text(lines.join('\n'))
     }),
   )
 

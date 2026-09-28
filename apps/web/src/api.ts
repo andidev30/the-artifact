@@ -116,6 +116,8 @@ export type ArtifactPage = {
   isOwner: boolean
   // null when signed out: only signed-in people see comments
   comments?: { total: number; unread: number } | null
+  // How often it was opened; null for people who can't edit it, missing from older servers
+  views?: number | null
 }
 
 export type ArtifactList = {
@@ -575,6 +577,19 @@ async function pageRequest<T>(slug: string, path: string, fallback: string, init
 
 export function listVersions(slug: string) {
   return pageRequest<ArtifactVersion[]>(slug, '/versions', 'The history could not be loaded.')
+}
+
+export type PageViews = {
+  total: number
+  versions: { version: number; views: number }[]
+  // People who opened it as themselves in the last keptDays days, most recent first
+  people: { name: string | null; email: string; visits: number; lastViewedAt: string; lastVersion: number }[]
+  morePeople: boolean
+  keptDays: number
+}
+
+export function getViews(slug: string) {
+  return pageRequest<PageViews>(slug, '/views', 'The views could not be loaded.')
 }
 
 export function restoreVersion(slug: string, version: number) {

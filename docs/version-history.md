@@ -20,6 +20,10 @@ Agents see the same history with `list_versions`, restore with `restore_version`
 
 On your own server, for as long as the page exists. On the hosted service's free Personal plan, a personal page keeps the versions from the last 7 days; older ones are deleted once a day. The current version is always kept, however old it is. Pages in an organization keep their full history.
 
+## Views of each version
+
+**Views** next to **History** shows how many times each version was opened and who opened it. See [Who opened a page](/docs/sharing#who-opened-a-page).
+
 ## Who can see history
 
 Only people who can edit the page. Older versions can contain things the author removed on purpose, so viewers and people with the link only see the current version.

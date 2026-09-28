@@ -39,6 +39,26 @@ When someone can't open a page, they see "This page isn't available", whether th
 
 Everyone in the table who can open a page can also read and write its [comments](/docs/comments) once signed in. Visitors who aren't signed in don't see comments, even on a page shared with **Anyone with the link**.
 
+## Who opened a page
+
+Open a page and choose **Views** to see how many times it was opened, in all and for each version, and who opened it. **Views** is there for the people who can edit the page (its owner, invited editors, and organization owners and admins); people who can only view it don't see it, and pages in the gallery don't show views.
+
+What is recorded:
+
+| Visit | Recorded | Kept |
+| --- | --- | --- |
+| Someone opens a **Restricted** or **Your organization** page: people it was shared with by email, and members of the organization | One more view of that version, plus who (their account) and when | The count for as long as the page exists; who and when for 90 days |
+| Anyone opens a page set to **Anyone with the link**, signed in or not | One more view of that version, nothing about who | For as long as the page exists |
+| An editor opens an older version from **History** | One more view of that version, plus who and when | As above |
+| The page's owner opens their own page | Nothing | |
+
+- A view is counted when a browser opens the page itself, in the app or in an [embed](#embedding). Agents reading a page with `get_artifact`, downloads, link previews and screenshots don't count.
+- Repeat visits by the same person to the same version within 30 minutes count once. For visits through the link, the server tells visitors apart by their network address and browser, in memory only; neither is stored.
+- After 90 days, the record of who opened a page and when is deleted. The counts stay. Deleting your account deletes the records of what you opened; deleting a page deletes its views.
+- **Views** lists each person once, with when they last opened the page, which version, and how many times in the last 90 days.
+
+Agents can read the same numbers with `list_views` (see [Publishing](/docs/publishing#list-views)).
+
 ## Link previews
 
 When you paste a page's link into Slack, WhatsApp, an email or anything else that shows previews, a page set to **Anyone with the link** shows its title and its screenshot. Without a screenshot (it is still being taken, or the server doesn't take them), the preview shows the title only.

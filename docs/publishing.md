@@ -123,6 +123,14 @@ Lists every version of a page, newest first, as the [version history](/docs/vers
 | --- | --- | --- |
 | `artifact_id` | yes | Id or link of the page |
 
+### list_views
+
+How many times each version of a page was opened, and who opened it in the last 90 days with when they last did, like **Views** in the app. Visits through a link shared with **Anyone with the link** are counted but anonymous. Editors only. See [Who opened a page](/docs/sharing#who-opened-a-page) for what is recorded.
+
+| Argument | Required | Meaning |
+| --- | --- | --- |
+| `artifact_id` | yes | Id or link of the page |
+
 ### restore_version
 
 Makes an older version current again, like **Restore this version** in the history: its HTML and files are published again as a new version, and the link stays the same. Editors only.

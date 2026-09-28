@@ -127,6 +127,13 @@
       "when": 1790593601805,
       "tag": "0017_release_check",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790594493340,
+      "tag": "0018_page_views",
+      "breakpoints": true
     }
   ]
 }

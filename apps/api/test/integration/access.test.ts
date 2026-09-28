@@ -69,7 +69,7 @@ async function access(slug: string, who: Who): Promise<Expected> {
   expect(await content.text()).toBe('<p>secret sauce</p>')
   expect(content.headers.get('content-security-policy')).toBe('sandbox allow-scripts allow-forms allow-popups allow-modals allow-downloads')
   expect(content.headers.get('x-content-type-options')).toBe('nosniff')
-  expect(content.headers.get('cache-control')).toBe('private, max-age=3600')
+  expect(content.headers.get('cache-control')).toBe('private, no-cache')
   return body.canEdit ? 'edit' : 'view'
 }
 

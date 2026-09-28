@@ -432,6 +432,32 @@ export const commentReads = pgTable(
   (t) => [primaryKey({ columns: [t.userId, t.artifactId] })],
 )
 
+// How often each version was opened, anonymous visits included (see src/views.ts). Kept as long as the version.
+export const artifactViewCounts = pgTable('artifact_view_counts', {
+  versionId: uuid('version_id')
+    .primaryKey()
+    .references(() => artifactVersions.id, { onDelete: 'cascade' }),
+  views: integer('views').notNull().default(0),
+})
+
+// Who opened a page and when, for pages opened with an identity (not through a shared link).
+// Deleted after VIEWER_RETENTION_DAYS by the daily jobs; the counts above stay.
+export const artifactViews = pgTable(
+  'artifact_views',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    artifactId: uuid('artifact_id')
+      .notNull()
+      .references(() => artifacts.id, { onDelete: 'cascade' }),
+    version: integer('version').notNull(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    viewedAt: timestamp('viewed_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('artifact_views_artifact_user_idx').on(t.artifactId, t.userId, t.viewedAt), index('artifact_views_viewed_at_idx').on(t.viewedAt)],
+)
+
 export const signupPolicyEnum = pgEnum('signup_policy', ['open', 'domains', 'invite-only'])
 
 // Settings the instance admin edits in the web app. At most one row (id 1); without it anyone

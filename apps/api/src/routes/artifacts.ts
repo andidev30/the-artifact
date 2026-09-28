@@ -30,6 +30,7 @@ import { limitInvites } from '../limits.js'
 import { currentThumbnails, getThumbnail, queueThumbnail, thumbnailsEnabled, type ThumbnailState } from '../thumbnails.js'
 import type { Artifact, ShareRole, Visibility } from '../db/schema.js'
 import { allowed, downloadVersion, serveVersion } from '../content.js'
+import { MAX_VIEWERS, pageViewers, totalViews, versionViews, VIEWER_RETENTION_DAYS } from '../views.js'
 import { getSharing, MAX_PEOPLE_PER_INVITE, parseEmails, removePerson, setPersonRole, sharePeople, SharingError } from '../sharing.js'
 
 export const artifacts = new Hono<AuthEnv>()
@@ -146,6 +147,8 @@ artifacts.get('/:slug', async (c) => {
   const [owner] = await db.select({ name: schema.users.name, email: schema.users.email }).from(schema.users).where(eq(schema.users.id, artifact.ownerId))
   // Only signed-in people see comments (see routes/comments.ts)
   const counts = user ? await commentCounts(user.id, [artifact.id]) : null
+  // Only people who can manage the page see how often it was opened
+  const views = access === 'edit' ? await totalViews(artifact) : null
   return c.json({
     slug: artifact.slug,
     title: artifact.title,
@@ -157,6 +160,7 @@ artifacts.get('/:slug', async (c) => {
     canEdit: access === 'edit',
     isOwner: user?.id === artifact.ownerId,
     comments: counts ? (counts.get(artifact.id) ?? { total: 0, unread: 0 }) : null,
+    views,
     contentUrl: `/api/artifacts/${artifact.slug}/v/${artifact.currentVersion}/`,
   })
 })
@@ -269,6 +273,23 @@ artifacts.get('/:slug/versions', requireUser, async (c) => {
       current: v.version === artifact.currentVersion,
     })),
   )
+})
+
+// How often each version was opened, and who opened it recently. Editors only, like the history.
+artifacts.get('/:slug/views', requireUser, async (c) => {
+  const artifact = await editable(c)
+  if (!artifact) return c.json({ error: 'Not found' }, 404)
+  const [versions, people] = await Promise.all([versionViews(artifact), pageViewers(artifact, MAX_VIEWERS + 1)])
+  return c.json({
+    total: versions.reduce((sum, v) => sum + v.views, 0),
+    versions,
+    people: people
+      .slice(0, MAX_VIEWERS)
+      .map((p) => ({ name: p.name, email: p.email, visits: p.visits, lastViewedAt: p.lastViewedAt, lastVersion: p.lastVersion })),
+    // More people than this opened it; only the most recent are listed
+    morePeople: people.length > MAX_VIEWERS,
+    keptDays: VIEWER_RETENTION_DAYS,
+  })
 })
 
 function versionParam(c: Context<AuthEnv>): number | null {
