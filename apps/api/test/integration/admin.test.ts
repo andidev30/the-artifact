@@ -1,18 +1,20 @@
 import { eq } from 'drizzle-orm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AccountSuspendedError, findOrCreateUser } from '../../src/auth/users.js'
+import { AccountSuspendedError, findOrCreateUser, NeedsSetupError } from '../../src/auth/users.js'
 import { hashToken } from '../../src/auth/session.js'
 import { downloadLink, signContentLink } from '../../src/content.js'
 import { db, schema } from '../../src/db/index.js'
 import { env } from '../../src/env.js'
 import { log } from '../../src/log.js'
 import { sendSignInLink } from '../../src/mail.js'
+import { setupCodeMatches, storeSetupCode } from '../../src/setup-code.js'
 import { addMember, call, callTool, connectAgent, createOrg, createPage, createUser, mcpRequest, type TestUser } from './helpers.js'
 
-const original = { selfHosted: env.selfHosted }
+const original = { selfHosted: env.selfHosted, setupCode: env.setupCode }
 
 afterEach(() => {
   env.selfHosted = original.selfHosted
+  env.setupCode = original.setupCode
 })
 
 async function isAdminInDb(email: string) {
@@ -26,18 +28,38 @@ async function me(user: TestUser) {
 }
 
 describe('first account becomes the instance admin', () => {
+  const setupCode = 'ABCD-EFGH-JKMN'
+  beforeEach(() => storeSetupCode(setupCode))
+
   it('makes only the first account an admin when self-hosted', async () => {
     env.selfHosted = true
-    await findOrCreateUser({ email: 'first@example.com', method: 'email_link' })
+    await findOrCreateUser({ email: 'first@example.com', method: 'email_link', setupCode })
     await findOrCreateUser({ email: 'second@example.com', method: 'email_link' })
     expect(await isAdminInDb('first@example.com')).toBe(true)
     expect(await isAdminInDb('second@example.com')).toBe(false)
   })
 
+  it('needs the setup code for the first account, and forgets it after', async () => {
+    env.selfHosted = true
+    await expect(findOrCreateUser({ email: 'first@example.com', method: 'google' })).rejects.toBeInstanceOf(NeedsSetupError)
+    await expect(findOrCreateUser({ email: 'first@example.com', method: 'email_link', setupCode: 'ABCD-EFGH-JKMP' })).rejects.toBeInstanceOf(NeedsSetupError)
+    expect(await db.select().from(schema.users)).toHaveLength(0)
+    // Case, spaces and dashes don't matter
+    expect((await findOrCreateUser({ email: 'first@example.com', method: 'email_link', setupCode: 'abcd efgh jkmn' })).isAdmin).toBe(true)
+    expect(await setupCodeMatches(setupCode)).toBe(false)
+  })
+
+  it('takes the code from SETUP_CODE when it is set', async () => {
+    env.selfHosted = true
+    env.setupCode = 'OPERATORCHOSEN1'
+    await expect(findOrCreateUser({ email: 'first@example.com', method: 'email_link', setupCode })).rejects.toBeInstanceOf(NeedsSetupError)
+    expect((await findOrCreateUser({ email: 'first@example.com', method: 'email_link', setupCode: 'operator-chosen-1' })).isAdmin).toBe(true)
+  })
+
   it('gives exactly one of many simultaneous sign-ups admin', async () => {
     env.selfHosted = true
     const emails = Array.from({ length: 8 }, (_, i) => `racer${i}@example.com`)
-    const users = await Promise.all(emails.map((email) => findOrCreateUser({ email, method: 'email_link' })))
+    const users = await Promise.all(emails.map((email) => findOrCreateUser({ email, method: 'email_link', setupCode })))
     expect(users.filter((u) => u.isAdmin)).toHaveLength(1)
     const rows = await db.select().from(schema.users)
     expect(rows).toHaveLength(8)
@@ -47,8 +69,8 @@ describe('first account becomes the instance admin', () => {
   it('creates one account when the same person signs up twice at once', async () => {
     env.selfHosted = true
     const [a, b] = await Promise.all([
-      findOrCreateUser({ email: 'twice@example.com', method: 'email_link' }),
-      findOrCreateUser({ email: 'twice@example.com', method: 'email_link' }),
+      findOrCreateUser({ email: 'twice@example.com', method: 'email_link', setupCode }),
+      findOrCreateUser({ email: 'twice@example.com', method: 'email_link', setupCode }),
     ])
     expect(a.id).toBe(b.id)
     expect(a.isAdmin).toBe(true)

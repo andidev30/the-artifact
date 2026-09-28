@@ -7,6 +7,8 @@ export type AppConfig = {
   emailSignIn: boolean
   // No accounts yet on a server without email; the sign-up page shows the setup form
   needsSetup: boolean
+  // No accounts yet on a self-hosted install: the first one needs the setup code from the server log
+  setupCode?: boolean
   // Without email: whether people may create a password account on their own (sign-up policy allows it)
   passwordSignUp?: boolean
   // Set by the instance admin; shown in the signed-in header

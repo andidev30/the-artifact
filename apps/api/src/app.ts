@@ -126,14 +126,16 @@ api.use(loadUser)
 
 // What the web app needs to know about this install
 api.get('/config', async (c) => {
-  const [accounts, settings, sso] = await Promise.all([mailEnabled() ? true : hasAccountsCached(), instanceSettings(), ssoButtons()])
+  const [accounts, settings, sso] = await Promise.all([mailEnabled() && !env.selfHosted ? true : hasAccountsCached(), instanceSettings(), ssoButtons()])
   return c.json({
     selfHosted: env.selfHosted,
     googleSignIn: Boolean(env.google.clientId && env.google.clientSecret),
     // Without SMTP, people sign in with a password and admins pass links on by hand
     emailSignIn: mailEnabled(),
     // No accounts yet on a server without email: the web app shows the setup form
-    needsSetup: !accounts,
+    needsSetup: !mailEnabled() && !accounts,
+    // No accounts yet on a self-hosted install: the first one needs the setup code from the server log
+    setupCode: env.selfHosted && !accounts,
     // Without email, whether people can create a password account on their own
     passwordSignUp: passwordSignUpOpen(settings),
     instanceName: settings.instanceName,

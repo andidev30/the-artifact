@@ -178,7 +178,7 @@ Owners and admins can turn on **Require two-factor sign-in** once they have a se
 
 ## Instance admins
 
-- On a self-hosted install the first account becomes the instance admin; more can be added from the admin area, or from the server with the make-admin script. See [The instance admin](/docs/self-hosting#the-instance-admin).
+- On a self-hosted install the first account becomes the instance admin. Creating it takes a one-time setup code the server prints to its log (or `SETUP_CODE`), so only someone who can read the server's log can claim a fresh install; the database keeps only a hash of the code. More admins can be added from the admin area, or from the server with the make-admin script. See [The instance admin](/docs/self-hosting#the-instance-admin).
 - Admins manage accounts and organizations. They can't read private pages through the admin area: it shows counts, not page content.
 - Suspending someone deletes their sessions, agent tokens and access tokens at once, and refuses their sign-in links, Google sign-in, passkeys and MCP calls until they are unsuspended. Links to page content made for them (the sandboxed frame's link and an agent's download link) are signed rather than stored, so they are checked against suspension each time they are used and stop working at once too.
 - Everything admins do in the admin area is written to the server log; see [The security log](#the-security-log). There is no instance-level audit log in the app.

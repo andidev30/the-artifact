@@ -4,6 +4,7 @@ import { hashPassword } from '../../src/auth/password.js'
 import { db, schema } from '../../src/db/index.js'
 import { env } from '../../src/env.js'
 import { sendCommentNotice, sendInvitation, sendShareNotice } from '../../src/mail.js'
+import { storeSetupCode } from '../../src/setup-code.js'
 import { call, createOrg, createPage, createUser, sessionCookie, type TestUser } from './helpers.js'
 
 // A server without SMTP_HOST: passwords instead of emailed links, and links admins pass on by hand
@@ -30,27 +31,54 @@ async function withPassword(user: TestUser, password: string) {
 }
 
 describe('first run', () => {
-  it('asks for setup until the first account exists, which becomes the admin', async () => {
-    expect(await config()).toMatchObject({ emailSignIn: false, needsSetup: true })
+  const setupCode = 'WXYZ-2345-6789'
+  beforeEach(() => storeSetupCode(setupCode))
 
-    const res = await call('/api/auth/password/setup', { json: { email: 'Owner@Example.com', password: 'correct horse', name: ' Ada ' } })
+  it('asks for setup until the first account exists, which becomes the admin', async () => {
+    expect(await config()).toMatchObject({ emailSignIn: false, needsSetup: true, setupCode: true })
+
+    const res = await call('/api/auth/password/setup', { json: { email: 'Owner@Example.com', password: 'correct horse', name: ' Ada ', setupCode } })
     expect(res.status).toBe(201)
     const cookie = sessionCookie(res)!
     const me = await (await call('/api/me', { cookie })).json()
     expect(me).toMatchObject({ email: 'owner@example.com', name: 'Ada', isAdmin: true, hasPassword: true })
-    expect(await config()).toMatchObject({ needsSetup: false })
+    expect(await config()).toMatchObject({ needsSetup: false, setupCode: false })
+  })
+
+  it('needs the setup code from the server log', async () => {
+    const setUp = (code?: string) => call('/api/auth/password/setup', { json: { email: 'a@example.com', password: 'long enough', setupCode: code } })
+    for (const code of [undefined, '', 'WXYZ-2345-678A']) {
+      const res = await setUp(code)
+      expect(res.status, String(code)).toBe(400)
+      expect(await res.json()).toMatchObject({ field: 'setupCode' })
+    }
+    expect(await db.select().from(schema.users)).toHaveLength(0)
+    expect((await setUp(setupCode)).status).toBe(201)
+  })
+
+  it('keeps password sign-up closed until the first account exists', async () => {
+    const res = await call('/api/auth/password/sign-up', { json: { email: 'a@example.com', password: 'long enough' } })
+    expect(res.status).toBe(409)
+    expect(await res.json()).toMatchObject({ code: 'needs_setup' })
+    expect(await db.select().from(schema.users)).toHaveLength(0)
+  })
+
+  it('needs no code on the hosted service', async () => {
+    env.selfHosted = false
+    expect(await config()).toMatchObject({ needsSetup: true, setupCode: false })
+    expect((await call('/api/auth/password/setup', { json: { email: 'a@example.com', password: 'long enough' } })).status).toBe(201)
   })
 
   it('works only once, even when two people race for it', async () => {
     const results = await Promise.all(
-      ['a@example.com', 'b@example.com'].map((email) => call('/api/auth/password/setup', { json: { email, password: 'long enough' } })),
+      ['a@example.com', 'b@example.com'].map((email) => call('/api/auth/password/setup', { json: { email, password: 'long enough', setupCode } })),
     )
     expect(results.map((r) => r.status).sort()).toEqual([201, 409])
     expect(await db.select().from(schema.users)).toHaveLength(1)
   })
 
   it('rejects short passwords', async () => {
-    const res = await call('/api/auth/password/setup', { json: { email: 'a@example.com', password: 'short' } })
+    const res = await call('/api/auth/password/setup', { json: { email: 'a@example.com', password: 'short', setupCode } })
     expect(res.status).toBe(400)
     expect(await res.json()).toMatchObject({ field: 'password' })
   })

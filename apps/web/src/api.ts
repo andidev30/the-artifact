@@ -818,14 +818,16 @@ export type SignInLink = {
   // Using the link sets a password: it came from an admin, or the server can't send email
   setPassword: boolean
   emailEnabled: boolean
+  // The first account on a self-hosted install: continuing needs the setup code from the server log
+  setupCode?: boolean
 }
 
 export function getSignInLink(token: string) {
   return request<SignInLink>(`/auth/email/confirm?token=${encodeURIComponent(token)}`)
 }
 
-export function confirmSignInLink(token: string, plan: string | null, next: string | null, password?: string) {
-  return request<{ redirect: string }>('/auth/email/confirm', { method: 'POST', json: { token, plan, next, password } })
+export function confirmSignInLink(token: string, plan: string | null, next: string | null, password?: string, setupCode?: string) {
+  return request<{ redirect: string }>('/auth/email/confirm', { method: 'POST', json: { token, plan, next, password, setupCode } })
 }
 
 export function logInWithPassword(email: string, password: string, plan: string | null, next: string | null) {
@@ -838,8 +840,8 @@ export function signUpWithPassword(email: string, password: string, name: string
 }
 
 // The first account on a server without email
-export function setUpServer(email: string, password: string, name: string) {
-  return request<{ redirect: string }>('/auth/password/setup', { method: 'POST', json: { email, password, name } })
+export function setUpServer(email: string, password: string, name: string, setupCode: string) {
+  return request<{ redirect: string }>('/auth/password/setup', { method: 'POST', json: { email, password, name, setupCode } })
 }
 
 export function changePassword(currentPassword: string, password: string, signOutAgents = false) {

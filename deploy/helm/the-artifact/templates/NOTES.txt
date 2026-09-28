@@ -16,8 +16,10 @@ and open {{ include "the-artifact.appUrl" . }}{{ if ne (include "the-artifact.ap
 {{- end }}
 {{- if .Values.selfHosted }}
 
-Create the first account right away: on a self-hosted server it becomes the instance admin.
-Do this before you share the address.
+Create the first account right away: on a self-hosted server it becomes the instance admin, so
+it needs the setup code the app prints to its log:
+
+  kubectl -n {{ .Release.Namespace }} logs deploy/{{ include "the-artifact.fullname" . }} -c app | grep "setup code"
 {{- end }}
 
 Agents connect to {{ include "the-artifact.appUrl" . }}/mcp.

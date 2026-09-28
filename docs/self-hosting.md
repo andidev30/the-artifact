@@ -44,7 +44,15 @@ Put each setting in the file listed here: the compose file sets the `.env` ones 
 docker compose up -d
 ```
 
-The first start pulls the images. The app listens on port 8080 (or `ARTIFACT_PORT`) of the server itself, `127.0.0.1`, so nothing else reaches it until you [put it behind HTTPS](#3-put-it-behind-https). To try it from another computer first, set `ARTIFACT_BIND=0.0.0.0` in `.env` and `APP_URL` to the address you open, e.g. `http://192.168.1.20:8080`, then run `docker compose up -d` again. It creates and updates its database tables on every start. Open `APP_URL` and create the first account: it becomes the instance admin (see [The instance admin](#the-instance-admin)). Without email, the first page you see is **Set up this server**, which asks for your email and a password. Do this before you share the address.
+The first start pulls the images. The app listens on port 8080 (or `ARTIFACT_PORT`) of the server itself, `127.0.0.1`, so nothing else reaches it until you [put it behind HTTPS](#3-put-it-behind-https). To try it from another computer first, set `ARTIFACT_BIND=0.0.0.0` in `.env` and `APP_URL` to the address you open, e.g. `http://192.168.1.20:8080`, then run `docker compose up -d` again. It creates and updates its database tables on every start.
+
+Then create the first account. It becomes the instance admin (see [The instance admin](#the-instance-admin)), so it needs the setup code the app prints to its log when it starts without accounts:
+
+```sh
+docker compose logs app | grep "setup code"
+```
+
+Open `APP_URL` and sign up. With email, you enter the code when you open the sign-in link; without email, the first page you see is **Set up this server**, which asks for the code, your email and a password. Each start prints a new code, and the last one printed is the one that works, so run `docker compose restart app` if you lost it.
 
 The image includes a headless Chromium for gallery thumbnails. The compose file runs the app with `deploy/seccomp-chromium.json` so Chromium can keep its sandbox on (see [Security](/docs/security)); keep that line if you write your own compose file, or the log will say thumbnails are off. On Kubernetes the profile goes on the nodes; see [Kubernetes](/docs/kubernetes#3-the-seccomp-profile).
 
@@ -125,7 +133,9 @@ See [Connect your agent](/docs/connect-your-agent) for Claude Desktop, Cursor, V
 
 ## The instance admin
 
-The first account created on a fresh install becomes its admin. Only one account can be first: if two people sign up at the same moment, exactly one of them gets it. After signing up, the admin is asked to name the organization everyone on the server works in (or to skip it and start on their own). Everyone who signs up after that is a regular user until an admin promotes them: they start in their personal workspace with nothing to choose, and join organizations by invitation.
+The first account created on a fresh install becomes its admin. Creating it takes the one-time setup code from the server log, so someone who reaches a new server before you can't make themselves its admin. Only one account can be first: if two people sign up at the same moment, exactly one of them gets it. Google and single sign-on can't be used for the first account, since they have nowhere to ask for the code; sign up with your email, and connect Google afterwards by signing in with it.
+
+The server makes a new code each time it starts without accounts, and keeps only a hash of it in the database, so every worker checks the same one. To choose the code yourself, for example when a script sets the server up, set `SETUP_CODE` in `app.env` to at least 12 letters or digits; the log then only says to use it. Once the first account exists, the code does nothing. After signing up, the admin is asked to name the organization everyone on the server works in (or to skip it and start on their own). Everyone who signs up after that is a regular user until an admin promotes them: they start in their personal workspace with nothing to choose, and join organizations by invitation.
 
 Admins see **Server admin** in the menu under their name, which opens `/admin`. When a newer release than the one running is out, a notice at the top links to its release notes; see [New releases](/docs/upgrading#new-releases) for how the server finds out and how to turn it off with `RELEASE_CHECK=false`. The page has these sections:
 
@@ -171,7 +181,7 @@ The automatic first-account admin applies unless `SELF_HOSTED=false`, which only
 
 Leave `SMTP_HOST` empty and The Artifact sends no email:
 
-- **First start**: the web app shows **Set up this server**. The account you create there, with a password, is the instance admin.
+- **First start**: the web app shows **Set up this server**. The account you create there, with a password and the setup code from `docker compose logs app`, is the instance admin.
 - **Logging in**: with email and password, or with Google when it is configured.
 - **Signing up on their own**: under the **Anyone** or **Email domains** policy, the sign-up page asks for an email and a password. Nobody checks that the address belongs to the person typing it, so an address someone invited or shared a page with can't be taken there; that person uses their invitation link or a sign-up link. If people you don't trust can reach the server, choose **Invited people only**.
 - **Adding people**: under **Server admin**, **People**, enter their address and choose **Make sign-up link**. Send them the link however you like; it works once, for 7 days, and asks them to choose a password. It creates their account whatever the sign-up policy says.

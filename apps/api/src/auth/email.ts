@@ -2,12 +2,14 @@ import { and, eq, gt } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { db, schema } from '../db/index.js'
 import type { User } from '../db/schema.js'
-import { env, mailEnabled } from '../env.js'
+import { env, mailEnabled, normalizeSetupCode } from '../env.js'
+import { needsSetupCode } from '../instance.js'
 import { clientIp, limitRequest } from '../limits.js'
 import { log } from '../log.js'
 import { sendSignInLink } from '../mail.js'
+import { setupCodeMatches } from '../setup-code.js'
 import { isAccountEmail, isEmail } from '../validation.js'
-import { hashPassword, passwordProblem } from './password.js'
+import { hashPassword, passwordProblem, SETUP_CODE_MISSING, SETUP_CODE_WRONG } from './password.js'
 import { hashToken, randomToken } from './session.js'
 import { continueSignIn } from './twofactor.js'
 import { afterSignInUrl, canSignUp, findOrCreateUser, safeNext, signInErrorUrl, SignupClosedError, userExists } from './users.js'
@@ -126,23 +128,34 @@ email.get('/confirm', async (c) => {
   if (!row) {
     return c.json({ error: 'This sign-in link has already been used or is not valid.', code: 'link_invalid' }, 404)
   }
+  const newAccount = !(await userExists(row.email))
   return c.json({
     email: row.email,
     expired: row.expiresAt.getTime() < Date.now(),
-    newAccount: !(await userExists(row.email)),
+    newAccount,
     setPassword: setsPassword(row),
     emailEnabled: mailEnabled(),
+    // The first account on a self-hosted install: the page asks for the setup code from the server log
+    setupCode: newAccount && (await needsSetupCode()),
   })
 })
 
 // Pressing Continue on the confirmation page: uses the link once, starts a session and says where to go
 email.post('/confirm', async (c) => {
-  const body = (await c.req.json().catch(() => null)) as { token?: unknown; plan?: unknown; next?: unknown; password?: unknown } | null
+  const body = (await c.req.json().catch(() => null)) as { token?: unknown; plan?: unknown; next?: unknown; password?: unknown; setupCode?: unknown } | null
   const token = typeof body?.token === 'string' ? body.token : ''
   if (!token) return c.json({ error: 'This sign-in link has already been used or is not valid.', code: 'link_invalid' }, 400)
+  const setupCode = typeof body?.setupCode === 'string' ? body.setupCode : undefined
 
-  // Checked before the link is used up, so a too-short password doesn't cost the person their link
+  // Checked before the link is used up, so a mistyped setup code or a too-short password doesn't cost
+  // the person their link. newAccountFields checks the code again as it creates the account.
   const pending = await findToken(token)
+  if (pending && !(await userExists(pending.email)) && (await needsSetupCode())) {
+    if (!normalizeSetupCode(setupCode)) return c.json({ error: SETUP_CODE_MISSING, field: 'setupCode' }, 400)
+    const busy = await limitRequest(c, 'password-ip', clientIp(c), 'Too many sign-in attempts from your network.')
+    if (busy) return busy
+    if (!(await setupCodeMatches(setupCode))) return c.json({ error: SETUP_CODE_WRONG, field: 'setupCode' }, 400)
+  }
   let passwordHash: string | undefined
   if (pending && setsPassword(pending)) {
     const problem = passwordProblem(body?.password)
@@ -162,13 +175,15 @@ email.post('/confirm', async (c) => {
 
   let user: User
   try {
-    user = await findOrCreateUser({ email: row.email, passwordHash, approved: Boolean(row.createdBy), method: 'email_link' })
+    user = await findOrCreateUser({ email: row.email, passwordHash, approved: Boolean(row.createdBy), method: 'email_link', setupCode })
   } catch (err) {
     if (err instanceof SignupClosedError) {
       const error =
         err.code === 'account_suspended'
           ? 'This account is suspended. Ask an admin of this server to restore it.'
-          : 'This server only accepts accounts from invited people and certain email domains. Ask an admin to invite you.'
+          : err.code === 'needs_setup'
+            ? `${SETUP_CODE_WRONG} Then ask for a new link.`
+            : 'This server only accepts accounts from invited people and certain email domains. Ask an admin to invite you.'
       return c.json({ error, code: err.code }, 403)
     }
     throw err

@@ -35,7 +35,11 @@ That is enough to try it: the app, Postgres and MinIO, with passwords the chart 
 kubectl -n the-artifact port-forward svc/the-artifact 8080:80
 ```
 
-Create the first account right away: it becomes the [instance admin](/docs/self-hosting#the-instance-admin). Do this before you share the address.
+Create the first account right away: it becomes the [instance admin](/docs/self-hosting#the-instance-admin), so it needs the setup code the app prints to its log:
+
+```sh
+kubectl -n the-artifact logs deploy/the-artifact -c app | grep "setup code"
+```
 
 Thumbnails are on by default, so the pod doesn't start until the [seccomp profile](#3-the-seccomp-profile) is on its node. On a cluster where you can't put files on the nodes, add `--set thumbnails.enabled=false`: the gallery then shows sketches, and the pod runs under the runtime's default profile.
 
@@ -232,7 +236,11 @@ kubectl apply -k deploy/kubernetes
 kubectl -n the-artifact rollout status deploy/the-artifact
 ```
 
-The app waits for Postgres and MinIO before it starts, then creates its tables and bucket. Open `APP_URL` and create the first account: it becomes the [instance admin](/docs/self-hosting#the-instance-admin). Do this before you share the address.
+The app waits for Postgres and MinIO before it starts, then creates its tables and bucket. Open `APP_URL` and create the first account: it becomes the [instance admin](/docs/self-hosting#the-instance-admin), so it needs the setup code the app prints to its log:
+
+```sh
+kubectl -n the-artifact logs deploy/the-artifact -c app | grep "setup code"
+```
 
 To try it before DNS and HTTPS are in place, forward a port and open `http://localhost:8080` (set `APP_URL=http://localhost:8080` for that, since sign-in links are built from it):
 

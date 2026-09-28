@@ -1,5 +1,5 @@
 import { defineConfig, devices } from '@playwright/test'
-import { HOSTED_DATABASE_URL, SELF_HOSTED_DATABASE_URL } from './apps/api/test/e2e-db.ts'
+import { HOSTED_DATABASE_URL, SELF_HOSTED_DATABASE_URL, SELF_HOSTED_SETUP_CODE } from './apps/api/test/e2e-db.ts'
 
 // Dedicated ports and databases so e2e runs don't touch a dev setup on 3000/5173.
 // One server pair runs as the hosted service, the other as a self-hosted install.
@@ -41,6 +41,7 @@ function servers(ports: { api: number; web: number }, selfHosted: boolean, datab
         SMTP_FROM: 'The Artifact <e2e@example.com>',
         // Pin settings a developer's apps/api/.env might set, so they can't change e2e behaviour
         SELF_HOSTED: String(selfHosted),
+        SETUP_CODE: selfHosted ? SELF_HOSTED_SETUP_CODE : '',
         GOOGLE_CLIENT_ID: '',
         GOOGLE_CLIENT_SECRET: '',
         SALES_EMAIL: '',

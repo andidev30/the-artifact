@@ -92,14 +92,15 @@ test('the server not answering, and an account that could not be loaded', async 
 // The e2e servers send email, so the screens of a server without it are shown by answering
 // /api/config the way such a server would. Nothing is submitted.
 test('sign-in and first-run setup on a server without email', async ({ page }) => {
-  let config = { selfHosted: true, googleSignIn: false, emailSignIn: false, needsSetup: true, passwordSignUp: false }
+  let config = { selfHosted: true, googleSignIn: false, emailSignIn: false, needsSetup: true, setupCode: true, passwordSignUp: false }
   await page.route('**/api/config', (route) => route.fulfill({ json: config }))
 
   await page.goto('/signup')
+  await expect(page.getByLabel('Setup code')).toBeVisible()
   await expect(page.getByLabel('Confirm password')).toBeVisible()
   await expectAccessible(page, 'first-run setup')
 
-  config = { ...config, needsSetup: false }
+  config = { ...config, needsSetup: false, setupCode: false }
   await page.goto('/login')
   await expect(page.getByLabel('Password', { exact: true })).toBeVisible()
   await expectAccessible(page, 'log in with a password')
@@ -112,6 +113,23 @@ test('sign-in and first-run setup on a server without email', async ({ page }) =
   await page.goto('/signup')
   await expect(page.getByLabel('Password', { exact: true })).toBeVisible()
   await expectAccessible(page, 'sign up with a password')
+})
+
+// The first account on a fresh self-hosted install with email, shown by answering the way such a server would
+test('first account on a self-hosted server with email', async ({ page }) => {
+  await page.route('**/api/config', (route) =>
+    route.fulfill({ json: { selfHosted: true, googleSignIn: false, emailSignIn: true, needsSetup: false, setupCode: true, passwordSignUp: false } }),
+  )
+  await page.goto('/signup')
+  await expect(page.getByText('enter the setup code from the server log')).toBeVisible()
+  await expectAccessible(page, 'sign up, first account')
+
+  await page.route('**/api/auth/email/confirm?*', (route) =>
+    route.fulfill({ json: { email: 'owner@example.com', expired: false, newAccount: true, setPassword: false, emailEnabled: true, setupCode: true } }),
+  )
+  await page.goto('/auth/confirm?token=first-account')
+  await expect(page.getByLabel('Setup code')).toBeVisible()
+  await expectAccessible(page, 'confirm sign-in, first account')
 })
 
 test('sign-in link, onboarding and an empty gallery', async ({ page }) => {

@@ -9,6 +9,10 @@ export const HOSTED_DATABASE_URL = process.env.TEST_DATABASE_URL ?? 'postgres://
 // account really is the first one
 export const SELF_HOSTED_DATABASE_URL = process.env.TEST_SELF_HOSTED_DATABASE_URL ?? 'postgres://artifact:artifact@localhost:5432/artifact_test_selfhosted'
 
+// The self-hosted e2e server's SETUP_CODE, which e2e/self-hosted/first-account.spec.ts types in. The
+// server starts before global setup empties its database, so it may not print a code of its own.
+export const SELF_HOSTED_SETUP_CODE = 'E2E-SETUP-CODE-1234'
+
 async function withDatabase<T>(url: string, fn: (sql: postgres.Sql) => Promise<T>): Promise<T> {
   if (!url.includes('artifact_test')) throw new Error(`Refusing to change ${url}`)
   const sql = postgres(url, { max: 1, onnotice: () => {} })

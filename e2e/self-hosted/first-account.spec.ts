@@ -1,8 +1,8 @@
 import { randomBytes } from 'node:crypto'
 import { expect, test } from '@playwright/test'
-import { selfHostedAccountCount } from '../../apps/api/test/e2e-db.ts'
+import { SELF_HOSTED_SETUP_CODE, selfHostedAccountCount } from '../../apps/api/test/e2e-db.ts'
 import { expectAccessible } from '../axe'
-import { signUp, uniqueEmail } from '../helpers'
+import { signInLink, uniqueEmail } from '../helpers'
 
 test('the first account on a fresh install becomes its admin and names the server organization', async ({ page }) => {
   // Global setup empties this server's database; anything here would make this account a later one
@@ -13,7 +13,23 @@ test('the first account on a fresh install becomes its admin and names the serve
   await expect(page).toHaveURL(/\/login/)
 
   const email = uniqueEmail('sh-first')
-  await signUp(page, email)
+  await page.goto('/signup')
+  await expect(page.getByText('enter the setup code from the server log')).toBeVisible()
+  await page.getByLabel('Email').fill(email)
+  await page.getByRole('button', { name: 'Email me a sign-up link' }).click()
+  await expect(page.getByRole('heading', { name: 'Check your inbox' })).toBeVisible()
+
+  // The first account needs the code the server printed; a wrong one keeps the link usable
+  await page.goto(await signInLink(page.request, email))
+  await expectAccessible(page, 'confirm the first account')
+  const code = page.getByLabel('Setup code')
+  await code.fill('WRONG-CODE-0000')
+  await page.getByRole('button', { name: `Continue as ${email}` }).click()
+  await expect(page.getByRole('alert')).toHaveText('That setup code is wrong. Use the newest one in the server log.')
+  await expect(code).toHaveAttribute('aria-invalid', 'true')
+  await code.fill(SELF_HOSTED_SETUP_CODE.toLowerCase())
+  await page.getByRole('button', { name: `Continue as ${email}` }).click()
+  await expect(page).toHaveURL(/\/onboarding/)
 
   // Straight to naming the organization, with no welcome step before it
   await expect(page.getByRole('heading', { name: /Name your organization/ })).toBeVisible()

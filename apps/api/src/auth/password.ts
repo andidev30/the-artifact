@@ -3,10 +3,11 @@ import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { track } from '../analytics.js'
 import { db, schema } from '../db/index.js'
-import { mailEnabled } from '../env.js'
+import { env, mailEnabled, normalizeSetupCode } from '../env.js'
 import { hasAccounts, instanceSettings, lockAdmins, newAccountFields, type EffectiveSettings } from '../instance.js'
 import { clearHits, clientIp, hit, limitRequest, tooManyRequests, waitText } from '../limits.js'
 import { ssoRequiredError, ssoRequiredFor } from '../ee/sso/connections.js'
+import { SetupCodeError } from '../setup-code.js'
 import { startSession } from './session.js'
 import { continueSignIn, signInFailed } from './twofactor.js'
 import { CONTROL_CHARS_ERROR, hasControlChars, isAccountEmail, isEmail } from '../validation.js'
@@ -57,7 +58,11 @@ export function passwordProblem(password: unknown): string | null {
 
 export const password = new Hono()
 
-type Body = { email?: unknown; password?: unknown; name?: unknown; plan?: unknown; next?: unknown }
+type Body = { email?: unknown; password?: unknown; name?: unknown; plan?: unknown; next?: unknown; setupCode?: unknown }
+
+// The server prints a new code each time it starts without accounts, so an old one stops working
+export const SETUP_CODE_MISSING = 'Enter the setup code from the server log.'
+export const SETUP_CODE_WRONG = 'That setup code is wrong. Use the newest one in the server log.'
 
 const TOO_MANY_TRIES = 'Too many sign-in attempts from your network.'
 
@@ -94,7 +99,8 @@ password.post('/login', async (c) => {
   return c.json({ redirect: await continueSignIn(c, user, redirect, 'password') })
 })
 
-// The first account on a server without email. It becomes the instance admin on a self-hosted install.
+// The first account on a server without email. It becomes the instance admin on a self-hosted install,
+// so there it needs the setup code from the server log.
 password.post('/setup', async (c) => {
   if (mailEnabled()) return c.json({ error: 'This server sends sign-in links by email. Sign up with your email instead.', code: 'email_enabled' }, 409)
   const busy = await limitRequest(c, 'password-ip', clientIp(c), TOO_MANY_TRIES)
@@ -104,19 +110,26 @@ password.post('/setup', async (c) => {
   const name = typeof body?.name === 'string' ? body.name.trim().replace(/\s+/g, ' ').slice(0, 80) || null : null
   if (!isEmail(email)) return c.json({ error: 'Enter a valid email address.', field: 'email' }, 400)
   if (name && hasControlChars(name)) return c.json({ error: CONTROL_CHARS_ERROR, field: 'name' }, 400)
+  if (env.selfHosted && !normalizeSetupCode(body?.setupCode)) return c.json({ error: SETUP_CODE_MISSING, field: 'setupCode' }, 400)
   const problem = passwordProblem(body?.password)
   if (problem) return c.json({ error: problem, field: 'password' }, 400)
   const passwordHash = await hashPassword(body!.password as string)
 
-  const created = await db.transaction(async (tx) => {
-    await lockAdmins(tx)
-    if (await hasAccounts(tx)) return null
-    const [user] = await tx
-      .insert(schema.users)
-      .values({ email, name, passwordHash, ...(await newAccountFields(tx)) })
-      .returning()
-    return user
-  })
+  const created = await db
+    .transaction(async (tx) => {
+      await lockAdmins(tx)
+      if (await hasAccounts(tx)) return null
+      const [user] = await tx
+        .insert(schema.users)
+        .values({ email, name, passwordHash, ...(await newAccountFields(tx, body?.setupCode)) })
+        .returning()
+      return user
+    })
+    .catch((err) => {
+      if (err instanceof SetupCodeError) return 'wrong-code' as const
+      throw err
+    })
+  if (created === 'wrong-code') return c.json({ error: SETUP_CODE_WRONG, field: 'setupCode' }, 400)
   if (!created) return c.json({ error: 'This server is already set up. Log in instead.', code: 'already_set_up' }, 409)
   track({ event: 'signed_up', userId: created.id, detail: 'password' })
   await startSession(c, created.id)
@@ -169,7 +182,13 @@ password.post('/sign-up', async (c) => {
   const problem = passwordProblem(body?.password)
   if (problem) return c.json({ error: problem, field: 'password' }, 400)
 
-  const created = await createPasswordAccount(email, name, await hashPassword(body!.password as string), true)
+  const created = await createPasswordAccount(email, name, await hashPassword(body!.password as string), true).catch((err) => {
+    if (err instanceof SetupCodeError) return 'needs-setup' as const
+    throw err
+  })
+  if (created === 'needs-setup') {
+    return c.json({ error: 'This server has no accounts yet. Create the first one on the setup page, with the setup code.', code: 'needs_setup' }, 409)
+  }
   if (!created) return c.json({ error: 'This address already has an account. Log in instead.', code: 'account_exists', field: 'email' }, 409)
   await startSession(c, created.id)
   return c.json({ redirect: afterSignInUrl(typeof body?.plan === 'string' ? body.plan : null, typeof body?.next === 'string' ? body.next : null) }, 201)
