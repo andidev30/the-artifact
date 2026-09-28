@@ -9,7 +9,7 @@ import { clearHits, clientIp, hit, limitRequest, tooManyRequests, waitText } fro
 import { ssoRequiredError, ssoRequiredFor } from '../ee/sso/connections.js'
 import { startSession } from './session.js'
 import { continueSignIn, signInFailed } from './twofactor.js'
-import { CONTROL_CHARS_ERROR, EMAIL_RE, hasControlChars } from '../validation.js'
+import { ACCOUNT_EMAIL_RE, CONTROL_CHARS_ERROR, EMAIL_RE, hasControlChars } from '../validation.js'
 import { afterSignInUrl, createPasswordAccount, waitingForAccess } from './users.js'
 
 // Passwords are for servers that can't send sign-in links by email. On those, people sign in with
@@ -67,7 +67,8 @@ password.post('/login', async (c) => {
   const body = (await c.req.json().catch(() => null)) as Body | null
   const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : ''
   const given = typeof body?.password === 'string' ? body.password : ''
-  if (!EMAIL_RE.test(email)) return c.json({ error: 'Enter a valid email address.', field: 'email' }, 400)
+  // Only finds an existing account, so addresses from before EMAIL_RE was tightened still sign in
+  if (!ACCOUNT_EMAIL_RE.test(email)) return c.json({ error: 'Enter a valid email address.', field: 'email' }, 400)
   if (!given) return c.json({ error: 'Enter your password.', field: 'password' }, 400)
   // Counted before the check, so attempts sent at once can't all be checked; a right password clears
   // the count, so someone who knows theirs isn't locked out by their own sign-ins

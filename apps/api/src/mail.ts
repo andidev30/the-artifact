@@ -23,13 +23,17 @@ export const transport = {
   },
 }
 
+// A person's address as one mailbox. As a plain string nodemailer parses it as a list of addresses,
+// where "x<y@example.com>" or a comma would deliver somewhere else.
+const recipient = (address: string) => ({ name: '', address })
+
 export async function sendSignInLink(to: string, link: string, intent: 'login' | 'signup') {
   const action = intent === 'signup' ? 'create your account' : 'log in'
   const subject = intent === 'signup' ? 'Finish creating your account on The Artifact' : 'Your sign-in link for The Artifact'
 
   await transport.sendMail({
     from: env.smtp.from,
-    to,
+    to: recipient(to),
     subject,
     text: `Open this link to ${action} on The Artifact:\n\n${link}\n\nThe link works once and expires in 15 minutes. If you didn't ask for it, you can ignore this email.`,
     html: `
@@ -55,7 +59,7 @@ export async function sendShareNotice(to: string, n: ShareNotice) {
   const can = n.role === 'editor' ? 'view and edit' : 'view'
   await transport.sendMail({
     from: env.smtp.from,
-    to,
+    to: recipient(to),
     subject: `${n.from} shared "${n.title}" with you`,
     text: `${n.from} shared a page with you on The Artifact. You can ${can} it.\n\n${n.message ? `"${n.message}"\n\n` : ''}${n.title}\n${n.link}\n\nIf you don't have an account yet, sign up with this email address to open it.`,
     html: `
@@ -79,7 +83,7 @@ export async function sendCommentNotice(to: string, n: CommentNotice) {
   const quote = n.body.length > 1000 ? `${n.body.slice(0, 1000)}…` : n.body
   await transport.sendMail({
     from: env.smtp.from,
-    to,
+    to: recipient(to),
     subject: `${n.from} ${what} "${n.title}"`,
     text: `${n.from} ${what} "${n.title}" (version ${n.version}) on The Artifact:\n\n${quote}\n\nOpen the comments:\n${n.link}`,
     html: `
@@ -101,7 +105,7 @@ export async function sendInvitation(to: string, n: InvitationNotice) {
   const as = n.role === 'admin' ? 'an admin' : 'a member'
   await transport.sendMail({
     from: env.smtp.from,
-    to,
+    to: recipient(to),
     subject: `${n.from} invited you to ${n.organization} on The Artifact`,
     text: `${n.from} invited you to join ${n.organization} on The Artifact as ${as}. You will see the pages your team's agents publish.\n\nAccept the invitation:\n${n.link}\n\nLog in or sign up with ${to} to accept. The invitation expires in ${n.expiresInDays} days.`,
     html: `

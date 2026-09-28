@@ -1,4 +1,13 @@
-export const EMAIL_RE = /^[^\s@\p{Cc}]+@[^\s@\p{Cc}]+\.[^\s@\p{Cc}]+$/u
+// A plain subset of what mail systems accept: one @, a dot in the domain, and none of the characters
+// that make an address mean something else to a mail library or a header (quotes, angle brackets,
+// commas, semicolons, colons, brackets, backslashes, spaces, control characters). Checked for every
+// address that is new to the server or that mail is sent to.
+const NOT_IN_EMAIL = String.raw`\s@"<>(),;:\\\[\]\p{Cc}`
+export const EMAIL_RE = new RegExp(`^[^${NOT_IN_EMAIL}]+@(?:[^${NOT_IN_EMAIL}.]+\\.)+[^${NOT_IN_EMAIL}.]+$`, 'u')
+
+// What EMAIL_RE accepted before it was tightened. Only for finding an account that already exists, so
+// people whose address predates the stricter rule can still sign in; never for storing a new address.
+export const ACCOUNT_EMAIL_RE = /^[^\s@\p{Cc}]+@[^\s@\p{Cc}]+\.[^\s@\p{Cc}]+$/u
 
 // Control characters other than tab and line breaks. Postgres can't store NUL at all, and the rest
 // have no place in names people read.
