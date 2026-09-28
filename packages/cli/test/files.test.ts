@@ -114,15 +114,35 @@ describe('collectPage', () => {
     expect(page).toMatchObject({ entry: { path: 'report.html' }, files: [], isDir: false })
   })
 
-  it('follows links to files but not to folders', async () => {
-    await tree({ 'index.html': 'x', 'shared/a.css': 'a' })
-    await mkdir(join(dir, 'site'))
-    await writeFile(join(dir, 'site/index.html'), 'x')
-    await symlink(join(dir, 'shared/a.css'), join(dir, 'site/a.css'))
+  it('follows links to files inside the folder, but not to folders or to files outside it', async () => {
+    await tree({ 'secret.json': '{}', 'shared/a.css': 'a', 'site/index.html': 'x', 'site/css/b.css': 'b', 'site/.env': 'KEY=1' })
+    await symlink(join(dir, 'site/css/b.css'), join(dir, 'site/b.css'))
+    await symlink('../shared/a.css', join(dir, 'site/a.css'))
+    await symlink(join(dir, 'secret.json'), join(dir, 'site/data.json'))
+    await symlink(join(dir, 'site/.env'), join(dir, 'site/env.txt'))
     await symlink(join(dir, 'shared'), join(dir, 'site/shared'))
     const page = await collectPage(join(dir, 'site'))
-    expect(page.files.map((f) => f.path)).toEqual(['a.css'])
-    expect(page.skipped).toEqual([{ path: 'shared', reason: 'a link to a folder' }])
+    expect(page.files.map((f) => f.path)).toEqual(['b.css', 'css/b.css'])
+    expect(page.skipped).toEqual([
+      { path: 'a.css', reason: 'a link to a file outside the folder' },
+      { path: 'data.json', reason: 'a link to a file outside the folder' },
+      { path: 'env.txt', reason: 'a link to a hidden file' },
+      { path: 'shared', reason: 'a link to a folder' },
+    ])
+    // --only leaves them out the same way
+    const some = await collectSome(join(dir, 'site'), ['*.json', '*.css'])
+    expect(some.files.map((f) => f.path)).toEqual(['b.css'])
+    expect(some.skipped.map((s) => s.path)).toContain('data.json')
+  })
+
+  it('publishes a folder reached through a link, and refuses an entry that links outside it', async () => {
+    await tree({ 'real/index.html': 'x', 'real/a.css': 'a', 'elsewhere.html': 'y', 'other/a.css': 'a' })
+    await symlink(join(dir, 'real'), join(dir, 'linked'))
+    expect((await collectPage(join(dir, 'linked'))).files.map((f) => f.path)).toEqual(['a.css'])
+    await symlink(join(dir, 'elsewhere.html'), join(dir, 'other/index.html'))
+    await expect(collectPage(join(dir, 'other'), { label: 'other' })).rejects.toThrow(
+      'index.html in other is a link to a file outside the folder. Only files inside the folder are published; copy it in instead.',
+    )
   })
 
   it('says what is wrong with the path', async () => {

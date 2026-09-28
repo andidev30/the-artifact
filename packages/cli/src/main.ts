@@ -218,12 +218,19 @@ function describePage(collected: { files: unknown[]; total: number }) {
   return `${count ? `index.html and ${count} ${count === 1 ? 'file' : 'files'}` : 'index.html'}, ${formatBytes(collected.total)}`
 }
 
-// The page --id names, or the one .the-artifact.json remembers for this path on this server
-async function pageToPublish(io: Io, values: Values, target: string, server: string): Promise<string | undefined> {
+// The page --id names, or the one .the-artifact.json remembers for this path on this server. That file
+// is meant to be committed, so it can come with a folder from someone else and name a page of theirs
+// they shared with this person: say which page it is before anything is sent to it.
+async function pageToPublish(io: Io, values: Values, given: string, target: string, server: string, allowNew = true): Promise<string | undefined> {
   // An empty --id is a new page, so CI can pass --id "$PAGE_ID" before the first run has set it
   const idArg = str(values, 'id')?.trim() || undefined
-  const link = values.new || idArg ? null : await readLink(io.cwd, target)
-  return idArg ?? (link && link.server === server ? link.id : undefined)
+  if (idArg) return idArg
+  const link = values.new ? null : await readLink(io.cwd, target)
+  if (!link || link.server !== server) return undefined
+  io.stderr.write(
+    `Publishing to ${server}/a/${link.id}, the page ${LINK_FILE} names for ${given}.${allowNew ? ' Pass --new to publish a new page instead.' : ''}\n`,
+  )
+  return link.id
 }
 
 async function publish(io: Io, parsed: Parsed) {
@@ -257,7 +264,7 @@ async function publish(io: Io, parsed: Parsed) {
 
   const server = await resolveServer(str(values, 'server'), io.env)
   const auth = await resolveAuth(server, { token: str(values, 'token'), env: io.env })
-  const id = await pageToPublish(io, values, target, server)
+  const id = await pageToPublish(io, values, given, target, server)
   log(`${id ? 'Publishing a new version of' : 'Publishing'} "${title}": ${describePage(collected)}.`)
 
   const page = await publishPage(auth, { title, html, files, id, visibility, folder: str(values, 'folder') })
@@ -299,9 +306,7 @@ async function update(io: Io, { positionals, values }: Parsed) {
 
   const server = await resolveServer(str(values, 'server'), io.env)
   const auth = await resolveAuth(server, { token: str(values, 'token'), env: io.env })
-  const idArg = str(values, 'id')?.trim() || undefined
-  const link = idArg ? null : await readLink(io.cwd, target)
-  const id = idArg ?? (link && link.server === server ? link.id : undefined)
+  const id = await pageToPublish(io, values, given, target, server, false)
   if (!id) throw new UsageError('--only and --remove update a page you published before: pass its --id, or publish it once with --save.')
   const parts = [sent.length ? `${sent.map((f) => f.path).join(', ')} (${formatBytes(some.total)})` : '', remove.length ? `removing ${remove.join(', ')}` : '']
   log(`Updating ${id}: ${parts.filter(Boolean).join('; ')}.`)
@@ -326,7 +331,7 @@ async function watchAndPublish(io: Io, values: Values, given: string, target: st
   const auth = await resolveAuth(server, { token: str(values, 'token'), env: io.env })
   const log = (line: string) => io.stderr.write(`${line}\n`)
   const state = {
-    id: await pageToPublish(io, values, target, server),
+    id: await pageToPublish(io, values, given, target, server),
     published: false,
     // Direct uploads send only the files the server doesn't have yet. Decided on the first publish.
     uploads: null as boolean | null,

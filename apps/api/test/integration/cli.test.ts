@@ -131,9 +131,14 @@ describe('the-artifact publish', () => {
     expect(second.code).toBe(0)
     expect(second.stderr).toContain('Published version 2 of "Nightly"')
     expect(pageId(second.stdout)).toBe(published.id)
+    // The committed link file says which page it sends to before sending
+    expect(second.stderr.split('\n')[0]).toBe(
+      `Publishing to ${origin}/a/${published.id}, the page .the-artifact.json names for site. Pass --new to publish a new page instead.`,
+    )
 
     const third = await run(['publish', 'site', '--title', 'Nightly', '--id', published.url], { env })
     expect(third.stderr).toContain('Published version 3 of "Nightly"')
+    expect(third.stderr).not.toContain('.the-artifact.json names')
 
     const fresh = await run(['publish', 'site', '--new'], { env })
     expect(fresh.code).toBe(0)

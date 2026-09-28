@@ -40,7 +40,9 @@ the-artifact login --with-token < token.txt
 the-artifact publish ./dist
 ```
 
-prints the page's link. Hidden files and folders, `node_modules`, and file types pages can't hold are left out, with a note for each.
+prints the page's link. Hidden files and folders, `node_modules`, and file types pages can't hold are left out, with a note for each. Links to folders aren't followed, and links to files only to files inside the folder that aren't hidden.
+
+When `.the-artifact.json` names the page, the CLI says which page it publishes to before sending anything. In a repository someone else gave you, check it: the file can name a page of theirs that they shared with you to edit. `--new` ignores the file.
 
 | Option | Meaning |
 | --- | --- |
