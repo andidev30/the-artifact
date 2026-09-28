@@ -2,17 +2,24 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import {
   changePassword,
+  createAccessToken,
   deleteAccount,
   disconnectAgent,
+  FieldError,
   getDeletionPreview,
+  listAccessTokens,
   listAgents,
+  revokeAccessToken,
+  TOKEN_EXPIRY_DAYS,
   updateProfile,
+  type AccessToken,
   type ConnectedAgent,
   type DeletionPreview,
   type Me,
 } from '../api'
 import { AccountHeader } from '../components/AccountHeader'
-import { timeAgo } from '../time'
+import { CopyCommand } from '../components/CopyCommand'
+import { expiryText, timeAgo } from '../time'
 import { useConfig } from '../useConfig'
 import { useMe } from '../useMe'
 import { chooseWorkspace, organizationSettingsPath, useWorkspace } from '../workspace'
@@ -63,6 +70,7 @@ function SettingsPage({ initial }: { initial: Me }) {
     { id: 'profile', label: 'Profile' },
     ...(showPassword ? [{ id: 'password', label: 'Password' }] : []),
     { id: 'agents', label: 'Connected agents' },
+    { id: 'tokens', label: 'Access tokens' },
     { id: 'delete', label: 'Delete account' },
   ]
 
@@ -73,7 +81,7 @@ function SettingsPage({ initial }: { initial: Me }) {
         <div className="app-title">
           <h1>Account settings</h1>
           <p>
-            Your profile{showPassword ? ', password' : ''} and the agents that publish for you, the same in every workspace.
+            Your profile{showPassword ? ', password' : ''} and the agents and access tokens that publish for you, the same in every workspace.
             {org && (
               <>
                 {' '}
@@ -102,6 +110,7 @@ function SettingsPage({ initial }: { initial: Me }) {
             <ProfileSection me={me} onSaved={(n) => setMe({ ...me, name: n })} />
             {showPassword && <PasswordSection me={me} onSaved={() => setMe({ ...me, hasPassword: true })} />}
             <AgentsSection />
+            <TokensSection me={me} defaultWorkspace={org?.id ?? null} />
             <DeleteSection me={me} />
           </div>
         </div>
@@ -324,6 +333,203 @@ function AgentsSection() {
   )
 }
 
+const EXPIRY_LABEL: Record<number, string> = { 7: '7 days', 30: '30 days', 90: '90 days', 365: '1 year' }
+
+// Tokens for publishing from CI and scripts. A new token is shown here once, right after it is made.
+function TokensSection({ me, defaultWorkspace }: { me: Me; defaultWorkspace: string | null }) {
+  const [tokens, setTokens] = useState<Loadable<AccessToken[]>>({ kind: 'loading' })
+  const [created, setCreated] = useState<{ token: string; name: string } | null>(null)
+  const [confirming, setConfirming] = useState<string | null>(null)
+  const [problem, setProblem] = useState<string | null>(null)
+
+  useEffect(() => {
+    let active = true
+    listAccessTokens()
+      .then((data) => active && setTokens({ kind: 'ready', data }))
+      .catch(() => active && setTokens({ kind: 'error' }))
+    return () => {
+      active = false
+    }
+  }, [])
+
+  async function revoke(t: AccessToken) {
+    setProblem(null)
+    try {
+      await revokeAccessToken(t.id)
+      setTokens((a) => (a.kind === 'ready' ? { kind: 'ready', data: a.data.filter((x) => x.id !== t.id) } : a))
+    } catch (err) {
+      setProblem(errorText(err, `${t.name} could not be revoked. Try again.`))
+    }
+    setConfirming(null)
+  }
+
+  return (
+    <section id="tokens" className="settings-card" aria-labelledby="tokens-title">
+      <header className="settings-card-head">
+        <h2 id="tokens-title">Access tokens</h2>
+        <p>
+          For publishing from CI and scripts, where an agent can’t sign in. A token acts for you in one workspace, with your permissions. Revoking one stops it
+          at once.{' '}
+          <Link className="text-link" to="/docs/connect-your-agent#publishing-from-ci">
+            How to use one
+          </Link>
+        </p>
+      </header>
+
+      {created ? (
+        <div className="settings-token-new" role="status">
+          <p>
+            <strong>Copy the token for {created.name} now.</strong> You won’t be able to see it again. Keep it in a secret, like a GitHub Actions secret.
+          </p>
+          <CopyCommand command={created.token} label="Copy token" plain />
+          <div>
+            <button type="button" className="button button-small button-quiet" onClick={() => setCreated(null)}>
+              Done
+            </button>
+          </div>
+        </div>
+      ) : (
+        <TokenForm
+          me={me}
+          defaultWorkspace={defaultWorkspace}
+          onCreated={(token, accessToken) => {
+            setCreated({ token, name: accessToken.name })
+            setTokens((a) => (a.kind === 'ready' ? { kind: 'ready', data: [accessToken, ...a.data] } : a))
+          }}
+        />
+      )}
+
+      {tokens.kind === 'error' && (
+        <p className="auth-notice" role="alert">
+          Your access tokens could not be loaded. Reload to try again.
+        </p>
+      )}
+      {problem && (
+        <p className="auth-notice" role="alert">
+          {problem}
+        </p>
+      )}
+      {tokens.kind === 'ready' && tokens.data.length > 0 && (
+        <ul className="settings-list" aria-label="Access tokens">
+          {tokens.data.map((t) => (
+            <li key={t.id} className="settings-row">
+              <span className="settings-avatar settings-avatar-agent" aria-hidden="true">
+                {t.name.slice(0, 1).toUpperCase()}
+              </span>
+              <span className="settings-who">
+                <strong>{t.name}</strong>
+                <span>
+                  Publishes to {t.workspace.name}, created {timeAgo(t.createdAt)}
+                </span>
+                <span>{t.lastUsedAt ? `Last used ${timeAgo(t.lastUsedAt)}` : 'Not used yet'}</span>
+              </span>
+              <span className="settings-meta" data-tone={t.expired ? 'bad' : undefined}>
+                {expiryText(t)}
+              </span>
+              <span className="settings-actions">
+                {confirming === t.id ? (
+                  <>
+                    <button type="button" className="button button-small button-danger" onClick={() => revoke(t)}>
+                      Revoke
+                    </button>
+                    <button type="button" className="auth-reset" onClick={() => setConfirming(null)}>
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <button type="button" className="button button-small button-quiet" aria-label={`Revoke ${t.name}`} onClick={() => setConfirming(t.id)}>
+                    Revoke
+                  </button>
+                )}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
+function TokenForm({
+  me,
+  defaultWorkspace,
+  onCreated,
+}: {
+  me: Me
+  defaultWorkspace: string | null
+  onCreated: (token: string, accessToken: AccessToken) => void
+}) {
+  const [name, setName] = useState('')
+  const [workspace, setWorkspace] = useState(defaultWorkspace ?? 'personal')
+  const [expiry, setExpiry] = useState('90')
+  const [saving, setSaving] = useState(false)
+  const [status, setStatus] = useState<string | null>(null)
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault()
+    setSaving(true)
+    setStatus(null)
+    try {
+      const { token, accessToken } = await createAccessToken({
+        name,
+        organizationId: workspace === 'personal' ? null : workspace,
+        expiresInDays: expiry === 'never' ? null : Number(expiry),
+      })
+      setName('')
+      onCreated(token, accessToken)
+    } catch (err) {
+      setStatus(errorText(err, 'The token could not be created. Try again.'))
+      if (err instanceof FieldError && err.field === 'name') document.getElementById('token-name')?.focus()
+    }
+    setSaving(false)
+  }
+
+  return (
+    <form className="settings-token-form" onSubmit={onSubmit}>
+      <div className="field">
+        <label htmlFor="token-name">Name</label>
+        <input
+          id="token-name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Nightly test report"
+          maxLength={60}
+          required
+          autoComplete="off"
+        />
+      </div>
+      <div className="field">
+        <label htmlFor="token-workspace">Workspace</label>
+        <select id="token-workspace" className="settings-select" value={workspace} onChange={(e) => setWorkspace(e.target.value)}>
+          <option value="personal">Personal</option>
+          {me.organizations.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="field">
+        <label htmlFor="token-expiry">Expires after</label>
+        <select id="token-expiry" className="settings-select" value={expiry} onChange={(e) => setExpiry(e.target.value)}>
+          {TOKEN_EXPIRY_DAYS.map((d) => (
+            <option key={d} value={String(d)}>
+              {EXPIRY_LABEL[d]}
+            </option>
+          ))}
+          <option value="never">No expiry</option>
+        </select>
+      </div>
+      <button type="submit" className="button button-small" disabled={saving || !name.trim()}>
+        {saving ? 'Creating' : 'Create token'}
+      </button>
+      <p className="field-hint settings-token-hint" data-tone={status ? 'bad' : undefined} aria-live="polite">
+        {status ?? 'You see the token once, right after you create it.'}
+      </p>
+    </form>
+  )
+}
+
 const pagesText = (n: number) => (n === 1 ? '1 page' : `${n} pages`)
 
 // What happens to pages and organizations, from the deletion preview
@@ -392,7 +598,10 @@ function DeleteSection({ me }: { me: Me }) {
     <section id="delete" className="settings-card settings-danger" aria-labelledby="delete-title">
       <header className="settings-card-head">
         <h2 id="delete-title">Delete account</h2>
-        <p>Deletes your account, your personal pages and your agent connections. People you shared personal pages with lose access. This can't be undone.</p>
+        <p>
+          Deletes your account, your personal pages, your agent connections and your access tokens. People you shared personal pages with lose access. This
+          can't be undone.
+        </p>
       </header>
 
       {preview && preview.blockedBy.length === 0 && <DeletionSummary preview={preview} />}

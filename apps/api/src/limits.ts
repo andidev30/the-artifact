@@ -27,9 +27,11 @@ const CORE = {
   // People one account invites to an organization or shares a page with
   invite: { max: 200, seconds: HOUR },
   'invite-ip': { max: 500, seconds: HOUR },
-  // MCP tool calls by one account, and the ones among them that publish a version
+  // MCP tool calls by one account, and the ones among them (or through POST /api/publish) that publish a version
   mcp: { max: 600, seconds: 10 * MINUTE },
   publish: { max: 200, seconds: HOUR },
+  // Access tokens one account creates in settings
+  'access-token': { max: 20, seconds: HOUR },
   // Comments and replies one account writes, in the app or through agents
   comment: { max: 120, seconds: HOUR },
   // Emails about new comments to one person for one page; comments past it only show in the app

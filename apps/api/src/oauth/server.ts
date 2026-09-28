@@ -5,6 +5,7 @@ import { hashToken, randomToken } from '../auth/session.js'
 import { db, schema } from '../db/index.js'
 import { env } from '../env.js'
 import { clientIp, hit, tooManyRequests, waitText } from '../limits.js'
+import { authenticateToken, TOKEN_RE } from '../tokens.js'
 
 // OAuth 2.1 authorization server for MCP clients, following the MCP authorization spec:
 // discovery (RFC 9728 + RFC 8414), dynamic client registration (RFC 7591), and
@@ -209,10 +210,13 @@ export type McpAuth = {
   clientName: string
 }
 
-// Resolves a bearer access token to the person and workspace it acts for
+// Resolves a bearer token, an OAuth access token or an access token from settings (src/tokens.ts),
+// to the person and workspace it acts for
 export async function authenticateBearer(header: string | undefined): Promise<McpAuth | null> {
-  const token = header?.match(/^Bearer\s+(.+)$/i)?.[1]
+  const token = header?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim()
   if (!token) return null
+  // OAuth tokens are 43 characters, so they never match
+  if (TOKEN_RE.test(token)) return authenticateToken(token)
   const [row] = await db
     .select({ token: schema.oauthTokens, clientName: schema.oauthClients.name, email: schema.users.email, suspendedAt: schema.users.suspendedAt })
     .from(schema.oauthTokens)

@@ -9,6 +9,7 @@ import { env, mailEnabled } from '../env.js'
 import { limitInvites } from '../limits.js'
 import { log } from '../log.js'
 import { sendInvitation } from '../mail.js'
+import { revokeToken, tokensIn } from '../tokens.js'
 import { EMAIL_RE, UUID_RE } from '../validation.js'
 
 const DAY = 24 * 60 * 60 * 1000
@@ -242,6 +243,24 @@ members.patch('/members/:userId', async (c) => {
   return c.json(await details(me.org.id, after?.role ?? me.role))
 })
 
+// Every member's access tokens for this organization. Owners and admins see them and can revoke
+// any of them, whoever made it, so a token that leaks can be stopped without waiting for its owner.
+members.get('/access-tokens', async (c) => {
+  const me = await actor(c)
+  if (!me) return c.json({ error: 'Not found' }, 404)
+  if (me.role === 'member') return c.json({ error: 'Only owners and admins can see the access tokens of an organization.' }, 403)
+  return c.json(await tokensIn(me.org.id))
+})
+
+members.delete('/access-tokens/:id', async (c) => {
+  const me = await actor(c)
+  if (!me) return c.json({ error: 'Not found' }, 404)
+  if (me.role === 'member') return c.json({ error: 'Only owners and admins can revoke access tokens of other people.' }, 403)
+  const id = c.req.param('id')
+  if (!UUID_RE.test(id) || !(await revokeToken(id, { organizationId: me.org.id }))) return c.json({ error: 'That access token was already revoked.' }, 404)
+  return c.body(null, 204)
+})
+
 // Removing yourself is leaving; anyone can leave, except the last owner
 members.delete('/members/:userId', async (c) => {
   const user = c.get('user')!
@@ -267,8 +286,9 @@ members.delete('/members/:userId', async (c) => {
         throw new RuleError(leaving ? 'You are the only owner. Make someone else an owner before you leave.' : 'An organization needs at least one owner.', 409)
       }
       await tx.delete(schema.memberships).where(and(eq(schema.memberships.organizationId, me.org.id), eq(schema.memberships.userId, targetId)))
-      // Agents connected to this organization stop publishing there
+      // Agents connected to this organization, and access tokens for it, stop publishing there
       await tx.delete(schema.oauthTokens).where(and(eq(schema.oauthTokens.organizationId, me.org.id), eq(schema.oauthTokens.userId, targetId)))
+      await tx.delete(schema.accessTokens).where(and(eq(schema.accessTokens.organizationId, me.org.id), eq(schema.accessTokens.userId, targetId)))
     })
   } catch (err) {
     return fail(c, err)

@@ -26,7 +26,9 @@ Hono on Node 26, Drizzle ORM over `postgres`, S3 via `@aws-sdk/client-s3`, MCP v
 | `src/instance.ts` | Instance admins, sign-up policy and instance settings |
 | `src/mcp.ts` | The MCP tools (`publish_artifact`, `list_artifacts`, `list_folders`, `move_artifact`, `get_artifact`, `rename_artifact`, `set_artifact_visibility`, `share_artifact`, `delete_artifact`, `list_versions`, `restore_version`, `download_artifact`, `list_comments`, `add_comment`, `reply_comment`, `resolve_comment`, and `prepare_upload`/`publish_upload` when `S3_PUBLIC_ENDPOINT` is set) |
 | `src/uploads.ts` | Publishing by direct upload: upload links, then checking and claiming what arrived |
-| `src/oauth/` | OAuth 2.1 server for MCP clients (discovery, dynamic registration, PKCE) and the consent API |
+| `src/oauth/` | OAuth 2.1 server for MCP clients (discovery, dynamic registration, PKCE) and the consent API; `authenticateBearer` resolves every bearer token |
+| `src/tokens.ts` | Access tokens (`art_…`) people make in settings for CI: one person, one workspace, checked against the database on every use (expiry, suspension, membership) |
+| `src/routes/publish.ts` | `POST /api/publish` for CI and scripts: bearer token only, JSON or multipart, the same `publish` as `publish_artifact`. Documented in `docs/publishing.md`; keep it stable |
 | `src/auth/` | Sessions, email links, passwords, Google sign-in, account lookup/creation |
 | `src/routes/` | REST routers for the web app |
 | `src/log.ts` | JSON logs, one object per line, tagged with the request id. Use `log.info/warn/error` rather than `console` |
@@ -40,7 +42,7 @@ Hono on Node 26, Drizzle ORM over `postgres`, S3 via `@aws-sdk/client-s3`, MCP v
 - **Access.** Owners and invited editors edit; invited viewers view; organization admins and owners edit every page in their organization; general access (`private` shown as "Restricted", `organization`, `link`) opens a page wider. Older versions and history are editor-only. Go through `accessLevel`/`canView`/`canEdit`; don't re-implement checks in routes.
 - **Blobs are shared and immutable.** Content lives under `blobs/<sha256>`; rows only hold hashes. Only the API writes there: direct uploads land under `uploads/<id>/` and are hashed before they become blobs. Anything that uploads blobs and then writes rows that reference them must call `holdStorageLock(tx)` inside the same transaction first, or the sweep can delete a blob between upload and commit.
 - **Version numbers.** Publish and restore lock the page row (`for update`) before picking the next number. Restore never rewrites history; it publishes the old content as a new version.
-- **Tokens are stored hashed** (`hashToken`): sessions, email links, invitations, OAuth codes and tokens. Links work once; delete the row as it is used.
+- **Tokens are stored hashed** (`hashToken`): sessions, email links, invitations, OAuth codes and tokens, access tokens. Links work once; delete the row as it is used.
 - **Email links must survive mail scanners.** Opening a sign-in link only shows a confirmation page; the POST on Continue uses it up.
 - **New accounts.** Creating accounts and changing admins take `lockAdmins(tx)`. Insert new users with `...(await newAccountFields(tx))`: on a self-hosted install the first account becomes admin and goes through onboarding, and later ones start onboarded in their personal workspace.
 - **Untrusted HTML.** Page content is served with `contentCsp()` (sandbox, opaque origin, framing as `EMBED_FRAME_ANCESTORS` allows) on every file, never with the app's cookies. Thumbnails intercept every request; see the header comment in `src/thumbnails.ts` before touching it.

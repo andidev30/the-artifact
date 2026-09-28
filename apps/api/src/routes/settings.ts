@@ -5,6 +5,9 @@ import { hashPassword, passwordProblem, verifyPassword } from '../auth/password.
 import { requireUser, startSession, type AuthEnv } from '../auth/session.js'
 import { db, schema } from '../db/index.js'
 import { isLastAdmin, lastAdminError } from '../instance.js'
+import { limitRequest } from '../limits.js'
+import { checkExpiry, checkTokenName, createToken, describeToken, revokeToken, tokensOf } from '../tokens.js'
+import { UUID_RE } from '../validation.js'
 
 // Account settings, mounted at /api/me next to GET /api/me
 export const settings = new Hono<AuthEnv>()
@@ -83,6 +86,42 @@ settings.delete('/agents/:clientId', async (c) => {
     await tx.delete(schema.oauthTokens).where(and(eq(schema.oauthTokens.userId, user.id), eq(schema.oauthTokens.clientId, clientId)))
     await tx.delete(schema.oauthGrants).where(and(eq(schema.oauthGrants.userId, user.id), eq(schema.oauthGrants.clientId, clientId)))
   })
+  return c.body(null, 204)
+})
+
+// Access tokens for CI and scripts (src/tokens.ts). Only the web app's session can manage them:
+// a token can't make or list tokens, since these routes never read a bearer token.
+settings.get('/access-tokens', async (c) => c.json(await tokensOf(c.get('user')!.id)))
+
+// { name, organizationId (null for the personal workspace), expiresInDays (7, 30, 90, 365 or null for none; 90 if left out) }.
+// The token is in this response only.
+settings.post('/access-tokens', async (c) => {
+  const user = c.get('user')!
+  const body = (await c.req.json().catch(() => null)) as { name?: unknown; organizationId?: unknown; expiresInDays?: unknown } | null
+  const name = checkTokenName(body?.name)
+  if ('error' in name) return c.json({ error: name.error, field: 'name' }, 400)
+  const expiry = checkExpiry(body?.expiresInDays)
+  if ('error' in expiry) return c.json({ error: expiry.error, field: 'expiresInDays' }, 400)
+  const organizationId = body?.organizationId ?? null
+  if (organizationId !== null) {
+    const [member] =
+      typeof organizationId === 'string' && UUID_RE.test(organizationId)
+        ? await db
+            .select({ role: schema.memberships.role })
+            .from(schema.memberships)
+            .where(and(eq(schema.memberships.userId, user.id), eq(schema.memberships.organizationId, organizationId)))
+        : []
+    if (!member) return c.json({ error: 'You are not a member of that organization.', field: 'organizationId' }, 400)
+  }
+  const busy = await limitRequest(c, 'access-token', user.id, 'You have created a lot of access tokens in a short time.')
+  if (busy) return busy
+  const { token, row } = await createToken({ userId: user.id, organizationId: organizationId as string | null, name: name.name, expiresAt: expiry.expiresAt })
+  return c.json({ token, accessToken: await describeToken(row.id) }, 201)
+})
+
+settings.delete('/access-tokens/:id', async (c) => {
+  const id = c.req.param('id')
+  if (!UUID_RE.test(id) || !(await revokeToken(id, { userId: c.get('user')!.id }))) return c.json({ error: 'That access token was already revoked.' }, 404)
   return c.body(null, 204)
 })
 
@@ -174,7 +213,7 @@ export async function deleteAccountData(user: { id: string; email: string }) {
     await tx.delete(schema.artifactShares).where(eq(schema.artifactShares.email, user.email))
     await tx.delete(schema.invitations).where(eq(schema.invitations.email, user.email))
     await tx.delete(schema.emailTokens).where(eq(schema.emailTokens.email, user.email))
-    // Sessions, memberships, agent tokens and the remaining (personal) pages cascade from the user.
+    // Sessions, memberships, agent and access tokens and the remaining (personal) pages cascade from the user.
     // Invitations and shares they sent, and versions they published, keep working without them.
     await tx.delete(schema.users).where(eq(schema.users.id, user.id))
   })

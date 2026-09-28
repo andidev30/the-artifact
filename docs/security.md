@@ -56,11 +56,19 @@ A page in a personal workspace is restricted until you share it. A page that som
 - Access tokens last an hour; refresh tokens rotate on every use. All tokens are stored as hashes.
 - An agent acts for one person in one workspace, and only with that person's permissions. Disconnect it in **Account settings** to revoke it immediately.
 
+## Access tokens
+
+- [Access tokens](/docs/connect-your-agent#publishing-from-ci) for CI are made in **Account settings** by someone signed in to the app, never by another token. Making them is [rate limited](/docs/configuration#rate-limits) per account.
+- A token is `art_` followed by 32 random bytes in base64url, so secret scanners can recognize one that leaks. It is shown once; the server stores only its SHA-256 hash.
+- It acts for one person in one workspace with that person's permissions, on `/mcp` and `POST /api/publish` only. The app's cookie-authenticated routes ignore it.
+- Every request checks the token against the database, with nothing cached: a revoked or expired token is refused on its next request. So is a token for an organization its owner is no longer in, or of a suspended account. Leaving an organization, being removed from it, and suspension also delete the tokens they affect.
+- Owners and admins of an organization can list and revoke every member's tokens for it. The list shows names and dates, never the token.
+
 ## Instance admins
 
 - On a self-hosted install the first account becomes the instance admin; more can be added from the admin area, or from the server with the make-admin script. See [The instance admin](/docs/self-hosting#the-instance-admin).
 - Admins manage accounts and organizations. They can't read private pages through the admin area: it shows counts, not page content.
-- Suspending someone deletes their sessions and agent tokens at once, and refuses their sign-in links, Google sign-in and MCP calls until they are unsuspended.
+- Suspending someone deletes their sessions, agent tokens and access tokens at once, and refuses their sign-in links, Google sign-in and MCP calls until they are unsuspended.
 - The last admin can't be removed, suspended or deleted, so an install always keeps a way in.
 
 ## Self-hosted data

@@ -4,20 +4,23 @@ import {
   fetchMe,
   getOrganization,
   inviteMember,
+  listOrganizationTokens,
   removeMember,
   renameOrganization,
   revokeInvitation,
+  revokeOrganizationToken,
   setMemberRole,
   type InviteRole,
   type Me,
   type Organization,
+  type OrganizationAccessToken,
   type OrganizationDetails,
   type OrganizationMember,
   type Role,
 } from '../api'
 import { AccountHeader } from '../components/AccountHeader'
 import { APP_HOST } from '../config'
-import { timeAgo } from '../time'
+import { expiryText, timeAgo } from '../time'
 import { useConfig } from '../useConfig'
 import { useMe } from '../useMe'
 import { chooseWorkspace } from '../workspace'
@@ -140,6 +143,7 @@ function Page({ initial, org }: { initial: Me; org: Organization }) {
   const sections = [
     { id: 'general', label: 'General' },
     { id: 'members', label: 'Members' },
+    ...(current.role === 'member' ? [] : [{ id: 'tokens', label: 'Access tokens' }]),
   ]
 
   return (
@@ -196,6 +200,7 @@ function Page({ initial, org }: { initial: Me; org: Organization }) {
                 }}
               />
             )}
+            {current.role !== 'member' && <TokensSection org={current} me={me} />}
           </div>
         </div>
       </main>
@@ -331,6 +336,103 @@ function Sections({
         )}
       </section>
     </>
+  )
+}
+
+// Owners and admins see every member's access tokens for the organization and can revoke any of
+// them, so a token that leaks can be stopped without waiting for the person who made it
+function TokensSection({ org, me }: { org: Organization; me: Me }) {
+  const [tokens, setTokens] = useState<Loadable<OrganizationAccessToken[]>>({ kind: 'loading' })
+  const [confirming, setConfirming] = useState<string | null>(null)
+  const [problem, setProblem] = useState<string | null>(null)
+
+  useEffect(() => {
+    let active = true
+    listOrganizationTokens(org.id)
+      .then((data) => active && setTokens({ kind: 'ready', data }))
+      .catch(() => active && setTokens({ kind: 'error' }))
+    return () => {
+      active = false
+    }
+  }, [org.id])
+
+  async function revoke(t: OrganizationAccessToken) {
+    setProblem(null)
+    try {
+      await revokeOrganizationToken(org.id, t.id)
+      setTokens((a) => (a.kind === 'ready' ? { kind: 'ready', data: a.data.filter((x) => x.id !== t.id) } : a))
+    } catch (err) {
+      setProblem(errorText(err, `${t.name} could not be revoked. Try again.`))
+    }
+    setConfirming(null)
+  }
+
+  return (
+    <section id="tokens" className="settings-card" aria-labelledby="tokens-title">
+      <header className="settings-card-head">
+        <h2 id="tokens-title">Access tokens</h2>
+        <p>
+          Tokens members made to publish to {org.name} from CI and scripts. Revoking one stops it at once. People make their own in{' '}
+          <Link className="text-link" to="/settings#tokens">
+            Account settings
+          </Link>
+          .
+        </p>
+      </header>
+      {tokens.kind === 'loading' && (
+        <p className="settings-muted" role="status">
+          Loading access tokens
+        </p>
+      )}
+      {tokens.kind === 'error' && (
+        <p className="auth-notice" role="alert">
+          The access tokens could not be loaded. Reload to try again.
+        </p>
+      )}
+      {problem && (
+        <p className="auth-notice" role="alert">
+          {problem}
+        </p>
+      )}
+      {tokens.kind === 'ready' && tokens.data.length === 0 && <p className="settings-muted">Nobody has an access token for {org.name}.</p>}
+      {tokens.kind === 'ready' && tokens.data.length > 0 && (
+        <ul className="settings-list" aria-label="Access tokens">
+          {tokens.data.map((t) => (
+            <li key={t.id} className="settings-row">
+              <span className="settings-avatar settings-avatar-agent" aria-hidden="true">
+                {t.name.slice(0, 1).toUpperCase()}
+              </span>
+              <span className="settings-who">
+                <strong>{t.name}</strong>
+                <span>
+                  {t.owner.id === me.id ? 'Yours' : `By ${t.owner.name ?? t.owner.email}`}, created {timeAgo(t.createdAt)}
+                </span>
+                <span>{t.lastUsedAt ? `Last used ${timeAgo(t.lastUsedAt)}` : 'Not used yet'}</span>
+              </span>
+              <span className="settings-meta" data-tone={t.expired ? 'bad' : undefined}>
+                {expiryText(t)}
+              </span>
+              <span className="settings-actions">
+                {confirming === t.id ? (
+                  <>
+                    <button type="button" className="button button-small button-danger" onClick={() => revoke(t)}>
+                      Revoke
+                    </button>
+                    <button type="button" className="auth-reset" onClick={() => setConfirming(null)}>
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <button type="button" className="button button-small button-quiet" aria-label={`Revoke ${t.name}`} onClick={() => setConfirming(t.id)}>
+                    Revoke
+                  </button>
+                )}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   )
 }
 

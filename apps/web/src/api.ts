@@ -479,6 +479,47 @@ export function disconnectAgent(clientId: string) {
   return request<null>(`/me/agents/${encodeURIComponent(clientId)}`, { method: 'DELETE' })
 }
 
+export type AccessToken = {
+  id: string
+  name: string
+  // id null is the personal workspace
+  workspace: { id: string | null; name: string }
+  createdAt: string
+  lastUsedAt: string | null
+  // null for no expiry
+  expiresAt: string | null
+  expired: boolean
+}
+
+export type OrganizationAccessToken = AccessToken & { owner: { id: string; name: string | null; email: string } }
+
+export const TOKEN_EXPIRY_DAYS = [7, 30, 90, 365] as const
+
+export function listAccessTokens() {
+  return request<AccessToken[]>('/me/access-tokens')
+}
+
+// The token itself is in this response only
+export async function createAccessToken(input: { name: string; organizationId: string | null; expiresInDays: number | null }) {
+  try {
+    return await request<{ token: string; accessToken: AccessToken }>('/me/access-tokens', { method: 'POST', json: input })
+  } catch (err) {
+    throw err instanceof ApiError ? new FieldError(err.message, err.field) : err
+  }
+}
+
+export function revokeAccessToken(id: string) {
+  return request<null>(`/me/access-tokens/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
+export function listOrganizationTokens(organizationId: string) {
+  return request<OrganizationAccessToken[]>(`${orgPath(organizationId)}/access-tokens`)
+}
+
+export function revokeOrganizationToken(organizationId: string, id: string) {
+  return request<null>(`${orgPath(organizationId)}/access-tokens/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
 export type DeletionPreview = {
   blockedBy: { id: string; name: string }[]
   deletesOrganizations: string[]

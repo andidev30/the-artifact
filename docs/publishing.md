@@ -195,6 +195,51 @@ Files whose content is already stored, like the images of a page you publish a n
 
 Agents that can't make requests of their own keep using `publish_artifact`.
 
+## Publishing without an agent
+
+CI jobs and scripts publish with a plain HTTP request to `POST {{APP_URL}}/api/publish`, authorized by an [access token](/docs/connect-your-agent#publishing-from-ci) as `Authorization: Bearer art_…`. It takes the same things as `publish_artifact`, publishes to the token's workspace with the same rules, limits and quotas, and answers with the link. The endpoint is stable: scripts and tools can rely on it.
+
+Send either JSON (`Content-Type: application/json`) with the fields of [publish_artifact](#publish_artifact):
+
+```json
+{
+  "title": "Nightly dashboard",
+  "html": "<!doctype html>…",
+  "files": [{ "path": "chart.js", "content": "…" }, { "path": "img/logo.png", "content": "iVBORw0…", "encoding": "base64" }],
+  "artifact_id": "k3v9x2m8pq",
+  "visibility": "organization",
+  "folder": "Reports"
+}
+```
+
+or multipart form data, which is easier from a shell because files go up as they are:
+
+| Part | Meaning |
+| --- | --- |
+| `title`, `artifact_id`, `visibility`, `folder` | Text fields, as in `publish_artifact` |
+| `index.html` | The page itself, as a file or text |
+| Any other name | A file of the page, named by its path: `css/site.css`, `img/logo.png` |
+
+```sh
+curl -fsS {{APP_URL}}/api/publish -H "Authorization: Bearer $ARTIFACT_TOKEN" \
+  -F 'title=Test report' -F 'index.html=@report/index.html' -F 'css/site.css=@report/css/site.css'
+```
+
+A new page answers `201`, a new version (with `artifact_id`) `200`, both with:
+
+```json
+{
+  "id": "k3v9x2m8pq",
+  "url": "{{APP_URL}}/a/k3v9x2m8pq",
+  "title": "Test report",
+  "version": 1,
+  "visibility": "private",
+  "folder": null
+}
+```
+
+Errors are JSON `{ "error": "…" }` with a message to show as is, sometimes with the `field` it is about: `400` for a page that can't be published (a bad file, a full workspace, an `artifact_id` you can't edit), `401` for a missing, expired or revoked token, `413` for a request over the size limit, `415` for another content type, and `429` with `Retry-After` past the `publish` [rate limit](/docs/configuration#rate-limits). Hosts like Vercel refuse requests over about 4.5 MB before they reach the server; for larger pages, run an agent with the token and use [direct upload](#publishing-by-direct-upload).
+
 ## Limits
 
 Besides the size of each page, a server limits how fast an account uses these tools and how much a workspace holds. Past a limit, the tool answers with an error that says so and what to do, and the agent tells you.
@@ -202,7 +247,7 @@ Besides the size of each page, a server limits how fast an account uses these to
 | Limit | Default |
 | --- | --- |
 | Tool calls, by every agent of one account together | 600 per 10 minutes |
-| New pages and versions (`publish_artifact`, `publish_upload`, `restore_version`) | 200 per hour |
+| New pages and versions (`publish_artifact`, `publish_upload`, `restore_version`, `POST /api/publish`) | 200 per hour |
 | People shared with by email (`share_artifact`, counted with invitations in the app) | 200 per hour |
 | Comments and replies (`add_comment`, `reply_comment`, counted with comments in the app) | 120 per hour |
 | Pages, versions and storage in a self-hosted workspace | None, unless the server sets them |
