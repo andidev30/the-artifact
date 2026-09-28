@@ -2,6 +2,13 @@
 
 Every release of The Artifact, newest first. Entries are generated from the commit messages when a release is made; what you have to do when you upgrade is in [Upgrading](docs/upgrading.md), and the versioning policy is there too.
 
+## [0.4.1](https://github.com/andidev30/the-artifact/compare/v0.4.0...v0.4.1) (2026-09-28)
+
+
+### Bug fixes
+
+* **web:** keep long values and headers inside the screen on phones ([8d20b3b](https://github.com/andidev30/the-artifact/commit/8d20b3bc0e41798a6addf826837facc430880953))
+
 ## [0.4.0](https://github.com/andidev30/the-artifact/compare/v0.3.0...v0.4.0) (2026-09-28)
 
 

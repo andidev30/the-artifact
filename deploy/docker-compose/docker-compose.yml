@@ -14,7 +14,7 @@ name: the-artifact
 
 services:
   app:
-    image: ghcr.io/andidev30/the-artifact:${ARTIFACT_VERSION:-0.4.0} # x-release-please-version
+    image: ghcr.io/andidev30/the-artifact:${ARTIFACT_VERSION:-0.4.1} # x-release-please-version
     restart: unless-stopped
     ports:
       - '${ARTIFACT_PORT:-8080}:3000'
