@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { addMember, call, callTool, connectAgent, createOrg, createPage, createUser, type TestUser } from './helpers.js'
 
-type Row = { slug: string; title: string; tags: string[] }
+type Row = { slug: string; title: string; tags: string[]; comments: number }
 
 async function tag(user: TestUser, slug: string, change: { add?: unknown; remove?: unknown }) {
   return call(`/api/artifacts/${slug}/tags`, { cookie: user.cookie, method: 'PATCH', json: change })
@@ -124,6 +124,41 @@ describe('tags', () => {
     expect(await (await call(`/api/tags?workspace=${org.id}`, { cookie: mate.cookie })).json()).toEqual([{ tag: 'finance', pages: 4 }])
     const outsider = await createUser()
     expect((await call(`/api/tags?workspace=${org.id}`, { cookie: outsider.cookie })).status).toBe(404)
+  })
+
+  it("aren't shown, filtered on or counted for listed link pages a member can't open, nor their comment counts", async () => {
+    const me = await createUser({ email: 'me@example.com' })
+    const mate = await createUser({ email: 'mate@example.com' })
+    const admin = await createUser({ email: 'admin@example.com' })
+    const org = await createOrg(mate, 'Acme', 'acme')
+    await addMember(org.id, me, 'member')
+    await addMember(org.id, admin, 'admin')
+    const open = await createPage(mate, { title: 'Open link', organizationId: org.id, visibility: 'link' })
+    const locked = await createPage(mate, { title: 'Password link', organizationId: org.id, visibility: 'link' })
+    for (const p of [open, locked]) {
+      await tag(mate, p.slug, { add: ['merger'] })
+      expect((await call(`/api/artifacts/${p.slug}/comments`, { cookie: mate.cookie, json: { body: 'Looks good' } })).status).toBe(201)
+    }
+    expect((await call(`/api/artifacts/${locked.slug}`, { cookie: mate.cookie, method: 'PATCH', json: { linkPassword: 'a long password' } })).status).toBe(200)
+
+    // Its title is listed as before
+    const rows = (await list(me, `workspace=${org.id}`)).rows
+    expect(rows.map((r) => [r.title, r.tags, r.comments]).sort()).toEqual([
+      ['Open link', ['merger'], 1],
+      ['Password link', [], 0],
+    ])
+    expect(await titles(me, `workspace=${org.id}&tag=merger`)).toEqual(['Open link'])
+    expect((await list(me, `workspace=${org.id}&tag=merger`)).total).toBe('1')
+    expect(await (await call(`/api/tags?workspace=${org.id}`, { cookie: me.cookie })).json()).toEqual([{ tag: 'merger', pages: 1 }])
+    const listed = await callTool((await connectAgent(me, org.id)).access_token, 'list_artifacts', {})
+    expect(listed.text).toMatch(/Open link \([^)]*tags: merger\)/)
+    expect(listed.text).toMatch(/Password link \((?![^)]*tags)/)
+
+    // Admins and the owner open it, so they see everything
+    for (const user of [admin, mate]) {
+      expect(await titles(user, `workspace=${org.id}&tag=merger`)).toEqual(['Open link', 'Password link'])
+      expect(await (await call(`/api/tags?workspace=${org.id}`, { cookie: user.cookie })).json()).toEqual([{ tag: 'merger', pages: 2 }])
+    }
   })
 
   it('work over MCP: tag_artifact and list_artifacts with tag', async () => {

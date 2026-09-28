@@ -518,7 +518,7 @@ function buildServer(auth: McpAuth) {
       }
       const [total, tags] = await Promise.all([
         cursor ? null : countForWorkspace(viewer, auth.organizationId, opts),
-        tagsOf(listed.rows.map((r) => r.artifact.id)),
+        tagsOf(listed.rows.filter((r) => r.readable).map((r) => r.artifact.id)),
       ])
       const lines = listed.rows.map(({ artifact: a, folderName }) => {
         const pageTags = tags.get(a.id)

@@ -124,17 +124,15 @@ artifacts.get('/', requireUser, async (c) => {
       listForWorkspace(user, organizationId, { query, folder, tag, cursor, limit }),
       cursor ? null : countForWorkspace(user, organizationId, { query, folder, tag }),
     ])
+    const readable = rows.filter((r) => r.readable).map((r) => r.artifact.id)
     const [editable, thumbs, counts, tags] = await Promise.all([
       editableIds(
         user,
         rows.map((r) => r.artifact),
       ),
       currentThumbnails(rows.map((r) => r.artifact)),
-      commentCounts(
-        user.id,
-        rows.map((r) => r.artifact.id),
-      ),
-      tagsOf(rows.map((r) => r.artifact.id)),
+      commentCounts(user.id, readable),
+      tagsOf(readable),
     ])
     return c.json(
       rows.map(({ artifact: a, ownerName, ownerEmail, folderName }) => ({

@@ -1,5 +1,5 @@
 import { and, asc, count, eq, inArray } from 'drizzle-orm'
-import { pagesInWorkspace } from './artifacts.js'
+import { pagesInWorkspace, readableIn, type Viewer } from './artifacts.js'
 import { db, schema } from './db/index.js'
 import type { Artifact } from './db/schema.js'
 import type { Workspace } from './quota.js'
@@ -67,14 +67,14 @@ export async function changeTags(artifact: Artifact, change: { add?: unknown; re
   })
 }
 
-// The tags of the pages this person sees in the workspace, with how many pages have each
-export async function workspaceTags(ws: Workspace, viewerId: string) {
+// The tags of the pages this person sees in the workspace and can open, with how many pages have each
+export async function workspaceTags(ws: Workspace, viewer: Viewer) {
   const a = schema.artifacts
   return db
     .select({ tag: t.tag, pages: count() })
     .from(t)
     .innerJoin(a, eq(a.id, t.artifactId))
-    .where(pagesInWorkspace(viewerId, ws.organizationId))
+    .where(and(pagesInWorkspace(viewer.id, ws.organizationId), readableIn(viewer, ws.organizationId)))
     .groupBy(t.tag)
     .orderBy(asc(t.tag))
 }

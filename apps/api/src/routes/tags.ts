@@ -12,5 +12,5 @@ tags.get('/', requireUser, async (c) => {
   const id = c.req.query('workspace') || 'personal'
   const ws = { userId: user.id, organizationId: id === 'personal' ? null : id }
   if (!(await belongsTo(user, ws))) return c.json({ error: 'Not found' }, 404)
-  return c.json(await workspaceTags(ws, user.id))
+  return c.json(await workspaceTags(ws, user))
 })
