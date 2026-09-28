@@ -78,6 +78,11 @@ test('docs render, link between pages and redirect the old guide address', async
 
   await page.getByRole('link', { name: /Next\s*Publishing pages/ }).click()
   await expect(page.getByRole('heading', { level: 1, name: 'Publishing pages' })).toBeVisible()
+
+  // The docs' Pricing link lands on the pricing section, not the top of the home page
+  await page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Pricing' }).click()
+  await expect(page).toHaveURL(/\/#pricing$/)
+  await expect(page.getByRole('heading', { level: 2, name: 'Pricing' })).toBeInViewport()
 })
 
 test('unknown paths show the 404 page', async ({ page }) => {

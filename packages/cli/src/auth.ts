@@ -4,7 +4,7 @@ import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { type Auth, errorMessage, jsonPost, oauthPost } from './api.ts'
 import { type Env, normalizeServer, readCredentials, type Saved, updateCredentials } from './config.ts'
-import { CliError, UsageError } from './errors.ts'
+import { CliError } from './errors.ts'
 
 // Signing in is the browser sign-in MCP clients use (docs/connect-your-agent.md): the CLI registers
 // itself with the server's OAuth server (RFC 7591), opens the consent page, and gets the code back on
@@ -21,14 +21,14 @@ function fromTokens(clientId: string, body: Tokens): Saved {
   return { kind: 'oauth', clientId, accessToken: body.access_token, refreshToken: body.refresh_token, expiresAt: Date.now() + body.expires_in * 1000 }
 }
 
+// Without --server, THE_ARTIFACT_URL or a saved sign-in, commands go to the hosted service
+export const HOSTED_SERVER = 'https://the-artifact-pi.vercel.app'
+
 export async function resolveServer(flag: string | undefined, env: Env): Promise<string> {
   const raw = flag ?? env.THE_ARTIFACT_URL
   if (raw) return normalizeServer(raw)
   const saved = (await readCredentials(env)).default
-  if (saved) return saved
-  throw new UsageError(
-    'Which server? Pass --server https://your-server or set THE_ARTIFACT_URL. After the-artifact login, the server you signed in to is used.',
-  )
+  return saved ?? HOSTED_SERVER
 }
 
 // Refresh tokens rotate, so two commands refreshing at once race: the loser's token is already used

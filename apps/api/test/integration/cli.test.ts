@@ -166,11 +166,11 @@ describe('the-artifact publish', () => {
     expect(listed.stderr).toBe('The access token passed with --token was refused. It may have expired or been revoked.\n')
   })
 
-  it('needs a server and a sign-in', async () => {
+  it('needs a sign-in, and goes to the hosted service without a server', async () => {
     await site({ 'index.html': '<!doctype html><h1>x</h1>' })
     const noServer = await run(['publish', 'site'], { env: { THE_ARTIFACT_URL: '' } })
-    expect(noServer.code).toBe(2)
-    expect(noServer.stderr).toContain('Which server?')
+    expect(noServer.code).toBe(1)
+    expect(noServer.stderr).toContain("You're not signed in to https://the-artifact-pi.vercel.app")
     const notSignedIn = await run(['publish', 'site'])
     expect(notSignedIn.code).toBe(1)
     expect(notSignedIn.stderr).toContain(`You're not signed in to ${origin}`)

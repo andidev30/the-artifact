@@ -28,7 +28,7 @@ Commands:
   whoami                       Show who you're signed in as, and in which workspace
 
 Options for every command:
-  --server <url>    The server, e.g. https://artifact.example.com (or THE_ARTIFACT_URL)
+  --server <url>    Your server, e.g. https://artifact.example.com (or THE_ARTIFACT_URL). Default: the hosted service
   --token <token>   An access token from settings (or THE_ARTIFACT_TOKEN), instead of signing in
   --json            Print JSON, for scripts
   -h, --help        Show help for a command
