@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { env } from '../env.js'
+import { clientIp, defineLimit, hit, limitRequest, tooManyRequests } from '../limits.js'
 import { log } from '../log.js'
 import { EMAIL_RE } from '../validation.js'
 import { sendSalesInquiry } from './mail.js'
@@ -14,24 +15,9 @@ const TOPICS: Record<string, string> = {
   'self-hosted-enterprise': 'Self-hosted Enterprise',
 }
 
-// At most this many messages per address in the window, kept in memory: enough to stop a loop, not a determined sender
-const LIMIT = 3
-const WINDOW = 60 * 60 * 1000
-const recent = new Map<string, number[]>()
-
-function allow(address: string): boolean {
-  const now = Date.now()
-  const times = (recent.get(address) ?? []).filter((t) => now - t < WINDOW)
-  if (times.length >= LIMIT) {
-    recent.set(address, times)
-    return false
-  }
-  times.push(now)
-  recent.set(address, times)
-  // Keep the map from growing without bound
-  if (recent.size > 10_000) for (const [k, v] of recent) if (v.every((t) => now - t >= WINDOW)) recent.delete(k)
-  return true
-}
+// Messages from one email address, and from one network, per hour: enough to stop a loop or a bot
+defineLimit('contact', { max: 3, seconds: 60 * 60 })
+defineLimit('contact-ip', { max: 10, seconds: 60 * 60 })
 
 type Field = 'name' | 'email' | 'company' | 'teamSize' | 'message'
 
@@ -52,6 +38,8 @@ contact.use(async (c, next) => {
 })
 
 contact.post('/', async (c) => {
+  const busy = await limitRequest(c, 'contact-ip', clientIp(c), 'Too many messages were sent from your network.')
+  if (busy) return busy
   const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null
   if (!body || typeof body !== 'object') return c.json({ error: 'Send the form as JSON.' }, 400)
 
@@ -72,7 +60,8 @@ contact.post('/', async (c) => {
   if (message.length < 10 || message.length > 5000) return bad('message', 'Tell us a little more: 10 to 5,000 characters.')
   const topic = TOPICS[typeof body.topic === 'string' ? body.topic : ''] ?? TOPICS.enterprise
 
-  if (!allow(email)) return c.json({ error: 'We already have a few messages from this address. We will reply soon.' }, 429)
+  const wait = await hit('contact', email)
+  if (wait) return tooManyRequests(c, 'We already have a few messages from this address. We will reply soon.', wait)
 
   try {
     await sendSalesInquiry({ name, email, company, teamSize, topic, message })

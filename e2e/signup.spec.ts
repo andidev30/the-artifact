@@ -73,3 +73,16 @@ test('opening a sign-in link does not use it up; it works once', async ({ page, 
   await expect(otherPage.getByRole('link', { name: 'Request a new link' })).toBeVisible()
   await other.close()
 })
+
+test('says why a sign-in link was refused when too many were asked for', async ({ page }) => {
+  // The server's limits are off for e2e (playwright.config.ts), so the refusal is the API's own reply, stubbed
+  const error = 'Too many sign-in links were sent to this address. Try again in 42 minutes.'
+  await page.route('**/api/auth/email', (route) =>
+    route.fulfill({ status: 429, headers: { 'Retry-After': '2520' }, contentType: 'application/json', body: JSON.stringify({ error }) }),
+  )
+  await page.goto('/login')
+  await page.getByLabel('Email').fill(uniqueEmail('limited'))
+  await page.getByRole('button', { name: 'Email me a sign-in link' }).click()
+  await expect(page.getByText(error)).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Check your inbox' })).toBeHidden()
+})

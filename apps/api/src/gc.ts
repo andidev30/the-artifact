@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm'
 import { db } from './db/index.js'
+import { deleteExpiredLimits } from './limits.js'
 import { log } from './log.js'
 import { deleteBlobs, deleteStaleUploads, listBlobs } from './storage.js'
 
@@ -46,12 +47,15 @@ export async function sweepStorage({ graceMs = GRACE_MS, now = Date.now() } = {}
   return { checked, deleted, uploads }
 }
 
-// Runs in the background every few hours while the server is up
+// Runs in the background every few hours while the server is up, and clears rate limit counters
+// whose window is over on the way
 export function scheduleSweeps() {
   const run = () =>
     sweepStorage()
       .then(({ deleted, uploads }) => (deleted || uploads) && log.info('Storage sweep', { deleted, uploads }))
       .catch((err) => log.error('Storage sweep failed', { err }))
+      .then(deleteExpiredLimits)
+      .catch((err) => log.error('Clearing rate limits failed', { err }))
   setTimeout(run, 60_000).unref()
   setInterval(run, EVERY_MS).unref()
 }

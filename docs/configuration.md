@@ -26,6 +26,11 @@ Settings are environment variables. With Docker Compose they go in `deploy/docke
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | empty | Enables **Continue with Google**. Register `APP_URL/api/auth/google/callback` as the redirect URI. |
 | `CHROME_PATH` | empty (the image sets it) | Chrome or Chromium binary that renders gallery thumbnails. Empty skips thumbnails; cards show a sketch. |
 | `THUMBNAIL_CDN_HOSTS` | a built-in list | Comma-separated hosts pages may load scripts, styles and fonts from while their thumbnail renders, e.g. `cdn.jsdelivr.net,fonts.gstatic.com`. `none` blocks every host (pages that need a CDN then render without it). The built-in list: `cdn.jsdelivr.net`, `unpkg.com`, `cdnjs.cloudflare.com`, `esm.sh`, `ga.jspm.io`, `cdn.skypack.dev`, `cdn.tailwindcss.com`, `code.jquery.com`, `d3js.org`, `cdn.plot.ly`, `fonts.googleapis.com`, `fonts.gstatic.com`, `rsms.me`. |
+| `TRUST_PROXY` | `false` | How many reverse proxies in front of the app add the visitor's address to `X-Forwarded-For`. `true` or `1` behind one proxy (Caddy, nginx, a Kubernetes ingress), `2` behind a CDN and a proxy. With `false`, the header is ignored, since anyone can send one, and every visitor has the proxy's address, so [per-network limits](/docs/configuration#rate-limits) count everyone together. See [Put it behind HTTPS](/docs/self-hosting#3-put-it-behind-https). |
+| `RATE_LIMITS` | the built-in limits | `off` turns every [rate limit](/docs/configuration#rate-limits) off. Otherwise a comma-separated list of changes, each `name=count/window` or `name=off`, e.g. `sign-in-link=20/1h,mcp=1000/10m,invite-ip=off`. Windows are in `s`, `m`, `h` or `d`. Limits you don't list keep their defaults; an unknown name stops the server from starting. |
+| `WORKSPACE_MAX_PAGES` | no limit | Most pages one workspace (a personal workspace or an organization) holds. See [Workspace quotas](/docs/configuration#workspace-quotas). |
+| `WORKSPACE_MAX_VERSIONS` | no limit | Most versions of pages, all pages of one workspace together |
+| `WORKSPACE_MAX_STORAGE` | no limit | Most storage one workspace uses, e.g. `10GB` or `500MB` (in powers of 1024) |
 | `SELF_HOSTED` | `true` | Skips the marketing pages; `/` opens the app. Also makes the first account the instance admin. Only the hosted service sets it to `false`. |
 | `PORT` | `3000` | Port inside the container |
 | `ARTIFACT_VERSION` | the release the compose file was written for | Release of `ghcr.io/andidev30/the-artifact` that `deploy/docker-compose/docker-compose.yml` runs, e.g. `0.1.0`; set it in the `.env` next to the compose file. See [Updating](/docs/self-hosting#updating). |
@@ -78,3 +83,35 @@ Instance admins change these under **Server admin** (`/admin`); they are stored 
 | Organization invitation | 7 days |
 | Browser session | 30 days, extended while you use it |
 | Agent access token | 1 hour, refreshed automatically; refresh tokens last 60 days and rotate on use |
+| Requests | See [Rate limits](/docs/configuration#rate-limits) |
+| Pages, versions and storage per workspace | None unless set; see [Workspace quotas](/docs/configuration#workspace-quotas) |
+
+## Rate limits
+
+Each limit counts something for one key (an email address, an account, or a network) in a window that starts with the first request and lasts the time shown. Past the limit, the server answers `429 Too Many Requests` with a `Retry-After` header and a message that says how long to wait, which the app shows as is. Agents get the message as the tool's error instead, which they read and pass on (an HTTP error would reach most MCP clients as a failed request, without it). A request that is refused isn't counted.
+
+| Name | What is counted | Default |
+| --- | --- | --- |
+| `sign-in-link` | Sign-in links emailed to one address, besides at most one per 60 seconds | 10 per hour |
+| `sign-in-link-ip` | Sign-in links asked for from one network | 30 per hour |
+| `password` | Wrong passwords for one address. Signing in with the right one resets it. | 10 per 15 minutes |
+| `password-ip` | Password sign-ins, sign-ups and first-account setups from one network | 100 per 15 minutes |
+| `oauth-register-ip` | Agents registering with the server (`POST /oauth/register`) from one network, which each agent does once when it connects | 60 per hour |
+| `invite` | People one account invites to an organization or shares a page with by email, in the app or through an agent | 200 per hour |
+| `invite-ip` | The same, from one network | 500 per hour |
+| `mcp` | MCP tool calls by one account, all agents together | 600 per 10 minutes |
+| `publish` | New pages and versions one account publishes through agents (`publish_artifact`, `publish_upload`, `restore_version`), also counted in `mcp` | 200 per hour |
+
+A network is one IPv4 address, or one IPv6 `/64`. The app knows a visitor's address from the connection, or from `X-Forwarded-For` when `TRUST_PROXY` says a proxy sets it. The counters are kept in Postgres, so every replica of the app shares them; the storage sweep clears the ones that ran out.
+
+Change or turn off single limits with `RATE_LIMITS`, e.g. `RATE_LIMITS=mcp=2000/10m,publish=500/1h` for a team whose agents publish a lot, or `RATE_LIMITS=off` for none.
+
+## Workspace quotas
+
+A self-hosted server has no quotas unless you set them. `WORKSPACE_MAX_PAGES`, `WORKSPACE_MAX_VERSIONS` and `WORKSPACE_MAX_STORAGE` apply to every workspace: each person's personal workspace, and each organization as a whole. They are checked when a page or a version is added, so a server that already holds more keeps it and only refuses new ones.
+
+Storage is the size of every version of every page in the workspace, the HTML and its files, each version counted in full as its history shows it (content that versions share is stored once, but counting it once would make the total something people can't work out). Restoring a version adds a version, so it counts too. Deleting a page frees what its versions used.
+
+When a publish would go past a quota, the agent gets an error that says which one and what to do, e.g. "Your personal workspace has 500 pages, the most this server allows. Publish a new version of a page you have (pass its artifact_id), or delete one you no longer need in the gallery." Restoring a version in the app shows the same message.
+
+On the hosted service, the free Personal plan holds 50 pages and 1 GB of storage in a personal workspace, and keeps older versions for 7 days. Organizations have no quota there.

@@ -4,6 +4,7 @@ import { Hono } from 'hono'
 import { db, schema } from '../db/index.js'
 import { mailEnabled } from '../env.js'
 import { hasAccounts, instanceSettings, lockAdmins, newAccountFields } from '../instance.js'
+import { atLimit, clearHits, clientIp, hit, limitRequest, tooManyRequests, waitText } from '../limits.js'
 import { startSession } from './session.js'
 import { EMAIL_RE } from '../validation.js'
 import { afterSignInUrl, createPasswordAccount, waitingForAccess } from './users.js'
@@ -51,54 +52,38 @@ export function passwordProblem(password: unknown): string | null {
   return null
 }
 
-// Failed logins per address, kept in memory: enough to slow down guessing, reset on restart
-const FAIL_WINDOW = 15 * 60 * 1000
-const MAX_FAILS = 10
-const failures = new Map<string, { count: number; since: number }>()
-
-function lockedOut(email: string): boolean {
-  const f = failures.get(email)
-  if (!f) return false
-  if (Date.now() - f.since > FAIL_WINDOW) {
-    failures.delete(email)
-    return false
-  }
-  return f.count >= MAX_FAILS
-}
-
-function recordFailure(email: string) {
-  const f = failures.get(email)
-  if (!f || Date.now() - f.since > FAIL_WINDOW) failures.set(email, { count: 1, since: Date.now() })
-  else f.count++
-}
-
 export const password = new Hono()
 
 type Body = { email?: unknown; password?: unknown; name?: unknown; plan?: unknown; next?: unknown }
 
+const TOO_MANY_TRIES = 'Too many sign-in attempts from your network.'
+
 password.post('/login', async (c) => {
+  const busy = await limitRequest(c, 'password-ip', clientIp(c), TOO_MANY_TRIES)
+  if (busy) return busy
   const body = (await c.req.json().catch(() => null)) as Body | null
   const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : ''
   const given = typeof body?.password === 'string' ? body.password : ''
   if (!EMAIL_RE.test(email)) return c.json({ error: 'Enter a valid email address.', field: 'email' }, 400)
   if (!given) return c.json({ error: 'Enter your password.', field: 'password' }, 400)
-  if (lockedOut(email)) {
-    return c.json(
-      { error: 'Too many wrong passwords for this address. Wait 15 minutes, or ask an admin for a new sign-in link.', code: 'too_many_attempts' },
-      429,
-    )
+  // Counts wrong passwords only, so someone who knows theirs isn't locked out by their own sign-ins
+  const locked = await atLimit('password', email)
+  if (locked) {
+    return tooManyRequests(c, `Too many wrong passwords for this address. Try again in ${waitText(locked)}, or ask an admin for a new sign-in link.`, locked, {
+      code: 'too_many_attempts',
+    })
   }
 
   const [user] = await db.select().from(schema.users).where(eq(schema.users.email, email))
   if (!(await verifyPassword(given, user?.passwordHash ?? null)) || !user) {
-    recordFailure(email)
+    await hit('password', email)
     const hint = user && !user.passwordHash ? ' This account has no password yet; use Google, or ask an admin for a sign-in link.' : ''
     return c.json({ error: `The email or password is wrong.${hint}`, code: 'wrong_password' }, 401)
   }
   if (user.suspendedAt) {
     return c.json({ error: 'This account is suspended. Ask an admin of this server to restore it.', code: 'account_suspended' }, 403)
   }
-  failures.delete(email)
+  await clearHits('password', email)
   await startSession(c, user.id)
   return c.json({ redirect: afterSignInUrl(typeof body?.plan === 'string' ? body.plan : null, typeof body?.next === 'string' ? body.next : null) })
 })
@@ -106,6 +91,8 @@ password.post('/login', async (c) => {
 // The first account on a server without email. It becomes the instance admin on a self-hosted install.
 password.post('/setup', async (c) => {
   if (mailEnabled()) return c.json({ error: 'This server sends sign-in links by email. Sign up with your email instead.', code: 'email_enabled' }, 409)
+  const busy = await limitRequest(c, 'password-ip', clientIp(c), TOO_MANY_TRIES)
+  if (busy) return busy
   const body = (await c.req.json().catch(() => null)) as Body | null
   const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : ''
   const name = typeof body?.name === 'string' ? body.name.trim().replace(/\s+/g, ' ').slice(0, 80) || null : null
@@ -141,6 +128,8 @@ export async function passwordSignUpOpen(): Promise<boolean> {
 // admin's sign-up link, or the first to type the address would get what was meant for them.
 password.post('/sign-up', async (c) => {
   if (mailEnabled()) return c.json({ error: 'This server sends sign-in links by email. Sign up with your email instead.', code: 'email_enabled' }, 409)
+  const busy = await limitRequest(c, 'password-ip', clientIp(c), TOO_MANY_TRIES)
+  if (busy) return busy
   const body = (await c.req.json().catch(() => null)) as Body | null
   const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : ''
   const name = typeof body?.name === 'string' ? body.name.trim().replace(/\s+/g, ' ').slice(0, 80) || null : null

@@ -5,6 +5,7 @@ import type { Artifact, Visibility } from './db/schema.js'
 import { env } from './env.js'
 import { checkHtmlSize, checkManifest, MAX_HTML_BYTES, prepareFiles, PublishError, sha256, type FileInput, type FileMeta, type ManifestEntry } from './files.js'
 import { holdStorageLock } from './gc.js'
+import { checkQuota } from './quota.js'
 import { getBlob, getText, putBlob } from './storage.js'
 import { checkUploadId, claimUploads } from './uploads.js'
 import { queueThumbnail } from './thumbnails.js'
@@ -159,15 +160,7 @@ export async function publishUpload(input: PublishTarget & { uploadId: string; f
   return publishContent(input, { htmlSha256: html.sha256, htmlSize: html.size, files, store: () => claimUploads(input.uploadId, [html, ...files]) })
 }
 
-// A rule for creating a page that isn't part of every install, set once by an entry point (src/app.ts
-// sets the hosted service's plan limits from ee/). It runs inside the transaction that creates the
-// page and refuses it by throwing a PublishError.
-export type NewPageCheck = (tx: Tx, owner: { userId: string; organizationId: string | null }) => Promise<void>
-let newPageCheck: NewPageCheck | null = null
-
-export function setNewPageCheck(check: NewPageCheck) {
-  newPageCheck = check
-}
+const contentSize = (content: Content) => content.htmlSize + content.files.reduce((sum, f) => sum + f.size, 0)
 
 async function publishContent(input: PublishTarget, content: Content): Promise<Artifact> {
   const title = input.title.trim().slice(0, 200) || 'Untitled page'
@@ -183,6 +176,7 @@ async function publishContent(input: PublishTarget, content: Content): Promise<A
     const { updated, versionId } = await db.transaction(async (tx) => {
       // Lock the page so two publishes (or a publish and a restore) can't pick the same number
       const [locked] = await tx.select().from(schema.artifacts).where(eq(schema.artifacts.id, existing.id)).for('update')
+      await checkQuota(tx, { userId: locked.ownerId, organizationId: locked.organizationId }, { page: false, bytes: contentSize(content) })
       const version = locked.currentVersion + 1
       const versionId = await insertVersion(tx, { artifactId: existing.id, version, publishedWith: input.clientName, publishedBy: input.userId }, content)
       const [updated] = await tx
@@ -207,7 +201,7 @@ async function publishContent(input: PublishTarget, content: Content): Promise<A
     throw new PublishError('Organization visibility needs an organization workspace. Use private (restricted) or link.')
   }
   const { created, versionId } = await db.transaction(async (tx) => {
-    await newPageCheck?.(tx, { userId: input.userId, organizationId: input.organizationId })
+    await checkQuota(tx, { userId: input.userId, organizationId: input.organizationId }, { page: true, bytes: contentSize(content) })
     const [created] = await tx
       .insert(schema.artifacts)
       .values({
@@ -408,6 +402,8 @@ export async function restoreVersion(artifact: Artifact, version: number, userId
       .from(schema.artifactVersions)
       .where(and(eq(schema.artifactVersions.artifactId, artifact.id), eq(schema.artifactVersions.version, version)))
     if (!old) return null
+    const [files] = await tx.execute<{ bytes: number }>(sql`select coalesce(sum(size), 0)::float8 as bytes from artifact_files where version_id = ${old.id}`)
+    await checkQuota(tx, { userId: locked.ownerId, organizationId: locked.organizationId }, { page: false, bytes: old.htmlSize + files.bytes })
     const next = locked.currentVersion + 1
     const [created] = await tx
       .insert(schema.artifactVersions)

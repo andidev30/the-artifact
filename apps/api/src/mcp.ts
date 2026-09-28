@@ -30,8 +30,9 @@ import {
 import { allowed, downloadLink, TOKEN_HOURS } from './content.js'
 import { db, schema } from './db/index.js'
 import type { Artifact } from './db/schema.js'
+import { hit, rule, waitText, windowText } from './limits.js'
 import { ALLOWED_EXTENSIONS, checkPath, ENTRY_PATH, isText, MAX_FILE_BYTES, MAX_FILES, MAX_HTML_BYTES, MAX_TOTAL_BYTES } from './files.js'
-import { parseEmails, sharePeople, SharingError } from './sharing.js'
+import { MAX_PEOPLE_PER_INVITE, parseEmails, sharePeople, SharingError } from './sharing.js'
 import { authenticateBearer, RESOURCE_METADATA_URL, type McpAuth } from './oauth/server.js'
 import { directUploads, UPLOAD_TTL_SECONDS } from './storage.js'
 import { prepareUpload } from './uploads.js'
@@ -71,10 +72,34 @@ const manifest = z
   )
   .min(1)
 
+// What to tell the agent when the account is past a limit, or null. Every tool call counts toward
+// "mcp", and the ones that publish a version toward "publish" as well.
+async function overLimit(userId: string, publishes: boolean): Promise<string | null> {
+  const calls = await hit('mcp', userId)
+  if (calls) return refusal('mcp', 'tool calls', calls)
+  const published = publishes ? await hit('publish', userId) : null
+  if (published) return refusal('publish', 'new pages and versions', published)
+  return null
+}
+
+function refusal(name: string, what: string, wait: number) {
+  const r = rule(name)!
+  return `This account is past this server's limit of ${r.max} ${what} per ${windowText(r.seconds)}. Try again in ${waitText(wait)}.`
+}
+
 // One server per request (stateless), bound to the person and workspace behind the token
 function buildServer(auth: McpAuth) {
   const viewer = { id: auth.userId, email: auth.email }
   const server = new McpServer({ name: 'the-artifact', version: '0.1.0' })
+
+  // A limit is reported as the tool's error, which the agent reads and can pass on. An HTTP 429
+  // would reach most MCP clients as a failed request, without the message.
+  const limited =
+    <A, R>(handler: (args: A) => Promise<R>, publishes = false) =>
+    async (args: A) => {
+      const refused = await overLimit(auth.userId, publishes)
+      return refused ? text(refused, true) : handler(args)
+    }
 
   server.registerTool(
     'publish_artifact',
@@ -105,7 +130,7 @@ function buildServer(auth: McpAuth) {
         visibility: visibility.optional(),
       }),
     },
-    async ({ title, html, files, artifact_id, visibility }) => {
+    limited(async ({ title, html, files, artifact_id, visibility }) => {
       try {
         const artifact = await publish({
           userId: auth.userId,
@@ -123,7 +148,7 @@ function buildServer(auth: McpAuth) {
         if (err instanceof PublishError) return text(err.message, true)
         throw err
       }
-    },
+    }, true),
   )
 
   if (directUploads()) {
@@ -139,7 +164,7 @@ function buildServer(auth: McpAuth) {
           `each file up to ${MAX_FILE_BYTES / 1024 / 1024} MB, ${MAX_TOTAL_BYTES / 1024 / 1024} MB and ${MAX_FILES} files in total. Allowed types: ${ALLOWED_EXTENSIONS.join(', ')}.`,
         inputSchema: z.object({ files: manifest.describe('Every file of the page, index.html included') }),
       },
-      async ({ files }) => {
+      limited(async ({ files }) => {
         try {
           const { uploadId, uploads, stored } = await prepareUpload(files)
           const commands = uploads.map((u) => `curl -fsS -T '${u.paths[0]}' '${u.url}'${u.paths.length > 1 ? `  # also ${u.paths.slice(1).join(', ')}` : ''}`)
@@ -155,7 +180,7 @@ function buildServer(auth: McpAuth) {
           if (err instanceof PublishError) return text(err.message, true)
           throw err
         }
-      },
+      }),
     )
 
     server.registerTool(
@@ -173,7 +198,7 @@ function buildServer(auth: McpAuth) {
           visibility: visibility.optional(),
         }),
       },
-      async ({ title, upload_id, files, artifact_id, visibility }) => {
+      limited(async ({ title, upload_id, files, artifact_id, visibility }) => {
         try {
           const artifact = await publishUpload({
             userId: auth.userId,
@@ -191,7 +216,7 @@ function buildServer(auth: McpAuth) {
           if (err instanceof PublishError) return text(err.message, true)
           throw err
         }
-      },
+      }, true),
     )
   }
 
@@ -203,7 +228,7 @@ function buildServer(auth: McpAuth) {
       inputSchema: z.object({}),
       annotations: { readOnlyHint: true },
     },
-    async () => {
+    limited(async () => {
       const rows = await listForWorkspace(auth.userId, auth.organizationId, 25)
       if (rows.length === 0) return text('No pages yet. Use publish_artifact to publish one.')
       return text(
@@ -211,7 +236,7 @@ function buildServer(auth: McpAuth) {
           .map(({ artifact: a }) => `- ${a.title} (artifact_id: ${a.slug}, v${a.currentVersion}, ${VISIBILITY_LABEL[a.visibility]}) ${artifactUrl(a.slug)}`)
           .join('\n'),
       )
-    },
+    }),
   )
 
   server.registerTool(
@@ -227,7 +252,7 @@ function buildServer(auth: McpAuth) {
       }),
       annotations: { readOnlyHint: true },
     },
-    async ({ artifact_id, path }) => {
+    limited(async ({ artifact_id, path }) => {
       const artifact = await findBySlug(parseArtifactRef(artifact_id))
       if (!artifact || !(await canView(artifact, viewer))) return text(`No page you can open has the id "${artifact_id}".`, true)
       const current = await getVersion(artifact, artifact.currentVersion)
@@ -254,7 +279,7 @@ function buildServer(auth: McpAuth) {
           '\n'
         : ''
       return text(`Title: ${artifact.title}\nVersion: ${artifact.currentVersion}\n${list}\n${html}`)
-    },
+    }),
   )
 
   server.registerTool(
@@ -268,14 +293,14 @@ function buildServer(auth: McpAuth) {
       }),
       annotations: { idempotentHint: true },
     },
-    async ({ artifact_id, title }) => {
+    limited(async ({ artifact_id, title }) => {
       const artifact = await findBySlug(parseArtifactRef(artifact_id))
       if (!artifact || !(await canEdit(artifact, viewer))) return text(`No page you can edit has the id "${artifact_id}".`, true)
       const checked = checkTitle(title)
       if ('error' in checked) return text(checked.error, true)
       const updated = await rename(artifact, checked.title)
       return text(`Renamed "${artifact.title}" to "${updated.title}".\nLink: ${artifactUrl(updated.slug)}`)
-    },
+    }),
   )
 
   server.registerTool(
@@ -286,14 +311,14 @@ function buildServer(auth: McpAuth) {
       inputSchema: z.object({ artifact_id: z.string().describe('Id or link of the page'), visibility }),
       annotations: { idempotentHint: true },
     },
-    async ({ artifact_id, visibility }) => {
+    limited(async ({ artifact_id, visibility }) => {
       const artifact = await findBySlug(parseArtifactRef(artifact_id))
       if (!artifact || !(await canEdit(artifact, viewer))) return text(`No page you can edit has the id "${artifact_id}".`, true)
       if (visibility === 'organization' && !artifact.organizationId)
         return text('This page is in a personal workspace. Use private (restricted) or link.', true)
       await db.update(schema.artifacts).set({ visibility }).where(eq(schema.artifacts.id, artifact.id))
       return text(`"${artifact.title}" is now ${describeVisibility(visibility)}.\nLink: ${artifactUrl(artifact.slug)}`)
-    },
+    }),
   )
 
   server.registerTool(
@@ -308,15 +333,19 @@ function buildServer(auth: McpAuth) {
         message: z.string().optional().describe('Optional note included in the email'),
       }),
     },
-    async ({ artifact_id, emails, role, message }) => {
+    limited(async ({ artifact_id, emails, role, message }) => {
       const artifact = await findBySlug(parseArtifactRef(artifact_id))
       if (!artifact || !(await canEdit(artifact, viewer))) return text(`No page you can edit has the id "${artifact_id}".`, true)
+      const people = parseEmails(emails)
+      // Shares email people, so they count toward the same limit as invitations in the web app
+      const wait = await hit('invite', auth.userId, Math.min(people.length, MAX_PEOPLE_PER_INVITE))
+      if (wait) return text(refusal('invite', 'people invited or shared with', wait), true)
       const [me] = await db.select({ name: schema.users.name }).from(schema.users).where(eq(schema.users.id, auth.userId))
       try {
         const { shared, notifyFailed } = await sharePeople(
           artifact,
           { id: auth.userId, email: auth.email, name: me?.name ?? null },
-          parseEmails(emails),
+          people,
           role,
           true,
           message,
@@ -330,7 +359,7 @@ function buildServer(auth: McpAuth) {
         if (err instanceof SharingError) return text(err.message, true)
         throw err
       }
-    },
+    }),
   )
 
   server.registerTool(
@@ -343,12 +372,12 @@ function buildServer(auth: McpAuth) {
       inputSchema: z.object({ artifact_id: z.string().describe('Id or link of the page') }),
       annotations: { destructiveHint: true, idempotentHint: true },
     },
-    async ({ artifact_id }) => {
+    limited(async ({ artifact_id }) => {
       const artifact = await findBySlug(parseArtifactRef(artifact_id))
       if (!artifact || !canDelete(artifact, viewer)) return text(`No page you own has the id "${artifact_id}". Only the owner of a page can delete it.`, true)
       await deleteArtifact(artifact)
       return text(`Deleted "${artifact.title}". Its link no longer works.`)
-    },
+    }),
   )
 
   server.registerTool(
@@ -359,7 +388,7 @@ function buildServer(auth: McpAuth) {
       inputSchema: z.object({ artifact_id: z.string().describe('Id or link of the page') }),
       annotations: { readOnlyHint: true },
     },
-    async ({ artifact_id }) => {
+    limited(async ({ artifact_id }) => {
       const artifact = await findBySlug(parseArtifactRef(artifact_id))
       if (!artifact || !(await canEdit(artifact, viewer))) return text(`No page you can edit has the id "${artifact_id}".`, true)
       const rows = await listVersions(artifact)
@@ -370,7 +399,7 @@ function buildServer(auth: McpAuth) {
         return `- Version ${v.version}${v.version === artifact.currentVersion ? ' (current)' : ''}: ${when}, ${how}${by ? ` by ${by}` : ''}`
       })
       return text(`Versions of "${artifact.title}", newest first:\n${lines.join('\n')}\nUse restore_version to make an older one current again.`)
-    },
+    }),
   )
 
   server.registerTool(
@@ -385,14 +414,14 @@ function buildServer(auth: McpAuth) {
         version: z.number().int().positive().describe('The version number to restore, from list_versions'),
       }),
     },
-    async ({ artifact_id, version }) => {
+    limited(async ({ artifact_id, version }) => {
       const artifact = await findBySlug(parseArtifactRef(artifact_id))
       if (!artifact || !(await canEdit(artifact, viewer))) return text(`No page you can edit has the id "${artifact_id}".`, true)
       if (version === artifact.currentVersion) return text('This is already the current version.', true)
       const updated = await restoreVersion(artifact, version, auth.userId)
       if (!updated) return text(`"${artifact.title}" has no version ${version}. Call list_versions to see its versions.`, true)
       return text(`Restored version ${version} of "${updated.title}" as version ${updated.currentVersion}.\nLink: ${artifactUrl(updated.slug)}`)
-    },
+    }, true),
   )
 
   server.registerTool(
@@ -409,7 +438,7 @@ function buildServer(auth: McpAuth) {
       }),
       annotations: { readOnlyHint: true },
     },
-    async ({ artifact_id, version }) => {
+    limited(async ({ artifact_id, version }) => {
       const artifact = await findBySlug(parseArtifactRef(artifact_id))
       const n = version ?? artifact?.currentVersion
       if (!artifact || !n || !allowed(await accessLevel(artifact, viewer), n === artifact.currentVersion))
@@ -423,7 +452,7 @@ function buildServer(auth: McpAuth) {
           `Download: ${link}\n` +
           `For example: curl -fsSL -o page.zip '${link}'`,
       )
-    },
+    }),
   )
 
   return server

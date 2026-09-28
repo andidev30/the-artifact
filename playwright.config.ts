@@ -37,6 +37,13 @@ function servers(ports: { api: number; web: number }, selfHosted: boolean, datab
         GOOGLE_CLIENT_ID: '',
         GOOGLE_CLIENT_SECRET: '',
         SALES_EMAIL: '',
+        // Every spec signs in from localhost, so per-network limits would count them all together.
+        // The limits themselves are covered by apps/api/test/integration/limits.test.ts.
+        RATE_LIMITS: 'off',
+        TRUST_PROXY: '',
+        WORKSPACE_MAX_PAGES: '',
+        WORKSPACE_MAX_VERSIONS: '',
+        WORKSPACE_MAX_STORAGE: '',
         // The MinIO from docker-compose
         S3_ENDPOINT: 'http://localhost:9000',
         S3_REGION: 'us-east-1',

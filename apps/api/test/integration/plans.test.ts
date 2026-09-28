@@ -2,7 +2,7 @@ import { and, eq } from 'drizzle-orm'
 import { afterEach, describe, expect, it } from 'vitest'
 import { publish } from '../../src/artifacts.js'
 import { db, schema } from '../../src/db/index.js'
-import { PERSONAL_HISTORY_DAYS, PERSONAL_PAGES, pruneHistory } from '../../src/ee/plans.js'
+import { PERSONAL_HISTORY_DAYS, PERSONAL_PAGES, PERSONAL_STORAGE_BYTES, pruneHistory } from '../../src/ee/plans.js'
 import { env } from '../../src/env.js'
 import { call, callTool, connectAgent, createOrg, createPage, createUser, type TestUser } from './helpers.js'
 
@@ -61,6 +61,28 @@ describe('the free Personal plan on the hosted service', () => {
     const page = await createPage(owner, { organizationId: org.id })
     expect(page.organizationId).toBe(org.id)
     await expect(createPage(owner)).rejects.toThrow(/the most the free Personal plan allows/)
+  })
+
+  it('holds 1 GB of versions in a personal workspace; organizations have no limit yet', async () => {
+    const owner = await createUser()
+    const org = await createOrg(owner)
+    const token = (await connectAgent(owner)).access_token
+    const page = await createPage(owner)
+    // As if its versions added up to all but 50 bytes of the plan
+    await db
+      .update(schema.artifactVersions)
+      .set({ htmlSize: PERSONAL_STORAGE_BYTES - 50 })
+      .where(eq(schema.artifactVersions.artifactId, page.id))
+
+    const res = await callTool(token, 'publish_artifact', { title: 'Page', html: `<p>${'x'.repeat(100)}</p>`, artifact_id: page.slug })
+    expect(res.isError).toBe(true)
+    expect(res.text).toMatch(/^This would take your personal workspace past 1 GB of storage, the most the free Personal plan allows \(1024 MB used/)
+    expect(res.text).toMatch(/Versions older than 7 days are removed every day, which frees space as well\.$/)
+    expect((await republish(owner, page.slug)).currentVersion).toBe(2)
+
+    await createPage(owner, { organizationId: org.id, html: `<p>${'x'.repeat(100)}</p>` })
+    env.selfHosted = true
+    expect((await republish(owner, page.slug)).currentVersion).toBe(3)
   })
 
   it(`deletes versions older than ${PERSONAL_HISTORY_DAYS} days, never the current one or an organization's`, async () => {

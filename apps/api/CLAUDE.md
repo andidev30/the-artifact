@@ -18,6 +18,8 @@ Hono on Node 26, Drizzle ORM over `postgres`, S3 via `@aws-sdk/client-s3`, MCP v
 | `src/thumbnails.ts` | Gallery screenshots of untrusted HTML with no network of its own |
 | `src/previews.ts` | Link preview (Open Graph) tags in the HTML shell of `/a/<slug>`, for link-shared pages only; mounted by `src/web.ts` and by `api/index.js` on Vercel |
 | `src/sharing.ts` | Per-person shares by email |
+| `src/limits.ts` | Rate limits: counters in Postgres (`hit`, `limitRequest` for a 429 with `Retry-After`), `RATE_LIMITS` overrides, the client address (`clientIp`, `TRUST_PROXY`) |
+| `src/quota.ts` | Pages, versions and storage per workspace, checked when a page or version is added; `WORKSPACE_MAX_*` and the plan hook for `ee/` |
 | `src/instance.ts` | Instance admins, sign-up policy and instance settings |
 | `src/mcp.ts` | The MCP tools (`publish_artifact`, `list_artifacts`, `get_artifact`, `rename_artifact`, `set_artifact_visibility`, `share_artifact`, `delete_artifact`, `list_versions`, `restore_version`, `download_artifact`, and `prepare_upload`/`publish_upload` when `S3_PUBLIC_ENDPOINT` is set) |
 | `src/uploads.ts` | Publishing by direct upload: upload links, then checking and claiming what arrived |
@@ -39,6 +41,7 @@ Hono on Node 26, Drizzle ORM over `postgres`, S3 via `@aws-sdk/client-s3`, MCP v
 - **Email links must survive mail scanners.** Opening a sign-in link only shows a confirmation page; the POST on Continue uses it up.
 - **New accounts.** Creating accounts and changing admins take `lockAdmins(tx)`. Insert new users with `...(await newAccountFields(tx))`: on a self-hosted install the first account becomes admin and goes through onboarding, and later ones start onboarded in their personal workspace.
 - **Untrusted HTML.** Page content is served with `CONTENT_CSP` (sandbox, opaque origin) on every file, never with the app's cookies. Thumbnails intercept every request; see the header comment in `src/thumbnails.ts` before touching it.
+- **Limits.** New endpoints that send email or create accounts, clients or content go through `limitRequest` (or `hit`) from `src/limits.ts`, with a limit added to its list and to `docs/configuration.md`. Anything that adds a version calls `checkQuota` inside its transaction.
 - Shared helpers: `EMAIL_RE` in `src/validation.ts`, `likeTerm` in `src/artifacts.ts` for escaped `ILIKE` searches, `checkTitle` for page names.
 
 ## Migrations

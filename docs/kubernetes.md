@@ -56,6 +56,7 @@ cp deploy/kubernetes/app.env.example deploy/kubernetes/app.env
 | `DATABASE_URL`, `POSTGRES_PASSWORD` | The same new password in both lines, letters and digits only. |
 | `S3_SECRET_ACCESS_KEY` | A new password; it is also the bundled MinIO's password. |
 | `SMTP_*`, `GOOGLE_*` | Optional, as in the [configuration reference](/docs/configuration). Without `SMTP_HOST` the server [runs without email](/docs/self-hosting#running-without-email). |
+| `TRUST_PROXY` | Already `true`, since people reach the app through the ingress. It makes [rate limits](/docs/configuration#rate-limits) see each visitor's address instead of the ingress controller's. |
 
 The database and MinIO keep the passwords they were created with, so changing them later means changing them inside Postgres and MinIO too. `app.env` is ignored by git.
 
@@ -91,7 +92,7 @@ kubectl -n the-artifact port-forward svc/the-artifact 8080:80
 
 ## Running it
 
-The app runs as one pod, and updates replace it rather than rolling: it migrates the database on start, and keeps the wrong-password limits in memory. Keep `replicas: 1`.
+The app runs as one pod, and updates replace it rather than rolling: it migrates the database on start. Keep `replicas: 1`.
 
 Commands from the other pages run with `kubectl exec`:
 

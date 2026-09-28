@@ -13,16 +13,18 @@ import {
   listForWorkspace,
   listSharedWith,
   listVersions,
+  PublishError,
   rename,
   restoreVersion,
   versionId,
 } from '../artifacts.js'
 import { requireUser, type AuthEnv } from '../auth/session.js'
 import { db, schema } from '../db/index.js'
+import { limitInvites } from '../limits.js'
 import { currentThumbnails, getThumbnail, queueThumbnail, thumbnailsEnabled } from '../thumbnails.js'
 import type { ShareRole, Visibility } from '../db/schema.js'
 import { allowed, downloadVersion, serveVersion } from '../content.js'
-import { getSharing, parseEmails, removePerson, setPersonRole, sharePeople, SharingError } from '../sharing.js'
+import { getSharing, MAX_PEOPLE_PER_INVITE, parseEmails, removePerson, setPersonRole, sharePeople, SharingError } from '../sharing.js'
 
 export const artifacts = new Hono<AuthEnv>()
 
@@ -222,7 +224,14 @@ artifacts.post('/:slug/versions/:version/restore', requireUser, async (c) => {
   const n = versionParam(c)
   if (!artifact || !n) return c.json({ error: 'Not found' }, 404)
   if (n === artifact.currentVersion) return c.json({ error: 'This is already the current version.' }, 400)
-  const updated = await restoreVersion(artifact, n, c.get('user')!.id)
+  let updated: Awaited<ReturnType<typeof restoreVersion>>
+  try {
+    updated = await restoreVersion(artifact, n, c.get('user')!.id)
+  } catch (err) {
+    // The workspace is full
+    if (err instanceof PublishError) return c.json({ error: err.message }, 403)
+    throw err
+  }
   if (!updated) return c.json({ error: 'Not found' }, 404)
   return c.json({ version: updated.currentVersion, updatedAt: updated.updatedAt })
 })
@@ -245,8 +254,14 @@ artifacts.post('/:slug/sharing/people', requireUser, async (c) => {
   if (!artifact) return c.json({ error: 'Not found' }, 404)
   const body = (await c.req.json().catch(() => ({}))) as { emails?: unknown; role?: ShareRole; notify?: boolean; message?: string }
   const role = body.role && ROLES.has(body.role) ? body.role : 'viewer'
+  const emails = parseEmails(body.emails)
+  const notify = body.notify !== false
+  if (notify) {
+    const busy = await limitInvites(c, c.get('user')!.id, Math.min(emails.length, MAX_PEOPLE_PER_INVITE))
+    if (busy) return busy
+  }
   try {
-    const result = await sharePeople(artifact, c.get('user')!, parseEmails(body.emails), role, body.notify !== false, body.message)
+    const result = await sharePeople(artifact, c.get('user')!, emails, role, notify, body.message)
     return c.json({ ...result, sharing: await getSharing(artifact) })
   } catch (err) {
     if (err instanceof SharingError) return c.json({ error: err.message }, 400)

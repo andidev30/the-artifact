@@ -3,6 +3,7 @@ import { Hono } from 'hono'
 import { db, schema } from '../db/index.js'
 import type { User } from '../db/schema.js'
 import { env, mailEnabled } from '../env.js'
+import { clientIp, limitRequest } from '../limits.js'
 import { log } from '../log.js'
 import { sendSignInLink } from '../mail.js'
 import { EMAIL_RE } from '../validation.js'
@@ -24,6 +25,8 @@ email.post('/', async (c) => {
   if (!mailEnabled()) {
     return c.json({ error: 'This server can’t send email. Log in with your password, or ask an admin for a sign-in link.', code: 'email_disabled' }, 503)
   }
+  const busy = await limitRequest(c, 'sign-in-link-ip', clientIp(c), 'Too many sign-in links were asked for from your network.')
+  if (busy) return busy
   if (!EMAIL_RE.test(address)) return c.json({ error: 'Enter a valid email address.' }, 400)
   const [existing] = await db.select({ suspendedAt: schema.users.suspendedAt }).from(schema.users).where(eq(schema.users.email, address))
   // A link a suspended person can't use is not worth an email
@@ -44,6 +47,8 @@ email.post('/', async (c) => {
     .from(schema.emailTokens)
     .where(and(eq(schema.emailTokens.email, address), gt(schema.emailTokens.createdAt, new Date(Date.now() - RESEND_AFTER))))
   if (recent) return c.body(null, 204)
+  const flooded = await limitRequest(c, 'sign-in-link', address, 'Too many sign-in links were sent to this address.')
+  if (flooded) return flooded
 
   const token = randomToken()
   await db.insert(schema.emailTokens).values({

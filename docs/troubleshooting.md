@@ -12,6 +12,14 @@ Opening a sign-in link shows a page that asks you to continue as your email addr
 
 Links work for 15 minutes. Press **Email me a new link** on the same page to get a fresh one sent to the same address.
 
+## "Too many …, try again in …"
+
+The server limits how often one address, account or network can ask for sign-in links, try passwords, invite people or use agent tools (see [Rate limits](/docs/configuration#rate-limits)). The limit ends on its own after the time the message gives. On a self-hosted server, if everyone behind the same office network or reverse proxy hits it together, the admin can set `TRUST_PROXY` or raise the limit with `RATE_LIMITS`.
+
+## "Your personal workspace has … pages" or "… past … of storage"
+
+The workspace is full. Delete pages you no longer need in the gallery, or ask the agent to publish a new version of a page you have. See [Limits](/docs/publishing#limits).
+
 ## I can't open a page someone sent me
 
 You see "This page isn't available" when the page is restricted and your email isn't on it, or when it was deleted. Check that you are signed in with the address it was shared with (the page tells you which one you're using), or ask the owner to share it with you.
