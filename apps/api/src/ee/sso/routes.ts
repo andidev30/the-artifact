@@ -95,10 +95,36 @@ function refusal(conn: SsoConnection, identity: SsoIdentity): string | null {
   return null
 }
 
+// A provider may not sign in to this existing account: `code` is the /login?error= code
+export class SsoLinkRefusedError extends SignupClosedError {
+  constructor(code: 'sso_admin' | 'sso_link') {
+    super()
+    this.code = code
+  }
+}
+
+// Linking an existing account by address hands it to whoever the provider says has that address.
+// Never an instance admin's: admins never depend on a provider to get in (ssoRequiredFor), so a
+// provider can't take their account over either. Without domains on the connection, only when the
+// provider verified the address itself (OIDC email_verified) or provisioned the account over SCIM:
+// with "Trust addresses", or a SAML IdP, nothing else limits which addresses it can name.
+async function checkLink(conn: SsoConnection, identity: SsoIdentity, existing: User) {
+  let code: 'sso_admin' | 'sso_link' | null = null
+  if (existing.isAdmin) code = 'sso_admin'
+  else if (!conn.allowedDomains.length && !(conn.protocol === 'oidc' && identity.emailVerified)) {
+    const [scim] = await db.select({ userId: schema.scimUsers.userId }).from(schema.scimUsers).where(eq(schema.scimUsers.userId, existing.id))
+    if (!scim) code = 'sso_link'
+  }
+  if (!code) return
+  securityLog('sso.link_refused', { actorId: null, targetId: existing.id, connectionId: conn.id, reason: code })
+  throw new SsoLinkRefusedError(code)
+}
+
 // The account a provider's person signs in to: the one already linked to their subject, else the
-// account with their (verified) address, else a new one. New accounts skip the sign-up policy only
-// when the connection lists its domains; a connection open to any address follows the policy, so
-// a provider anyone can sign up at (a public Google client, say) doesn't open the server to all.
+// account with their address when checkLink allows it, else a new one. New accounts skip the
+// sign-up policy only when the connection lists its domains; a connection open to any address
+// follows the policy, so a provider anyone can sign up at (a public Google client, say) doesn't
+// open the server to all.
 export async function accountFor(conn: SsoConnection, identity: SsoIdentity & { email: string }): Promise<User> {
   const [linked] = await db
     .select({ user: schema.users })
@@ -114,7 +140,13 @@ export async function accountFor(conn: SsoConnection, identity: SsoIdentity & { 
     return linked.user
   }
 
-  const user = await findOrCreateUser({ email: identity.email, name: identity.name, approved: conn.allowedDomains.length > 0, method: 'sso' })
+  const user = await findOrCreateUser({
+    email: identity.email,
+    name: identity.name,
+    approved: conn.allowedDomains.length > 0,
+    method: 'sso',
+    checkExisting: (existing) => checkLink(conn, identity, existing),
+  })
   const [created] = await db
     .insert(schema.ssoIdentities)
     .values({ connectionId: conn.id, userId: user.id, subject: identity.subject, email: identity.email })

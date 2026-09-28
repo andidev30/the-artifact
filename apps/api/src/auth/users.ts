@@ -18,6 +18,8 @@ type Profile = {
   approved?: boolean
   // How a new account was made, for the hosted service's sign-up funnel
   method: SignUpMethod
+  // Called with an existing account before it is signed in to; throws a SignupClosedError to refuse it
+  checkExisting?: (existing: User) => void | Promise<void>
 }
 
 // `code` is the error the sign-in routes redirect to (/login?error=…)
@@ -72,6 +74,7 @@ export async function findOrCreateUser(profile: Profile): Promise<User> {
   const [found] = await db.select().from(schema.users).where(eq(schema.users.email, email))
   if (found) {
     if (found.suspendedAt) throw new AccountSuspendedError()
+    await profile.checkExisting?.(found)
     // Every way in here proves the address: an email link, Google's verified email, or single sign-on
     const byEmail = found.emailUnverified
       ? (await db.update(schema.users).set({ emailUnverified: false }).where(eq(schema.users.id, found.id)).returning())[0]
@@ -104,7 +107,10 @@ export async function findOrCreateUser(profile: Profile): Promise<User> {
     // One account at a time, so only the very first one can become the instance admin
     await lockAdmins(tx)
     const [raced] = await tx.select().from(schema.users).where(eq(schema.users.email, email))
-    if (raced) return { user: raced, created: false }
+    if (raced) {
+      await profile.checkExisting?.(raced)
+      return { user: raced, created: false }
+    }
     const [created] = await tx
       .insert(schema.users)
       .values({
