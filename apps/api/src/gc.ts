@@ -3,6 +3,7 @@ import { db } from './db/index.js'
 import { deleteExpiredLimits } from './limits.js'
 import { log } from './log.js'
 import { deleteBlobs, deleteStaleUploads, listBlobs } from './storage.js'
+import { deleteOldViews } from './views.js'
 
 // Blobs are shared by every version that has the same content, so deleting a page or an account
 // deletes rows only. This removes the blobs no row refers to any more.
@@ -47,8 +48,8 @@ export async function sweepStorage({ graceMs = GRACE_MS, now = Date.now() } = {}
   return { checked, deleted, uploads }
 }
 
-// Runs in the background every few hours while the server is up, and clears rate limit counters
-// whose window is over on the way
+// Runs in the background every few hours while the server is up, and on the way clears rate limit
+// counters whose window is over and records of who opened a page that are past their retention
 export function scheduleSweeps() {
   const run = () =>
     sweepStorage()
@@ -56,6 +57,8 @@ export function scheduleSweeps() {
       .catch((err) => log.error('Storage sweep failed', { err }))
       .then(deleteExpiredLimits)
       .catch((err) => log.error('Clearing rate limits failed', { err }))
+      .then(deleteOldViews)
+      .catch((err) => log.error('Deleting old page views failed', { err }))
   setTimeout(run, 60_000).unref()
   setInterval(run, EVERY_MS).unref()
 }

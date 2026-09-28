@@ -3,6 +3,7 @@ import { Hono, type MiddlewareHandler } from 'hono'
 import { env } from '../env.js'
 import { sweepStorage } from '../gc.js'
 import { deleteExpiredLimits } from '../limits.js'
+import { deleteOldViews } from '../views.js'
 
 // Scheduled jobs for hosts without a long-running process, such as Vercel, where the timers in
 // index.ts never run. A scheduler calls these with CRON_SECRET as a bearer token (Vercel Cron
@@ -24,4 +25,4 @@ export const requireCronSecret: MiddlewareHandler = async (c, next) => {
 
 cron.use(requireCronSecret)
 
-cron.get('/sweep', async (c) => c.json({ ...(await sweepStorage()), rateLimits: await deleteExpiredLimits() }))
+cron.get('/sweep', async (c) => c.json({ ...(await sweepStorage()), rateLimits: await deleteExpiredLimits(), views: await deleteOldViews() }))
