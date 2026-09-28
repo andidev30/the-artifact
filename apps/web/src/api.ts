@@ -668,6 +668,8 @@ export type DataExport = {
   pagesTotal: number
   error: string | null
   downloadUrl: string | null
+  // The build moves on only while this page asks how it is going (a server without a background process)
+  buildsOnPoll: boolean
 }
 
 // organizationId null for your own account

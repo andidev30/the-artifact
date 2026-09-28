@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { publish } from '../../src/artifacts.js'
 import { db, schema } from '../../src/db/index.js'
 import { env } from '../../src/env.js'
-import { buildExport, EXPORT_HOURS, stepExport, sweepExports, zipKey } from '../../src/exports.js'
+import { buildExport, buildExportsInProcess, EXPORT_HOURS, stepExport, sweepExports, zipKey } from '../../src/exports.js'
 import { sendExportReady } from '../../src/mail.js'
 import { deleteObjects, getObject, listObjects } from '../../src/storage.js'
 import { unzip } from '../unzip.js'
@@ -19,6 +19,7 @@ type ExportView = {
   pagesTotal: number
   expiresAt: string | null
   downloadUrl: string | null
+  buildsOnPoll: boolean
 }
 
 async function site(owner: TestUser, html: string, opts: { slug?: string; organizationId?: string | null; title?: string } = {}) {
@@ -243,9 +244,22 @@ describe('exporting an account', () => {
     await createPage(me)
     const res = await requestExport(me, { versions: 'current' })
     expect(res.status).toBe(202)
+    expect(((await res.json()) as { export: ExportView }).export.buildsOnPoll).toBe(true)
     const ready = await current(me)
     expect(ready?.status).toBe('ready')
     expect(ready?.downloadUrl).toMatch(new RegExp(`^/api/exports/${ready!.id}/download\\?sig=`))
+  })
+
+  it('tells the settings page it may be closed when the server builds exports by itself', async () => {
+    const me = await createUser()
+    await createPage(me)
+    expect(((await (await requestExport(me, { versions: 'current' })).json()) as { export: ExportView }).export.buildsOnPoll).toBe(true)
+    buildExportsInProcess()
+    try {
+      expect((await current(me))?.buildsOnPoll).toBe(false)
+    } finally {
+      buildExportsInProcess(false)
+    }
   })
 
   it('emails a link to settings when it is ready, and nothing without email', async () => {
