@@ -55,10 +55,10 @@ oauth.get('/.well-known/oauth-authorization-server', (c) =>
 export function isAllowedRedirect(uri: string): boolean {
   try {
     const url = new URL(uri)
-    if (url.hash) return false
+    if (url.hash || url.username || url.password) return false
     if (url.protocol === 'https:') return true
     if (url.protocol === 'http:') return ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
-    return /^[a-z][a-z0-9+.-]*:$/.test(url.protocol) && !['javascript:', 'vbscript:', 'data:', 'file:'].includes(url.protocol)
+    return /^[a-z][a-z0-9+.-]*:$/.test(url.protocol) && !['javascript:', 'vbscript:', 'data:', 'file:', 'blob:', 'about:'].includes(url.protocol)
   } catch {
     return false
   }
