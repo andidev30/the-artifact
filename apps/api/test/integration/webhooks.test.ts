@@ -28,6 +28,8 @@ let base = ''
 let received: Received[] = []
 let status = 200
 let redirectTo = ''
+// While set, answers wait for it
+let hold: Promise<void> | null = null
 
 beforeAll(async () => {
   server = createServer((req, res) => {
@@ -35,8 +37,9 @@ beforeAll(async () => {
     req.on('data', (chunk) => {
       body += chunk
     })
-    req.on('end', () => {
+    req.on('end', async () => {
       received.push({ path: req.url ?? '', headers: req.headers, body })
+      await hold
       if (redirectTo && req.url === '/hook') res.writeHead(302, { location: redirectTo }).end()
       else res.writeHead(status).end('ok')
     })
@@ -53,6 +56,7 @@ beforeEach(() => {
   received = []
   status = 200
   redirectTo = ''
+  hold = null
   forgetRecentViews()
 })
 
@@ -255,6 +259,33 @@ describe('delivery', () => {
     await runWebhookQueue()
     expect(received).toHaveLength(1)
     expect((await deliveries(owner, '/api/me', webhook.id))[0]).toMatchObject({ status: 'delivered', attempts: 1 })
+  })
+
+  it("hands the first attempt to Vercel's waitUntil, so the request doesn't wait for it", async () => {
+    const context = Symbol.for('@vercel/request-context')
+    const handed: Promise<unknown>[] = []
+    const holder = globalThis as Record<symbol, unknown>
+    holder[context] = { get: () => ({ waitUntil: (p: Promise<unknown>) => handed.push(p) }) }
+    let release = () => {}
+    hold = new Promise((resolve) => {
+      release = resolve
+    })
+    try {
+      const owner = await createUser()
+      const { webhook } = await addHook(owner, '/api/me', {})
+      // The destination hasn't answered, so this returns only because the send was handed off
+      await createPage(owner)
+      expect(handed).toHaveLength(1)
+      expect((await deliveries(owner, '/api/me', webhook.id))[0]).toMatchObject({ status: 'pending' })
+
+      release()
+      await Promise.all(handed)
+      expect(received).toHaveLength(1)
+      expect((await deliveries(owner, '/api/me', webhook.id))[0]).toMatchObject({ status: 'delivered', attempts: 1 })
+    } finally {
+      release()
+      delete holder[context]
+    }
   })
 
   it('is retried by the cron job', async () => {
