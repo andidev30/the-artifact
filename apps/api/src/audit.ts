@@ -28,6 +28,9 @@ export const AUDIT_ACTIONS = [
   'organization.settings_changed',
   'access_token.created',
   'access_token.revoked',
+  'webhook.created',
+  'webhook.changed',
+  'webhook.deleted',
 ] as const
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number]
@@ -36,7 +39,7 @@ export type AuditEvent = {
   action: AuditAction
   // Who did it; null when nobody is signed in
   actor: { id: string; email: string } | null
-  target?: { type: 'page' | 'member' | 'invitation' | 'access_token' | 'organization'; id: string; label: string }
+  target?: { type: 'page' | 'member' | 'invitation' | 'access_token' | 'organization' | 'webhook'; id: string; label: string }
   details?: Record<string, unknown>
 } & (
   | // The organization it happened in; null (a personal page, a personal token) records nothing

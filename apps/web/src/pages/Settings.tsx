@@ -22,6 +22,7 @@ import { AccountHeader } from '../components/AccountHeader'
 import { CopyCommand } from '../components/CopyCommand'
 import { ExportSection } from '../components/ExportSection'
 import { SecuritySection, SessionsSection, signInAgain } from '../components/SignInSecurity'
+import { WebhooksSection } from '../components/Webhooks'
 import { expiryText, timeAgo } from '../time'
 import { useConfig } from '../useConfig'
 import { useMe } from '../useMe'
@@ -78,6 +79,7 @@ function SettingsPage({ initial }: { initial: Me }) {
     { id: 'agents', label: 'Connected agents' },
     { id: 'tokens', label: 'Access tokens' },
     { id: 'export', label: 'Export your data' },
+    { id: 'webhooks', label: 'Webhooks' },
     { id: 'delete', label: 'Delete account' },
   ]
 
@@ -121,6 +123,7 @@ function SettingsPage({ initial }: { initial: Me }) {
             <AgentsSection />
             <TokensSection me={me} defaultWorkspace={org?.id ?? null} />
             <ExportSection organization={null} />
+            <WebhooksSection workspace="personal" name="your personal workspace" />
             <DeleteSection me={me} />
           </div>
         </div>

@@ -3,6 +3,7 @@ import { and, desc, eq, sql } from 'drizzle-orm'
 import { db, schema } from './db/index.js'
 import type { Artifact } from './db/schema.js'
 import { log } from './log.js'
+import { emitWebhookEvent } from './webhooks.js'
 
 // Views of a page: a count per version for everyone, and who opened it and when for people who
 // opened it as themselves. Visits to a page shared by link stay anonymous: they only add to the count.
@@ -91,7 +92,10 @@ export async function recordView(input: ViewInput, now = Date.now()): Promise<vo
     } else await addCounts(new Map([[versionId, 1]]))
   } catch (err) {
     log.warn('Recording a view failed', { err })
+    return
   }
+  // Anonymous for a page opened through its shared link, as the view itself is
+  await emitWebhookEvent({ event: 'page.opened', artifact, version, actorId: identified ? viewerId : null })
 }
 
 export const FLUSH_MS = 5_000

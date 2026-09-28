@@ -26,6 +26,7 @@ import { checkQuota, type Workspace } from './quota.js'
 import { getBlob, getText, putBlob } from './storage.js'
 import { checkUploadId, claimUploads } from './uploads.js'
 import { queueThumbnail } from './thumbnails.js'
+import { emitWebhookEvent } from './webhooks.js'
 import { CONTROL_CHARS_ERROR, hasControlChars, MAX_VERSION, SLUG_RE, UUID_RE } from './validation.js'
 
 export { MAX_HTML_BYTES, PublishError }
@@ -403,6 +404,7 @@ async function publishContent(input: PublishTarget, content: Content | ((tx: Tx,
     queueThumbnail(versionId)
     track({ event: 'page_published', userId: input.userId })
     if (input.visibility) auditVisibility(existing, input.visibility, { id: input.userId, email: input.email })
+    await emitWebhookEvent({ event: 'page.published', artifact: updated, version: updated.currentVersion, actorId: input.userId })
     return updated
   }
 
@@ -433,6 +435,7 @@ async function publishContent(input: PublishTarget, content: Content | ((tx: Tx,
   track({ event: 'page_published', userId: input.userId })
   // A new page in an organization is open to it by default, which nobody chose, so only a link counts
   if (visibility === 'link') track({ event: 'page_shared', userId: input.userId, detail: 'link' })
+  await emitWebhookEvent({ event: 'page.published', artifact: created, version: 1, actorId: input.userId })
   return created
 }
 
@@ -773,6 +776,7 @@ export async function restoreVersion(artifact: Artifact, version: number, userId
   })
   if (!result) return null
   if (!result.hasThumbnail) queueThumbnail(result.versionId)
+  await emitWebhookEvent({ event: 'page.published', artifact: result.updated, version: result.updated.currentVersion, actorId: userId })
   return result.updated
 }
 

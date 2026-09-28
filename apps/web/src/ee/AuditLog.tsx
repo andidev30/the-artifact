@@ -45,6 +45,9 @@ const ACTION_LABEL: Record<string, string> = {
   'organization.settings_changed': 'Changed settings',
   'access_token.created': 'Created an access token',
   'access_token.revoked': 'Revoked an access token',
+  'webhook.created': 'Added a webhook',
+  'webhook.changed': 'Changed a webhook',
+  'webhook.deleted': 'Deleted a webhook',
 }
 
 const VISIBILITY_LABEL: Record<string, string> = { private: 'Restricted', organization: 'Organization', link: 'Anyone with the link' }
