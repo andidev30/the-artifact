@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0](https://github.com/andidev30/the-artifact/compare/cli-v0.3.0...cli-v0.4.0) (2026-09-28)
+
+
+### Features
+
+* **cli:** use the hosted service when no server is given ([5b416b5](https://github.com/andidev30/the-artifact/commit/5b416b5a3596cb2d85d9db058d822d9d0eb5c3ac))
+
+
+### Bug fixes
+
+* **web:** docs' Pricing link lands on pricing; feat(cli): hosted service by default ([031a876](https://github.com/andidev30/the-artifact/commit/031a8768f99a01c38f2d7a2aab065ee96794ce58))
+
 ## [0.3.0](https://github.com/andidev30/the-artifact/compare/cli-v0.2.0...cli-v0.3.0) (2026-09-28)
 
 
