@@ -2,6 +2,25 @@
 
 Every release of The Artifact, newest first. Entries are generated from the commit messages when a release is made; what you have to do when you upgrade is in [Upgrading](docs/upgrading.md), and the versioning policy is there too.
 
+## [0.4.0](https://github.com/andidev30/the-artifact/compare/v0.3.0...v0.4.0) (2026-09-28)
+
+
+### Features
+
+* **cli:** use the hosted service when no server is given ([5b416b5](https://github.com/andidev30/the-artifact/commit/5b416b5a3596cb2d85d9db058d822d9d0eb5c3ac))
+* sample pages, linked from the README and the landing page ([3f5a9f1](https://github.com/andidev30/the-artifact/commit/3f5a9f132f9ce2181f1539d180d06a73bd7d129f))
+* sample pages, linked from the README and the landing page ([795213c](https://github.com/andidev30/the-artifact/commit/795213cfc943fd28c6e97f341b8b0d638dbaef94))
+
+
+### Bug fixes
+
+* send addresses that end in a slash to the API on Vercel ([a33444e](https://github.com/andidev30/the-artifact/commit/a33444e90ff91a0d0160680a9f9129259f15c94c))
+* send addresses that end in a slash to the API on Vercel ([46c5011](https://github.com/andidev30/the-artifact/commit/46c5011d998ab65ecc3368b27cda43a055970bd6))
+* **web:** docs' Pricing link lands on pricing; feat(cli): hosted service by default ([031a876](https://github.com/andidev30/the-artifact/commit/031a8768f99a01c38f2d7a2aab065ee96794ce58))
+* **web:** the docs' Pricing link lands on the pricing section ([8594da2](https://github.com/andidev30/the-artifact/commit/8594da2dcc0be8acec865d1e3e1f24c54587fb53))
+* **web:** tidy the share dialog's link options and add a Never choice for link expiry ([62d73fd](https://github.com/andidev30/the-artifact/commit/62d73fd22485597535c07027e0118eb3e34d1d6a))
+* **web:** tidy the share dialog's link options and add a Never choice for link expiry ([90eac44](https://github.com/andidev30/the-artifact/commit/90eac44aecc78fe1c70641f0da55accf1705085e))
+
 ## [0.3.0](https://github.com/andidev30/the-artifact/compare/v0.2.0...v0.3.0) (2026-09-28)
 
 
