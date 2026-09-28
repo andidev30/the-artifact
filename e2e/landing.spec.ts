@@ -110,3 +110,23 @@ test('the footer and sign-up link to the legal pages', async ({ page }) => {
   await expect(page.getByRole('link', { name: 'Terms of Service' })).toHaveAttribute('href', '/legal/terms')
   await expect(page.getByRole('link', { name: 'Privacy Policy' })).toHaveAttribute('href', '/legal/privacy')
 })
+
+test('the landing page and docs use fonts served by the app itself', async ({ page }) => {
+  const requested: string[] = []
+  page.on('request', (request) => {
+    if (request.resourceType() === 'font' || request.resourceType() === 'stylesheet') requested.push(request.url())
+  })
+  const loaded = (face: string) => page.evaluate(async (f) => (await document.fonts.load(f)).length > 0 && document.fonts.check(f), face)
+
+  await page.goto('/')
+  await expect(page.getByRole('heading', { level: 1, name: 'Your agent writes the page. You send the link.' })).toBeVisible()
+  for (const face of ['400 16px "Schibsted Grotesk"', '800 16px "Schibsted Grotesk"', '400 16px "JetBrains Mono"']) expect(await loaded(face)).toBe(true)
+
+  await page.goto('/docs/self-hosting')
+  await expect(page.getByRole('heading', { level: 1, name: 'Self-hosting' })).toBeVisible()
+  await expect(page.locator('.doc-code').first()).toContainText('git clone')
+  for (const face of ['500 16px "Schibsted Grotesk"', '500 16px "JetBrains Mono"']) expect(await loaded(face)).toBe(true)
+
+  const origin = new URL(page.url()).origin
+  expect(requested.filter((url) => url.startsWith('http') && new URL(url).origin !== origin)).toEqual([])
+})

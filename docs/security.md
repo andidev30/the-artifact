@@ -144,4 +144,4 @@ Opening a page is counted, and for pages shared with specific people or an organ
 
 ## Self-hosted data
 
-Everything lives in your own Postgres database and object storage: accounts and version history in Postgres, page HTML, files and thumbnails in the bucket. Nothing is sent to us. The bucket should stay private; pages are only ever served through the app, which checks access and adds the sandbox headers. While rendering thumbnails, the server may fetch scripts and fonts that pages load from the public CDNs listed above; set `THUMBNAIL_CDN_HOSTS=none` to turn that off.
+Everything lives in your own Postgres database and object storage: accounts and version history in Postgres, page HTML, files and thumbnails in the bucket. Nothing is sent to us, and the app's own fonts and scripts are served by your server rather than a CDN. The bucket should stay private; pages are only ever served through the app, which checks access and adds the sandbox headers. While rendering thumbnails, the server may fetch scripts and fonts that pages load from the public CDNs listed above; set `THUMBNAIL_CDN_HOSTS=none` to turn that off.
