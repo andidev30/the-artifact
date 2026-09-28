@@ -1,3 +1,6 @@
+import cluster from 'node:cluster'
+import { databasePoolMax } from './workers.js'
+
 try {
   process.loadEnvFile()
 } catch {
@@ -94,6 +97,8 @@ export const env = {
   // Transaction-mode poolers (PgBouncer, Supabase on port 6543) hand each query to any server
   // connection, so prepared statements made on one aren't there on the next
   databasePrepare: process.env.DATABASE_PREPARE !== 'false',
+  // Connections each process may open. A cluster's primary gives its workers WEB_CONCURRENCY (src/primary.ts).
+  databasePoolMax: databasePoolMax(process.env.DATABASE_POOL_MAX, cluster.isWorker ? Number(process.env.WEB_CONCURRENCY) : 1),
   google: {
     clientId: process.env.GOOGLE_CLIENT_ID ?? '',
     clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',

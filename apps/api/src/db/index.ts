@@ -4,7 +4,7 @@ import { env } from '../env.js'
 import * as schema from './schema.js'
 
 // Notices are informational (e.g. "already exists, skipping" from migrations)
-const client = postgres(env.databaseUrl, { onnotice: () => {}, prepare: env.databasePrepare })
+const client = postgres(env.databaseUrl, { onnotice: () => {}, prepare: env.databasePrepare, max: env.databasePoolMax })
 
 // postgres.js doesn't expose its pool, so the metrics count what holds a connection instead: every
 // query outside a transaction while it runs, and every transaction from begin to commit. Drizzle
@@ -42,4 +42,7 @@ client.begin = ((...args: Parameters<typeof begin>) => {
 export const poolStats = () => ({ max: client.options.max, active })
 
 export const db = drizzle(client, { schema })
+
+// Lets running queries finish, for up to a few seconds, then closes every connection
+export const closeDatabase = () => client.end({ timeout: 5 })
 export { schema }

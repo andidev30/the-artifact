@@ -6,7 +6,8 @@ Hono on Node 26, Drizzle ORM over `postgres`, S3 via `@aws-sdk/client-s3`, MCP v
 
 | File | Responsibility |
 | --- | --- |
-| `src/index.ts` | Boot: optional migrations (`MIGRATE_ON_START`), bucket check, storage sweeps, HTTP server |
+| `src/index.ts` | Boot of the long-running server: one process, or with `WEB_CONCURRENCY` above 1 a `node:cluster` primary (`src/primary.ts`) and its workers. Vercel runs `api/index.js` instead and never forks |
+| `src/startup.ts`, `src/server.ts`, `src/primary.ts`, `src/workers.ts` | Once per server before serving: migrations (`MIGRATE_ON_START`) and the bucket check (`startup.ts`). One serving process (`server.ts`): the HTTP server, graceful shutdown on `SIGTERM`, and in the background process only the storage sweep and the thumbnail queue. The primary (`primary.ts`) restarts crashed workers with backoff, forwards thumbnails to worker 1 and gathers `/metrics` from every worker. Sizing and IPC messages (`workers.ts`). Anything else that must run once per server (a timer, a queue) goes where `scheduleSweeps` is called in `server.ts`; in-memory state is per worker |
 | `src/app.ts` | Mounts every router; `GET /api/config` and `GET /api/me` |
 | `src/env.ts` | Environment variables. Add new settings here and read them from `env` |
 | `src/db/schema.ts` | Tables. `src/db/index.ts` exports `db`, `schema` and the `Tx` type |

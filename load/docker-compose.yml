@@ -36,6 +36,8 @@ services:
       # Empty turns thumbnails off
       CHROME_PATH: ${CHROME_PATH-/usr/bin/chromium-headless-shell}
       THUMBNAIL_CONCURRENCY: ${THUMBNAIL_CONCURRENCY:-2}
+      # Node processes serving requests; empty is one per CPU of APP_CPUS
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-}
     healthcheck:
       test: ['CMD', 'node', '-e', "fetch('http://localhost:3000/readyz').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
       interval: 5s

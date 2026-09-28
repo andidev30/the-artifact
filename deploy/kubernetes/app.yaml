@@ -77,6 +77,13 @@ spec:
           envFrom:
             - secretRef:
                 name: the-artifact
+          env:
+            # Node.js worker processes serving requests. One uses at most about one and a half cores
+            # and takes about 250 MiB, and the pod has no CPU limit, so the node's core count says
+            # nothing about what it may use. Raise it together with resources below; see
+            # docs/configuration.md. Change it here: a value here wins over one in app.env.
+            - name: WEB_CONCURRENCY
+              value: '1'
           ports:
             - name: http
               containerPort: 3000

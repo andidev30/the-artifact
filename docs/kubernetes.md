@@ -52,6 +52,8 @@ Put your values in a file and pass it with `-f`. `helm show values oci://ghcr.io
 | `google.clientId`, `google.clientSecret` | off | **Continue with Google** |
 | `thumbnails.enabled` | `true` | Gallery thumbnails. Needs the [seccomp profile](#3-the-seccomp-profile) on the nodes. |
 | `thumbnails.concurrency` | `2` | `THUMBNAIL_CONCURRENCY`: how many thumbnails render at once, 1 to 8. A typical page renders in under a second, so 2 keeps up with about 150 new pages a minute; each extra render adds another Chromium page, so check `resources.limits` when you raise it. |
+| `webConcurrency` | the CPU limit, or 1 without one | `WEB_CONCURRENCY`: how many worker processes serve requests. Empty follows `resources.limits.cpu` when you set one (one per core, up to 8), and runs one process otherwise. See [Using more cores](#using-more-cores). |
+| `databasePoolMax` | 10 with one worker, about 20 in all with more | `DATABASE_POOL_MAX`: database connections per worker |
 | `metrics.token`, `metrics.serviceMonitor.enabled` | off | [Prometheus metrics](#health-checks-and-metrics) |
 | `releaseCheck` | `true` | `false` sets `RELEASE_CHECK=false`: no daily request to GitHub for [new releases](/docs/upgrading#new-releases), for clusters without internet access |
 | `rateLimits`, `workspaceQuota.maxPages`, `workspaceQuota.maxVersions`, `workspaceQuota.maxStorage` | the defaults | `RATE_LIMITS` and the [workspace quotas](/docs/configuration#workspace-quotas) |
@@ -231,6 +233,15 @@ The app waits for whatever `DATABASE_URL` and `S3_ENDPOINT` point at, so nothing
 ## Running it
 
 The app runs as one pod, and updates replace it rather than rolling: it migrates the database on start. With the manifests, keep `replicas: 1`; the chart has no other choice.
+
+### Using more cores
+
+Since the pod doesn't scale out, it scales up: one Node.js process uses at most about one and a half cores, so the app can start several [worker processes](/docs/configuration#more-than-one-worker) in the pod. Both the chart and the manifests run one by default, because the pod has no CPU limit and the node's core count says nothing about what the pod may use. Each worker takes about 250 MiB of memory.
+
+- **Chart:** set `resources.limits.cpu` (e.g. `4`), and the app starts one worker per core, up to 8; or set `webConcurrency` yourself. Raise `resources.limits.memory` by about 256Mi per worker, and the CPU request to what you expect it to use.
+- **Manifests:** change `WEB_CONCURRENCY` in the `env` of the app container in `app.yaml`, and its `resources` to match.
+
+Each worker has its own database pool (`DATABASE_POOL_MAX`); with the defaults, the pod opens at most 10 connections with one worker and about 20 with more.
 
 Commands from the other pages run with `kubectl exec` (with a Helm release named something other than `the-artifact`, use `deploy/<release>-the-artifact`):
 

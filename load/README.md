@@ -36,6 +36,7 @@ Settings for the compose file, read from the environment or a `load/.env`:
 | `METRICS_TOKEN` | `load-test-metrics` | Bearer token for `GET /metrics` |
 | `CHROME_PATH` | the image's Chromium | Empty turns thumbnails off |
 | `THUMBNAIL_CONCURRENCY` | `2` | Thumbnails rendered at once |
+| `WEB_CONCURRENCY` | one per CPU of `APP_CPUS` | Node processes serving requests; `1` runs one process, as before 0.5.0 |
 
 Against a staging server instead, set `RATE_LIMITS` and `METRICS_TOKEN` there the same way, and give the seeding script its database and bucket.
 

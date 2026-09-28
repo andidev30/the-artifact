@@ -117,6 +117,22 @@ Secret already holds, else a new random one. (list $ given secretName key)
 - name: RELEASE_CHECK
   value: 'false'
 {{- end }}
+{{- with .Values.webConcurrency | toString }}
+{{- if ne . "" }}
+- name: WEB_CONCURRENCY
+  value: {{ . | quote }}
+{{- end }}
+{{- end }}
+{{- if and (eq (.Values.webConcurrency | toString) "") (not (dig "limits" "cpu" "" .Values.resources)) }}
+- name: WEB_CONCURRENCY
+  value: '1'
+{{- end }}
+{{- with .Values.databasePoolMax | toString }}
+{{- if ne . "" }}
+- name: DATABASE_POOL_MAX
+  value: {{ . | quote }}
+{{- end }}
+{{- end }}
 {{- with .Values.rateLimits }}
 - name: RATE_LIMITS
   value: {{ . | quote }}
