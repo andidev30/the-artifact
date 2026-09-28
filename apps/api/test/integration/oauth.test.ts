@@ -286,3 +286,32 @@ describe('full MCP OAuth flow', () => {
     expect((await mcpRequest(tokens.access_token, 'tools/list')).status).toBe(401)
   })
 })
+
+describe('token revocation', () => {
+  const revoke = (form: Record<string, string>) => call('/oauth/revoke', { method: 'POST', form })
+
+  it('advertises the endpoint', async () => {
+    const meta = await (await call('/.well-known/oauth-authorization-server')).json()
+    expect(meta.revocation_endpoint).toBe('http://localhost:5177/oauth/revoke')
+  })
+
+  it('revoking a refresh token ends the whole connection', async () => {
+    const user = await createUser()
+    const tokens = await connectAgent(user)
+    const other = await connectAgent(user, null, 'cursor')
+    expect((await revoke({ token: tokens.refresh_token })).status).toBe(200)
+    expect((await mcpRequest(tokens.access_token, 'tools/list')).status).toBe(401)
+    // Other agents stay connected
+    expect((await mcpRequest(other.access_token, 'tools/list')).status).toBe(200)
+  })
+
+  it('answers the same for unknown tokens, and ignores a token from another client', async () => {
+    const user = await createUser()
+    const tokens = await connectAgent(user)
+    const other = await registerClient('other')
+    expect((await revoke({ token: 'nope' })).status).toBe(200)
+    expect((await revoke({ token: tokens.access_token, client_id: other.client_id })).status).toBe(200)
+    expect((await mcpRequest(tokens.access_token, 'tools/list')).status).toBe(200)
+    expect((await revoke({})).status).toBe(400)
+  })
+})

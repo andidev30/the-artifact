@@ -39,6 +39,8 @@ oauth.get('/.well-known/oauth-authorization-server', (c) =>
     authorization_endpoint: `${env.appUrl}/oauth/authorize`,
     token_endpoint: `${env.appUrl}/oauth/token`,
     registration_endpoint: `${env.appUrl}/oauth/register`,
+    revocation_endpoint: `${env.appUrl}/oauth/revoke`,
+    revocation_endpoint_auth_methods_supported: ['none'],
     response_types_supported: ['code'],
     grant_types_supported: ['authorization_code', 'refresh_token'],
     code_challenge_methods_supported: ['S256'],
@@ -201,6 +203,23 @@ oauth.post('/oauth/token', async (c) => {
   }
 
   return tokenError(c, 'unsupported_grant_type', 'Use authorization_code or refresh_token.')
+})
+
+// Token revocation (RFC 7009), for clients that sign out, like the CLI's logout. Revoking either
+// token of a connection ends the whole connection, as Disconnect does in settings. The answer is
+// 200 whether or not the token was known, so it reveals nothing.
+oauth.post('/oauth/revoke', async (c) => {
+  const type = c.req.header('content-type') ?? ''
+  const params: Record<string, unknown> = type.includes('application/json') ? await c.req.json().catch(() => ({})) : await c.req.parseBody().catch(() => ({}))
+  if (typeof params.token !== 'string' || !params.token) return tokenError(c, 'invalid_request', 'token is required.')
+  const [found] = await db
+    .select({ clientId: schema.oauthTokens.clientId, userId: schema.oauthTokens.userId })
+    .from(schema.oauthTokens)
+    .where(eq(schema.oauthTokens.id, hashToken(params.token)))
+  if (found && (!params.client_id || params.client_id === found.clientId)) {
+    await db.delete(schema.oauthTokens).where(and(eq(schema.oauthTokens.clientId, found.clientId), eq(schema.oauthTokens.userId, found.userId)))
+  }
+  return c.body(null, 200)
 })
 
 export type McpAuth = {

@@ -4,7 +4,7 @@ import { app } from '../../src/app.js'
 import { hashToken } from '../../src/auth/session.js'
 import { db, schema } from '../../src/db/index.js'
 import { env } from '../../src/env.js'
-import { addMember, call, callTool, createOrg, createUser, mcpRequest, slugFrom, type TestUser } from './helpers.js'
+import { addMember, call, callTool, connectAgent, createOrg, createUser, mcpRequest, slugFrom, type TestUser } from './helpers.js'
 
 const HTML = '<!doctype html><title>Report</title><h1>Tests passed</h1>'
 const DAY = 24 * 60 * 60 * 1000
@@ -113,6 +113,30 @@ describe('creating access tokens', () => {
       expect(res.status, `${method} ${path}`).toBe(401)
     }
     expect(await db.$count(schema.accessTokens)).toBe(1)
+  })
+})
+
+describe('GET /api/whoami', () => {
+  it('says whom a token acts for, and in which workspace', async () => {
+    const user = await createUser({ name: 'Ana' })
+    const org = await createOrg(user)
+    const personal = await createToken(user, { name: 'Laptop' })
+    const res = await call('/api/whoami', { bearer: personal.token })
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ email: user.email, name: 'Ana', workspace: { id: null, name: 'Personal' }, client: 'Laptop' })
+    const team = await createToken(user, { name: 'CI', organizationId: org.id })
+    expect((await (await call('/api/whoami', { bearer: team.token })).json()).workspace).toEqual({ id: org.id, name: 'Acme Inc' })
+  })
+
+  it('takes OAuth tokens too, and refuses anything else like POST /api/publish', async () => {
+    const user = await createUser()
+    const tokens = await connectAgent(user)
+    expect((await (await call('/api/whoami', { bearer: tokens.access_token })).json()).client).toBe('claude-code')
+    expect((await call('/api/whoami')).status).toBe(401)
+    const bad = await call('/api/whoami', { bearer: 'art_nope' })
+    expect(bad.status).toBe(401)
+    expect((await bad.json()).error).toBe('This access token is not valid. It may have expired or been revoked.')
+    expect((await call('/api/whoami', { cookie: user.cookie })).status).toBe(401)
   })
 })
 

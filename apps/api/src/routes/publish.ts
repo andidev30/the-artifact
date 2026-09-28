@@ -165,3 +165,23 @@ publishApi.post(
     }
   },
 )
+
+// GET /api/whoami: who a bearer token acts for and in which workspace, so the CLI and scripts can
+// check a token before relying on it. Bearer tokens only, like POST /api/publish.
+export const whoamiApi = new Hono()
+
+whoamiApi.get('/', async (c) => {
+  const header = c.req.header('authorization')
+  const auth = await authenticateBearer(header)
+  if (!auth) return unauthorized(c, Boolean(header))
+  const [user] = await db.select({ name: schema.users.name }).from(schema.users).where(eq(schema.users.id, auth.userId))
+  const [org] = auth.organizationId
+    ? await db.select({ name: schema.organizations.name }).from(schema.organizations).where(eq(schema.organizations.id, auth.organizationId))
+    : []
+  return c.json({
+    email: auth.email,
+    name: user?.name ?? null,
+    workspace: { id: auth.organizationId, name: org?.name ?? 'Personal' },
+    client: auth.clientName,
+  })
+})
