@@ -82,7 +82,7 @@ export function FlowDemo() {
           <span>
             Write
             <br />
-            artifact
+            page
           </span>
         </div>
 
