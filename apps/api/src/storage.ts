@@ -45,6 +45,11 @@ function client(endpoint: string) {
     requestChecksumCalculation: 'WHEN_REQUIRED',
     responseChecksumValidation: 'WHEN_REQUIRED',
     ...(env.storage.accessKeyId ? { credentials: { accessKeyId: env.storage.accessKeyId, secretAccessKey: env.storage.secretAccessKey } } : {}),
+    // A store that stops answering fails the request instead of holding it forever. The socket timeout
+    // counts only silence, so large uploads and downloads (exports stream through the API to slow
+    // browsers) take as long as they need. No requestTimeout: it caps the whole upload, and the SDK
+    // also waits that long for "100 Continue" from stores that never send it.
+    requestHandler: { connectionTimeout: 10_000, socketTimeout: 120_000 },
   })
 }
 

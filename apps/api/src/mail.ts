@@ -18,6 +18,11 @@ export const transport = {
       port: env.smtp.port,
       secure: env.smtp.secure,
       auth: env.smtp.user ? { user: env.smtp.user, pass: env.smtp.pass } : undefined,
+      // Sign-in links and invitations are sent while the person waits; with nodemailer's defaults a mail
+      // server that hangs would hold the request for 2 minutes to connect or 10 of silence
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 30_000,
     })
     return smtp.sendMail(message)
   },
