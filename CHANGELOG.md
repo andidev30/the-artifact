@@ -2,6 +2,39 @@
 
 Every release of The Artifact, newest first. Entries are generated from the commit messages when a release is made; what you have to do when you upgrade is in [Upgrading](docs/upgrading.md), and the versioning policy is there too.
 
+## [0.6.0](https://github.com/andidev30/the-artifact/compare/v0.5.0...v0.6.0) (2026-09-28)
+
+
+### Features
+
+* **api:** compare two versions of a page and diff_versions for agents ([ce0104b](https://github.com/andidev30/the-artifact/commit/ce0104be505f1fd395812b57f9839a9c9e5cf86a))
+* **api:** inspect_artifact lets agents check a page before sharing it ([9e3b1a3](https://github.com/andidev30/the-artifact/commit/9e3b1a33c20ea069dad8ff4d4d9e51543e0571a4))
+* **api:** inspect_artifact lets agents check a page before sharing it ([ec534c7](https://github.com/andidev30/the-artifact/commit/ec534c7b450edaaca39bd304188ac5bf63edb656)), closes [#137](https://github.com/andidev30/the-artifact/issues/137)
+* **api:** update some files of a page without republishing all of it ([150a9c4](https://github.com/andidev30/the-artifact/commit/150a9c460d0bc3e1b8fc6839f7c0e4896aefbcdd))
+* **cli:** publish --only and --remove to update some files of a page ([eeb61ca](https://github.com/andidev30/the-artifact/commit/eeb61ca847d83414de6c7f9b73422388ad7f79fe))
+* **cli:** publish --watch publishes a new version whenever files change ([4ee03a4](https://github.com/andidev30/the-artifact/commit/4ee03a4bac247fad026a3a90d04647ed7eaedb5d))
+* compare two versions of a page ([cde769d](https://github.com/andidev30/the-artifact/commit/cde769d97e7338afa7032a58b4a9cb97c81e7275))
+* duplicate a page, or move it to another workspace ([8fb4f34](https://github.com/andidev30/the-artifact/commit/8fb4f3423d50895cf7698308630c7c0fd25b105c))
+* duplicate a page, or move it to another workspace ([7e764df](https://github.com/andidev30/the-artifact/commit/7e764dffcf889fb568e88ffd4b9b7bda90286191)), closes [#140](https://github.com/andidev30/the-artifact/issues/140)
+* export all data of an account or organization ([f8f3973](https://github.com/andidev30/the-artifact/commit/f8f3973b32d173616d07ef54376439a4b1343790))
+* export all data of an account or organization ([c98972b](https://github.com/andidev30/the-artifact/commit/c98972ba67fadce2dec28a38717949d1fed727b0)), closes [#144](https://github.com/andidev30/the-artifact/issues/144)
+* pin comments to an element of the page ([aee5f6b](https://github.com/andidev30/the-artifact/commit/aee5f6bd15de90d05e85743c3bffb5e958301214))
+* pin comments to an element of the page ([3d697e0](https://github.com/andidev30/the-artifact/commit/3d697e0cd04071f1d453ec9a13ab80ad9a468c1a)), closes [#142](https://github.com/andidev30/the-artifact/issues/142)
+* publish --watch with live updates in the viewer ([a40d1be](https://github.com/andidev30/the-artifact/commit/a40d1bebd921ad9f4b8eab0abb3d11464a50102a))
+* tags on pages, and search inside page content ([99cf7cc](https://github.com/andidev30/the-artifact/commit/99cf7cc5344f27b3cc900104f19fb0cef973baec)), closes [#145](https://github.com/andidev30/the-artifact/issues/145)
+* update one file of a page without republishing all of it ([8939c76](https://github.com/andidev30/the-artifact/commit/8939c76fa28014719fa15886cc3dcb8c6b8a09d9))
+* **web:** compare two versions from the history, side by side or as changes ([51aa9d5](https://github.com/andidev30/the-artifact/commit/51aa9d508930db7a6948b3b4302cced4c35f1771))
+* webhooks with Slack and Discord formats ([cca476f](https://github.com/andidev30/the-artifact/commit/cca476f66b40017f2143b04316aad8bc97b4fcee))
+* webhooks, tags and search inside pages (includes [#155](https://github.com/andidev30/the-artifact/issues/155)) ([5e16c7c](https://github.com/andidev30/the-artifact/commit/5e16c7c7bead28665af0436bdf05822a297c5a61))
+* **web:** show new versions of an open page without a reload ([97dc00f](https://github.com/andidev30/the-artifact/commit/97dc00f8d64fe5ff5e351e98e49c0b43644939a2))
+
+
+### Bug fixes
+
+* **api:** keep the server running when a webhook round fails ([69f8a18](https://github.com/andidev30/the-artifact/commit/69f8a183dea29bdd0b19d95e524d764e4daca8af))
+* **api:** say only "No page you can edit" when an update targets such a page ([e4e3d67](https://github.com/andidev30/the-artifact/commit/e4e3d67595e885150746144c3437fa9ef35c12dd))
+* **web:** keep the compare controls in the main landmark and name the version pickers by their labels only ([2bb7255](https://github.com/andidev30/the-artifact/commit/2bb7255d9b5c73e64a9fd573cc0d4c2f77e47387))
+
 ## [0.5.0](https://github.com/andidev30/the-artifact/compare/v0.4.1...v0.5.0) (2026-09-28)
 
 
