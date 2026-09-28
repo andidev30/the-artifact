@@ -13,7 +13,7 @@ Markdown that ships inside the app at `/docs/<file name>` (bundled by `apps/web/
 - Plain second person, short sentences, present tense. Say what happens, not what "will" happen. No marketing words, no exclamation marks.
 - UI labels in bold exactly as they appear (**Share**, **Server admin**, **Continue**); env vars, paths, commands and MCP tool names in backticks.
 - Say "page", not "artifact".
-- Tables for settings, roles and limits; fenced code blocks tagged `sh`, `json`, `toml` or `yaml` (those get a label and a copy button).
+- Tables for settings, roles and limits; fenced code blocks tagged `sh`, `html`, `json`, `toml` or `yaml` (those get a label and a copy button).
 - Use `{{MCP_URL}}` and `{{APP_URL}}` in examples; the app fills in the install's own address.
 
 ## Links
@@ -32,5 +32,5 @@ Numbers and names here come from code; check them when you change it:
 | `configuration.md` limits | `apps/api/src/files.ts`, `artifacts.ts`, `sharing.ts`, `comments.ts`, `auth/`, `oauth/server.ts`, `thumbnails.ts`, `limits.ts`, `quota.ts`, `ee/plans.ts` |
 | `publishing.md` tools and arguments | `apps/api/src/mcp.ts` |
 | `sharing.md`, `organizations.md` roles | `apps/api/src/artifacts.ts` (`accessLevel`), `routes/members.ts` |
-| `security.md` | `apps/api/src/content.ts`, `thumbnails.ts`, `auth/` |
+| `security.md` | `apps/api/src/content.ts`, `embeds.ts`, `previews.ts`, `thumbnails.ts`, `auth/` |
 | `self-hosting.md`, `kubernetes.md`, `backups.md` | `deploy/`, `Dockerfile` |
