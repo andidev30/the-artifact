@@ -27,11 +27,14 @@ spec:
       labels:
         app.kubernetes.io/name: the-artifact
     spec:
+      # The app doesn't call the Kubernetes API
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         # The image's node user
         runAsUser: 1000
         runAsGroup: 1000
+        fsGroup: 1000
         # Docker's default profile plus the namespace calls Chromium's sandbox needs to render
         # thumbnails of untrusted pages safely. It has to be on every node that can run this pod,
         # at /var/lib/kubelet/seccomp/profiles/the-artifact-chromium.json (see docs/kubernetes.md),
@@ -46,6 +49,11 @@ spec:
         - name: wait-for-services
           image: the-artifact
           imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
           envFrom:
             - secretRef:
                 name: the-artifact
@@ -70,10 +78,23 @@ spec:
                   }
                 }
               })()
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
       containers:
         - name: app
           image: the-artifact
           imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            # /tmp (Chromium's profile and temp files) and /dev/shm are writable volumes
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
           envFrom:
             - secretRef:
                 name: the-artifact
@@ -116,10 +137,16 @@ spec:
               # Headroom for Chromium while it renders thumbnails
               memory: 1536Mi
           volumeMounts:
+            # Chromium's profile and temp files, since the root filesystem is read-only
+            - name: tmp
+              mountPath: /tmp
             # Chromium keeps shared memory here; the runtime's default 64 MB is tight
             - name: shm
               mountPath: /dev/shm
       volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 512Mi
         - name: shm
           emptyDir:
             medium: Memory
