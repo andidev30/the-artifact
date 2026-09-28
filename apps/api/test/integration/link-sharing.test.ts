@@ -199,7 +199,11 @@ describe('link password', () => {
     const content = await call(location)
     expect(content.status).toBe(200)
     expect(await content.text()).toBe('<h1>Numbers</h1>')
-    expect((await call(`${base}~${location.slice(base.length + 1, -2)}x/`)).status).toBe(404)
+    // Change the token's last character to a different one: replacing it with a fixed letter left it
+    // unchanged whenever it already was that letter
+    const token = location.slice(base.length + 1, -1)
+    const tampered = token.slice(0, -1) + (token.endsWith('x') ? 'y' : 'x')
+    expect((await call(`${base}~${tampered}/`)).status).toBe(404)
 
     // Still no preview: crawlers never have the cookie
     expect(await (await site.request(`/a/${page.slug}`)).text()).not.toContain('Board deck')
