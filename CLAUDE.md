@@ -15,6 +15,7 @@ Hosts the HTML pages coding agents build. An agent publishes through the MCP ser
 | `load/` | k6 load tests, a Compose file for a production-like server, metrics sampling | see `load/README.md`; seeding in `apps/api/test/load/seed.ts` |
 | `docker-compose.yml` | Dev services only: Postgres, MinIO, Mailpit | not for deploying |
 | `Dockerfile` | Production image: API + built web app on one port | |
+| `release-please-config.json`, `CHANGELOG.md` | Releases: version, changelog and image tags, from conventional commits | see "Releases" in `CONTRIBUTING.md` |
 
 ## Commands
 
@@ -53,7 +54,7 @@ Everything is AGPL-3.0 (`LICENSE`) except folders named `ee/`, which are under `
 - Product copy says "page", not "artifact"; "artifact" is the internal name (tables, MCP tool names, URLs under `/api/artifacts`). Copy is plain, short sentences, no exclamation marks.
 - Errors from the API are `{ error: string, field?: string }` with a 4xx status; the message is shown to people as is, so write it for them.
 - Missing and no-access look the same (404) so private pages and organizations don't reveal they exist.
-- Commits: conventional style with an optional scope, e.g. `feat: …`, `fix(web): …`, `refactor(api): …`, `docs: …`.
+- Commits: conventional style with an optional scope, e.g. `feat: …`, `fix(web): …`, `refactor(api): …`, `docs: …`. release-please turns them into the changelog and the next version (see "Releases" in `CONTRIBUTING.md`), so breaking changes get `!` and a `BREAKING CHANGE:` footer saying what operators must do.
 
 ## When behaviour changes
 
@@ -61,4 +62,5 @@ Everything is AGPL-3.0 (`LICENSE`) except folders named `ee/`, which are under `
 - New or changed env var → `apps/api/src/env.ts`, `docs/configuration.md`, `apps/api/.env.example`, and the examples in `deploy/` when operators need it.
 - MCP tools or their arguments → `apps/api/src/mcp.ts` and the tool tables in `docs/publishing.md`.
 - Schema → `pnpm db:generate` and commit the SQL and the snapshot together (see `apps/api/CLAUDE.md`).
+- Anything an operator must do on upgrade (a setting to add, a command to run, a deploy file to edit, a migration the previous version can't run on) → a `## Upgrading to x.y.z` section at the end of `docs/upgrading.md`; the Release workflow copies it into the GitHub release.
 - Finish with `pnpm lint` and the relevant tests; UI flows that cross the API also have e2e specs.

@@ -19,7 +19,36 @@ Run `git config blame.ignoreRevsFile .git-blame-ignore-revs` once, so `git blame
 - Schema changes go through `pnpm db:generate`; commit the migration with the snapshot.
 - Before you push: `pnpm lint` and `pnpm test` (and `pnpm test:e2e` for UI flows). CI runs all of them.
 
-Commit messages follow the style in the log: `feat: …`, `fix(web): …`, `refactor(api): …`, `docs: …`.
+Commit messages follow the style in the log: `feat: …`, `fix(web): …`, `refactor(api): …`, `docs: …`. They become the release notes, so write the subject for someone running a server.
+
+## Releases
+
+Releases are made by [release-please](https://github.com/googleapis/release-please) from the commit messages on `main`:
+
+- Each push to `main` updates an open pull request titled `chore: release x.y.z`, with the next version, its `CHANGELOG.md` entry and the version bumped in `package.json` and the files in `deploy/`.
+- Merging that pull request tags `vx.y.z`, creates the GitHub release with the same notes, and publishes the image as `x.y.z`, `x.y` and `latest`. Every push to `main` is also published as `main`.
+
+Pull requests are merged with **Rebase and merge**, or with a merge commit whose description is left empty. release-please reads every commit, and a merge commit that repeats the pull request title in its description lists the change a second time.
+
+Which commits go into the notes, and how they move the version:
+
+| Commit | Section | Version before 1.0.0 | From 1.0.0 |
+| --- | --- | --- | --- |
+| `feat:` | Features | minor | minor |
+| `fix:` | Bug fixes | patch | patch |
+| `perf:` | Performance | patch | patch |
+| `feat!:`, `fix!:` or a `BREAKING CHANGE:` footer | ⚠ BREAKING CHANGES | minor | major |
+| `docs:`, `refactor:`, `test:`, `build:`, `ci:`, `chore:` | not listed | none | none |
+
+The scope stays in the notes (`**api:** …`), so use one when a change is limited to one part. [Upgrading](docs/upgrading.md#what-counts-as-breaking) lists what is breaking: removed or renamed settings and changed defaults, migrations the previous version can't run on, MCP tool and argument changes, removed API routes, and deploy files operators have to edit. Mark those with `!` and write the footer as what the operator has to do:
+
+```
+feat(api)!: read the storage bucket from S3_BUCKET only
+
+BREAKING CHANGE: ARTIFACT_BUCKET is no longer read. Rename it to S3_BUCKET in app.env before you upgrade.
+```
+
+When a change needs operators to act on upgrade, breaking or not (a setting to add, a command to run, a file to edit), add or extend the section `## Upgrading to x.y.z` at the end of `docs/upgrading.md` in the same pull request, with the version the open release pull request proposes. When the release is made, that section is added to the GitHub release under **Upgrading**. Before merging the release pull request, check that the version in the heading still matches.
 
 ## Licensing of contributions
 
