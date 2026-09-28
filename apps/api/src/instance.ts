@@ -2,6 +2,7 @@ import { and, count, eq, isNull, ne, sql, type SQL } from 'drizzle-orm'
 import { db, schema } from './db/index.js'
 import type { SignupPolicy, User } from './db/schema.js'
 import { env } from './env.js'
+import { CONTROL_CHARS_ERROR, hasControlChars } from './validation.js'
 
 // Instance administration: who runs this install, and the settings they edit in the web app.
 
@@ -94,6 +95,7 @@ export function parseSettings(body: unknown): { ok: true; value: SettingsInput }
     if (typeof b.instanceName !== 'string') return { ok: false, error: 'Use text for the name.', field: 'instanceName' }
     name = b.instanceName.trim().replace(/\s+/g, ' ') || null
     if (name && name.length > 60) return { ok: false, error: 'Use at most 60 characters for the name.', field: 'instanceName' }
+    if (name && hasControlChars(name)) return { ok: false, error: CONTROL_CHARS_ERROR, field: 'instanceName' }
   }
   return { ok: true, value: { signupPolicy: policy, allowedDomains: domains, instanceName: name } }
 }

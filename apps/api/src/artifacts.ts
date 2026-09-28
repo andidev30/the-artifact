@@ -12,7 +12,7 @@ import { checkQuota, type Workspace } from './quota.js'
 import { getBlob, getText, putBlob } from './storage.js'
 import { checkUploadId, claimUploads } from './uploads.js'
 import { queueThumbnail } from './thumbnails.js'
-import { UUID_RE } from './validation.js'
+import { CONTROL_CHARS_ERROR, hasControlChars, UUID_RE } from './validation.js'
 
 export { MAX_HTML_BYTES, PublishError }
 const SLUG_ALPHABET = 'abcdefghijkmnpqrstuvwxyz23456789'
@@ -222,6 +222,7 @@ async function folderId(tx: Tx, ws: Workspace, name: string | null, userId: stri
 const contentSize = (content: Content) => content.htmlSize + content.files.reduce((sum, f) => sum + f.size, 0)
 
 async function publishContent(input: PublishTarget, content: Content): Promise<Artifact> {
+  if (hasControlChars(input.title)) throw new PublishError("The title can't contain control characters.")
   const title = input.title.trim().slice(0, 200) || 'Untitled page'
   const folder = folderChoice(input.folder)
 
@@ -330,7 +331,8 @@ export async function loadVersionTree(versionId: string) {
 }
 
 // An ILIKE "contains" pattern, with %, _ and \ taken literally
-export const likeTerm = (q: string) => `%${q.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`
+// Postgres text can't hold NUL, and nothing stored contains one
+export const likeTerm = (q: string) => `%${q.replaceAll('\0', '').replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`
 
 function titleMatches(query: string | undefined): SQL | undefined {
   const q = query?.trim()
@@ -489,6 +491,7 @@ export const VISIBILITY_LABEL: Record<Visibility, string> = {
 export function checkTitle(value: unknown): { title: string } | { error: string } {
   const title = typeof value === 'string' ? value.trim() : ''
   if (!title) return { error: 'Give the page a name.' }
+  if (hasControlChars(title)) return { error: CONTROL_CHARS_ERROR }
   if (title.length > MAX_TITLE_LENGTH) return { error: `Keep the name under ${MAX_TITLE_LENGTH} characters.` }
   return { title }
 }

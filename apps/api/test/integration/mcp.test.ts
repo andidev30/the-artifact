@@ -242,6 +242,10 @@ describe('MCP over /mcp', () => {
     const long = await callTool(token, 'rename_artifact', { artifact_id: slug, title: 'x'.repeat(201) })
     expect(long).toMatchObject({ isError: true, text: 'Keep the name under 200 characters.' })
     expect((await callTool(token, 'rename_artifact', { artifact_id: slug, title: 'x'.repeat(200) })).isError).toBe(false)
+    const control = await callTool(token, 'rename_artifact', { artifact_id: slug, title: 'Q3\u0000report' })
+    expect(control).toMatchObject({ isError: true, text: "The name can't contain control characters." })
+    const published = await callTool(token, 'publish_artifact', { title: 'Q4\u0007report', html: HTML })
+    expect(published).toMatchObject({ isError: true, text: "The title can't contain control characters." })
   })
 
   it('only editors can rename', async () => {

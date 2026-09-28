@@ -9,7 +9,7 @@ import { db, schema } from '../db/index.js'
 import { isLastAdmin, lastAdminError } from '../instance.js'
 import { limitRequest } from '../limits.js'
 import { auditToken, checkExpiry, checkTokenName, createToken, describeToken, revokeToken, tokensOf } from '../tokens.js'
-import { UUID_RE } from '../validation.js'
+import { CONTROL_CHARS_ERROR, hasControlChars, UUID_RE } from '../validation.js'
 
 // Account settings, mounted at /api/me next to GET /api/me
 export const settings = new Hono<AuthEnv>()
@@ -20,6 +20,7 @@ settings.patch('/', async (c) => {
   const body = (await c.req.json().catch(() => null)) as { name?: unknown } | null
   const name = typeof body?.name === 'string' ? body.name.trim() : ''
   if (name.length < 1 || name.length > 80) return c.json({ error: 'Use 1 to 80 characters for your name.', field: 'name' }, 400)
+  if (hasControlChars(name)) return c.json({ error: CONTROL_CHARS_ERROR, field: 'name' }, 400)
   await db.update(schema.users).set({ name }).where(eq(schema.users.id, user.id))
   return c.json({ name })
 })

@@ -14,7 +14,7 @@ import { limitInvites } from '../limits.js'
 import { log } from '../log.js'
 import { sendInvitation } from '../mail.js'
 import { revokeToken, tokensIn } from '../tokens.js'
-import { EMAIL_RE, UUID_RE } from '../validation.js'
+import { CONTROL_CHARS_ERROR, EMAIL_RE, hasControlChars, UUID_RE } from '../validation.js'
 
 const DAY = 24 * 60 * 60 * 1000
 const INVITE_DAYS = 7
@@ -157,6 +157,7 @@ members.patch('/', async (c) => {
   if (body?.name !== undefined) {
     const name = typeof body.name === 'string' ? body.name.trim() : ''
     if (name.length < 2 || name.length > 60) return c.json({ error: 'Use 2 to 60 characters for the name.', field: 'name' }, 400)
+    if (hasControlChars(name)) return c.json({ error: CONTROL_CHARS_ERROR, field: 'name' }, 400)
     set.name = name
   }
   if (body?.requireTwoFactor !== undefined) {
@@ -427,6 +428,7 @@ invitations.post('/:token/sign-up', async (c) => {
   const problem = passwordProblem(body?.password)
   if (problem) return c.json({ error: problem, field: 'password' }, 400)
   const name = typeof body?.name === 'string' ? body.name.trim().replace(/\s+/g, ' ').slice(0, 80) || null : null
+  if (name && hasControlChars(name)) return c.json({ error: CONTROL_CHARS_ERROR, field: 'name' }, 400)
 
   const user = await createPasswordAccount(row.invitation.email, name, await hashPassword(body!.password as string))
   if (!user) return c.json({ error: `${row.invitation.email} already has an account. Log in to accept.`, code: 'account_exists' }, 409)

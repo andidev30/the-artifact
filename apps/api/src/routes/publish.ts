@@ -7,6 +7,7 @@ import type { Visibility } from '../db/schema.js'
 import { ENTRY_PATH, MAX_TOTAL_BYTES, type FileInput } from '../files.js'
 import { hit, rule, tooManyRequests, waitText, windowText } from '../limits.js'
 import { authenticateBearer, type McpAuth } from '../oauth/server.js'
+import { hasControlChars } from '../validation.js'
 
 // POST /api/publish: publishing without an MCP client, for CI jobs and scripts (and the CLI that
 // builds on it), with an access token from settings as the bearer token. Takes what publish_artifact
@@ -38,6 +39,7 @@ function optionalString(value: unknown, field: string): string | undefined {
 function checkInput(raw: { title?: unknown; html?: unknown; files: FileInput[]; artifact_id?: unknown; visibility?: unknown; folder?: unknown }): Input {
   const title = optionalString(raw.title, 'title')
   if (!title?.trim()) throw new InputError('Give the page a title.', 'title')
+  if (hasControlChars(title)) throw new InputError("The title can't contain control characters.", 'title')
   if (typeof raw.html !== 'string' || !raw.html.trim()) throw new InputError('Send the page itself as html, or as a file part named index.html.', 'html')
   const visibility = optionalString(raw.visibility, 'visibility')
   if (visibility !== undefined && !VISIBILITIES.has(visibility as Visibility))

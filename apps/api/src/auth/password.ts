@@ -9,7 +9,7 @@ import { atLimit, clearHits, clientIp, hit, limitRequest, tooManyRequests, waitT
 import { ssoRequiredError, ssoRequiredFor } from '../ee/sso/connections.js'
 import { startSession } from './session.js'
 import { continueSignIn, signInFailed } from './twofactor.js'
-import { EMAIL_RE } from '../validation.js'
+import { CONTROL_CHARS_ERROR, EMAIL_RE, hasControlChars } from '../validation.js'
 import { afterSignInUrl, createPasswordAccount, waitingForAccess } from './users.js'
 
 // Passwords are for servers that can't send sign-in links by email. On those, people sign in with
@@ -102,6 +102,7 @@ password.post('/setup', async (c) => {
   const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : ''
   const name = typeof body?.name === 'string' ? body.name.trim().replace(/\s+/g, ' ').slice(0, 80) || null : null
   if (!EMAIL_RE.test(email)) return c.json({ error: 'Enter a valid email address.', field: 'email' }, 400)
+  if (name && hasControlChars(name)) return c.json({ error: CONTROL_CHARS_ERROR, field: 'name' }, 400)
   const problem = passwordProblem(body?.password)
   if (problem) return c.json({ error: problem, field: 'password' }, 400)
   const passwordHash = await hashPassword(body!.password as string)
@@ -140,6 +141,7 @@ password.post('/sign-up', async (c) => {
   const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : ''
   const name = typeof body?.name === 'string' ? body.name.trim().replace(/\s+/g, ' ').slice(0, 80) || null : null
   if (!EMAIL_RE.test(email)) return c.json({ error: 'Enter a valid email address.', field: 'email' }, 400)
+  if (name && hasControlChars(name)) return c.json({ error: CONTROL_CHARS_ERROR, field: 'name' }, 400)
 
   const { signupPolicy, allowedDomains } = await instanceSettings()
   if (signupPolicy === 'invite-only') {
