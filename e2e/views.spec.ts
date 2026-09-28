@@ -1,7 +1,14 @@
-import { expect, test } from '@playwright/test'
+import { type APIRequestContext, expect, test } from '@playwright/test'
 import { fromApp, connectAgent, publishViaMcp, signUpPersonal, uniqueEmail } from './helpers'
 
 const HTML = '<!doctype html><title>Roadmap</title><h1>Roadmap</h1>'
+
+// The server writes view counts every 5 seconds (apps/api/src/views.ts): wait for them before opening Views
+async function viewsWritten(request: APIRequestContext, slug: string, total: number) {
+  await expect
+    .poll(async () => ((await (await request.get(`/api/artifacts/${slug}/views`)).json()) as { total: number }).total, { timeout: 15_000 })
+    .toBe(total)
+}
 
 test('owners see how often a page was opened and who opened it', async ({ page, browser }) => {
   const friend = uniqueEmail('views-friend')
@@ -22,6 +29,7 @@ test('owners see how often a page was opened and who opened it', async ({ page, 
   await expect(other.frameLocator('iframe.viewer-frame').getByRole('heading', { name: 'Roadmap' })).toBeVisible()
   await expect(other.getByRole('button', { name: /^Views/ })).toHaveCount(0)
   await context.close()
+  await viewsWritten(page.request, slug, 1)
 
   // The owner's own visit doesn't count
   await page.goto(`/a/${slug}`)
@@ -46,6 +54,7 @@ test('visits through a shared link are counted without saying who', async ({ pag
   await visitor.goto(`/a/${slug}`)
   await expect(visitor.frameLocator('iframe.viewer-frame').getByRole('heading', { name: 'Roadmap' })).toBeVisible()
   await context.close()
+  await viewsWritten(page.request, slug, 1)
 
   await page.goto(`/a/${slug}`)
   await page.getByRole('button', { name: /^Views/ }).click()
