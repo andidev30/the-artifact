@@ -6,6 +6,12 @@ Each release of The Artifact has a version number, a list of changes and, when s
 
 Releases are at https://github.com/andidev30/the-artifact/releases, and the same list is in `CHANGELOG.md` in the repository. Each release lists its features and fixes, then **⚠ BREAKING CHANGES** when there are any, then **Upgrading** when you have to do something. The upgrade notes are also below, under [Upgrading to a release](#upgrading-to-a-release).
 
+## New releases
+
+On a self-hosted server, **Server admin** shows a notice when a newer release than the one running is out, with a link to its release notes. Pre-releases are left out. To find out, the server asks GitHub's public releases API (`api.github.com/repos/andidev30/the-artifact/releases`) at most once a day, and only when an admin opens **Server admin**. The request carries nothing about your server: no address, no counts, no identifier. If GitHub can't be reached, the notice doesn't show and the server tries again the next day.
+
+To turn the check off, for example on a server without internet access, set `RELEASE_CHECK=false` in `app.env` (`releaseCheck: false` in Helm values) and restart. The server then makes no request at all. See the [configuration reference](/docs/configuration).
+
 ## Version numbers
 
 Versions are `major.minor.patch`, e.g. `1.4.2`:
@@ -109,3 +115,8 @@ Only releases that need you to do something are listed. Each section is copied i
 - **Rate limits count visitors by network.** Behind a reverse proxy, set `TRUST_PROXY=true` in `app.env`, or every visitor has the proxy's address and shares one limit. On Kubernetes, add `TRUST_PROXY=true` to your `app.env`; the new `app.env.example` has it. See [Put it behind HTTPS](/docs/self-hosting#3-put-it-behind-https).
 - **Kubernetes pins the image.** `kustomization.yaml` used to run `latest`; it now names the release. If you kept `newTag: latest`, set it to `'0.2'` or `'0.2.0'`.
 - **The database gains tables** for rate limits, folders, comments, access tokens, passkeys and two-factor sign-in, and columns for requiring two-factor sign-in in an organization and for listing active sessions. They are added on the first start, so take a backup before it; see [Before you upgrade](#before-you-upgrade).
+
+## Upgrading to 0.3.0
+
+- **The admin area tells you about new releases.** Once a day, when an admin opens **Server admin**, the server asks GitHub's public releases API for the newest release; nothing about your server is sent. On a server without internet access, or if you don't want the request, set `RELEASE_CHECK=false` in `app.env` (`releaseCheck: false` in Helm values). See [New releases](#new-releases).
+- **The database gains a table** (`release_check`) that remembers the last check. It is added on the first start.

@@ -83,6 +83,9 @@ export const env = {
   selfHosted: process.env.SELF_HOSTED !== 'false',
   // Built web app to serve from this process (the Docker image sets it); empty in development
   webDir: process.env.WEB_DIR ?? '',
+  // Ask GitHub once a day for the newest release, to tell self-hosted admins about it (src/releases.ts).
+  // RELEASE_CHECK=false makes no request at all, for air-gapped installs.
+  releaseCheck: process.env.RELEASE_CHECK !== 'false',
   migrateOnStart: process.env.MIGRATE_ON_START === 'true',
   // Bearer token for GET /api/cron/*, for hosts that run scheduled jobs from outside (Vercel Cron)
   cronSecret: process.env.CRON_SECRET ?? '',

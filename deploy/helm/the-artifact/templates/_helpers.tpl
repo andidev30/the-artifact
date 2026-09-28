@@ -109,6 +109,10 @@ Secret already holds, else a new random one. (list $ given secretName key)
   value: {{ .Values.selfHosted | toString | quote }}
 - name: TRUST_PROXY
   value: {{ include "the-artifact.trustProxy" . | quote }}
+{{- if not .Values.releaseCheck }}
+- name: RELEASE_CHECK
+  value: 'false'
+{{- end }}
 {{- with .Values.rateLimits }}
 - name: RATE_LIMITS
   value: {{ . | quote }}

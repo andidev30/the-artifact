@@ -24,6 +24,7 @@ import {
 } from '../adminApi'
 import { AccountHeader } from '../components/AccountHeader'
 import { CopyCommand } from '../components/CopyCommand'
+import { ReleaseNotice } from '../components/ReleaseNotice'
 import { useConfig } from '../useConfig'
 import { timeAgo } from '../time'
 import { useMe } from '../useMe'
@@ -112,6 +113,8 @@ function AdminPage({ me }: { me: Me }) {
             .
           </p>
         </div>
+
+        <ReleaseNotice />
 
         <div className="settings-layout">
           <nav className="settings-rail" aria-label="Admin sections">

@@ -29,7 +29,8 @@
         "deploy/docker-compose/docker-compose.yml",
         "deploy/docker-compose/.env.example",
         "deploy/kubernetes/kustomization.yaml",
-        { "type": "generic", "path": "deploy/helm/the-artifact/Chart.yaml" }
+        { "type": "generic", "path": "deploy/helm/the-artifact/Chart.yaml" },
+        { "type": "generic", "path": "apps/api/src/version.ts" }
       ],
       "exclude-paths": ["packages/cli"]
     },

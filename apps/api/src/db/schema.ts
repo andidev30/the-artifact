@@ -486,6 +486,18 @@ export const rateLimits = pgTable(
   (t) => [primaryKey({ columns: [t.bucket, t.key] }), index('rate_limits_resets_at_idx').on(t.resetsAt)],
 )
 
+// The newest release on GitHub, for the notice in the admin area of a self-hosted install (see
+// src/releases.ts). At most one row (id 1), shared by every server process so that between them
+// they ask GitHub at most once a day.
+export const releaseCheck = pgTable('release_check', {
+  id: integer('id').primaryKey().default(1),
+  // When a process last claimed the check, whether or not GitHub answered
+  checkedAt: timestamp('checked_at', { withTimezone: true }).notNull(),
+  // Null until GitHub answers with a release
+  latestVersion: text('latest_version'),
+  releaseUrl: text('release_url'),
+})
+
 export type User = typeof users.$inferSelect
 export type Passkey = typeof passkeys.$inferSelect
 export type SignupPolicy = (typeof signupPolicyEnum.enumValues)[number]

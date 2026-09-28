@@ -34,6 +34,10 @@
     "selfHosted": {
       "type": "boolean"
     },
+    "releaseCheck": {
+      "type": "boolean",
+      "description": "Ask GitHub once a day for the newest release and tell admins about it"
+    },
     "trustProxy": {
       "description": "true, false, the number of proxies, or empty for true when the ingress is on",
       "anyOf": [

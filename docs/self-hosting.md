@@ -96,7 +96,7 @@ See [Connect your agent](/docs/connect-your-agent) for Claude Desktop, Cursor, V
 
 The first account created on a fresh install becomes its admin. Only one account can be first: if two people sign up at the same moment, exactly one of them gets it. After signing up, the admin is asked to name the organization everyone on the server works in (or to skip it and start on their own). Everyone who signs up after that is a regular user until an admin promotes them: they start in their personal workspace with nothing to choose, and join organizations by invitation.
 
-Admins see **Server admin** in the menu under their name, which opens `/admin`:
+Admins see **Server admin** in the menu under their name, which opens `/admin`. When a newer release than the one running is out, a notice at the top links to its release notes; see [New releases](/docs/upgrading#new-releases) for how the server finds out and how to turn it off with `RELEASE_CHECK=false`. The page has these sections:
 
 - **Overview**: how many people, organizations and pages the install has, and who has been active this week.
 - **People**: search everyone by name or email and see their organizations, page count and when they were last seen. From there you can:
