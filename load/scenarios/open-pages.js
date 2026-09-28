@@ -13,6 +13,10 @@ const LINK_SHARE = Number(__ENV.LINK_SHARE ?? 0.7)
 // The app shell (/a/<slug>, /api/config, /api/me) is only there when the API serves the built web
 // app, as the Docker image does; set WITH_SHELL=false against pnpm dev's API
 const WITH_SHELL = __ENV.WITH_SHELL !== 'false'
+// Every visit sends the load generator's one address, and the server counts a visitor (address and
+// browser) once per page every 30 minutes. true gives each visit its own User-Agent, so every visit by
+// link is a new visitor and is counted: the database write load of view counting at its worst.
+const UNIQUE_VISITORS = __ENV.UNIQUE_VISITORS === 'true'
 
 export const options = {
   scenarios: { open: { executor: 'constant-vus', vus: VUS, duration: DURATION } },
@@ -34,6 +38,7 @@ export default function () {
   const page = pick(byLink ? seed.pages.link : seed.pages.organization)
   const via = byLink ? 'link' : 'signed-in'
   const cookie = byLink ? {} : { cookie: pick(seed.users).cookie }
+  const agent = UNIQUE_VISITORS ? { 'user-agent': `k6 visitor ${__VU}-${__ITER}` } : {}
   const tags = (step) => ({ step, via })
 
   if (WITH_SHELL) {
@@ -50,13 +55,13 @@ export default function () {
   check(details, { 'details 200': (r) => r.status === 200 })
 
   let base = `${BASE_URL}/api/artifacts/${page.slug}/v/${page.version}/`
-  let entry = http.get(base, { headers: { ...cookie, 'sec-fetch-dest': 'iframe' }, redirects: 0, tags: tags(byLink ? 'entry' : 'entry-redirect') })
+  let entry = http.get(base, { headers: { ...cookie, ...agent, 'sec-fetch-dest': 'iframe' }, redirects: 0, tags: tags(byLink ? 'entry' : 'entry-redirect') })
   if (!byLink) {
     check(entry, { 'redirected to a link token': (r) => r.status === 302 && r.headers.Location?.includes('/~') })
     const to = entry.headers.Location ?? ''
     base = to.startsWith('/') ? `${BASE_URL}${to}` : to
     // Browsers don't send the cookie from here on: the frame's origin is opaque
-    entry = http.get(base, { headers: { 'sec-fetch-dest': 'iframe' }, tags: tags('entry') })
+    entry = http.get(base, { headers: { ...agent, 'sec-fetch-dest': 'iframe' }, tags: tags('entry') })
   }
   check(entry, { 'entry 200': (r) => r.status === 200 && r.headers['Content-Type']?.startsWith('text/html') })
 

@@ -90,6 +90,7 @@ A visit loads `/a/<slug>`, `/api/config` and `/api/me` (the shell, skipped with 
 | --- | --- | --- |
 | `LINK_SHARE` | `0.7` | Share of visits by link; the rest are signed in |
 | `WITH_SHELL` | `true` | Load the app shell too |
+| `UNIQUE_VISITORS` | `false` | Give every visit its own User-Agent. The server counts a visitor (address and browser) once per page every 30 minutes, and k6 sends one address, so by default almost no views are written; `true` counts every visit by link, the worst case for the database |
 
 Thresholds: under 1% failed requests; p95 of the shell and details under 200 ms, of the entry HTML and files under 300 ms. Requests are tagged `step` (`shell`, `details`, `entry-redirect`, `entry`, `file`) and `via` (`link`, `signed-in`).
 
