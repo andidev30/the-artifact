@@ -89,7 +89,7 @@ Open http://localhost:8080 and create the first account; it becomes the admin of
 claude mcp add --transport http --scope user the-artifact http://localhost:8080/mcp
 ```
 
-Other clients, HTTPS, email and backups are covered in [Self-hosting](docs/self-hosting.md). To build the image from the checkout instead, see [Building the image yourself](docs/self-hosting.md#building-the-image-yourself). For a cluster, see [Kubernetes](docs/kubernetes.md), which uses the same published image.
+Other clients, HTTPS, email and backups are covered in [Self-hosting](docs/self-hosting.md). To build the image from the checkout instead, see [Building the image yourself](docs/self-hosting.md#building-the-image-yourself). For a cluster, see [Kubernetes](docs/kubernetes.md), which uses the same published image. Before updating, read the [changelog](CHANGELOG.md) and [Upgrading](docs/upgrading.md).
 
 ## MCP tools
 

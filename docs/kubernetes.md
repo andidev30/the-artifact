@@ -10,13 +10,13 @@
 
 ## 1. Choose the image
 
-Every commit to `main` is published as `ghcr.io/andidev30/the-artifact`, for `linux/amd64` and `linux/arm64`: `latest` follows `main`, and each release is also tagged with its version (`1.2.0`, `1.2`). Name it under `images` in `deploy/kubernetes/kustomization.yaml`, pinned to a version:
+Each release is published as `ghcr.io/andidev30/the-artifact`, for `linux/amd64` and `linux/arm64`, tagged with its version (`0.2.0`), its major.minor (`0.2`, which moves to each new patch) and `latest`; see [Image tags](/docs/upgrading#image-tags). `deploy/kubernetes/kustomization.yaml` names the image under `images`, pinned to the release you checked out. Keep it pinned, to the exact version or its major.minor:
 
 ```yaml
 images:
   - name: the-artifact
     newName: ghcr.io/andidev30/the-artifact
-    newTag: '1.2.0'
+    newTag: '0.2'
 ```
 
 To run your own build instead, build it from the repository and push it to your registry:
@@ -110,7 +110,7 @@ The pod's startup and liveness probes call `/healthz`, which only says the proce
 
 ### Updating
 
-With the published image, set `newTag` to the new version and run `kubectl apply -k deploy/kubernetes`. Database changes apply when the new version starts.
+With the published image, read [Upgrading](/docs/upgrading) and take a [backup](#backups), then check out the new release, which names it in `newTag` (or set `newTag` yourself), and run `kubectl apply -k deploy/kubernetes`. Database changes apply when the new version starts.
 
 With your own builds, give every build its own tag, so the cluster pulls it instead of reusing the image it has:
 

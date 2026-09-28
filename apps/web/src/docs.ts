@@ -22,6 +22,7 @@ const RUNNING: DocPage[] = [
   { slug: 'kubernetes', title: 'Kubernetes' },
   { slug: 'configuration', title: 'Configuration reference' },
   { slug: 'backups', title: 'Backup and restore' },
+  { slug: 'upgrading', title: 'Upgrading' },
 ]
 
 const REFERENCE: DocPage[] = [
