@@ -45,6 +45,7 @@ import { currentThumbnails, getThumbnail, queueThumbnail, thumbnailsEnabled, typ
 import type { Artifact, ShareRole, Visibility } from '../db/schema.js'
 import { allowed, downloadVersion, serveVersion } from '../content.js'
 import { MAX_VIEWERS, pageViewers, totalViews, versionViews, VIEWER_RETENTION_DAYS } from '../views.js'
+import { parseVersion } from '../validation.js'
 import { getSharing, MAX_PEOPLE_PER_INVITE, parseEmails, removePerson, setPersonRole, sharePeople, SharingError } from '../sharing.js'
 
 export const artifacts = new Hono<AuthEnv>()
@@ -201,8 +202,8 @@ artifacts.get('/:slug/content', async (c) => {
 
 // The screenshot of a version shown on gallery cards. Missing ones are rendered in the background.
 artifacts.get('/:slug/thumbnails/:version', async (c) => {
-  const n = Number(c.req.param('version'))
-  if (!Number.isInteger(n) || n < 1) return c.json({ error: 'Not found' }, 404)
+  const n = parseVersion(c.req.param('version'))
+  if (n === null) return c.json({ error: 'Not found' }, 404)
   const found = await findPageVersion(c.req.param('slug'), n)
   if (!found || !allowed(await accessFor(c, found.artifact), n === found.artifact.currentVersion)) return c.json({ error: 'Not found' }, 404)
   const id = found.version?.id
@@ -358,10 +359,7 @@ artifacts.get('/:slug/views', requireUser, async (c) => {
   })
 })
 
-function versionParam(c: Context<AuthEnv>): number | null {
-  const n = Number(c.req.param('version'))
-  return Number.isInteger(n) && n > 0 ? n : null
-}
+const versionParam = (c: Context<AuthEnv>) => parseVersion(c.req.param('version'))
 
 artifacts.get('/:slug/versions/:version', requireUser, async (c) => {
   const artifact = await editable(c)

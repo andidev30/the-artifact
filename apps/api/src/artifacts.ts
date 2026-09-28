@@ -13,7 +13,7 @@ import { checkQuota, type Workspace } from './quota.js'
 import { getBlob, getText, putBlob } from './storage.js'
 import { checkUploadId, claimUploads } from './uploads.js'
 import { queueThumbnail } from './thumbnails.js'
-import { CONTROL_CHARS_ERROR, hasControlChars, UUID_RE } from './validation.js'
+import { CONTROL_CHARS_ERROR, hasControlChars, MAX_VERSION, SLUG_RE, UUID_RE } from './validation.js'
 
 export { MAX_HTML_BYTES, PublishError }
 const SLUG_ALPHABET = 'abcdefghijkmnpqrstuvwxyz23456789'
@@ -116,6 +116,7 @@ export async function deleteArtifact(artifact: Artifact) {
 }
 
 export async function findBySlug(slug: string) {
+  if (!SLUG_RE.test(slug)) return null
   const [row] = await db.select().from(schema.artifacts).where(eq(schema.artifacts.slug, slug))
   return row ?? null
 }
@@ -128,6 +129,7 @@ export type Version = typeof schema.artifactVersions.$inferSelect
 // process. The version's files are then read from the cache below. Null when there is no such page;
 // version null when the page has no such version.
 export async function findPageVersion(slug: string, version: number): Promise<{ artifact: Artifact; version: Version | null } | null> {
+  if (!SLUG_RE.test(slug) || !Number.isInteger(version) || version < 1 || version > MAX_VERSION) return null
   const a = schema.artifacts
   const v = schema.artifactVersions
   const [row] = await db
@@ -611,6 +613,7 @@ export async function listVersions(artifact: Artifact) {
 }
 
 export async function getVersion(artifact: Artifact, version: number) {
+  if (!Number.isInteger(version) || version < 1 || version > MAX_VERSION) return null
   const [v] = await db
     .select()
     .from(schema.artifactVersions)
@@ -620,6 +623,7 @@ export async function getVersion(artifact: Artifact, version: number) {
 
 // Restoring never rewrites history: it publishes the old HTML and files as a new version on top
 export async function restoreVersion(artifact: Artifact, version: number, userId: string): Promise<Artifact | null> {
+  if (!Number.isInteger(version) || version < 1 || version > MAX_VERSION) return null
   const result = await db.transaction(async (tx) => {
     // Lock the page so two restores (or a restore and a publish) can't pick the same number
     const [locked] = await tx.select().from(schema.artifacts).where(eq(schema.artifacts.id, artifact.id)).for('update')

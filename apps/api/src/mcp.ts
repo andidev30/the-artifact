@@ -60,6 +60,7 @@ import { authenticateBearer, RESOURCE_METADATA_URL, type McpAuth } from './oauth
 import { directUploads, UPLOAD_TTL_SECONDS } from './storage.js'
 import { prepareUpload } from './uploads.js'
 import { MAX_VIEWERS, pageViewers, REPEAT_MINUTES, versionViews, VIEWER_RETENTION_DAYS } from './views.js'
+import { MAX_VERSION } from './validation.js'
 
 const visibility = z
   .enum(['private', 'organization', 'link'])
@@ -666,7 +667,7 @@ function buildServer(auth: McpAuth) {
         'Nothing is overwritten: its HTML and files are published again as a new version, and the link stays the same. For people who can edit the page.',
       inputSchema: z.object({
         artifact_id: z.string().describe('Id or link of the page'),
-        version: z.number().int().positive().describe('The version number to restore, from list_versions'),
+        version: z.number().int().positive().max(MAX_VERSION).describe('The version number to restore, from list_versions'),
       }),
     },
     limited(async ({ artifact_id, version }) => {
@@ -689,7 +690,7 @@ function buildServer(auth: McpAuth) {
         'Pass version for an older version (editors only). To read the files one at a time instead, use get_artifact.',
       inputSchema: z.object({
         artifact_id: z.string().describe('Id or link of the page'),
-        version: z.number().int().positive().optional().describe('A version number from list_versions; omit for the current version'),
+        version: z.number().int().positive().max(MAX_VERSION).optional().describe('A version number from list_versions; omit for the current version'),
       }),
       annotations: { readOnlyHint: true },
     },
