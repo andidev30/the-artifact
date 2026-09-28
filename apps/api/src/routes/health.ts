@@ -3,7 +3,7 @@ import { Hono } from 'hono'
 import { db } from '../db/index.js'
 import { env } from '../env.js'
 import { log } from '../log.js'
-import { collectProcessMetrics, registry } from '../metrics.js'
+import { collectProcessMetrics, metricsText, registry } from '../metrics.js'
 import { checkBucket } from '../storage.js'
 import { bearerMatches } from './cron.js'
 
@@ -69,5 +69,5 @@ health.get('/metrics', async (c) => {
   if (!bearerMatches(c.req.header('authorization'), env.metricsToken)) return c.json({ error: 'Not found' }, 404)
   collectProcessMetrics()
   c.header('Cache-Control', 'no-store')
-  return c.body(await registry.metrics(), 200, { 'Content-Type': registry.contentType })
+  return c.body(await metricsText(), 200, { 'Content-Type': registry.contentType })
 })

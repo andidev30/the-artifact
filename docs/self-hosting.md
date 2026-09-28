@@ -46,6 +46,8 @@ The first start pulls the images. The app listens on port 8080 (or `ARTIFACT_POR
 
 The image includes a headless Chromium for gallery thumbnails. The compose file runs the app with `deploy/seccomp-chromium.json` so Chromium can keep its sandbox on (see [Security](/docs/security)); keep that line if you write your own compose file, or the log will say thumbnails are off. On Kubernetes the profile goes on the nodes; see [Kubernetes](/docs/kubernetes#3-the-seccomp-profile).
 
+The app starts one worker process per CPU the container may use, up to 8, since one process can't use more than about one and a half cores. Each takes about 250 MB of memory. On a server that runs other things too, or has little memory, set `WEB_CONCURRENCY` in `app.env` to the number you want (`1` for a single process), or limit the container's CPUs, which the app counts. See [More than one worker](/docs/configuration#more-than-one-worker).
+
 ## Where content is stored
 
 Postgres holds accounts, organizations, sharing and the list of versions. The content itself (every version's HTML, its files and its thumbnail) is in object storage, one object per distinct content under `blobs/<sha256>`. Versions that reuse a stylesheet or image, and restored versions, store nothing new. When pages or accounts are deleted, their objects are removed by a sweep that runs every few hours. The same sweep deletes records of [who opened a page](/docs/sharing#who-opened-a-page) once they are 90 days old. To run it now:
@@ -282,7 +284,7 @@ On Kubernetes, scrape the service inside the cluster (`the-artifact.the-artifact
 | Metric | Type | What it measures |
 | --- | --- | --- |
 | `artifact_http_request_duration_seconds` | histogram | Requests by `method`, `route` (the matched pattern) and `status` |
-| `artifact_db_pool_max` | gauge | Connections the database pool may open (10) |
+| `artifact_db_pool_max` | gauge | Connections the database pools may open, all workers together (`WEB_CONCURRENCY` × `DATABASE_POOL_MAX`) |
 | `artifact_db_pool_active` | gauge | Queries and transactions holding or waiting for a database connection. Above `artifact_db_pool_max`, requests are queueing for the database. |
 | `artifact_s3_request_duration_seconds` | histogram | Object storage requests by `operation` (`GetObject`, `PutObject`, ...) and `outcome` (`ok`, `not_found`, `error`), retries included |
 | `artifact_thumbnail_queue_length` | gauge | Versions waiting for a thumbnail or being rendered |
@@ -290,7 +292,7 @@ On Kubernetes, scrape the service inside the cluster (`the-artifact.the-artifact
 | `artifact_thumbnail_render_duration_seconds` | histogram | Thumbnail renders by `outcome` (`stored`, `failed`) |
 | `artifact_process_*`, `artifact_nodejs_*` | various | CPU, memory, event loop lag and garbage collection of the Node.js process |
 
-The numbers are per process and start from zero when the app restarts, which Prometheus handles on its own.
+With several [workers](/docs/configuration#more-than-one-worker), whichever worker gets the scrape asks the others and answers for the whole server: counts and gauges are added up, event loop lag is averaged. The numbers start from zero when the app restarts, which Prometheus handles on its own; so does the share of a worker that was restarted after a crash, which Prometheus also reads as a reset.
 
 ## Backups
 

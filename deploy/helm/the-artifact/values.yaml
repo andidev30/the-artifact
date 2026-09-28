@@ -39,6 +39,17 @@ releaseCheck: true
 # false otherwise. Rate limits count visitors by that address.
 trustProxy: ''
 
+# How many Node.js worker processes serve requests (WEB_CONCURRENCY), 1 to 64. One process uses at
+# most about one and a half cores, and each worker takes about 250 MiB of memory. Empty follows
+# resources.limits.cpu when you set one (one worker per core, up to 8) and runs a single process
+# otherwise, since the pod has no CPU limit by default and the node's core count says nothing about
+# what it may use. Raise resources.limits.memory with it. See docs/configuration.md.
+webConcurrency: ''
+
+# Database connections each worker may open (DATABASE_POOL_MAX). Empty gives 10 to a single process
+# and about 20 in all to several workers.
+databasePoolMax: ''
+
 # "off", or changes to single rate limits, e.g. mcp=2000/10m,publish=500/1h. Empty keeps the defaults.
 rateLimits: ''
 

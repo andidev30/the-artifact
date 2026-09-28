@@ -463,13 +463,47 @@ const pending: string[] = []
 const queued = new Set<string>()
 const workers = new Set<Promise<void>>()
 
+// In a cluster one worker renders for the whole server, so one Chromium and THUMBNAIL_CONCURRENCY
+// renders in all (src/primary.ts). The others hand versions to it, and it tells them when its queue
+// is full. A handed-over version that is lost (the renderer restarted) is queued again by the next
+// gallery or thumbnail request that finds it never tried, as after a restart of a single process.
+let renderer: { send: (versionId: string) => void; full: boolean } | null = null
+let onQueueFull: ((full: boolean) => void) | null = null
+
+export function renderThumbnailsElsewhere(send: (versionId: string) => void) {
+  renderer = { send, full: false }
+}
+
+export function rendererQueueFull(full: boolean) {
+  if (renderer) renderer.full = full
+}
+
+export function reportQueueFull(listener: (full: boolean) => void) {
+  onQueueFull = listener
+}
+
+let wasFull = false
+function queueChanged() {
+  thumbnailQueue.set(queued.size)
+  const full = queued.size >= MAX_QUEUE
+  if (full !== wasFull) {
+    wasFull = full
+    onQueueFull?.(full)
+  }
+}
+
 // True when the version is (now) waiting for a render or being rendered
 export function queueThumbnail(versionId: string): boolean {
   if (!thumbnailsEnabled()) return false
+  if (renderer) {
+    if (renderer.full) return false
+    renderer.send(versionId)
+    return true
+  }
   if (queued.has(versionId)) return true
   if (queued.size >= MAX_QUEUE) return false
   queued.add(versionId)
-  thumbnailQueue.set(queued.size)
+  queueChanged()
   pending.push(versionId)
   if (workers.size < config.concurrency) {
     // Outside the request's context: the queue outlives it and renders other people's versions too,
@@ -491,7 +525,7 @@ async function work() {
       log.error('Thumbnail queue failed', { versionId: id, err })
     } finally {
       queued.delete(id)
-      thumbnailQueue.set(queued.size)
+      queueChanged()
     }
   }
 }

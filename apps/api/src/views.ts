@@ -10,7 +10,7 @@ import { log } from './log.js'
 // Recording sits on the path that serves pages, so it is cheap: repeat views by the same person or
 // visitor within REPEAT_MINUTES are dropped in memory before touching the database. Counts are
 // written in one of two ways:
-// - Batched (the long-running server: src/index.ts calls batchViewCounts). Counts are summed in
+// - Batched (the long-running server: src/server.ts calls batchViewCounts in every worker). Counts are summed in
 //   memory per version and added every FLUSH_MS, or sooner once MAX_PENDING versions wait, with one
 //   multi-row upsert, so a burst of views on one page is one row update rather than a queue on its
 //   row lock. Counts lag by up to FLUSH_MS, and a crash loses them (a graceful stop flushes).
@@ -29,8 +29,8 @@ const MAX_REMEMBERED = 50_000
 const recent = new Map<string, number>()
 
 // True the first time a key is seen within the window. Each process keeps its own map, so with
-// several replicas a repeat can still be counted once per replica; the database check below covers
-// identified viewers.
+// several workers or replicas a repeat can still be counted once per process; the database check
+// below covers identified viewers.
 export function firstInWindow(key: string, now = Date.now()): boolean {
   const hashed = createHash('sha256').update(SALT).update(key).digest('base64url')
   const last = recent.get(hashed)

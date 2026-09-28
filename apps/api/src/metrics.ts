@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { ErrorHandler, MiddlewareHandler } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import { routePath } from 'hono/route'
-import { collectDefaultMetrics, Gauge, Histogram, Registry } from 'prom-client'
+import { AggregatorRegistry, collectDefaultMetrics, Gauge, Histogram, Registry } from 'prom-client'
 import { poolStats } from './db/index.js'
 import { log, requestContext } from './log.js'
 
@@ -17,6 +17,22 @@ export function collectProcessMetrics() {
   if (defaultsOn) return
   defaultsOn = true
   collectDefaultMetrics({ register: registry, prefix: 'artifact_' })
+}
+
+// In a cluster (src/primary.ts) any worker may get the scrape, and it answers for the whole server:
+// the primary asks every worker for its metrics and adds them up (gauges and counters are summed,
+// prom-client averages event loop lag). Set by the worker at start.
+let clusterMetrics: (() => Promise<string>) | null = null
+
+export function reportClusterMetrics(ask: () => Promise<string>) {
+  // Registers prom-client's answer to the primary's requests; it sends this registry's metrics
+  new AggregatorRegistry()
+  AggregatorRegistry.setRegistries([registry])
+  clusterMetrics = ask
+}
+
+export function metricsText(): Promise<string> {
+  return clusterMetrics ? clusterMetrics() : registry.metrics()
 }
 
 const httpDuration = new Histogram({

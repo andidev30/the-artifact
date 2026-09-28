@@ -29,6 +29,8 @@ function servers(ports: { api: number; web: number }, selfHosted: boolean, datab
       stdout: 'pipe' as const,
       env: {
         PORT: String(ports.api),
+        // One process, as in development; apps/api/test/integration/cluster.test.ts covers workers
+        WEB_CONCURRENCY: '1',
         APP_URL: webUrl(ports),
         DATABASE_URL: databaseUrl,
         SMTP_HOST: 'localhost',
