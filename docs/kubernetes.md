@@ -61,7 +61,7 @@ Put your values in a file and pass it with `-f`. `helm show values oci://ghcr.io
 | `contentOrigin` | none | `CONTENT_ORIGIN`: a [separate domain for pages](/docs/self-hosting#a-separate-domain-for-pages). With the ingress on, its host is added to the Ingress and its TLS hosts, so the certificate has to cover it too (cert-manager does that on its own). |
 | `embedFrameAncestors` | any site | `EMBED_FRAME_ANCESTORS`: which sites may [embed pages](/docs/sharing#embedding) in a frame; `none` turns embedding off. See [Configuration](/docs/configuration#optional). |
 | `trustProxy` | `true` with the ingress, `false` without | `TRUST_PROXY`, so [rate limits](/docs/configuration#rate-limits) see each visitor's address instead of the ingress controller's |
-| `smtp.host`, `smtp.port`, `smtp.user`, `smtp.password`, `smtp.from` | no email | Email, as in the [configuration reference](/docs/configuration). Without `smtp.host` the server [runs without email](/docs/self-hosting#running-without-email). |
+| `smtp.host`, `smtp.port`, `smtp.secure`, `smtp.requireTls`, `smtp.user`, `smtp.password`, `smtp.from` | no email | Email, as in the [configuration reference](/docs/configuration). Without `smtp.host` the server [runs without email](/docs/self-hosting#running-without-email). |
 | `google.clientId`, `google.clientSecret` | off | **Continue with Google** |
 | `thumbnails.enabled` | `true` | Gallery thumbnails. Needs the [seccomp profile](#3-the-seccomp-profile) on the nodes. |
 | `thumbnails.concurrency` | `2` | `THUMBNAIL_CONCURRENCY`: how many thumbnails render at once, 1 to 8. A typical page renders in under a second, so 2 keeps up with about 150 new pages a minute; each extra render adds another Chromium page, so check `resources.limits` when you raise it. |

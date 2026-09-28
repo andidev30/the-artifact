@@ -164,6 +164,8 @@ Secret already holds, else a new random one. (list $ given secretName key)
   value: {{ .Values.smtp.port | toString | quote }}
 - name: SMTP_SECURE
   value: {{ .Values.smtp.secure | toString | quote }}
+- name: SMTP_REQUIRE_TLS
+  value: {{ .Values.smtp.requireTls | toString | quote }}
 {{- with .Values.smtp.user }}
 - name: SMTP_USER
   value: {{ . | quote }}

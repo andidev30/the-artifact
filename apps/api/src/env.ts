@@ -141,6 +141,8 @@ export const env = {
     host: process.env.SMTP_HOST ?? '',
     port: Number(process.env.SMTP_PORT ?? 587),
     secure: process.env.SMTP_SECURE === 'true',
+    // STARTTLS is required (see transportOptions in src/mail.ts); false for relays that don't offer it
+    requireTls: process.env.SMTP_REQUIRE_TLS !== 'false',
     user: process.env.SMTP_USER ?? '',
     pass: process.env.SMTP_PASS ?? '',
     from: process.env.SMTP_FROM || 'The Artifact <no-reply@localhost>',

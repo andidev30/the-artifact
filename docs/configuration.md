@@ -25,6 +25,7 @@ Settings are environment variables. With Docker Compose they go in `deploy/docke
 | `SMTP_FROM` | `The Artifact <no-reply@localhost>` | Sender, e.g. `"The Artifact <artifact@example.com>"` |
 | `SMTP_PORT` | `587` | |
 | `SMTP_SECURE` | `false` | `true` for implicit TLS (usually port 465) |
+| `SMTP_REQUIRE_TLS` | `true` | Without `SMTP_SECURE`, the app sends only after the mail server agrees to STARTTLS, so nobody on the network can turn encryption off and read sign-in links. `false` sends over a plain connection when the server doesn't offer it, for a relay on a network you trust. A server on the same machine (`localhost`, `127.0.0.1`, `::1`) never needs it. |
 | `SMTP_USER`, `SMTP_PASS` | empty | Leave empty for servers without authentication |
 | `SALES_EMAIL` | the `SMTP_FROM` address | Where the **Contact sales** form sends messages. Each one has Reply-To set to the sender. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | empty | Enables **Continue with Google**. Register `APP_URL/api/auth/google/callback` as the redirect URI. |
