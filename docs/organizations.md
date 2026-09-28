@@ -40,7 +40,7 @@ Owners and admins can check **Require two-factor sign-in** under **General** in 
 
 Members without it are sent to **Sign-in security** the next time they sign in. Until they add a passkey or an authenticator app, they can't open the organization's gallery, folders or settings in the app, see its pages (except ones shared with them directly or by link), connect a new agent to it or make access tokens for it. The notice on their pages says so. They can still leave the organization.
 
-Agents they already connected and access tokens they already made keep publishing, so turning it on doesn't break anyone's CI. To stop access tokens too, revoke them under [Access tokens](#access-tokens); removing someone from the organization also stops their agents there. Turning the requirement off lets everyone back in at once.
+Agents they already connected to the organization and access tokens they already made for it stop working too, and their other agents can't reach its pages. So before you turn it on, check under **Members** that people whose CI publishes to the organization have **2FA on**. Nothing is deleted: their agents and tokens work again as soon as they add a second factor, and turning the requirement off lets everyone back in at once.
 
 Only an instance admin can reset someone's second factor if they lose it; owners and admins of an organization can't.
 

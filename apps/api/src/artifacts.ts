@@ -32,8 +32,8 @@ export function parseArtifactRef(ref: string): string {
   return match ? match[1] : ref.trim()
 }
 
-// Organizations in viewer.blockedOrgs require a second factor this person hasn't set up; in the web
-// app they count as not being a member there (src/auth/factors.ts)
+// Organizations in viewer.blockedOrgs require a second factor this person hasn't set up; there they
+// count as not being a member, in the web app, for agents and for content links (src/auth/factors.ts)
 async function roleIn(viewer: Viewer, organizationId: string) {
   if (viewer.blockedOrgs?.includes(organizationId)) return null
   const userId = viewer.id
@@ -134,6 +134,8 @@ export async function currentHtml(artifact: Artifact): Promise<string> {
 type PublishTarget = {
   userId: string
   email: string
+  // As on Viewer
+  blockedOrgs?: readonly string[]
   organizationId: string | null
   clientName: string
   title: string
@@ -228,7 +230,8 @@ async function publishContent(input: PublishTarget, content: Content): Promise<A
 
   if (input.slug) {
     const existing = await findBySlug(input.slug)
-    if (!existing || !(await canEdit(existing, { id: input.userId, email: input.email }))) {
+    const viewer = { id: input.userId, email: input.email, blockedOrgs: input.blockedOrgs }
+    if (!existing || !(await canEdit(existing, viewer))) {
       throw new PublishError(`No page you can edit has the id "${input.slug}". Publish without artifact_id to create a new page.`)
     }
     if (input.visibility === 'organization' && !existing.organizationId) {
@@ -237,7 +240,7 @@ async function publishContent(input: PublishTarget, content: Content): Promise<A
     const ws = { userId: existing.ownerId, organizationId: existing.organizationId }
     // Folder names are looked up in the connected workspace, so a page from elsewhere (shared with
     // this person) can't be filed from here
-    if (folder !== undefined && (existing.organizationId !== input.organizationId || !(await belongsTo({ id: input.userId }, ws)))) {
+    if (folder !== undefined && (existing.organizationId !== input.organizationId || !(await belongsTo(viewer, ws)))) {
       throw new PublishError("This page belongs to another workspace, so it can't be filed into a folder from here. Publish again without folder.")
     }
     const { updated, versionId } = await db.transaction(async (tx) => {

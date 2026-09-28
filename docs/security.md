@@ -99,9 +99,12 @@ There is no self-service way around the second factor: that would be the way in 
 
 ### Organizations that require it
 
-Owners and admins can turn on **Require two-factor sign-in** once they have a second factor themselves. Members without one are sent to set it up when they sign in, and until they do, the web app treats them as outside the organization: its gallery, folders and settings answer that it requires two-factor sign-in, its pages open only if they are shared with them directly or by link, and they can't connect an agent to it or make access tokens for it. They can still leave it.
+Owners and admins can turn on **Require two-factor sign-in** once they have a second factor themselves. Members without one are sent to set it up when they sign in, and until they do, they are treated as outside the organization everywhere:
 
-Agents already connected to the organization and access tokens already made for it keep working. They were set up by the person while signed in, they keep being checked against membership and suspension on every request, and stopping them would break automation without keeping out someone who knows the password: whoever signs in first can also add the first factor. The requirement protects accounts from here on; to cut off existing access, revoke access tokens under **Access tokens** in the organization's settings, or remove the member, which also disconnects their agents there.
+- In the web app, its gallery, folders and settings answer that it requires two-factor sign-in, and they can't connect an agent to it or make access tokens for it. They can still leave it.
+- Agents already connected to the organization and access tokens already made for it are refused, including refreshing an agent's token. They aren't deleted: they work again once the person adds a second factor.
+- Agents and access tokens for their personal workspace or another organization can't open or change the organization's pages, and neither can links to page content made for them before (the sandboxed frame's link and an agent's download link), which are checked again on every use.
+- Its pages open only if they are shared with them directly or by link.
 
 ## Sessions
 
@@ -113,22 +116,23 @@ Agents already connected to the organization and access tokens already made for 
 
 - Agents connect with OAuth 2.1: dynamic client registration, authorization code with PKCE (S256), and your explicit approval on a consent screen.
 - Redirects are limited to HTTPS, loopback addresses and app schemes.
-- Access tokens last an hour; refresh tokens rotate on every use. All tokens are stored as hashes.
+- Access tokens last an hour; refresh tokens rotate on every use. A used refresh token is kept until it would have expired: if it is presented again, someone else has a copy, so every token of that connection is revoked and the agent has to connect again (OAuth 2.1 refresh token reuse detection). All tokens are stored as hashes.
 - An agent acts for one person in one workspace, and only with that person's permissions. Disconnect it in **Account settings** to revoke it immediately.
+- Every request checks the agent's token against the database: it is refused for a suspended account, and for an organization the person is no longer in or that requires a second factor they haven't set up. Membership is also checked when an approval is exchanged for tokens and when a token is refreshed, and leaving or being removed from an organization deletes the agent's tokens and pending approvals for it.
 
 ## Access tokens
 
 - [Access tokens](/docs/connect-your-agent#publishing-from-ci) for CI are made in **Account settings** by someone signed in to the app, never by another token. Making them is [rate limited](/docs/configuration#rate-limits) per account.
 - A token is `art_` followed by 32 random bytes in base64url, so secret scanners can recognize one that leaks. It is shown once; the server stores only its SHA-256 hash.
 - It acts for one person in one workspace with that person's permissions, on `/mcp` and `POST /api/publish` only. The app's cookie-authenticated routes ignore it.
-- Every request checks the token against the database, with nothing cached: a revoked or expired token is refused on its next request. So is a token for an organization its owner is no longer in, or of a suspended account. Leaving an organization, being removed from it, and suspension also delete the tokens they affect.
+- Every request checks the token against the database, with nothing cached: a revoked or expired token is refused on its next request. So is a token for an organization its owner is no longer in or that requires a second factor its owner hasn't set up, or of a suspended account. Leaving an organization, being removed from it, and suspension also delete the tokens they affect.
 - Owners and admins of an organization can list and revoke every member's tokens for it. The list shows names and dates, never the token.
 
 ## Instance admins
 
 - On a self-hosted install the first account becomes the instance admin; more can be added from the admin area, or from the server with the make-admin script. See [The instance admin](/docs/self-hosting#the-instance-admin).
 - Admins manage accounts and organizations. They can't read private pages through the admin area: it shows counts, not page content.
-- Suspending someone deletes their sessions, agent tokens and access tokens at once, and refuses their sign-in links, Google sign-in, passkeys and MCP calls until they are unsuspended.
+- Suspending someone deletes their sessions, agent tokens and access tokens at once, and refuses their sign-in links, Google sign-in, passkeys and MCP calls until they are unsuspended. Links to page content made for them (the sandboxed frame's link and an agent's download link) are signed rather than stored, so they are checked against suspension each time they are used and stop working at once too.
 - Resetting someone's two-factor sign-in is logged; see [Losing every factor](#losing-every-factor).
 - The last admin can't be removed, suspended or deleted, so an install always keeps a way in.
 

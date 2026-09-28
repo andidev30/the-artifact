@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, isNull } from 'drizzle-orm'
 import { Hono, type Context } from 'hono'
+import { blockedOrganizations, twoFactorRequiredError } from '../auth/factors.js'
 import { hashToken, randomToken } from '../auth/session.js'
 import { track } from '../analytics.js'
 import { db, schema } from '../db/index.js'
@@ -173,6 +174,24 @@ function tokenError(c: Context, error: string, description: string) {
   return c.json({ error, error_description: description }, 400)
 }
 
+// Why this person can no longer act in this workspace, or null when they can: they left or were
+// removed from the organization, or it requires a second factor they haven't set up
+export async function workspaceRefusal(userId: string, organizationId: string | null): Promise<string | null> {
+  if (!organizationId) return null
+  const [member] = await db
+    .select({ role: schema.memberships.role })
+    .from(schema.memberships)
+    .where(and(eq(schema.memberships.userId, userId), eq(schema.memberships.organizationId, organizationId)))
+  if (!member) return 'You are not in this organization any more.'
+  if ((await blockedOrganizations(userId)).includes(organizationId)) return (await twoFactorRequiredError(organizationId)).error
+  return null
+}
+
+// Ends a connection: every token one client holds for one person, as Disconnect in settings does
+async function endConnection(clientId: string, userId: string) {
+  await db.delete(schema.oauthTokens).where(and(eq(schema.oauthTokens.clientId, clientId), eq(schema.oauthTokens.userId, userId)))
+}
+
 oauth.post('/oauth/token', async (c) => {
   const type = c.req.header('content-type') ?? ''
   const params: Record<string, string> = type.includes('application/json')
@@ -190,6 +209,9 @@ oauth.post('/oauth/token', async (c) => {
     if (params.client_id && params.client_id !== grant.clientId) return tokenError(c, 'invalid_grant', 'The code was issued to another client.')
     if (params.redirect_uri && params.redirect_uri !== grant.redirectUri) return tokenError(c, 'invalid_grant', 'redirect_uri does not match.')
     if (!pkceMatches(params.code_verifier, grant.codeChallenge)) return tokenError(c, 'invalid_grant', 'PKCE verification failed.')
+    // Approved for an organization, then removed from it before the code was exchanged
+    const refused = await workspaceRefusal(grant.userId, grant.organizationId)
+    if (refused) return tokenError(c, 'invalid_grant', refused)
     const tokens = await issueTokens(grant.clientId, grant.userId, grant.organizationId)
     track({ event: 'agent_connected', userId: grant.userId, detail: 'oauth' })
     return c.json(tokens)
@@ -199,11 +221,23 @@ oauth.post('/oauth/token', async (c) => {
     if (!params.refresh_token) return tokenError(c, 'invalid_request', 'refresh_token is required.')
     const where = and(eq(schema.oauthTokens.id, hashToken(params.refresh_token)), eq(schema.oauthTokens.kind, 'refresh'))
     // Check the client before using the token up, so a wrong client can't burn someone else's token
-    const [found] = await db.select({ clientId: schema.oauthTokens.clientId }).from(schema.oauthTokens).where(where)
-    if (found && params.client_id && params.client_id !== found.clientId) return tokenError(c, 'invalid_grant', 'The token was issued to another client.')
-    // Refresh tokens rotate: the old one stops working once used
-    const [old] = await db.delete(schema.oauthTokens).where(where).returning()
-    if (!old || old.expiresAt.getTime() < Date.now()) return tokenError(c, 'invalid_grant', 'The refresh token is invalid or expired.')
+    const [found] = await db.select().from(schema.oauthTokens).where(where)
+    if (!found || found.expiresAt.getTime() < Date.now()) return tokenError(c, 'invalid_grant', 'The refresh token is invalid or expired.')
+    if (params.client_id && params.client_id !== found.clientId) return tokenError(c, 'invalid_grant', 'The token was issued to another client.')
+    // Refused without using the token up, so it works again once a missing second factor is added
+    const refused = found.usedAt ? null : await workspaceRefusal(found.userId, found.organizationId)
+    if (refused) return tokenError(c, 'invalid_grant', refused)
+    // Refresh tokens rotate and the used one is kept. Seeing it again means two parties hold the
+    // connection, and there is no telling which is the client, so it ends for both (OAuth 2.1, section 4.3.1).
+    const [old] = await db
+      .update(schema.oauthTokens)
+      .set({ usedAt: new Date() })
+      .where(and(where, isNull(schema.oauthTokens.usedAt)))
+      .returning()
+    if (!old) {
+      await endConnection(found.clientId, found.userId)
+      return tokenError(c, 'invalid_grant', 'The refresh token was already used. Connect again.')
+    }
     return c.json(await issueTokens(old.clientId, old.userId, old.organizationId))
   }
 
@@ -221,9 +255,7 @@ oauth.post('/oauth/revoke', async (c) => {
     .select({ clientId: schema.oauthTokens.clientId, userId: schema.oauthTokens.userId })
     .from(schema.oauthTokens)
     .where(eq(schema.oauthTokens.id, hashToken(params.token)))
-  if (found && (!params.client_id || params.client_id === found.clientId)) {
-    await db.delete(schema.oauthTokens).where(and(eq(schema.oauthTokens.clientId, found.clientId), eq(schema.oauthTokens.userId, found.userId)))
-  }
+  if (found && (!params.client_id || params.client_id === found.clientId)) await endConnection(found.clientId, found.userId)
   return c.body(null, 200)
 })
 
@@ -232,22 +264,39 @@ export type McpAuth = {
   email: string
   organizationId: string | null
   clientName: string
+  // Organizations that require a second factor this person hasn't set up. The token's own workspace
+  // is never one of them (the token is refused then); pages in the others stay closed to it.
+  blockedOrgs: string[]
 }
 
 // Resolves a bearer token, an OAuth access token or an access token from settings (src/tokens.ts),
-// to the person and workspace it acts for
+// to the person and workspace it acts for. Like access tokens, OAuth tokens are checked against
+// suspension and membership on every request.
 export async function authenticateBearer(header: string | undefined): Promise<McpAuth | null> {
   const token = header?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim()
   if (!token) return null
   // OAuth tokens are 43 characters, so they never match
   if (TOKEN_RE.test(token)) return authenticateToken(token)
   const [row] = await db
-    .select({ token: schema.oauthTokens, clientName: schema.oauthClients.name, email: schema.users.email, suspendedAt: schema.users.suspendedAt })
+    .select({
+      token: schema.oauthTokens,
+      clientName: schema.oauthClients.name,
+      email: schema.users.email,
+      suspendedAt: schema.users.suspendedAt,
+      role: schema.memberships.role,
+    })
     .from(schema.oauthTokens)
     .innerJoin(schema.oauthClients, eq(schema.oauthTokens.clientId, schema.oauthClients.id))
     .innerJoin(schema.users, eq(schema.oauthTokens.userId, schema.users.id))
+    .leftJoin(
+      schema.memberships,
+      and(eq(schema.memberships.userId, schema.oauthTokens.userId), eq(schema.memberships.organizationId, schema.oauthTokens.organizationId)),
+    )
     .where(and(eq(schema.oauthTokens.id, hashToken(token)), eq(schema.oauthTokens.kind, 'access')))
   if (!row || row.token.expiresAt.getTime() < Date.now() || row.suspendedAt) return null
+  if (row.token.organizationId && !row.role) return null
+  const blockedOrgs = await blockedOrganizations(row.token.userId)
+  if (row.token.organizationId && blockedOrgs.includes(row.token.organizationId)) return null
   await db.update(schema.oauthTokens).set({ lastUsedAt: new Date() }).where(eq(schema.oauthTokens.id, row.token.id))
-  return { userId: row.token.userId, email: row.email, organizationId: row.token.organizationId, clientName: row.clientName }
+  return { userId: row.token.userId, email: row.email, organizationId: row.token.organizationId, clientName: row.clientName, blockedOrgs }
 }

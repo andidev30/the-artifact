@@ -1,5 +1,6 @@
 import { and, desc, eq, sql } from 'drizzle-orm'
 import { audit } from './audit.js'
+import { blockedOrganizations } from './auth/factors.js'
 import { hashToken, randomToken } from './auth/session.js'
 import { db, schema } from './db/index.js'
 import type { McpAuth } from './oauth/server.js'
@@ -51,7 +52,8 @@ export async function createToken(input: { userId: string; organizationId: strin
 }
 
 // The person and workspace a token acts for, or null when it is unknown, expired, belongs to a
-// suspended account, or is for an organization the person is no longer in
+// suspended account, or is for an organization the person is no longer in or that requires a second
+// factor they haven't set up (it works again once they add one)
 export async function authenticateToken(token: string): Promise<McpAuth | null> {
   if (!TOKEN_RE.test(token)) return null
   const [row] = await db
@@ -67,10 +69,12 @@ export async function authenticateToken(token: string): Promise<McpAuth | null> 
   const t = row.token
   if (t.expiresAt && t.expiresAt.getTime() <= Date.now()) return null
   if (t.organizationId && !row.role) return null
+  const blockedOrgs = await blockedOrganizations(t.userId)
+  if (t.organizationId && blockedOrgs.includes(t.organizationId)) return null
   if (!t.lastUsedAt || Date.now() - t.lastUsedAt.getTime() > USED_EVERY) {
     await db.update(schema.accessTokens).set({ lastUsedAt: sql`now()` }).where(eq(schema.accessTokens.id, t.id))
   }
-  return { userId: t.userId, email: row.email, organizationId: t.organizationId, clientName: t.name }
+  return { userId: t.userId, email: row.email, organizationId: t.organizationId, clientName: t.name, blockedOrgs }
 }
 
 const listed = {

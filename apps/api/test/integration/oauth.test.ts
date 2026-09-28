@@ -1,6 +1,8 @@
+import { eq } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import { db, schema } from '../../src/db/index.js'
 import {
+  addMember,
   approve,
   call,
   connectAgent,
@@ -195,13 +197,10 @@ describe('full MCP OAuth flow', () => {
     expect(next.access_token).not.toBe(tokens.access_token)
     expect((await mcpRequest(next.access_token, 'tools/list')).status).toBe(200)
 
-    // The old refresh token no longer works
-    const old = await token({ grant_type: 'refresh_token', refresh_token: tokens.refresh_token })
-    expect(old.status).toBe(400)
-    expect((await old.json()).error).toBe('invalid_grant')
-
-    // The new one still does
-    expect((await token({ grant_type: 'refresh_token', refresh_token: next.refresh_token })).status).toBe(200)
+    // The new one works in turn
+    const again = await token({ grant_type: 'refresh_token', refresh_token: next.refresh_token })
+    expect(again.status).toBe(200)
+    expect(((await again.json()) as Tokens).refresh_token).not.toBe(next.refresh_token)
   })
 
   it('rejects the wrong PKCE verifier', async () => {
@@ -284,6 +283,87 @@ describe('full MCP OAuth flow', () => {
     const tokens = await connectAgent(user)
     await db.update(schema.oauthTokens).set({ expiresAt: new Date(Date.now() - 1000) })
     expect((await mcpRequest(tokens.access_token, 'tools/list')).status).toBe(401)
+  })
+})
+
+describe('refresh token reuse', () => {
+  it('using a refresh token a second time ends the whole connection', async () => {
+    const user = await createUser()
+    const tokens = await connectAgent(user)
+    const other = await connectAgent(user, null, 'cursor')
+    const first = (await (await token({ grant_type: 'refresh_token', refresh_token: tokens.refresh_token })).json()) as Tokens
+    const second = (await (await token({ grant_type: 'refresh_token', refresh_token: first.refresh_token })).json()) as Tokens
+    expect((await mcpRequest(second.access_token, 'tools/list')).status).toBe(200)
+
+    const replay = await token({ grant_type: 'refresh_token', refresh_token: tokens.refresh_token })
+    expect(replay.status).toBe(400)
+    expect((await replay.json()).error).toBe('invalid_grant')
+    // Every token of the connection stops working, the newest included
+    expect((await mcpRequest(second.access_token, 'tools/list')).status).toBe(401)
+    expect((await token({ grant_type: 'refresh_token', refresh_token: second.refresh_token })).status).toBe(400)
+    expect(await db.select().from(schema.oauthTokens).where(eq(schema.oauthTokens.userId, user.id))).toHaveLength(2)
+    // Other agents stay connected
+    expect((await mcpRequest(other.access_token, 'tools/list')).status).toBe(200)
+  })
+
+  it('a refresh token from another client is refused without ending the connection', async () => {
+    const user = await createUser()
+    const tokens = await connectAgent(user)
+    const other = await registerClient('other')
+    await token({ grant_type: 'refresh_token', refresh_token: tokens.refresh_token })
+    const res = await token({ grant_type: 'refresh_token', refresh_token: tokens.refresh_token, client_id: other.client_id })
+    expect(res.status).toBe(400)
+    // The used token is kept next to the two new ones
+    expect(await db.select().from(schema.oauthTokens).where(eq(schema.oauthTokens.userId, user.id))).toHaveLength(4)
+  })
+})
+
+describe('organization membership', () => {
+  it('a code approved for an organization is not exchanged once the person has left it', async () => {
+    const owner = await createUser()
+    const member = await createUser()
+    const org = await createOrg(owner)
+    await addMember(org.id, member, 'member')
+    const client = await registerClient()
+    const { verifier, challenge } = pkcePair()
+    const { code } = await approve(member, await startAuthorize(client.client_id, challenge), org.id)
+    await db.delete(schema.memberships).where(eq(schema.memberships.userId, member.id))
+
+    const res = await token({ grant_type: 'authorization_code', code, code_verifier: verifier, client_id: client.client_id, redirect_uri: REDIRECT_URI })
+    expect(res.status).toBe(400)
+    expect(await res.json()).toMatchObject({ error: 'invalid_grant' })
+    expect(await db.select().from(schema.oauthTokens)).toHaveLength(0)
+  })
+
+  it('removing a member also drops approvals not yet exchanged', async () => {
+    const owner = await createUser()
+    const member = await createUser()
+    const org = await createOrg(owner)
+    await addMember(org.id, member, 'member')
+    const client = await registerClient()
+    await approve(member, await startAuthorize(client.client_id, pkcePair().challenge), org.id)
+    expect((await call(`/api/organizations/${org.id}/members/${member.id}`, { method: 'DELETE', cookie: owner.cookie })).status).toBe(200)
+    expect(await db.select().from(schema.oauthGrants).where(eq(schema.oauthGrants.userId, member.id))).toHaveLength(0)
+  })
+
+  it('agent tokens for an organization are checked against membership on every request', async () => {
+    const owner = await createUser()
+    const member = await createUser()
+    const org = await createOrg(owner)
+    await addMember(org.id, member, 'member')
+    const tokens = await connectAgent(member, org.id)
+    const personal = await connectAgent(member, null, 'cursor')
+    expect((await mcpRequest(tokens.access_token, 'tools/list')).status).toBe(200)
+
+    // Membership gone, tokens left behind
+    await db.delete(schema.memberships).where(eq(schema.memberships.userId, member.id))
+    expect((await mcpRequest(tokens.access_token, 'tools/list')).status).toBe(401)
+    expect((await call('/api/whoami', { bearer: tokens.access_token })).status).toBe(401)
+    const refresh = await token({ grant_type: 'refresh_token', refresh_token: tokens.refresh_token })
+    expect(refresh.status).toBe(400)
+    expect(await refresh.json()).toMatchObject({ error: 'invalid_grant' })
+    // The personal workspace is not affected
+    expect((await mcpRequest(personal.access_token, 'tools/list')).status).toBe(200)
   })
 })
 

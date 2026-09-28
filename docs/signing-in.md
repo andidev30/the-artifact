@@ -50,7 +50,7 @@ Changing your password signs out every other device. Adding a passkey or an auth
 
 ## Organizations that require it
 
-Owners and admins can make two-factor sign-in a requirement for their organization (see [Organizations and members](/docs/organizations#requiring-two-factor-sign-in)). If you are a member without a passkey or an authenticator app, the app takes you to **Sign-in security** when you sign in, and you can't open the organization's pages or settings in the app until you add one (pages shared with you directly or by link still open). Agents you connected and access tokens you made for it keep working. Leaving the organization still works.
+Owners and admins can make two-factor sign-in a requirement for their organization (see [Organizations and members](/docs/organizations#requiring-two-factor-sign-in)). If you are a member without a passkey or an authenticator app, the app takes you to **Sign-in security** when you sign in, and you can't open the organization's pages or settings in the app until you add one (pages shared with you directly or by link still open). Agents you connected and access tokens you made for it stop working until then, and start again once you add one. Leaving the organization still works.
 
 ## If you lose your second factor
 

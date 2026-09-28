@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AccountSuspendedError, findOrCreateUser } from '../../src/auth/users.js'
 import { hashToken } from '../../src/auth/session.js'
+import { downloadLink, signContentLink } from '../../src/content.js'
 import { db, schema } from '../../src/db/index.js'
 import { env } from '../../src/env.js'
 import { sendSignInLink } from '../../src/mail.js'
@@ -220,6 +221,24 @@ describe('suspension', () => {
     const back = await call(`/api/admin/users/${bob.id}`, { method: 'PATCH', cookie: admin.cookie, json: { suspended: false } })
     expect(await back.json()).toMatchObject({ suspended: false })
     expect((await findOrCreateUser({ email: 'bob@example.com', method: 'email_link' })).id).toBe(bob.id)
+  })
+
+  it('ends links to page content issued before, for frames and agents’ downloads', async () => {
+    const admin = await createUser({ admin: true })
+    const bob = await createUser()
+    const page = await createPage(bob)
+    const [row] = await db.select().from(schema.artifacts).where(eq(schema.artifacts.id, page.id))
+    const frame = `/api/artifacts/${page.slug}/v/1/~${await signContentLink(bob.id, row, 1)}/`
+    const download = (await downloadLink(bob.id, row, 1)).replace('http://localhost:5177', '')
+    expect((await call(frame)).status).toBe(200)
+    expect((await call(download)).status).toBe(200)
+
+    await call(`/api/admin/users/${bob.id}`, { method: 'PATCH', cookie: admin.cookie, json: { suspended: true } })
+    expect((await call(frame)).status).toBe(404)
+    expect((await call(download)).status).toBe(404)
+
+    await call(`/api/admin/users/${bob.id}`, { method: 'PATCH', cookie: admin.cookie, json: { suspended: false } })
+    expect((await call(frame)).status).toBe(200)
   })
 
   it('blocks MCP calls even with a token issued before a manual suspension', async () => {
