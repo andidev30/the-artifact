@@ -1,14 +1,15 @@
 name: Hosted migrate
 
-# Applies new migrations to the hosted service's database on every push to main, then deploys it. The
-# Vercel function never runs migrations, and Vercel no longer deploys from git by itself (vercel.json turns
-# git deployments off): production is deployed here, through the deploy hook, only after the
-# migrations for that commit are in. Without that a release could query tables that aren't there yet,
-# which happened with 0016-0022. A backup runs before any migration and is kept like the nightly ones.
-# Pull requests get no Vercel preview. Setup: ee/ops/runbook.md.
+# Deploys the hosted service: applies new migrations to its database, then starts the production
+# deployment through the Vercel deploy hook, only after the migrations are in. It runs when a server
+# release is published (called from release.yml, since events made with the workflow token start no
+# other workflow) and by hand with `gh workflow run hosted-migrate.yml` for a hotfix. Merges to main
+# don't deploy: each deployment counts against Vercel's daily limit, and production should run a
+# release. vercel.json turns Vercel's own git deployments off. The Vercel function never runs
+# migrations. A backup runs before any migration and is kept like the nightly ones. Setup:
+# ee/ops/runbook.md.
 on:
-  push:
-    branches: [main]
+  workflow_call:
   workflow_dispatch:
 
 concurrency:
