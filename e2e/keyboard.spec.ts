@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
-import { forgetSignInLinks } from '../apps/api/test/e2e-db.ts'
+import { createHostedOrganization, forgetSignInLinks } from '../apps/api/test/e2e-db.ts'
 import { connectAgent, latestMail, mockRetention, publishViaMcp, signUpPersonal, uniqueEmail } from './helpers'
 
 // Every flow here is driven with the keyboard alone: no clicks, no fill()
@@ -320,9 +320,10 @@ test('put a password on a link, reset the link, and open a page with its passwor
 })
 
 test('set a version retention policy, confirming what it removes', async ({ page }) => {
-  await signUpPersonal(page, uniqueEmail('kb-retention'))
-  const res = await page.request.post('/api/organizations', { data: { name: 'Keep Co', slug: `kb-${Date.now().toString(36)}` } })
-  const org = (await res.json()) as { slug: string }
+  const email = uniqueEmail('kb-retention')
+  await signUpPersonal(page, email)
+  // The hosted service doesn't create organizations yet, so it goes straight into the database
+  const org = await createHostedOrganization(email, 'Keep Co', `kb-${Date.now().toString(36)}`)
   const saves = await mockRetention(page, { keepDays: null, keepVersions: null, license: 'active' })
   await page.goto(`/organizations/${org.slug}/settings`)
   const section = page.locator('section#retention')

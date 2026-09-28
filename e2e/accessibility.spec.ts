@@ -157,6 +157,9 @@ test('gallery with pages and folders, its menus and dialogs', async ({ page }) =
   const folders = page.getByRole('navigation', { name: 'Folders' })
   await folders.getByRole('button', { name: /Plans/ }).click()
   await expect(page.getByRole('heading', { level: 2, name: 'Plans' })).toBeVisible()
+  // The old list stays dimmed until the folder's pages arrive; axe would measure the dimmed colours
+  await expect(page.locator('.page-card')).toHaveCount(1)
+  await expect(page.locator('.gallery[data-stale]')).toHaveCount(0)
   await expectAccessible(page, 'gallery, one folder')
   await folders.getByRole('button', { name: /All pages/ }).click()
 
@@ -310,8 +313,9 @@ test('account and organization settings', async ({ page, browser }) => {
 })
 
 test('version retention in organization settings, with and without a license', async ({ page }) => {
-  await signUpPersonal(page, uniqueEmail('a11y-retention'))
-  const org = await createOrganization(page, 'Retention Co')
+  const email = uniqueEmail('a11y-retention')
+  await signUpPersonal(page, email)
+  const org = await createOrganization(email, 'Retention Co')
   await mockRetention(page, { keepDays: null, keepVersions: null, license: 'active' })
   await page.goto(`/organizations/${org.slug}/settings#retention`)
   const section = page.locator('section#retention')
