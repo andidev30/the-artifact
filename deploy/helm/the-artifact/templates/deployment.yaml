@@ -6,7 +6,7 @@ metadata:
     {{- include "the-artifact.labels" . | nindent 4 }}
     app.kubernetes.io/component: app
 spec:
-  # One pod: it migrates the database on start and keeps the wrong-password limits in memory.
+  # One pod: it migrates the database on start.
   # Recreate stops the old pod before the new one starts, so two never migrate at once.
   replicas: 1
   strategy:
