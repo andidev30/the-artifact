@@ -1,5 +1,5 @@
 import { and, eq, sql } from 'drizzle-orm'
-import { MAX_TITLE_LENGTH, newSlug, pageTarget, type Viewer } from './artifacts.js'
+import { inScope, MAX_TITLE_LENGTH, newSlug, pageTarget, type Viewer } from './artifacts.js'
 import { audit } from './audit.js'
 import { db, schema } from './db/index.js'
 import type { Artifact, Visibility } from './db/schema.js'
@@ -15,7 +15,9 @@ import { emitWebhookEvent } from './webhooks.js'
 //
 // Both take publish rights in the target, as publishing does: Personal is the person's own, and an
 // organization is one they are a member of (any role, and not closed to them for want of a second
-// factor). On the hosted service that means organizations they already belong to.
+// factor). On the hosted service that means organizations they already belong to. A token or agent
+// for one workspace still copies and moves into the others the person can publish to: that adds a page
+// there, as publishing would, and opens nothing of theirs.
 //
 // A copy is a new page owned by whoever made it: the current version only, pointing at the same blobs,
 // Restricted, with no people, link settings, comments or views.
@@ -143,9 +145,10 @@ export async function duplicatePage(source: Artifact, actor: Actor, workspace: u
   return result.created
 }
 
-// Whether this person may move the page out of the workspace it is in: edit access and a place there
+// Whether this person may move the page out of the workspace it is in: edit access and a place there,
+// and for a token, that it is the token's workspace (inScope)
 export async function canMove(artifact: Artifact, actor: Actor, editable: boolean): Promise<boolean> {
-  return editable && (await belongsTo(actor, workspaceOf(artifact)))
+  return editable && inScope(actor, artifact.organizationId) && (await belongsTo(actor, workspaceOf(artifact)))
 }
 
 // The caller has checked canMove. Returns the page as it is now.

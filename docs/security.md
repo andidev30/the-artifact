@@ -87,6 +87,8 @@ For [single sign-on](/docs/sso) the server downloads a SAML IdP's metadata and a
 
 A page in a personal workspace is restricted until you share it. A page that someone can't open looks the same as one that doesn't exist.
 
+A page published in an organization stays with the organization. Its owner can edit, share and delete it only while they are a member there (and not kept out by [two-factor sign-in](#organizations-that-require-it)). Someone who leaves or is removed keeps only what a share with them or the page's link gives, like anyone outside the organization, in the app, through agents and access tokens, and in their account's [data export](/docs/exporting-your-data).
+
 Pages are kept out of search engines. `/robots.txt` asks crawlers to stay away from page links (`/a/`), embeds (`/e/`), page content and the API; a self-hosted install asks them to stay off the whole server, and a separate domain for pages does the same. Chat apps and social sites that unfurl links (Slack, Discord, LinkedIn, X and others) may still read the preview of a page shared with **Anyone with the link**, and only of those.
 
 ## Sign-in
@@ -148,7 +150,7 @@ Owners and admins can turn on **Require two-factor sign-in** once they have a se
 - In the web app, its gallery, folders and settings answer that it requires two-factor sign-in, and they can't connect an agent to it or make access tokens for it. They can still leave it.
 - Agents already connected to the organization and access tokens already made for it are refused, including refreshing an agent's token. They aren't deleted: they work again once the person adds a second factor.
 - Agents and access tokens for their personal workspace or another organization can't open or change the organization's pages, and neither can links to page content made for them before (the sandboxed frame's link and an agent's download link), which are checked again on every use.
-- Its pages open only if they are shared with them directly or by link.
+- Its pages open only if they are shared with them directly or by link. That includes pages they published there: owning one gives them nothing until they set up a second factor.
 
 ## Sessions
 
@@ -163,13 +165,14 @@ Owners and admins can turn on **Require two-factor sign-in** once they have a se
 - Redirects are limited to HTTPS, loopback addresses and app schemes.
 - Access tokens last an hour; refresh tokens rotate on every use. A used refresh token is kept until it would have expired: if it is presented again, someone else has a copy, so every token of that connection is revoked and the agent has to connect again (OAuth 2.1 refresh token reuse detection). All tokens are stored as hashes.
 - An agent acts for one person in one workspace, and only with that person's permissions. Disconnect it in **Account settings** to revoke it immediately.
+- **What an agent reaches outside its workspace.** Being a page's owner, and a role in an organization (member, admin or owner), count only for pages in the agent's own workspace. Elsewhere it opens and changes only what is shared with the person directly (as viewer or editor) or by link, as a link someone sent them would. So an agent for your personal workspace can't open, change, share or delete an organization's pages, even if you are an admin of that organization or published them there, and an organization's owners always see every token that acts on its pages with those rights. The download links it gets from `download_artifact` carry its workspace, signed with the rest of the link, and are checked by the same rule each time they are used. It can still copy or move a page it may act on into another workspace you belong to, as publishing there would.
 - Every request checks the agent's token against the database: it is refused for a suspended account, and for an organization the person is no longer in or that requires a second factor they haven't set up. Membership is also checked when an approval is exchanged for tokens and when a token is refreshed, and leaving or being removed from an organization deletes the agent's tokens and pending approvals for it.
 
 ## Access tokens
 
 - [Access tokens](/docs/connect-your-agent#publishing-from-ci) for CI are made in **Account settings** by someone signed in to the app, never by another token, with a session that signed in within the last hour, so an older session someone got hold of can't be turned into a token that outlives it. Making them is [rate limited](/docs/configuration#rate-limits) per account.
 - A token is `art_` followed by 32 random bytes in base64url, so secret scanners can recognize one that leaks. It is shown once; the server stores only its SHA-256 hash.
-- It acts for one person in one workspace with that person's permissions, on `/mcp` and `POST /api/publish` only. The app's cookie-authenticated routes ignore it.
+- It acts for one person in one workspace with that person's permissions, on `/mcp` and `POST /api/publish` only, by the same rule as an agent: outside its workspace, only pages shared with the person directly or by link (see [Agent access](#agent-access)). The app's cookie-authenticated routes ignore it.
 - Every request checks the token against the database, with nothing cached: a revoked or expired token is refused on its next request. So is a token for an organization its owner is no longer in or that requires a second factor its owner hasn't set up, or of a suspended account. Leaving an organization, being removed from it, and suspension also delete the tokens they affect.
 - Owners and admins of an organization can list and revoke every member's tokens for it. The list shows names and dates, never the token.
 

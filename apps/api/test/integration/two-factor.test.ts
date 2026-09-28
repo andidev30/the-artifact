@@ -625,7 +625,10 @@ describe('organizations that require two-factor sign-in', () => {
     expect((await callTool(agent.access_token, 'list_artifacts', {})).text).toContain(page.slug)
     expect((await call('/api/whoami', { bearer: accessToken })).status).toBe(200)
     expect((await call('/oauth/token', { form: { grant_type: 'refresh_token', refresh_token: agent.refresh_token } })).status).toBe(200)
-    expect((await callTool(personal.access_token, 'get_artifact', { artifact_id: page.slug })).isError).toBe(false)
+    expect((await callTool(agent.access_token, 'get_artifact', { artifact_id: page.slug })).isError).toBe(false)
+    // An agent for another workspace opens only pages shared with the person directly or by link
+    expect((await callTool(personal.access_token, 'get_artifact', { artifact_id: page.slug })).isError).toBe(true)
+    expect((await callTool(personal.access_token, 'get_artifact', { artifact_id: linkPage.slug })).isError).toBe(false)
     expect((await call(frame)).status).toBe(200)
     expect((await call(download)).status).toBe(200)
   })

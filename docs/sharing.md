@@ -76,6 +76,10 @@ In an organization, owners and admins can edit every page in it, even pages that
 | Organization member | – | View | View |
 | Anyone else, signed in or not | – | – | View, until the link expires, with its password if it has one |
 
+The owner of a page in an organization counts as its owner only while they are a member of it. After they leave or are removed, or while the organization [requires two-factor sign-in](/docs/organizations#requiring-two-factor-sign-in) they haven't set up, they are in the row that applies to them otherwise: usually an invited viewer or editor, or anyone else.
+
+An agent or access token counts the owner row and the organization rows only for pages in the workspace it was connected to; elsewhere it gets the invited and link rows (see [Choosing a workspace](/docs/connect-your-agent#choosing-a-workspace)).
+
 When someone can't open a page, they see "This page isn't available", whether the page is private or doesn't exist. That way a link doesn't reveal that a private page exists.
 
 Everyone in the table who can open a page can also read and write its [comments](/docs/comments) once signed in. Visitors who aren't signed in don't see comments, even on a page shared with **Anyone with the link**.

@@ -15,6 +15,8 @@ The gallery shows a screenshot of each page, taken on the server a few seconds a
 
 ## Tools
 
+Tools that take an `artifact_id` act on pages in the agent's own workspace with your permissions there, and on pages anywhere else only as far as they are shared with you directly or by link (see [Choosing a workspace](/docs/connect-your-agent#choosing-a-workspace)). `POST /api/publish` follows the same rule.
+
 ### publish_artifact
 
 Publishes a page and returns its link.
@@ -109,7 +111,7 @@ Lists the folders of the connected workspace, by name, with how many of the page
 
 ### move_artifact
 
-Files a page into a folder, or takes it out of its folder, without publishing a new version. With `workspace`, it moves the page to another workspace first, like **Move to workspace** in the app (see [Moving a page to another workspace](/docs/sharing#moving-a-page-to-another-workspace)). For people who can edit the page, from the workspace the page is in; only the owner moves a page into or out of their personal workspace. The link stays the same.
+Files a page into a folder, or takes it out of its folder, without publishing a new version. With `workspace`, it moves the page to another workspace first, like **Move to workspace** in the app (see [Moving a page to another workspace](/docs/sharing#moving-a-page-to-another-workspace)). For people who can edit the page, from the workspace the page is in, with an agent connected to that workspace; only the owner moves a page into or out of their personal workspace. The link stays the same.
 
 | Argument | Required | Meaning |
 | --- | --- | --- |
@@ -200,7 +202,7 @@ Shares a page with people by email, as `viewer` or `editor`, with an optional me
 
 ### delete_artifact
 
-Deletes a page, like **Delete** in the app: the link stops working for everyone and every version is deleted. It can't be undone. Only the page's owner can delete it; editors and organization admins can't.
+Deletes a page, like **Delete** in the app: the link stops working for everyone and every version is deleted. It can't be undone. Only the page's owner can delete it, with an agent connected to the page's workspace; editors and organization admins can't.
 
 | Argument | Required | Meaning |
 | --- | --- | --- |

@@ -1,5 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
-import { and, asc, count, desc, eq, ilike, inArray, isNull, ne, or, sql, type SQL } from 'drizzle-orm'
+import { and, asc, count, desc, eq, ilike, inArray, isNull, ne, notInArray, or, sql, type SQL } from 'drizzle-orm'
 import { track } from './analytics.js'
 import { audit } from './audit.js'
 import { db, schema } from './db/index.js'
@@ -57,9 +57,10 @@ export function parseArtifactRef(ref: string): string {
 }
 
 // Organizations in viewer.blockedOrgs require a second factor this person hasn't set up; there they
-// count as not being a member, in the web app, for agents and for content links (src/auth/factors.ts)
+// count as not being a member, in the web app, for agents and for content links (src/auth/factors.ts).
+// Nor are they one outside the workspace a token acts in (inScope).
 async function roleIn(viewer: Viewer, organizationId: string) {
-  if (viewer.blockedOrgs?.includes(organizationId)) return null
+  if (viewer.blockedOrgs?.includes(organizationId) || !inScope(viewer, organizationId)) return null
   const userId = viewer.id
   const [m] = await db
     .select({ role: schema.memberships.role })
@@ -68,8 +69,40 @@ async function roleIn(viewer: Viewer, organizationId: string) {
   return m?.role ?? null
 }
 
-// The person asking: pages are shared by email, so both are needed
-export type Viewer = { id: string; email: string; blockedOrgs?: readonly string[] }
+// The person asking: pages are shared by email, so both are needed. workspace: the one workspace an
+// access token or a connected agent acts in; left out for the web app's sessions (see inScope).
+export type Viewer = { id: string; email: string; blockedOrgs?: readonly string[]; workspace?: { organizationId: string | null } }
+
+// A token acts for its person in its own workspace only: owning a page and a role in an organization
+// count there and nowhere else, while pages shared with the person directly or by link open from any
+// workspace, as a link someone sent them does
+export function inScope(viewer: Pick<Viewer, 'workspace'>, organizationId: string | null): boolean {
+  return !viewer.workspace || viewer.workspace.organizationId === organizationId
+}
+
+// Owning a page counts in its workspace only: a personal page is its owner's, and an organization's
+// page is its owner's while they are a member there and not blocked (role, from roleIn). Someone who
+// left or was removed has only what shares and links give them; the page stays with the organization.
+function ownerCounts(artifact: Artifact, viewer: Viewer, role: string | null): boolean {
+  if (artifact.ownerId !== viewer.id) return false
+  return artifact.organizationId ? role !== null : inScope(viewer, null)
+}
+
+// The pages ownerCounts gives this person when no token limits them to one workspace, as SQL over artifacts
+export function ownedPages(userId: string, blockedOrgs: readonly string[] = []): SQL {
+  const a = schema.artifacts
+  const m = schema.memberships
+  return and(
+    eq(a.ownerId, userId),
+    or(
+      isNull(a.organizationId),
+      and(
+        sql`exists (select 1 from ${m} where ${m.organizationId} = ${a.organizationId} and ${m.userId} = ${userId})`,
+        blockedOrgs.length ? notInArray(a.organizationId, [...blockedOrgs]) : undefined,
+      ),
+    ),
+  ) as SQL
+}
 
 export type Access = 'edit' | 'view' | null
 
@@ -113,7 +146,8 @@ export function sharedWithViewer(viewer: Viewer): SQL {
 export async function accessLevel(artifact: Artifact, viewer: Viewer | null, link: LinkPass = {}): Promise<Access> {
   let level: Access = linkLetsIn(artifact, link) ? 'view' : null
   if (!viewer) return level
-  if (artifact.ownerId === viewer.id) return 'edit'
+  const role = artifact.organizationId ? await roleIn(viewer, artifact.organizationId) : null
+  if (ownerCounts(artifact, viewer, role)) return 'edit'
 
   const [share] = await db
     .select({ role: schema.artifactShares.role })
@@ -122,25 +156,25 @@ export async function accessLevel(artifact: Artifact, viewer: Viewer | null, lin
   if (share?.role === 'editor') return 'edit'
   if (share) level = 'view'
 
-  if (artifact.organizationId) {
-    const role = await roleIn(viewer, artifact.organizationId)
-    if (role === 'owner' || role === 'admin') return 'edit'
-    if (role && artifact.visibility === 'organization') level = 'view'
-  }
+  if (role === 'owner' || role === 'admin') return 'edit'
+  if (role && artifact.visibility === 'organization') level = 'view'
   return level
 }
 
 // accessLevel for requests that come back every few seconds, like an open page asking whether it has a
-// newer version. The page row is read fresh by the caller, so the owner, general access and the link
+// newer version. The page row is read fresh by the caller, so its owner, general access and the link
 // always count as they are now; only what the viewer is to the page (a share, a role in its
-// organization) may be up to RECENT_ACCESS_MS old. Per process, like every cache in src/cache.ts.
+// organization, and with it whether owning the page counts) may be up to RECENT_ACCESS_MS old. Per
+// process, like every cache in src/cache.ts.
 const RECENT_ACCESS_MS = 10_000
 const recentAccess = new Lru<string, { access: Access; at: number }>(20_000, 20_000, () => 1)
 
 export async function recentAccessLevel(artifact: Artifact, viewer: Viewer | null, link: LinkPass = {}, now = Date.now()): Promise<Access> {
   const byLink: Access = linkLetsIn(artifact, link) ? 'view' : null
   if (!viewer) return byLink
-  const key = [artifact.id, artifact.ownerId, artifact.organizationId, artifact.visibility, viewer.id, viewer.email, viewer.blockedOrgs?.join(',')].join('|')
+  const scope = viewer.workspace ? (viewer.workspace.organizationId ?? 'personal') : '*'
+  const who = [viewer.id, viewer.email, viewer.blockedOrgs?.join(','), scope]
+  const key = [artifact.id, artifact.ownerId, artifact.organizationId, artifact.visibility, ...who].join('|')
   const hit = recentAccess.get(key)
   let access: Access
   if (hit && now - hit.at < RECENT_ACCESS_MS) access = hit.access
@@ -160,9 +194,11 @@ export async function canEdit(artifact: Artifact, viewer: Viewer): Promise<boole
   return (await accessLevel(artifact, viewer)) === 'edit'
 }
 
-// Only the owner deletes: editors and organization admins can't remove someone else's page
-export function canDelete(artifact: Artifact, viewer: Viewer): boolean {
-  return artifact.ownerId === viewer.id
+// Only the owner deletes, while owning the page counts (ownerCounts): editors and organization admins
+// can't remove someone else's page
+export async function canDelete(artifact: Artifact, viewer: Viewer): Promise<boolean> {
+  if (artifact.ownerId !== viewer.id) return false
+  return ownerCounts(artifact, viewer, artifact.organizationId ? await roleIn(viewer, artifact.organizationId) : null)
 }
 
 // Its versions, files, shares and thumbnails go with it; the storage sweep removes blobs nothing uses any more
@@ -297,7 +333,7 @@ export async function publishUpload(input: PublishTarget & { uploadId: string; f
     htmlSha256: html.sha256,
     htmlSize: html.size,
     files,
-    store: () => claimUploads(input.uploadId, [html, ...files], input.userId),
+    store: () => claimUploads(input.uploadId, [html, ...files], { id: input.userId, blockedOrgs: input.blockedOrgs }),
   })
 }
 
@@ -359,7 +395,7 @@ export async function updateUpload(input: PublishTarget & Changes & { uploadId: 
       htmlSha256: merged.html.sha256,
       htmlSize: merged.html.size,
       files: merged.files,
-      store: () => claimUploads(input.uploadId, html ? [html, ...files] : files, input.userId),
+      store: () => claimUploads(input.uploadId, html ? [html, ...files] : files, { id: input.userId, blockedOrgs: input.blockedOrgs }),
     }
   })
 }
@@ -393,7 +429,8 @@ async function publishContent(input: PublishTarget, content: Content | ((tx: Tx,
 
   if (input.slug) {
     const existing = await findBySlug(input.slug)
-    const viewer = { id: input.userId, email: input.email, blockedOrgs: input.blockedOrgs }
+    // Publishing comes from agents and tokens only, which act in the workspace they are for
+    const viewer = { id: input.userId, email: input.email, blockedOrgs: input.blockedOrgs, workspace: { organizationId: input.organizationId } }
     if (!existing || !(await canEdit(existing, viewer))) {
       throw new PublishError(
         typeof content === 'function'
@@ -757,7 +794,7 @@ export function checkTitle(value: unknown): { title: string } | { error: string 
 
 // Of these pages, the ids this person can edit, in two queries instead of one per page
 export async function editableIds(viewer: Viewer, artifacts: Artifact[]): Promise<Set<string>> {
-  const ids = new Set(artifacts.filter((a) => a.ownerId === viewer.id).map((a) => a.id))
+  const ids = new Set(artifacts.filter((a) => !a.organizationId && ownerCounts(a, viewer, null)).map((a) => a.id))
   const rest = artifacts.filter((a) => !ids.has(a.id))
   if (rest.length === 0) return ids
 
@@ -776,16 +813,19 @@ export async function editableIds(viewer: Viewer, artifacts: Artifact[]): Promis
     )
   for (const s of shares) ids.add(s.artifactId)
 
-  const orgIds = [...new Set(rest.map((a) => a.organizationId).filter((id): id is string => id !== null && !viewer.blockedOrgs?.includes(id)))]
+  const orgIds = [
+    ...new Set(rest.map((a) => a.organizationId).filter((id): id is string => id !== null && !viewer.blockedOrgs?.includes(id) && inScope(viewer, id))),
+  ]
   if (orgIds.length) {
-    const admin = await db
-      .select({ organizationId: schema.memberships.organizationId })
+    const roles = await db
+      .select({ organizationId: schema.memberships.organizationId, role: schema.memberships.role })
       .from(schema.memberships)
-      .where(
-        and(eq(schema.memberships.userId, viewer.id), inArray(schema.memberships.organizationId, orgIds), inArray(schema.memberships.role, ['owner', 'admin'])),
-      )
-    const adminOf = new Set(admin.map((m) => m.organizationId))
-    for (const a of rest) if (a.organizationId && adminOf.has(a.organizationId)) ids.add(a.id)
+      .where(and(eq(schema.memberships.userId, viewer.id), inArray(schema.memberships.organizationId, orgIds)))
+    const roleOf = new Map(roles.map((m) => [m.organizationId, m.role]))
+    for (const a of rest) {
+      const role = a.organizationId ? (roleOf.get(a.organizationId) ?? null) : null
+      if (role === 'owner' || role === 'admin' || ownerCounts(a, viewer, role)) ids.add(a.id)
+    }
   }
   return ids
 }

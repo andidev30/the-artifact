@@ -334,12 +334,15 @@ describe('moving a page to another workspace', () => {
     const [folder] = await db.select().from(schema.folders).where(eq(schema.folders.organizationId, org.id))
     expect(await page(source.slug)).toMatchObject({ organizationId: org.id, folderId: folder.id })
 
-    // Filing from another workspace's agent still isn't allowed without naming it
+    // The page is now the organization's: the personal agent no longer acts on it, even for its owner
     expect((await callTool(token, 'move_artifact', { artifact_id: source.slug, folder: 'Mine' })).isError).toBe(true)
-    expect((await callTool(token, 'move_artifact', { artifact_id: source.slug, workspace: org.id })).text).toContain('already in that workspace')
-    expect((await callTool(token, 'move_artifact', { artifact_id: source.slug })).isError).toBe(true)
+    expect((await callTool(token, 'move_artifact', { artifact_id: source.slug, workspace: 'personal' })).text).toContain('No page you can edit')
 
-    const back = await callTool(token, 'move_artifact', { artifact_id: source.slug, workspace: 'personal' })
+    const orgToken = (await connectAgent(owner, org.id)).access_token
+    expect((await callTool(orgToken, 'move_artifact', { artifact_id: source.slug, workspace: org.id })).text).toContain('already in that workspace')
+    expect((await callTool(orgToken, 'move_artifact', { artifact_id: source.slug })).isError).toBe(true)
+
+    const back = await callTool(orgToken, 'move_artifact', { artifact_id: source.slug, workspace: 'personal' })
     expect(back.text).toContain('Moved "Draft" to your personal workspace.')
     expect(await page(source.slug)).toMatchObject({ organizationId: null, folderId: null })
 

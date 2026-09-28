@@ -5,7 +5,7 @@ import { env } from '../../src/env.js'
 import { sha256 } from '../../src/files.js'
 import { sweepStorage } from '../../src/gc.js'
 import { getBlob } from '../../src/storage.js'
-import { call, callTool, connectAgent, createUser, mcpRequest, slugFrom } from './helpers.js'
+import { addMember, call, callTool, connectAgent, createOrg, createUser, mcpRequest, slugFrom } from './helpers.js'
 
 // Unique per run: the test bucket keeps blobs between runs, and stored content is never uploaded again
 function page() {
@@ -37,6 +37,26 @@ async function agent() {
 describe('publishing by direct upload', () => {
   afterEach(() => {
     env.storage.publicEndpoint = process.env.S3_PUBLIC_ENDPOINT ?? ''
+  })
+
+  it('makes an owner who left an organization upload again what its pages hold', async () => {
+    const owner = await createUser()
+    const boss = await createUser()
+    const org = await createOrg(boss)
+    await addMember(org.id, owner, 'member')
+    const orgToken = (await connectAgent(owner, org.id)).access_token
+    const { files, manifest } = page()
+    const first = await callTool(orgToken, 'prepare_upload', { files: manifest })
+    for (const [path, url] of links(first.text)) await put(url, files[path])
+    const uploadId = first.text.match(/upload_id: ([0-9a-f]+)/)![1]
+    expect((await callTool(orgToken, 'publish_upload', { title: 'Team page', upload_id: uploadId, files: manifest })).isError).toBe(false)
+
+    const personal = (await connectAgent(owner)).access_token
+    expect((await callTool(personal, 'prepare_upload', { files: manifest })).text).toContain('Already stored')
+    expect((await call(`/api/organizations/${org.id}/members/${owner.id}`, { method: 'DELETE', cookie: boss.cookie })).status).toBe(200)
+    const after = await callTool(personal, 'prepare_upload', { files: manifest })
+    expect(after.text).not.toContain('Already stored')
+    expect([...links(after.text).keys()].sort()).toEqual(['img/big.png', 'index.html', 'site.css'])
   })
 
   it('prepares links, takes the bytes straight to storage and publishes them', async () => {

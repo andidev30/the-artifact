@@ -6,7 +6,7 @@ import { funnel, pruneProductEvents } from '../../src/ee/analytics.js'
 import { env } from '../../src/env.js'
 import { runPruners } from '../../src/gc.js'
 import { sendSignInLink } from '../../src/mail.js'
-import { call, connectAgent, createOrg, createPage, createUser, type TestUser } from './helpers.js'
+import { addMember, call, connectAgent, createOrg, createPage, createUser, type TestUser } from './helpers.js'
 
 const original = { selfHosted: env.selfHosted }
 const DAY = 24 * 60 * 60 * 1000
@@ -88,6 +88,7 @@ describe('product events on the hosted service', () => {
       (await call(`/api/artifacts/${page.slug}/sharing/people`, { cookie: owner.cookie, json: { emails: 'friend@example.com', role: 'viewer' } })).ok,
     ).toBe(true)
     const colleague = await createUser()
+    await addMember(org.id, colleague, 'member')
     const theirs = await createPage(colleague, { organizationId: org.id, visibility: 'private' })
     expect((await call(`/api/artifacts/${theirs.slug}`, { method: 'PATCH', cookie: colleague.cookie, json: { visibility: 'organization' } })).status).toBe(200)
     // A new page open to its organization by default isn't a share anybody chose

@@ -14,8 +14,8 @@ The server builds the zip in the background. The section shows how many pages ar
 
 The export has:
 
-- Every page you own: in your personal workspace, and pages you published in organizations.
-- Comments on those pages, and comments you wrote on other people's pages.
+- Every page you own: in your personal workspace, and pages you published in organizations you are still a member of. Pages you published in an organization you left, or one that requires two-factor sign-in you haven't set up, stay with that organization and aren't included.
+- Comments on those pages, and comments you wrote on any other page.
 - Your account: your name and email, how you sign in, your organizations, connected agents, access tokens and sessions.
 
 ## Export an organization
@@ -28,7 +28,7 @@ Owners of an organization find **Export data** in the organization's settings (t
 | --- | --- |
 | `README.txt` | This layout, in short |
 | `account.json` | Your account: name, email, when you joined, how you sign in (password, Google, passkeys, authenticator app, single sign-on), your organizations and roles, personal folders, connected agents, access tokens and sessions. An organization's export has `organization.json` instead: its name, address, settings, members, pending invitations and folders. |
-| `comments.json` | Comments you wrote on other people's pages, with the page's address and title while you can still open it. Account exports only. |
+| `comments.json` | Comments you wrote on pages not in the export, with the page's address and title while you can still open it. Account exports only. |
 | `pages/<page>/page.json` | The page: title, owner, workspace, folder, who can open it (general access, and whether its link expires or has a password), the people it is shared with and their roles, and every version with when it was published, by whom, with which agent, and how often it was opened |
 | `pages/<page>/comments.json` | The comments on the page: text, the version it was written on, when it was written, edited or resolved, and the display name of its author (`null` when they have none or deleted their account). Replies name the comment they answer in `replyTo`. |
 | `pages/<page>/versions/<n>/` | The files of version `n` as they were published. Open `index.html` in a browser to see the page. With **Only the current version**, only the current one is there, and `page.json` still lists them all. |
