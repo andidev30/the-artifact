@@ -31,6 +31,7 @@ export function SsoSection() {
   const [editing, setEditing] = useState<string | null>(null)
   const [removing, setRemoving] = useState<string | null>(null)
   const [test, setTest] = useState<SsoTestResult | null>(null)
+  const testResult = useRef<Promise<SsoTestResult | null> | null>(null)
   // After a panel closes, focus goes back to the button that opened it, once it has rendered again
   const [focusTo, focusSoon] = useState<string | null>(null)
 
@@ -49,16 +50,16 @@ export function SsoSection() {
         if (err instanceof ApiError && err.code === 'enterprise_required') setState({ kind: 'unlicensed', message: err.message })
         else setState({ kind: 'error' })
       })
-    // Back from "Test connection": the result waits on the server, once
+    // Back from "Test connection": the result waits on the server and can be read once, so the
+    // request is kept in a ref that outlives the effect running twice in development
     const params = new URLSearchParams(window.location.search)
     if (params.has('sso-test')) {
       params.delete('sso-test')
       const rest = params.toString()
       window.history.replaceState(null, '', `${window.location.pathname}${rest ? `?${rest}` : ''}#sso`)
-      ssoTestResult()
-        .then((r) => active && setTest(r))
-        .catch(() => {})
+      testResult.current ??= ssoTestResult().catch(() => null)
     }
+    testResult.current?.then((r) => active && r && setTest(r))
     return () => {
       active = false
     }

@@ -411,7 +411,8 @@ test('agent consent page', async ({ page }) => {
 })
 
 test('single sign-on: sign-in buttons and the admin section', async ({ page, browser }) => {
-  const signedOut = await browser.newPage()
+  const signedOutContext = await browser.newContext()
+  const signedOut = await signedOutContext.newPage()
   await licensedSso(signedOut)
   await signedOut.goto('/login')
   await expect(signedOut.getByRole('link', { name: 'Continue with Okta' })).toBeVisible()
@@ -419,7 +420,7 @@ test('single sign-on: sign-in buttons and the admin section', async ({ page, bro
   await signedOut.goto('/login?error=sso_required')
   await expect(signedOut.getByRole('alert')).toContainText('single sign-on')
   await expectAccessible(signedOut, 'log in, single sign-on required')
-  await signedOut.close()
+  await signedOutContext.close()
 
   const email = uniqueEmail('a11y-sso')
   await signUpPersonal(page, email)

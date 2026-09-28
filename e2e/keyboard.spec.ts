@@ -409,13 +409,14 @@ test('set a version retention policy, confirming what it removes', async ({ page
 })
 
 test('single sign-on: the sign-in button and adding a provider in Server admin', async ({ page, browser }) => {
-  const signedOut = await browser.newPage()
+  const signedOutContext = await browser.newContext()
+  const signedOut = await signedOutContext.newPage()
   await licensedSso(signedOut)
   await signedOut.goto('/login')
   const button = signedOut.getByRole('link', { name: 'Continue with Okta' })
   await tabTo(signedOut, button)
   await expectFocusRing(button)
-  await signedOut.close()
+  await signedOutContext.close()
 
   const email = uniqueEmail('kb-sso')
   await signUpPersonal(page, email)
