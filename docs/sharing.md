@@ -24,9 +24,11 @@ Who can open the page with just the link:
 
 When a page is set to **Anyone with the link**, **Share** shows three more options under it:
 
-- **Link expires**: after the end of this day, the link opens nothing. Leave it empty to keep the link working.
+- **Link expires**: **Never**, the default, keeps the link working until you change it. **On a date** asks for the last day it works; after the end of that day, the link opens nothing.
 - **Link password**: people who open the link enter it first, on a small password page, before they see anything of the page. It needs at least 8 characters. Your browser remembers it for that page for 12 hours. **Remove password** takes it off.
 - **Reset link**: the page gets a new public link, `{{APP_URL}}/a/<page id>?k=<key>`. Every public link shared before stops working. **Copy link** and the embed code give the new one.
+
+Above the options, a line says what the link does now, for example "The link never expires." or "The link works until 31 December 2026. People who open it enter a password." **Save link settings** applies the expiry and password together.
 
 These only change what the link does for people with no access of their own. The owner, the people added above and, for **Your organization** pages, the organization's members keep opening the page at its own address, `{{APP_URL}}/a/<page id>`: no key, no password and no expiry. A reset never changes that address, so the links in sharing emails keep working.
 
