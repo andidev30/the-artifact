@@ -4,7 +4,8 @@ import { callTool, publishPage, VERSION, whoami } from './api.ts'
 import { browserLogin, resolveAuth, resolveServer, revoke } from './auth.ts'
 import { type Env, normalizeServer, readCredentials, readLink, saveLink, type Saved, updateCredentials, LINK_FILE } from './config.ts'
 import { CliError, SignedOutError, UsageError } from './errors.ts'
-import { checkLimits, collectPage, fallbackTitle, formatBytes, readPage, titleFromHtml } from './files.ts'
+import { readFile } from 'node:fs/promises'
+import { checkLimits, collectPage, collectSome, ENTRY_PATH, fallbackTitle, formatBytes, readPage, titleFromHtml } from './files.ts'
 
 export type Io = {
   env: Env
@@ -49,6 +50,9 @@ Options:
   --visibility <who>     restricted, organization or link
   --folder <name>        File the page into this folder of the workspace ("" for no folder)
   --ignore <glob>        Leave out matching files; repeat for more (e.g. --ignore '*.map')
+  --only <path>          Send only this file (or glob) and keep the page's other files as they are;
+                         repeat for more (e.g. --only data.json). Needs --id or a saved page
+  --remove <path>        Remove this file from the page and keep the others; repeat for more
   --save                 Remember the page in ${LINK_FILE}, so later publishes update it
   --new                  Publish a new page even if ${LINK_FILE} has one for this path
   --dry-run              List what would be sent, and send nothing`,
@@ -106,6 +110,8 @@ const OPTIONS: Record<string, ParseArgsConfig['options']> = {
     visibility: { type: 'string' },
     folder: { type: 'string' },
     ignore: { type: 'string', multiple: true },
+    only: { type: 'string', multiple: true },
+    remove: { type: 'string', multiple: true },
     save: { type: 'boolean' },
     new: { type: 'boolean' },
     'dry-run': { type: 'boolean' },
@@ -180,7 +186,10 @@ function print(io: Io, values: Values, json: unknown, human: string) {
   io.stdout.write(values.json ? `${JSON.stringify(json, null, 2)}\n` : human ? `${human}\n` : '')
 }
 
-async function publish(io: Io, { positionals, values }: Parsed) {
+async function publish(io: Io, parsed: Parsed) {
+  const { values } = parsed
+  if ((values.only as string[] | undefined)?.length || (values.remove as string[] | undefined)?.length) return update(io, parsed)
+  const { positionals } = parsed
   const given = one(positionals, 'folder', 'publish')
   const target = resolve(io.cwd, given)
   const visibility = visibilityArg(str(values, 'visibility'))
@@ -223,6 +232,56 @@ async function publish(io: Io, { positionals, values }: Parsed) {
       (values.save ? ` Saved in ${LINK_FILE}; publishing this path again updates it.` : ''),
   )
   // The link alone on stdout, so `url=$(the-artifact publish dist)` works
+  print(io, values, page, page.url)
+}
+
+// publish --only/--remove: a new version of an existing page with only some files sent or removed,
+// and the rest of its current version kept (mode update of POST /api/publish)
+async function update(io: Io, { positionals, values }: Parsed) {
+  const given = one(positionals, 'folder', 'publish')
+  const target = resolve(io.cwd, given)
+  const visibility = visibilityArg(str(values, 'visibility'))
+  const only = (values.only as string[] | undefined) ?? []
+  const remove = ((values.remove as string[] | undefined) ?? []).map((p) => p.trim().replace(/^\.\//, '')).filter(Boolean)
+  if (values.new) throw new UsageError("--only and --remove change a page you have, so they don't go with --new.")
+  const some = only.length
+    ? await collectSome(target, only, { entry: str(values, 'entry'), ignore: values.ignore as string[] | undefined, label: given })
+    : { entry: null, files: [], skipped: [], total: 0 }
+  checkLimits(some)
+  const log = (line: string) => io.stderr.write(`${line}\n`)
+  for (const s of some.skipped) log(`Left out ${s.path}: ${s.reason}.`)
+  const sent = [...(some.entry ? [{ path: ENTRY_PATH, abs: some.entry.abs, size: some.entry.size }] : []), ...some.files]
+  if (!sent.length && !remove.length) throw new CliError(`Nothing in ${given} matches --only, so there is nothing to send.`)
+  const title = str(values, 'title')?.trim() || undefined
+
+  if (values['dry-run']) {
+    const lines = [...sent.map((f) => `${f.path} (${formatBytes(f.size)})`), ...remove.map((p) => `${p} (removed)`)]
+    print(
+      io,
+      values,
+      { title: title ?? null, files: sent.map((f) => ({ path: f.path, size: f.size })), remove, total: some.total },
+      `${title ? `Title: ${title}\n` : ''}${lines.join('\n')}\n${sent.length} ${sent.length === 1 ? 'file' : 'files'}, ${formatBytes(some.total)}; the page's other files stay as they are. Nothing was sent.`,
+    )
+    return
+  }
+
+  const server = await resolveServer(str(values, 'server'), io.env)
+  const auth = await resolveAuth(server, { token: str(values, 'token'), env: io.env })
+  const idArg = str(values, 'id')?.trim() || undefined
+  const link = idArg ? null : await readLink(io.cwd, target)
+  const id = idArg ?? (link && link.server === server ? link.id : undefined)
+  if (!id) throw new UsageError('--only and --remove update a page you published before: pass its --id, or publish it once with --save.')
+  const parts = [sent.length ? `${sent.map((f) => f.path).join(', ')} (${formatBytes(some.total)})` : '', remove.length ? `removing ${remove.join(', ')}` : '']
+  log(`Updating ${id}: ${parts.filter(Boolean).join('; ')}.`)
+
+  const html = some.entry ? await readFile(some.entry.abs) : undefined
+  const files = await Promise.all(some.files.map(async (f) => ({ path: f.path, content: await readFile(f.abs) })))
+  const page = await publishPage(auth, { title, html, files, id, visibility, folder: str(values, 'folder'), update: { remove } })
+  if (values.save) await saveLink(io.cwd, target, { id: page.id, server })
+  log(
+    `Published version ${page.version} of "${page.title}" (${ACCESS_LABEL[page.visibility] ?? page.visibility}${page.folder ? `, in ${page.folder}` : ''}); its other files are as they were.` +
+      (values.save ? ` Saved in ${LINK_FILE}; publishing this path again updates it.` : ''),
+  )
   print(io, values, page, page.url)
 }
 

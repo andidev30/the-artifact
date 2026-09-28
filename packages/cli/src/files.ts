@@ -131,10 +131,11 @@ function formatMb(bytes: number) {
   return `${bytes / 1024 / 1024} MB`
 }
 
-export function checkLimits(collected: Collected) {
+// The entry is null for an update that doesn't replace it
+export function checkLimits(collected: { entry: PageFile | null; files: PageFile[]; total: number }) {
   const { entry, files, total } = collected
-  if (entry.size === 0) throw new CliError(`${entry.path} is empty.`)
-  if (entry.size > MAX_HTML_BYTES)
+  if (entry?.size === 0) throw new CliError(`${entry.path} is empty.`)
+  if (entry && entry.size > MAX_HTML_BYTES)
     throw new CliError(`${entry.path} is larger than ${formatMb(MAX_HTML_BYTES)}. Move large assets into files or compress images.`)
   if (files.length > MAX_FILES)
     throw new CliError(`A page can have at most ${MAX_FILES} files besides the HTML; this one has ${files.length}. Use --ignore to leave some out.`)
@@ -146,28 +147,11 @@ export function checkLimits(collected: Collected) {
     )
 }
 
-// What publishing `target` sends: a single HTML file, or a folder's entry HTML and the files next to
-// it. Hidden files and folders, node_modules and ignored paths are never read.
-export async function collectPage(target: string, opts: { entry?: string; ignore?: string[]; label?: string } = {}): Promise<Collected & { isDir: boolean }> {
-  const label = opts.label ?? target
-  const info = await stat(target).catch(() => null)
-  if (!info) throw new CliError(`There is no file or folder at ${label}.`)
-
-  if (info.isFile()) {
-    if (opts.entry) throw new CliError('--entry is for publishing a folder. To publish one file, pass the file itself.')
-    if (!isHtml(target)) throw new CliError(`${label} isn't an HTML file. Pass an .html file, or a folder with an index.html.`)
-    const entry = { path: basename(target), abs: target, size: info.size }
-    return { entry, files: [], skipped: [], total: info.size, isDir: false }
-  }
-  if (!info.isDirectory()) throw new CliError(`${label} is neither a file nor a folder.`)
-
-  const entryPath = toPosix(opts.entry ?? ENTRY_PATH).replace(/^\.\//, '')
-  if (!isHtml(entryPath)) throw new CliError(`--entry ${entryPath} isn't an HTML file.`)
-  const ignored = ignoreMatcher(opts.ignore ?? [])
-  const files: PageFile[] = []
+// Every file in a folder, except hidden files and folders, node_modules and ignored paths, which are
+// never read. Links to folders are noted rather than followed.
+async function walkFolder(target: string, ignored: (path: string, isDir: boolean) => boolean): Promise<{ found: PageFile[]; skipped: Skipped[] }> {
+  const found: PageFile[] = []
   const skipped: Skipped[] = []
-  let entry: PageFile | null = null
-
   async function walk(dir: string) {
     const entries = await readdir(dir, { withFileTypes: true })
     entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
@@ -186,28 +170,107 @@ export async function collectPage(target: string, opts: { entry?: string; ignore
         continue
       }
       if (!isFile) continue
-      const size = real ? real.size : (await stat(abs)).size
-      if (path.toLowerCase() === entryPath.toLowerCase()) {
-        entry = { path, abs, size }
-      } else if (path.toLowerCase() === ENTRY_PATH) {
-        skipped.push({ path, reason: `the page itself is ${entryPath}` })
-      } else if (!hasAllowedType(path)) {
-        skipped.push({ path, reason: 'not a type pages can hold' })
-      } else {
-        files.push({ path, abs, size })
-      }
+      found.push({ path, abs, size: real ? real.size : (await stat(abs)).size })
     }
   }
   await walk(target)
+  return { found, skipped }
+}
+
+async function statTarget(target: string, label: string) {
+  const info = await stat(target).catch(() => null)
+  if (!info) throw new CliError(`There is no file or folder at ${label}.`)
+  if (!info.isFile() && !info.isDirectory()) throw new CliError(`${label} is neither a file nor a folder.`)
+  return info
+}
+
+function entryPathOf(entry: string | undefined): string {
+  const entryPath = toPosix(entry ?? ENTRY_PATH).replace(/^\.\//, '')
+  if (!isHtml(entryPath)) throw new CliError(`--entry ${entryPath} isn't an HTML file.`)
+  return entryPath
+}
+
+// What publishing `target` sends: a single HTML file, or a folder's entry HTML and the files next to it
+export async function collectPage(target: string, opts: { entry?: string; ignore?: string[]; label?: string } = {}): Promise<Collected & { isDir: boolean }> {
+  const label = opts.label ?? target
+  const info = await statTarget(target, label)
+
+  if (info.isFile()) {
+    if (opts.entry) throw new CliError('--entry is for publishing a folder. To publish one file, pass the file itself.')
+    if (!isHtml(target)) throw new CliError(`${label} isn't an HTML file. Pass an .html file, or a folder with an index.html.`)
+    const entry = { path: basename(target), abs: target, size: info.size }
+    return { entry, files: [], skipped: [], total: info.size, isDir: false }
+  }
+
+  const entryPath = entryPathOf(opts.entry)
+  const { found, skipped } = await walkFolder(target, ignoreMatcher(opts.ignore ?? []))
+  const files: PageFile[] = []
+  let entry: PageFile | null = null
+  for (const file of found) {
+    const path = file.path
+    if (path.toLowerCase() === entryPath.toLowerCase()) {
+      entry = file
+    } else if (path.toLowerCase() === ENTRY_PATH) {
+      skipped.push({ path, reason: `the page itself is ${entryPath}` })
+    } else if (!hasAllowedType(path)) {
+      skipped.push({ path, reason: 'not a type pages can hold' })
+    } else {
+      files.push(file)
+    }
+  }
 
   if (!entry) {
     throw new CliError(
       opts.entry ? `There is no ${entryPath} in ${label}.` : `There is no index.html in ${label}. Pass --entry to choose the page's HTML file.`,
     )
   }
-  const found = entry as PageFile
-  const total = files.reduce((n, f) => n + f.size, found.size)
-  return { entry: found, files, skipped, total, isDir: true }
+  const total = files.reduce((n, f) => n + f.size, entry.size)
+  return { entry, files, skipped, total, isDir: true }
+}
+
+// Some files of a page, for an update of it (--only): the files of `target` matching any of the
+// patterns, which are paths or globs relative to it. The entry HTML, when it matches, is sent as
+// index.html. Unlike a whole page, the folder needn't hold the rest of the page, so a job can write
+// only the files it changes.
+export async function collectSome(
+  target: string,
+  patterns: string[],
+  opts: { entry?: string; ignore?: string[]; label?: string } = {},
+): Promise<{ entry: PageFile | null; files: PageFile[]; skipped: Skipped[]; total: number }> {
+  const label = opts.label ?? target
+  const info = await statTarget(target, label)
+  const matchers = patterns.map((p) => ({ pattern: p, re: globToRegExp(toPosix(p).replace(/^\.\//, '')) }))
+  const used = new Set<string>()
+  const matches = (path: string, alias?: string) => {
+    const hits = matchers.filter((m) => m.re.test(path) || (alias !== undefined && m.re.test(alias)))
+    for (const m of hits) used.add(m.pattern)
+    return hits.length > 0
+  }
+
+  let entry: PageFile | null = null
+  const files: PageFile[] = []
+  const skipped: Skipped[] = []
+  if (info.isFile()) {
+    if (opts.entry) throw new CliError('--entry is for publishing a folder. To publish one file, pass the file itself.')
+    if (!isHtml(target)) throw new CliError(`${label} isn't an HTML file. Pass an .html file, or a folder with an index.html.`)
+    if (matches(basename(target), ENTRY_PATH)) entry = { path: basename(target), abs: target, size: info.size }
+  } else {
+    const entryPath = entryPathOf(opts.entry)
+    const walked = await walkFolder(target, ignoreMatcher(opts.ignore ?? []))
+    skipped.push(...walked.skipped)
+    for (const file of walked.found) {
+      const path = file.path
+      const isEntry = path.toLowerCase() === entryPath.toLowerCase()
+      if (!matches(path, isEntry ? ENTRY_PATH : undefined)) continue
+      if (isEntry) entry = file
+      else if (path.toLowerCase() === ENTRY_PATH) skipped.push({ path, reason: `the page itself is ${entryPath}` })
+      else if (!hasAllowedType(path)) skipped.push({ path, reason: 'not a type pages can hold' })
+      else files.push(file)
+    }
+  }
+  const unmatched = matchers.find((m) => !used.has(m.pattern))
+  if (unmatched) throw new CliError(`Nothing in ${label} matches --only ${unmatched.pattern}.`)
+  return { entry, files, skipped, total: files.reduce((n, f) => n + f.size, entry?.size ?? 0) }
 }
 
 export async function readPage(collected: Collected) {
