@@ -90,7 +90,7 @@ export function ViewsPanel({ slug, currentVersion, visibility, onClose }: Props)
               {views.versions.map((v) => (
                 <li key={v.version} className="views-version">
                   <span>
-                    Version {v.version}
+                    <span>Version {v.version}</span>
                     {v.version === currentVersion && <span className="history-current">Current</span>}
                   </span>
                   <span>{times(v.views)}</span>

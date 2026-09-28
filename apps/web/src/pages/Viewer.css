@@ -105,7 +105,8 @@
   gap: 6px;
 }
 
-.viewer-count {
+.viewer-count,
+.viewer-views-count {
   min-width: 20px;
   padding: 0 5px;
   font-size: 0.75rem;

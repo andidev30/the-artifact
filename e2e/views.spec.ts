@@ -27,7 +27,7 @@ test('owners see how often a page was opened and who opened it', async ({ page, 
   const panel = page.getByRole('complementary', { name: 'Views' })
   await expect(panel.locator('.views-total')).toHaveText('1 view')
   await expect(panel.getByText(friend)).toBeVisible()
-  await expect(panel.getByText('Version 1')).toBeVisible()
+  await expect(panel.getByText('Version 1', { exact: true })).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(panel).toHaveCount(0)
   await expect(page.getByRole('button', { name: /^Views/ })).toBeFocused()

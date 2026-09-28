@@ -221,7 +221,7 @@ function PageFrame({ page, email, onChange }: { page: ArtifactPage; email: strin
               onClick={() => toggle('views')}
             >
               Views
-              {page.views > 0 && <span className="viewer-count">{page.views}</span>}
+              {page.views > 0 && <span className="viewer-views-count">{page.views}</span>}
             </button>
           )}
           {page.canEdit && (
