@@ -107,7 +107,7 @@ Each limit counts something for one key (an email address, an account, or a netw
 | --- | --- | --- |
 | `sign-in-link` | Sign-in links emailed to one address, besides at most one per 60 seconds | 10 per hour |
 | `sign-in-link-ip` | Sign-in links asked for from one network | 30 per hour |
-| `password` | Wrong passwords for one address. Signing in with the right one resets it. | 10 per 15 minutes |
+| `password` | Wrong passwords for one address, at sign-in and as the current password when changing it. Entering the right one resets it. | 10 per 15 minutes |
 | `password-ip` | Password sign-ins, sign-ups and first-account setups from one network | 100 per 15 minutes |
 | `two-factor` | Wrong authenticator app and recovery codes for one account, when signing in or turning the app on. Entering a right one resets it. | 10 per hour |
 | `two-factor-ip` | [Second-factor steps](/docs/security#two-factor-sign-in) and passkey sign-ins from one network | 100 per 15 minutes |
@@ -122,7 +122,7 @@ Each limit counts something for one key (an email address, an account, or a netw
 | `publish` | New pages and versions one account publishes through agents (`publish_artifact`, `publish_upload`, `restore_version`, also counted in `mcp`) or with an access token (`POST /api/publish`) | 200 per hour |
 | `access-token` | [Access tokens](/docs/connect-your-agent#publishing-from-ci) one account creates in **Account settings** | 20 per hour |
 | `comment` | Comments and replies one account writes, in the app or through agents (`add_comment`, `reply_comment`) | 120 per hour |
-| `link-password` | Wrong passwords for one page's link, from anyone. Past it, nobody can try until the window ends. | 30 per 15 minutes |
+| `link-password` | Wrong passwords for one page's link, from anyone; right ones don't count. Past it, nobody can try until the window ends. | 30 per 15 minutes |
 | `link-password-ip` | Link password attempts from one network, right or wrong | 100 per 15 minutes |
 | `comment-email` | Emails to one person about new comments on one page. Comments past it send nothing and show as new in the app, so a burst of comments is one email. | 1 per 15 minutes |
 

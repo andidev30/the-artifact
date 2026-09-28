@@ -30,7 +30,7 @@ The organization's owners require a passkey or an authenticator app. Add one und
 
 ## "Sign in again to change how you sign in"
 
-Adding or removing passkeys and the authenticator app, and making new recovery codes, need a sign-in from the last hour. Choose **Sign in again**, sign in, and you return to **Sign-in security**.
+Adding or removing passkeys and the authenticator app, making new recovery codes, and adding a password to an account that has none, need a sign-in from the last hour. Choose **Sign in again**, sign in, and you return to where you were in **Account settings**.
 
 ## "Your personal workspace has … pages" or "… past … of storage"
 
@@ -85,6 +85,10 @@ An instance admin suspended the account. An admin can unsuspend it under **Serve
 ## Self-hosted: nobody is an admin
 
 Run the make-admin script on the server. See [An existing install without an admin](/docs/self-hosting#an-existing-install-without-an-admin).
+
+## Self-hosted: "This request did not come from this app"
+
+Changes are only accepted from the app's own pages, as the browser reports them (see [Sign-in](/docs/security#sign-in)). Browsers without that report are checked against `APP_URL` instead, so make sure it is exactly the address people open the app at, with `https://` and without a trailing path, and that your reverse proxy passes the `Origin` and `Sec-Fetch-Site` headers through unchanged.
 
 ## Self-hosted: I forgot my password
 
