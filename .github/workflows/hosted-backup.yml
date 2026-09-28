@@ -1,0 +1,106 @@
+name: Hosted backup
+
+# Nightly backup of the hosted service (Supabase Postgres and its storage bucket), kept as workflow
+# artifacts for 90 days. This repository is public and anyone signed in to GitHub can download its
+# artifacts, so both files are encrypted with age on the runner before upload; only the holder of the
+# private key can read them. Skipped until the secrets exist. Setup and restore: ee/ops/runbook.md.
+on:
+  schedule:
+    - cron: '20 20 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: hosted-backup
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  # At least the Supabase server's major version: pg_dump refuses to dump a newer server
+  PG_MAJOR: 17
+
+jobs:
+  configured:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      database: ${{ steps.check.outputs.database }}
+      bucket: ${{ steps.check.outputs.bucket }}
+    steps:
+      - id: check
+        env:
+          HOSTED_DATABASE_URL: ${{ secrets.HOSTED_DATABASE_URL }}
+          BACKUP_AGE_RECIPIENT: ${{ secrets.BACKUP_AGE_RECIPIENT }}
+          HOSTED_S3_SECRET_ACCESS_KEY: ${{ secrets.HOSTED_S3_SECRET_ACCESS_KEY }}
+        run: |
+          if [ -n "$HOSTED_DATABASE_URL" ] && [ -n "$BACKUP_AGE_RECIPIENT" ]; then
+            echo "database=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Backups are off: set HOSTED_DATABASE_URL and BACKUP_AGE_RECIPIENT (see ee/ops/runbook.md)"
+          fi
+          if [ -n "$HOSTED_S3_SECRET_ACCESS_KEY" ]; then
+            echo "bucket=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  backup:
+    needs: configured
+    if: needs.configured.outputs.database == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install age and the Postgres client
+        run: |
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y --no-install-recommends age "postgresql-client-$PG_MAJOR"
+          echo "/usr/lib/postgresql/$PG_MAJOR/bin" >> "$GITHUB_PATH"
+
+      # Database first, then blobs: blobs never change once written, so a copy taken after the dump
+      # has everything the dump refers to
+      - name: Back up the database
+        env:
+          DATABASE_URL: ${{ secrets.HOSTED_DATABASE_URL }}
+          BACKUP_AGE_RECIPIENT: ${{ secrets.BACKUP_AGE_RECIPIENT }}
+        run: ee/ops/backup/backup-db.sh out/database
+
+      - name: Back up the bucket
+        if: needs.configured.outputs.bucket == 'true'
+        env:
+          S3_ENDPOINT: ${{ secrets.HOSTED_S3_ENDPOINT }}
+          S3_REGION: ${{ secrets.HOSTED_S3_REGION }}
+          S3_BUCKET: ${{ secrets.HOSTED_S3_BUCKET }}
+          S3_ACCESS_KEY_ID: ${{ secrets.HOSTED_S3_ACCESS_KEY_ID }}
+          S3_SECRET_ACCESS_KEY: ${{ secrets.HOSTED_S3_SECRET_ACCESS_KEY }}
+          BACKUP_AGE_RECIPIENT: ${{ secrets.BACKUP_AGE_RECIPIENT }}
+        run: ee/ops/backup/backup-bucket.sh out/bucket
+
+      - if: needs.configured.outputs.bucket != 'true'
+        run: echo "::warning::The bucket isn't backed up. Set the HOSTED_S3_* secrets (see ee/ops/runbook.md)"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: database
+          path: out/database/
+          retention-days: 90
+          # Encrypted data doesn't compress
+          compression-level: 0
+          if-no-files-found: error
+
+      - if: needs.configured.outputs.bucket == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: bucket
+          path: out/bucket/
+          retention-days: 90
+          compression-level: 0
+          if-no-files-found: error
+
+      - name: Summary
+        run: |
+          {
+            echo "| File | Size |"
+            echo "| --- | --- |"
+            find out -type f -printf '| %f | %s bytes |\n'
+          } >> "$GITHUB_STEP_SUMMARY"
