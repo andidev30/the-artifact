@@ -86,6 +86,7 @@ Instance admins change these under **Server admin** (`/admin`); they are stored 
 | Organization invitation | 7 days |
 | Browser session | 30 days, extended while you use it |
 | Agent access token | 1 hour, refreshed automatically; refresh tokens last 60 days and rotate on use |
+| Access token for CI | 7, 30 or 90 days, 1 year, or no expiry, as chosen when it is made (90 days by default); names up to 60 characters |
 | Requests | See [Rate limits](/docs/configuration#rate-limits) |
 | Pages, versions and storage per workspace | None unless set; see [Workspace quotas](/docs/configuration#workspace-quotas) |
 
@@ -103,7 +104,8 @@ Each limit counts something for one key (an email address, an account, or a netw
 | `invite` | People one account invites to an organization or shares a page with by email, in the app or through an agent | 200 per hour |
 | `invite-ip` | The same, from one network | 500 per hour |
 | `mcp` | MCP tool calls by one account, all agents together | 600 per 10 minutes |
-| `publish` | New pages and versions one account publishes through agents (`publish_artifact`, `publish_upload`, `restore_version`), also counted in `mcp` | 200 per hour |
+| `publish` | New pages and versions one account publishes through agents (`publish_artifact`, `publish_upload`, `restore_version`, also counted in `mcp`) or with an access token (`POST /api/publish`) | 200 per hour |
+| `access-token` | [Access tokens](/docs/connect-your-agent#publishing-from-ci) one account creates in **Account settings** | 20 per hour |
 | `comment` | Comments and replies one account writes, in the app or through agents (`add_comment`, `reply_comment`) | 120 per hour |
 | `comment-email` | Emails to one person about new comments on one page. Comments past it send nothing and show as new in the app, so a burst of comments is one email. | 1 per 15 minutes |
 

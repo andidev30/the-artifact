@@ -13,7 +13,7 @@ On a self-hosted server, whoever sets it up names the organization everyone ther
 | Role | Can |
 | --- | --- |
 | Owner | Everything: rename the organization, invite and remove anyone, change any role, make other owners |
-| Admin | Invite people, remove and change members and admins, rename the organization, edit every page |
+| Admin | Invite people, remove and change members and admins, rename the organization, edit every page, see and revoke every member's [access tokens](#access-tokens) for it |
 | Member | Publish and see the organization's pages; create, rename and delete its [folders](/docs/publishing#folders); leave the organization |
 
 An organization always keeps at least one owner. The last owner can't leave, be removed or change their own role until someone else is an owner.
@@ -28,9 +28,13 @@ You don't need the email to accept. When you are signed in with the invited addr
 
 The chip next to the logo shows the current workspace. Click it to switch between your organizations and your personal workspace. The app remembers your choice on this device.
 
+## Access tokens
+
+Members make [access tokens](/docs/connect-your-agent#publishing-from-ci) in **Account settings** to publish to the organization from CI. Owners and admins see every member's tokens for the organization under **Access tokens** in its settings: the name, who made it, when it was last used and when it expires, never the token itself. **Revoke** stops a token at once, whoever made it, so a token that leaks doesn't have to wait for its owner.
+
 ## Leaving or deleting
 
-Members can leave from the organization's settings, under **Members**. Pages you published there stay in the organization.
+Members can leave from the organization's settings, under **Members**. Pages you published there stay in the organization. Agents you connected to it and access tokens you made for it stop working at once.
 
 Deleting your account (**Account settings → Delete account**) is blocked while you are the only owner of an organization that has other people in it. Otherwise, before you confirm, the page lists what will happen:
 
