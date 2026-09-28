@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import { expect, test } from '@playwright/test'
+import { createHostedOrganization } from '../apps/api/test/e2e-db.ts'
 import { connectAgent, publishViaMcp, signUpPersonal, uniqueEmail } from './helpers'
 
 const HTML = '<!doctype html><h1>Page</h1>'
@@ -8,11 +9,11 @@ const PAGES = 56
 
 test('search, file pages into folders and scroll through a long gallery', async ({ page }) => {
   test.setTimeout(120_000)
-  await signUpPersonal(page, uniqueEmail('folders'))
-  // An organization, since the free Personal plan stops at 50 pages
-  const created = await page.request.post('/api/organizations', { data: { name: 'Folder Co', slug: `e2e-${randomBytes(4).toString('hex')}` } })
-  expect(created.status()).toBe(201)
-  const org = (await created.json()) as { id: string }
+  const email = uniqueEmail('folders')
+  await signUpPersonal(page, email)
+  // An organization, since the free Personal plan stops at 50 pages; written to the database, as the
+  // hosted service doesn't create new ones yet
+  const org = await createHostedOrganization(email, 'Folder Co', `e2e-${randomBytes(4).toString('hex')}`)
   await page.evaluate((id) => localStorage.setItem('the-artifact.workspace', id), org.id)
   const token = await connectAgent(page, org.id)
 

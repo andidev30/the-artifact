@@ -1,15 +1,14 @@
 import { createHash, randomBytes } from 'node:crypto'
-import { expect, test, type Page } from '@playwright/test'
-import { grantInstanceAdmin } from '../apps/api/test/e2e-db.ts'
+import { expect, test } from '@playwright/test'
+import { createHostedOrganization, grantInstanceAdmin } from '../apps/api/test/e2e-db.ts'
 import { expectAccessible } from './axe'
 import { connectAgent, latestMail, publishViaMcp, signInLink, signUpPersonal, uniqueEmail } from './helpers'
 
 const HTML = '<!doctype html><title>Plan</title><h1>Plan</h1>'
 
-async function createOrganization(page: Page, name: string) {
-  const res = await page.request.post('/api/organizations', { data: { name, slug: `e2e-${randomBytes(4).toString('hex')}` } })
-  expect(res.status()).toBe(201)
-  return (await res.json()) as { id: string; slug: string }
+// Written to the database: the hosted service doesn't create new organizations yet
+function createOrganization(ownerEmail: string, name: string) {
+  return createHostedOrganization(ownerEmail, name, `e2e-${randomBytes(4).toString('hex')}`)
 }
 
 test('signed-out screens', async ({ page }) => {
@@ -89,7 +88,7 @@ test('sign-in link, onboarding and an empty gallery', async ({ page }) => {
 
   await expect(page).toHaveURL(/\/onboarding/)
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
-  await expectAccessible(page, 'onboarding, workspace choice')
+  await expectAccessible(page, 'onboarding, welcome')
   await page.getByRole('button', { name: 'Continue' }).click()
   await expect(page.getByRole('heading', { name: 'Connect your agent' })).toBeVisible()
   await expectAccessible(page, 'onboarding, connect your agent')
@@ -104,9 +103,17 @@ test('sign-in link, onboarding and an empty gallery', async ({ page }) => {
   await expectAccessible(page, 'account menu')
   await page.keyboard.press('Escape')
 
+  // The hosted service says new organizations are coming soon instead of offering the form
+  await page.getByRole('button', { name: /^Workspace:/ }).click()
+  await expect(page.getByText('New organizations are coming soon.')).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Create an organization' })).toHaveCount(0)
+  await expectAccessible(page, 'workspace switcher, personal only')
+  await page.keyboard.press('Escape')
+
   await page.goto('/organizations/new')
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
-  await expectAccessible(page, 'new organization')
+  await expect(page.getByRole('heading', { level: 1, name: 'Organizations are coming soon' })).toBeVisible()
+  await expect(page.getByLabel('Organization name')).toHaveCount(0)
+  await expectAccessible(page, 'new organization, coming soon')
 
   await page.goto('/a/doesnotexist')
   await expect(page.getByRole('heading', { name: "This page isn't available" })).toBeVisible()
@@ -114,8 +121,9 @@ test('sign-in link, onboarding and an empty gallery', async ({ page }) => {
 })
 
 test('gallery with pages and folders, its menus and dialogs', async ({ page }) => {
-  await signUpPersonal(page, uniqueEmail('a11y-gallery'))
-  const org = await createOrganization(page, 'Access Co')
+  const email = uniqueEmail('a11y-gallery')
+  await signUpPersonal(page, email)
+  const org = await createOrganization(email, 'Access Co')
   await page.evaluate((id) => localStorage.setItem('the-artifact.workspace', id), org.id)
   const token = await connectAgent(page, org.id)
   await publishViaMcp(page.request, token, { title: 'Roadmap draft', html: HTML })
@@ -238,7 +246,7 @@ test('account and organization settings', async ({ page, browser }) => {
   await expect(security.getByRole('img', { name: 'QR code for your authenticator app' })).toBeVisible()
   await expectAccessible(page, 'account settings, authenticator setup')
 
-  const org = await createOrganization(page, 'Settings Co')
+  const org = await createOrganization(email, 'Settings Co')
   const guest = uniqueEmail('a11y-invited')
   expect((await page.request.post(`/api/organizations/${org.id}/invitations`, { data: { email: guest, role: 'member' } })).status()).toBe(201)
   await page.goto(`/organizations/${org.slug}/settings`)

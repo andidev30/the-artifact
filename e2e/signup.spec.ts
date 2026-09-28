@@ -2,37 +2,32 @@ import { randomBytes } from 'node:crypto'
 import { expect, test } from '@playwright/test'
 import { openSignInLink, signInLink, signUp, uniqueEmail } from './helpers'
 
-test('sign up with a magic link, create an organization, land in its workspace', async ({ page }) => {
+test('sign up with a magic link and land in a personal workspace; new organizations are coming soon', async ({ page }) => {
   const email = uniqueEmail('signup')
-  const slug = `e2e-${randomBytes(4).toString('hex')}`
 
+  // The pricing page's Organization link, from before the plan waited for billing, still starts personal
   await signUp(page, email, '/signup?plan=organization')
 
-  // Workspace step: the organization plan preselects "My team"
-  await expect(page.getByRole('heading', { name: /Who is this workspace for/ })).toBeVisible()
-  await expect(page.getByRole('radio', { name: /My team/ })).toBeChecked()
+  // Welcome step: no workspace choice to make, and no way to name an organization
+  await expect(page.getByRole('heading', { name: /^Welcome/ })).toBeVisible()
+  await expect(page.getByRole('radio')).toHaveCount(0)
+  await expect(page.getByText('Organizations for teams are coming soon.', { exact: false })).toBeVisible()
+  const rail = page.getByRole('list', { name: 'Setup progress' })
+  await expect(rail).not.toContainText('Name your organization')
   await page.getByRole('button', { name: 'Continue' }).click()
 
-  // Organization step, with a live address check
-  await expect(page.getByRole('heading', { name: 'Name your organization' })).toBeVisible()
-  await page.getByLabel('Organization name').fill('E2E Team')
-  await expect(page.getByLabel('Address')).toHaveValue('e2e-team')
-  await page.getByLabel('Address').fill('login')
-  await expect(page.locator('#slug-status')).toHaveText(/reserved/)
-  await expect(page.getByRole('button', { name: 'Create organization' })).toBeDisabled()
-  await page.getByLabel('Address').fill(slug)
-  await expect(page.locator('#slug-status')).toHaveText('This address is available.')
-  await page.getByRole('button', { name: 'Create organization' }).click()
-
   await expect(page.getByRole('heading', { name: 'Connect your agent' })).toBeVisible()
-  await expect(page.getByText('E2E Team is ready.')).toBeVisible()
+  await expect(page.getByText('Your workspace is ready.')).toBeVisible()
   await page.getByRole('link', { name: 'Go to your pages' }).click()
 
   await expect(page).toHaveURL(/\/app$/)
   await expect(page.getByRole('heading', { name: 'Pages', exact: true })).toBeVisible()
-  await expect(page.getByText('Everything published to E2E Team. Your role: Owner.')).toBeVisible()
-  await expect(page.getByRole('tab', { name: 'E2E Team' })).toHaveAttribute('aria-selected', 'true')
   await expect(page.getByText(email)).toBeVisible()
+
+  // The API refuses a new organization, with a reason written for people
+  const refused = await page.request.post('/api/organizations', { data: { name: 'E2E Team', slug: `e2e-${randomBytes(4).toString('hex')}` } })
+  expect(refused.status()).toBe(403)
+  expect((await refused.json()).error).toMatch(/^New organizations are coming soon\./)
 
   // Onboarding runs once
   await page.goto('/onboarding')

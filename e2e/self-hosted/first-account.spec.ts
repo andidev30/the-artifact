@@ -15,12 +15,12 @@ test('the first account on a fresh install becomes its admin and names the serve
   const email = uniqueEmail('sh-first')
   await signUp(page, email)
 
-  // Straight to naming the organization: there is no Just me / My team choice to make
+  // Straight to naming the organization, with no welcome step before it
   await expect(page.getByRole('heading', { name: /Name your organization/ })).toBeVisible()
   await expect(page.getByRole('radio')).toHaveCount(0)
   const rail = page.getByRole('list', { name: 'Setup progress' })
   await expect(rail).toContainText('Name your organization')
-  await expect(rail).not.toContainText('Choose a workspace')
+  await expect(rail).not.toContainText('Your workspace')
   await expect(page.getByRole('button', { name: 'Skip, just me for now' })).toBeVisible()
   await expectAccessible(page, 'self-hosted onboarding')
 
