@@ -131,7 +131,10 @@ jobs:
             echo "::notice::HOSTED_DISPATCH_TOKEN is not set, so the hosted service isn't deployed (see ee/ops/runbook.md)"
             exit 0
           fi
-          gh workflow run hosted-migrate.yml -R andidev30/the-artifact-backups -f ref="$TAG"
+          # REST, not `gh workflow run`: that looks up the default branch over GraphQL, which the
+          # fine-grained token can't
+          gh api -X POST repos/andidev30/the-artifact-backups/actions/workflows/hosted-migrate.yml/dispatches \
+            -f ref=main -f "inputs[ref]=$TAG"
           echo "Hosted migrate started for $TAG in andidev30/the-artifact-backups" >> "$GITHUB_STEP_SUMMARY"
 
   # The CLI versions on its own (tags cli-vX.Y.Z, packages/cli/CHANGELOG.md). npm trusts this
