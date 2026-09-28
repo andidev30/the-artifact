@@ -233,11 +233,58 @@
   box-shadow: none;
 }
 
+.comment-thread:focus-visible {
+  outline: 2px solid var(--line);
+  outline-offset: 2px;
+}
+
+/* What a thread is about; the numbered circle matches its pin on the page */
+.comment-anchor {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
+}
+
+.comment-anchor p {
+  flex: 1 1 160px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.comment-pinned {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  min-width: 0;
+  margin-right: auto;
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
+}
+
+.comment-pinned-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.comment-pin-start {
+  margin-right: auto;
+}
+
 @media (max-width: 640px) {
   .comments-panel {
     position: absolute;
     inset: 0;
     width: auto;
     border-left: 0;
+  }
+
+  /* The page is what people pick from; the panel comes back once they have */
+  .comments-panel[data-picking] {
+    display: none;
   }
 }

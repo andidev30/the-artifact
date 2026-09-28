@@ -20,6 +20,7 @@ import { db, schema } from './db/index.js'
 import type { Artifact } from './db/schema.js'
 import { env } from './env.js'
 import { checkPath, ENTRY_PATH } from './files.js'
+import { HELPER_MARK, HELPER_TAG, withFrameHelper } from './frame-helper.js'
 import { clientIp } from './limits.js'
 import { isGrant, linkPassFor, signGrant, verifyGrant } from './links.js'
 import { onUnhandledError } from './metrics.js'
@@ -150,12 +151,20 @@ export async function serveVersion(c: Context<AuthEnv>) {
   if (!pathname.startsWith(base)) return notFound(c)
   let rest = pathname.slice(base.length)
   let token: string | null = null
-  if (rest.startsWith('~')) {
+  // Up to two segments before the file's path, which can't start with "~": a link token, and the mark
+  // that asks for the comment helper in HTML files (frame-helper.ts). Relative links keep both.
+  let helper = false
+  for (let i = 0; i < 2 && rest.startsWith('~'); i++) {
     const slash = rest.indexOf('/')
     if (slash === -1) return c.redirect(`${pathname}/`, 301)
-    token = rest.slice(1, slash)
+    const segment = rest.slice(0, slash)
+    if (segment === HELPER_MARK && !helper) helper = true
+    else if (token === null && segment !== HELPER_MARK) token = segment.slice(1)
+    else return notFound(c)
     rest = rest.slice(slash + 1)
   }
+  if (rest.startsWith('~')) return notFound(c)
+  const mark = helper ? `${HELPER_MARK}/` : ''
   let path: string
   try {
     path = rest.split('/').map(decodeURIComponent).join('/')
@@ -212,7 +221,7 @@ export async function serveVersion(c: Context<AuthEnv>) {
       query.delete('k')
     }
     const search = query.size ? `?${query}` : ''
-    return c.body(null, 302, { Location: `${env.contentOrigin}${prefix}${rest}${search}`, 'Cache-Control': 'no-store', Vary: 'Cookie' })
+    return c.body(null, 302, { Location: `${env.contentOrigin}${prefix}${mark}${rest}${search}`, 'Cache-Control': 'no-store', Vary: 'Cookie' })
   }
 
   // A browser opening a page that needs to know who is looking, or that the link's key and password
@@ -222,7 +231,7 @@ export async function serveVersion(c: Context<AuthEnv>) {
     if (signed) {
       query.delete('k')
       const search = query.size ? `?${query}` : ''
-      return c.body(null, 302, { Location: `${base}~${signed}/${rest}${search}`, 'Cache-Control': 'no-store', ...(onContent ? {} : { Vary: 'Cookie' }) })
+      return c.body(null, 302, { Location: `${base}~${signed}/${mark}${rest}${search}`, 'Cache-Control': 'no-store', ...(onContent ? {} : { Vary: 'Cookie' }) })
     }
   }
 
@@ -248,14 +257,20 @@ export async function serveVersion(c: Context<AuthEnv>) {
   if (path === ENTRY_PATH) {
     etag = v.htmlSha256.slice(0, 32)
     contentType = 'text/html; charset=utf-8'
+    if (helper) etag = `${etag.slice(0, 23)}-${HELPER_TAG}`
     // Unchanged pages revalidate without a trip to storage
     body = c.req.header('if-none-match') === `"${etag}"` ? '' : await versionHtml(v)
+    if (helper && body) body = withFrameHelper(body)
   } else {
     const file = await getFile(v, path)
     if (!file) return notFound(c)
     body = file.content
     contentType = file.contentType
     etag = file.sha256.slice(0, 32)
+    if (helper && contentType.startsWith('text/html')) {
+      body = withFrameHelper(file.content.toString('utf8'))
+      etag = `${etag.slice(0, 23)}-${HELPER_TAG}`
+    }
   }
 
   const headers: Record<string, string> = {

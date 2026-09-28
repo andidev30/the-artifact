@@ -6,6 +6,7 @@ import {
   canDeleteComment,
   canEditComment,
   canResolve,
+  checkAnchor,
   checkBody,
   CommentCursorError,
   commentAccess,
@@ -47,6 +48,7 @@ function view(comment: ListedComment, userId: string, moderator: boolean) {
     author: comment.authorLabel,
     mine,
     postedWith: comment.postedWith,
+    anchor: comment.anchor,
     createdAt: comment.createdAt,
     editedAt: comment.editedAt,
     canEdit: mine,
@@ -91,23 +93,28 @@ comments.get('/', async (c) => {
   }
 })
 
-// { body } starts a thread; { body, replyTo: <comment id> } replies in the thread of that comment
+// { body } starts a thread, { body, anchor } one about an element of the page (see checkAnchor);
+// { body, replyTo: <comment id> } replies in the thread of that comment
 comments.post('/', async (c) => {
   const page = await load(c)
   if (!page) return c.json({ error: 'Not found' }, 404)
   const user = c.get('user')!
-  const input = (await c.req.json().catch(() => ({}))) as { body?: unknown; replyTo?: unknown }
+  const input = (await c.req.json().catch(() => ({}))) as { body?: unknown; replyTo?: unknown; anchor?: unknown }
   const checked = checkBody(input.body)
   if ('error' in checked) return c.json({ error: checked.error, field: 'body' }, 400)
+  const anchored = checkAnchor(input.anchor, page.artifact.currentVersion)
+  if ('error' in anchored) return c.json({ error: anchored.error, field: 'anchor' }, 400)
+  const hasReplyTo = input.replyTo !== undefined && input.replyTo !== null
+  if (hasReplyTo && anchored.anchor) return c.json({ error: "A reply can't be pinned to an element. Start a new comment instead.", field: 'anchor' }, 400)
   let replyTo: Comment | null = null
-  if (input.replyTo !== undefined && input.replyTo !== null) {
+  if (hasReplyTo) {
     replyTo = typeof input.replyTo === 'string' ? await findComment(page.artifact, input.replyTo) : null
     if (!replyTo) return c.json({ error: 'That comment was deleted.' }, 404)
   }
   const busy = await limitRequest(c, 'comment', user.id, 'You have written a lot of comments in a short time.')
   if (busy) return busy
   try {
-    const { comment } = await addComment(page.artifact, user, checked.body, { replyTo })
+    const { comment } = await addComment(page.artifact, user, checked.body, { replyTo, anchor: anchored.anchor })
     return c.json(single(comment, user, page.moderator), 201)
   } catch (err) {
     if (err instanceof CommentError) return c.json({ error: err.message }, 404)

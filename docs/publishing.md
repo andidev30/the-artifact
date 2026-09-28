@@ -216,7 +216,7 @@ The link needs no sign-in, but it only works for the person the agent is connect
 
 ### list_comments
 
-Reads the [comments](/docs/comments) on a page: threads oldest first, each with its replies, the author, the agent it was posted through (if any) and the version that was current when it was written. Resolved threads are left out unless `include_resolved` is set. For anyone who can open the page. Agents are told to read comments before publishing a new version, and `get_artifact` says how many threads are open.
+Reads the [comments](/docs/comments) on a page: threads oldest first, each with its replies, the author, the agent it was posted through (if any) and the version that was current when it was written. A thread [pinned to an element](/docs/comments#pinning-a-comment-to-an-element) also says which: its CSS selector, the HTML file it is in, the version it was picked on, the element's text then and roughly where it was on the page. Resolved threads are left out unless `include_resolved` is set. For anyone who can open the page. Agents are told to read comments before publishing a new version, and `get_artifact` says how many threads are open.
 
 | Argument | Required | Meaning |
 | --- | --- | --- |
@@ -227,12 +227,13 @@ Reads the [comments](/docs/comments) on a page: threads oldest first, each with 
 
 ### add_comment
 
-Starts a new comment thread on a page, for example to say what a new version changed. The comment is posted as the person the agent is connected as, marked with the agent's name.
+Starts a new comment thread on a page, for example to say what a new version changed, optionally pinned to one element. The comment is posted as the person the agent is connected as, marked with the agent's name.
 
 | Argument | Required | Meaning |
 | --- | --- | --- |
 | `artifact_id` | yes | Id or link of the page |
 | `body` | yes | Plain text, up to 5,000 characters |
+| `anchor` | no | Pins the comment to one element of the page, shown there in the viewer: `selector` (a CSS selector, up to 500 characters, required), `snippet` (the element's text, up to 200 characters, to find it again if the selector stops matching), `path` (the HTML file, `index.html` when left out) and `version` (the current one when left out). Left out, the comment is about the whole page |
 
 ### reply_comment
 

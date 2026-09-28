@@ -404,6 +404,16 @@ export const artifactShares = pgTable(
   (t) => [primaryKey({ columns: [t.artifactId, t.email] }), index('artifact_shares_email_idx').on(t.email)],
 )
 
+// Where on a page a comment points: a CSS selector and the element's text when it was picked, in
+// one HTML file of one version. rect is its box as fractions of the page's width and height.
+export type CommentAnchor = {
+  version: number
+  selector: string
+  snippet: string
+  path: string
+  rect?: { x: number; y: number; w: number; h: number }
+}
+
 // Comments on a page, from anyone signed in who can open it. One level of threads: a comment with no
 // parent starts a thread and replies point at it, never at another reply. Deleting a thread's first
 // comment deletes its replies.
@@ -423,6 +433,9 @@ export const artifactComments = pgTable(
     version: integer('version').notNull(),
     // MCP client that posted it for its person; null for comments written in the web app
     postedWith: text('posted_with'),
+    // The element of the page a thread's first comment is about; null for comments on the whole page.
+    // Picked inside the page's sandboxed frame, so every field was checked as untrusted (checkAnchor).
+    anchor: jsonb('anchor').$type<CommentAnchor>(),
     editedAt: timestamp('edited_at', { withTimezone: true }),
     // Only set on the first comment of a thread
     resolvedAt: timestamp('resolved_at', { withTimezone: true }),

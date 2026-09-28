@@ -123,6 +123,10 @@ Other clients, HTTPS, email and backups are covered in [Self-hosting](docs/self-
 | `restore_version` | Makes an older version current again |
 | `list_views` | How often a page was opened, and who opened it |
 | `download_artifact` | A link to download a page and its files as a zip |
+| `list_comments` | Reads the comments on a page, with the element each pinned one is about |
+| `add_comment` | Starts a comment thread, on the whole page or pinned to an element |
+| `reply_comment` | Replies in a comment's thread |
+| `resolve_comment` | Resolves or reopens a thread |
 
 Arguments and limits are in [Publishing pages](docs/publishing.md).
 

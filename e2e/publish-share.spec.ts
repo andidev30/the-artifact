@@ -34,8 +34,8 @@ test('publish a page, open it, share it, and open it by link while signed out', 
   await expect(frame.locator('body')).toHaveAttribute('data-ran', 'yes')
   await expect(page.locator('iframe.viewer-frame')).toHaveAttribute('sandbox', /allow-scripts/)
   await expect(page.locator('iframe.viewer-frame')).not.toHaveAttribute('sandbox', /allow-same-origin/)
-  // Loaded from its own URL (not srcdoc), so a page's files resolve by relative paths
-  await expect(page.locator('iframe.viewer-frame')).toHaveAttribute('src', `/api/artifacts/${slug}/v/1/`)
+  // Loaded from its own URL (not srcdoc), so a page's files resolve by relative paths; signed in, with the comment helper
+  await expect(page.locator('iframe.viewer-frame')).toHaveAttribute('src', `/api/artifacts/${slug}/v/1/~comments/`)
   await expect(page.locator('iframe.viewer-frame')).not.toHaveAttribute('srcdoc', /.*/)
 
   // Share with a person
@@ -155,6 +155,6 @@ test('a restricted multi-file page loads its CSS, JS and images in the viewer an
   // Restoring brings the files back as version 3
   await page.getByRole('button', { name: 'Restore this version' }).click()
   await expect(page.getByText(/Version 3, updated/)).toBeVisible()
-  await expect(page.locator('iframe.viewer-frame')).toHaveAttribute('src', `/api/artifacts/${slug}/v/3/`)
+  await expect(page.locator('iframe.viewer-frame')).toHaveAttribute('src', `/api/artifacts/${slug}/v/3/~comments/`)
   await expect(frame.locator('#data')).toHaveText('loaded')
 })

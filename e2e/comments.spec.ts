@@ -101,3 +101,52 @@ test('comment on a page, reply, resolve, and read it all from an agent', async (
   await expect(anon.getByRole('button', { name: /Comments/ })).toHaveCount(0)
   await anonymous.close()
 })
+
+test('pin a comment to an element, see its pin, and read the element from an agent', async ({ page }) => {
+  await signUpPersonal(page, uniqueEmail('comments-pins'))
+  const token = await connectAgent(page)
+  const html = '<!doctype html><h1>Plan</h1><section id="revenue"><h2>Revenue by month</h2><p>Numbers</p></section>'
+  const slug = await publishViaMcp(page.request, token, { title: `Pins ${Date.now()}`, html })
+
+  await page.goto(`/a/${slug}`)
+  const frame = page.frameLocator('iframe.viewer-frame')
+  await expect(frame.getByRole('heading', { name: 'Revenue by month' })).toBeVisible()
+  await page.getByRole('button', { name: 'Comments' }).click()
+  const panel = page.getByRole('complementary', { name: 'Comments' })
+
+  // Pick with the mouse: the click picks the element instead of reaching the page
+  await panel.getByRole('button', { name: 'Pin to an element' }).click()
+  await expect(page.getByRole('group', { name: 'Pin a comment to an element' })).toBeVisible()
+  await frame.getByRole('heading', { name: 'Revenue by month' }).click()
+  await expect(panel.getByText('Pinned to “Revenue by month”')).toBeVisible()
+  await expect(panel.getByLabel('New comment')).toBeFocused()
+  await panel.getByLabel('New comment').fill('The axis is wrong')
+  await panel.getByRole('button', { name: 'Comment', exact: true }).click()
+  await expect(panel.getByText('About “Revenue by month”')).toBeVisible()
+
+  // Its pin is drawn over the page and leads to the thread
+  const pin = page.getByRole('button', { name: 'Comment 1: The axis is wrong' })
+  await expect(pin).toBeVisible()
+  await pin.click()
+  await expect(panel.locator('[data-thread]')).toBeFocused()
+
+  // Pick with the keyboard: arrow keys in the frame, Enter chooses
+  await panel.getByRole('button', { name: 'Pin to an element' }).click()
+  await expect(page.locator('iframe.viewer-frame')).toBeFocused()
+  await page.keyboard.press('ArrowDown')
+  await page.keyboard.press('Enter')
+  await expect(panel.getByText('Pinned to “Plan”')).toBeVisible()
+  await panel.getByRole('button', { name: 'Unpin' }).click()
+  await expect(panel.getByRole('button', { name: 'Pin to an element' })).toBeVisible()
+
+  // The agent reads which element the comment is about
+  const listed = await callTool(page.request, token, 'list_comments', { artifact_id: slug })
+  expect(listed).toContain('[about the element "#revenue > h2:nth-of-type(1)" in index.html of version 1, which read "Revenue by month"')
+
+  // A version without the element: the thread says so and keeps the text it had
+  await publishViaMcp(page.request, token, { title: 'Pins', html: '<!doctype html><h1>Plan</h1>', artifact_id: slug })
+  await page.reload()
+  await page.getByRole('button', { name: 'Comments' }).click()
+  await expect(panel.getByText('The element this comment is about has changed. It was “Revenue by month”.')).toBeVisible()
+  await expect(page.locator('.pin')).toHaveCount(0)
+})

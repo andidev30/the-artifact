@@ -2,12 +2,14 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { downloadUrl, FRAME_SANDBOX, fetchMe, getArtifact, logout, PasswordNeeded, unlockPage, versionUrl, type ArtifactPage, type Visibility } from '../api'
 import { CommentsPanel } from '../components/CommentsPanel'
+import { PickBar, PinLayer, useFrameHelper } from '../components/PagePins'
 import { HistoryPanel, OldVersionBar, type Viewing } from '../components/HistoryPanel'
 import { DeleteDialog, PageMenu, RenameDialog, type MenuItem } from '../components/PageActions'
 import { ShareDialog } from '../components/ShareDialog'
 import { ViewsPanel } from '../components/ViewsPanel'
 import { Wordmark } from '../components/Wordmark'
 import { LOGIN_URL } from '../config'
+import { HELPER_MARK } from '../frameMessages'
 import { timeAgo } from '../time'
 import './Auth.css'
 import './Viewer.css'
@@ -230,6 +232,18 @@ function PageFrame({ page, email, onChange }: { page: ArtifactPage; email: strin
   const [viewing, setViewing] = useState<Viewing | null>(null)
   const [dialog, setDialog] = useState<'rename' | 'delete' | null>(null)
   const [announce, setAnnounce] = useState('')
+  // Signed-in people get the comment helper in the frame, to pin comments to elements of the page
+  const frameRef = useRef<HTMLIFrameElement>(null)
+  const frameVersion = viewing ? viewing.version : page.version
+  const helper = useFrameHelper(frameRef, Boolean(page.comments), frameVersion)
+  // A pin that was chosen: the panel moves to its thread. An object, so choosing the same pin again moves there again.
+  const [focusThread, setFocusThread] = useState<{ id: string } | null>(null)
+  const { stopPick, picking } = helper
+  // Closing the comments ends picking
+  // biome-ignore lint/correctness/useExhaustiveDependencies: stopPick changes on every render
+  useEffect(() => {
+    if (panel !== 'comments' && picking) stopPick()
+  }, [panel, picking])
 
   // Downloads what the frame shows, which can be an older version picked in the history
   const menu: MenuItem[] = [{ label: 'Download', download: downloadUrl(page.slug, viewing?.version) }]
@@ -340,13 +354,22 @@ function PageFrame({ page, email, onChange }: { page: ArtifactPage; email: strin
         />
       )}
       <main id="main" className="viewer-body">
-        <iframe
-          key={viewing ? `v${viewing.version}` : 'current'}
-          className="viewer-frame"
-          title={viewing ? `${page.title}, version ${viewing.version}` : page.title}
-          sandbox={FRAME_SANDBOX}
-          src={versionUrl(page.slug, viewing ? viewing.version : page.version)}
-        />
+        <div className="viewer-stage">
+          <PickBar helper={helper} />
+          <iframe
+            ref={frameRef}
+            key={viewing ? `v${viewing.version}` : 'current'}
+            className="viewer-frame"
+            title={viewing ? `${page.title}, version ${viewing.version}` : page.title}
+            sandbox={FRAME_SANDBOX}
+            src={`${versionUrl(page.slug, frameVersion)}${page.comments ? HELPER_MARK : ''}`}
+            onLoad={helper.onFrameLoad}
+          />
+          {panel === 'comments' && <PinLayer helper={helper} onOpen={(id) => setFocusThread({ id })} />}
+          <span className="visually-hidden" role="status">
+            {helper.hover}
+          </span>
+        </div>
         {panel === 'history' && (
           <HistoryPanel slug={page.slug} currentVersion={page.version} selected={viewing?.version ?? page.version} onSelect={setViewing} onClose={closePanel} />
         )}
@@ -356,6 +379,8 @@ function PageFrame({ page, email, onChange }: { page: ArtifactPage; email: strin
             slug={page.slug}
             currentVersion={page.version}
             onClose={closePanel}
+            helper={helper}
+            focusThread={focusThread}
             onSeen={() => onChange({ ...pageRef.current, comments: { total: pageRef.current.comments?.total ?? 0, unread: 0 } })}
             onTotalChange={(delta) => {
               const counts = pageRef.current.comments ?? { total: 0, unread: 0 }

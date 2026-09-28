@@ -308,6 +308,29 @@ test('viewer with its history, views and comments panels, and the share dialog',
   await expectAccessible(page, 'viewer menu')
 })
 
+test('pinning a comment to an element, and its pin', async ({ page }) => {
+  await signUpPersonal(page, uniqueEmail('a11y-pins'))
+  const token = await connectAgent(page)
+  const slug = await publishViaMcp(page.request, token, { title: 'Launch plan', html: '<!doctype html><title>Plan</title><h1>Plan</h1><p>Revenue</p>' })
+
+  await page.goto(`/a/${slug}`)
+  await expect(page.frameLocator('iframe.viewer-frame').getByRole('heading', { name: 'Plan' })).toBeVisible()
+  await page.getByRole('button', { name: 'Comments' }).click()
+  const comments = page.getByRole('complementary', { name: 'Comments' })
+  await comments.getByRole('button', { name: 'Pin to an element' }).click()
+  await expect(page.getByRole('group', { name: 'Pin a comment to an element' })).toBeVisible()
+  await expectAccessible(page, 'picking an element')
+  await page.locator('iframe.viewer-frame').focus()
+  await page.keyboard.press('ArrowDown')
+  await page.keyboard.press('Enter')
+  await expect(comments.getByText('Pinned to “Plan”')).toBeVisible()
+  await expectAccessible(page, 'comment pinned to an element')
+  await comments.getByLabel('New comment').fill('Bigger heading')
+  await comments.getByRole('button', { name: 'Comment', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Comment 1: Bigger heading' })).toBeVisible()
+  await expectAccessible(page, 'thread with a pin on the page')
+})
+
 test('account and organization settings', async ({ page, browser }) => {
   const email = uniqueEmail('a11y-settings')
   await signUpPersonal(page, email)
