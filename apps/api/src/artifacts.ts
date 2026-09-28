@@ -1,14 +1,16 @@
 import { randomBytes } from 'node:crypto'
-import { and, asc, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from 'drizzle-orm'
+import { and, asc, count, desc, eq, ilike, inArray, isNull, ne, or, sql, type SQL } from 'drizzle-orm'
 import { db, schema } from './db/index.js'
 import type { Artifact, Visibility } from './db/schema.js'
 import { env } from './env.js'
 import { checkHtmlSize, checkManifest, MAX_HTML_BYTES, prepareFiles, PublishError, sha256, type FileInput, type FileMeta, type ManifestEntry } from './files.js'
+import { belongsTo, checkFolderName, ensureFolder, FolderError } from './folders.js'
 import { holdStorageLock } from './gc.js'
-import { checkQuota } from './quota.js'
+import { checkQuota, type Workspace } from './quota.js'
 import { getBlob, getText, putBlob } from './storage.js'
 import { checkUploadId, claimUploads } from './uploads.js'
 import { queueThumbnail } from './thumbnails.js'
+import { UUID_RE } from './validation.js'
 
 export { MAX_HTML_BYTES, PublishError }
 const SLUG_ALPHABET = 'abcdefghijkmnpqrstuvwxyz23456789'
@@ -107,6 +109,9 @@ type PublishTarget = {
   title: string
   slug?: string
   visibility?: Visibility
+  // Name of a folder of the connected workspace to file the page into, created when missing; '' for no folder.
+  // Left out, a new page goes in no folder and an existing one stays where it is.
+  folder?: string
 }
 
 type PublishInput = PublishTarget & {
@@ -160,10 +165,30 @@ export async function publishUpload(input: PublishTarget & { uploadId: string; f
   return publishContent(input, { htmlSha256: html.sha256, htmlSize: html.size, files, store: () => claimUploads(input.uploadId, [html, ...files]) })
 }
 
+// undefined: leave the folder as it is; null: no folder
+function folderChoice(folder: string | undefined): string | null | undefined {
+  if (folder === undefined) return undefined
+  if (!folder.trim()) return null
+  const checked = checkFolderName(folder)
+  if ('error' in checked) throw new PublishError(checked.error)
+  return checked.name
+}
+
+async function folderId(tx: Tx, ws: Workspace, name: string | null, userId: string): Promise<string | null> {
+  if (name === null) return null
+  try {
+    return (await ensureFolder(tx, ws, name, userId)).id
+  } catch (err) {
+    if (err instanceof FolderError) throw new PublishError(err.message)
+    throw err
+  }
+}
+
 const contentSize = (content: Content) => content.htmlSize + content.files.reduce((sum, f) => sum + f.size, 0)
 
 async function publishContent(input: PublishTarget, content: Content): Promise<Artifact> {
   const title = input.title.trim().slice(0, 200) || 'Untitled page'
+  const folder = folderChoice(input.folder)
 
   if (input.slug) {
     const existing = await findBySlug(input.slug)
@@ -173,12 +198,19 @@ async function publishContent(input: PublishTarget, content: Content): Promise<A
     if (input.visibility === 'organization' && !existing.organizationId) {
       throw new PublishError('This page is in a personal workspace. Use private (restricted) or link.')
     }
+    const ws = { userId: existing.ownerId, organizationId: existing.organizationId }
+    // Folder names are looked up in the connected workspace, so a page from elsewhere (shared with
+    // this person) can't be filed from here
+    if (folder !== undefined && (existing.organizationId !== input.organizationId || !(await belongsTo(input.userId, ws)))) {
+      throw new PublishError("This page belongs to another workspace, so it can't be filed into a folder from here. Publish again without folder.")
+    }
     const { updated, versionId } = await db.transaction(async (tx) => {
       // Lock the page so two publishes (or a publish and a restore) can't pick the same number
       const [locked] = await tx.select().from(schema.artifacts).where(eq(schema.artifacts.id, existing.id)).for('update')
       await checkQuota(tx, { userId: locked.ownerId, organizationId: locked.organizationId }, { page: false, bytes: contentSize(content) })
       const version = locked.currentVersion + 1
       const versionId = await insertVersion(tx, { artifactId: existing.id, version, publishedWith: input.clientName, publishedBy: input.userId }, content)
+      const filed = folder === undefined ? {} : { folderId: await folderId(tx, ws, folder, input.userId) }
       const [updated] = await tx
         .update(schema.artifacts)
         .set({
@@ -187,6 +219,7 @@ async function publishContent(input: PublishTarget, content: Content): Promise<A
           updatedAt: new Date(),
           publishedWith: input.clientName,
           ...(input.visibility ? { visibility: input.visibility } : {}),
+          ...filed,
         })
         .where(eq(schema.artifacts.id, existing.id))
         .returning()
@@ -201,7 +234,8 @@ async function publishContent(input: PublishTarget, content: Content): Promise<A
     throw new PublishError('Organization visibility needs an organization workspace. Use private (restricted) or link.')
   }
   const { created, versionId } = await db.transaction(async (tx) => {
-    await checkQuota(tx, { userId: input.userId, organizationId: input.organizationId }, { page: true, bytes: contentSize(content) })
+    const ws = { userId: input.userId, organizationId: input.organizationId }
+    await checkQuota(tx, ws, { page: true, bytes: contentSize(content) })
     const [created] = await tx
       .insert(schema.artifacts)
       .values({
@@ -211,6 +245,7 @@ async function publishContent(input: PublishTarget, content: Content): Promise<A
         organizationId: input.organizationId,
         visibility,
         publishedWith: input.clientName,
+        folderId: await folderId(tx, ws, folder ?? null, input.userId),
       })
       .returning()
     const versionId = await insertVersion(tx, { artifactId: created.id, version: 1, publishedWith: input.clientName, publishedBy: input.userId }, content)
@@ -263,43 +298,120 @@ function titleMatches(query: string | undefined): SQL | undefined {
 }
 
 // Pages shown in a workspace: in an organization, shared pages plus your own private ones
-export async function listForWorkspace(userId: string, organizationId: string | null, limit = 50, query?: string) {
-  const scope = organizationId
-    ? and(
-        eq(schema.artifacts.organizationId, organizationId),
-        or(inArray(schema.artifacts.visibility, ['organization', 'link']), eq(schema.artifacts.ownerId, userId)),
-      )
-    : and(isNull(schema.artifacts.organizationId), eq(schema.artifacts.ownerId, userId))
-  const where = and(scope, titleMatches(query))
+export function pagesInWorkspace(userId: string, organizationId: string | null): SQL {
+  const a = schema.artifacts
+  return (
+    organizationId
+      ? and(eq(a.organizationId, organizationId), or(inArray(a.visibility, ['organization', 'link']), eq(a.ownerId, userId)))
+      : and(isNull(a.organizationId), eq(a.ownerId, userId))
+  ) as SQL
+}
 
-  return db
+export const PAGE_SIZE = 50
+export const MAX_PAGE_SIZE = 100
+
+// A list is read newest first, one page at a time. folder: undefined for every page, null for pages
+// in no folder, or a folder id. cursor: the next value of the page before.
+export type ListOptions = { limit?: number; query?: string; folder?: string | null; cursor?: string }
+
+export class CursorError extends Error {
+  constructor() {
+    super('This list changed while you were reading it. Start again from the first page.')
+  }
+}
+
+// The cursor is the (updated_at, id) of the last row: stable while pages are added or updated, since
+// a page that moves to the top only shows up on a new first page. updated_at goes through as text
+// with every microsecond, which a JavaScript Date would round to milliseconds and so skip or repeat rows.
+const CURSOR_AT = sql<string>`to_char(${schema.artifacts.updatedAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`
+const CURSOR_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/
+
+const encodeCursor = (at: string, id: string) => Buffer.from(`${at}|${id}`).toString('base64url')
+
+function after(cursor: string | undefined): SQL | undefined {
+  if (!cursor) return undefined
+  const [at = '', id = ''] = Buffer.from(cursor, 'base64url').toString('utf8').split('|')
+  if (!CURSOR_RE.test(at) || !UUID_RE.test(id)) throw new CursorError()
+  return sql`(${schema.artifacts.updatedAt}, ${schema.artifacts.id}) < (${at}::timestamptz, ${id}::uuid)`
+}
+
+function pageLimit(limit: number | undefined): number {
+  if (limit === undefined || !Number.isFinite(limit)) return PAGE_SIZE
+  return Math.min(MAX_PAGE_SIZE, Math.max(1, Math.floor(limit)))
+}
+
+// Rows one past the limit say whether there is a next page
+function paged<T extends { cursorAt: string; artifact: Artifact }>(rows: T[], limit: number) {
+  if (rows.length <= limit) return { rows, next: null }
+  const last = rows[limit - 1]
+  return { rows: rows.slice(0, limit), next: encodeCursor(last.cursorAt, last.artifact.id) }
+}
+
+function inFolder(folder: string | null | undefined): SQL | undefined {
+  if (folder === undefined) return undefined
+  return folder === null ? isNull(schema.artifacts.folderId) : eq(schema.artifacts.folderId, folder)
+}
+
+const NEWEST_FIRST = [desc(schema.artifacts.updatedAt), desc(schema.artifacts.id)]
+
+export async function listForWorkspace(userId: string, organizationId: string | null, opts: ListOptions = {}) {
+  const limit = pageLimit(opts.limit)
+  const rows = await db
     .select({
       artifact: schema.artifacts,
       ownerName: schema.users.name,
       ownerEmail: schema.users.email,
+      folderName: schema.folders.name,
+      cursorAt: CURSOR_AT,
     })
     .from(schema.artifacts)
     .innerJoin(schema.users, eq(schema.artifacts.ownerId, schema.users.id))
-    .where(where)
-    .orderBy(desc(schema.artifacts.updatedAt))
-    .limit(limit)
+    .leftJoin(schema.folders, eq(schema.artifacts.folderId, schema.folders.id))
+    .where(and(pagesInWorkspace(userId, organizationId), titleMatches(opts.query), inFolder(opts.folder), after(opts.cursor)))
+    .orderBy(...NEWEST_FIRST)
+    .limit(limit + 1)
+  return paged(rows, limit)
 }
 
-// Pages other people shared with this email address, newest first
-export async function listSharedWith(viewer: Viewer, limit = 50, query?: string) {
-  return db
+export async function countForWorkspace(userId: string, organizationId: string | null, opts: Pick<ListOptions, 'query' | 'folder'> = {}) {
+  const [row] = await db
+    .select({ n: count() })
+    .from(schema.artifacts)
+    .where(and(pagesInWorkspace(userId, organizationId), titleMatches(opts.query), inFolder(opts.folder)))
+  return row.n
+}
+
+// Pages other people shared with this email address. Their folders belong to the owner's workspace, so they aren't part of it.
+function sharedWith(viewer: Viewer, query: string | undefined): SQL {
+  return and(eq(schema.artifactShares.email, viewer.email.toLowerCase()), ne(schema.artifacts.ownerId, viewer.id), titleMatches(query)) as SQL
+}
+
+export async function listSharedWith(viewer: Viewer, opts: Omit<ListOptions, 'folder'> = {}) {
+  const limit = pageLimit(opts.limit)
+  const rows = await db
     .select({
       artifact: schema.artifacts,
       ownerName: schema.users.name,
       ownerEmail: schema.users.email,
       role: schema.artifactShares.role,
+      cursorAt: CURSOR_AT,
     })
     .from(schema.artifactShares)
     .innerJoin(schema.artifacts, eq(schema.artifactShares.artifactId, schema.artifacts.id))
     .innerJoin(schema.users, eq(schema.artifacts.ownerId, schema.users.id))
-    .where(and(eq(schema.artifactShares.email, viewer.email.toLowerCase()), titleMatches(query)))
-    .orderBy(desc(schema.artifacts.updatedAt))
-    .limit(limit)
+    .where(and(sharedWith(viewer, opts.query), after(opts.cursor)))
+    .orderBy(...NEWEST_FIRST)
+    .limit(limit + 1)
+  return paged(rows, limit)
+}
+
+export async function countSharedWith(viewer: Viewer, query?: string) {
+  const [row] = await db
+    .select({ n: count() })
+    .from(schema.artifactShares)
+    .innerJoin(schema.artifacts, eq(schema.artifactShares.artifactId, schema.artifacts.id))
+    .where(sharedWith(viewer, query))
+  return row.n
 }
 
 export function describeVisibility(v: Visibility): string {

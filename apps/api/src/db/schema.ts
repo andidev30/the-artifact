@@ -1,4 +1,5 @@
-import { boolean, index, integer, jsonb, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
+import { sql } from 'drizzle-orm'
+import { boolean, check, index, integer, jsonb, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid, type AnyPgColumn } from 'drizzle-orm/pg-core'
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -137,6 +138,25 @@ export const oauthTokens = pgTable(
 
 export const visibilityEnum = pgEnum('visibility', ['private', 'organization', 'link'])
 
+// Folders group pages inside one workspace: an organization's (organization_id set) or a person's
+// personal workspace (owner_id set). They never change who can open a page. One level, no nesting.
+export const folders = pgTable(
+  'folders',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id').references(() => organizations.id, { onDelete: 'cascade' }),
+    ownerId: uuid('owner_id').references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check('folders_one_workspace', sql`(${t.organizationId} is null) <> (${t.ownerId} is null)`),
+    uniqueIndex('folders_org_name_unique').on(t.organizationId, sql`lower(${t.name})`).where(sql`${t.organizationId} is not null`),
+    uniqueIndex('folders_owner_name_unique').on(t.ownerId, sql`lower(${t.name})`).where(sql`${t.organizationId} is null`),
+  ],
+)
+
 export const artifacts = pgTable(
   'artifacts',
   {
@@ -152,10 +172,19 @@ export const artifacts = pgTable(
     currentVersion: integer('current_version').notNull().default(1),
     // Name of the MCP client that published it, e.g. "claude-code"
     publishedWith: text('published_with'),
+    // Always a folder of the page's own workspace; null for no folder
+    folderId: uuid('folder_id').references((): AnyPgColumn => folders.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index('artifacts_owner_idx').on(t.ownerId), index('artifacts_org_idx').on(t.organizationId)],
+  // The gallery pages through a workspace newest first by (updated_at, id); these keep that an index scan
+  (t) => [
+    index('artifacts_owner_idx').on(t.ownerId, t.updatedAt, t.id),
+    index('artifacts_org_idx').on(t.organizationId, t.updatedAt, t.id),
+    index('artifacts_folder_idx').on(t.folderId, t.updatedAt, t.id),
+    // Title search with ILIKE; needs pg_trgm, see drizzle/0012_gallery_folders.sql
+    index('artifacts_title_trgm_idx').using('gin', t.title.op('gin_trgm_ops')),
+  ],
 )
 
 export const artifactVersions = pgTable(
@@ -267,6 +296,7 @@ export type User = typeof users.$inferSelect
 export type SignupPolicy = (typeof signupPolicyEnum.enumValues)[number]
 export type ShareRole = (typeof shareRoleEnum.enumValues)[number]
 export type Artifact = typeof artifacts.$inferSelect
+export type Folder = typeof folders.$inferSelect
 export type Visibility = (typeof visibilityEnum.enumValues)[number]
 export type Role = (typeof roleEnum.enumValues)[number]
 export type InviteRole = (typeof inviteRoleEnum.enumValues)[number]

@@ -78,6 +78,8 @@ Instance admins change these under **Server admin** (`/admin`); they are stored 
 | File path | 200 characters |
 | Thumbnail render | 8 seconds to load, 20 in all; 640×360 WebP of a 1280×720 viewport |
 | Page title | 200 characters |
+| Folders | 500 per workspace, names up to 80 characters |
+| Gallery and `list_artifacts` | 50 and 25 pages at a time by default, at most 100 |
 | People per share | 20 at a time |
 | Sign-in link | Works once, for 15 minutes, and is used when you press Continue on the page it opens (opening it alone uses nothing); a new one can be sent after 60 seconds |
 | Organization invitation | 7 days |

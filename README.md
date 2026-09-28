@@ -95,8 +95,10 @@ Other clients, HTTPS, email and backups are covered in [Self-hosting](docs/self-
 
 | Tool | Does |
 | --- | --- |
-| `publish_artifact` | Publishes a page (or a new version of one) and returns its link |
-| `list_artifacts` | Lists the most recently updated pages in the connected workspace |
+| `publish_artifact` | Publishes a page (or a new version of one), optionally into a folder, and returns its link |
+| `list_artifacts` | Lists the most recently updated pages in the connected workspace, by title or folder, a batch at a time |
+| `list_folders` | Lists the workspace's folders |
+| `move_artifact` | Files a page into a folder, or takes it out |
 | `get_artifact` | Reads a page's HTML and files, to edit it |
 | `rename_artifact` | Renames a page |
 | `set_artifact_visibility` | Restricted, organization, or anyone with the link |

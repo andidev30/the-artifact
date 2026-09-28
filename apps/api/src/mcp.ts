@@ -9,6 +9,8 @@ import {
   canEdit,
   canView,
   checkTitle,
+  countForWorkspace,
+  CursorError,
   deleteArtifact,
   describeVisibility,
   findBySlug,
@@ -18,6 +20,7 @@ import {
   versionHtml,
   listForWorkspace,
   listVersions,
+  MAX_PAGE_SIZE,
   MAX_TITLE_LENGTH,
   parseArtifactRef,
   publish,
@@ -31,6 +34,7 @@ import { allowed, downloadLink, TOKEN_HOURS } from './content.js'
 import { db, schema } from './db/index.js'
 import type { Artifact } from './db/schema.js'
 import { hit, rule, waitText, windowText } from './limits.js'
+import { canFile, checkFolderName, ensureFolder, fileInto, FolderError, folderNamed, listFolders, MAX_FOLDER_NAME, workspaceOf } from './folders.js'
 import { ALLOWED_EXTENSIONS, checkPath, ENTRY_PATH, isText, MAX_FILE_BYTES, MAX_FILES, MAX_HTML_BYTES, MAX_TOTAL_BYTES } from './files.js'
 import { MAX_PEOPLE_PER_INVITE, parseEmails, sharePeople, SharingError } from './sharing.js'
 import { authenticateBearer, RESOURCE_METADATA_URL, type McpAuth } from './oauth/server.js'
@@ -51,16 +55,33 @@ function text(t: string, isError = false) {
   return { content: [{ type: 'text' as const, text: t }], isError }
 }
 
-function published(artifact: Artifact, otherFiles: number) {
+async function folderName(artifact: Artifact): Promise<string | null> {
+  if (!artifact.folderId) return null
+  const [row] = await db.select({ name: schema.folders.name }).from(schema.folders).where(eq(schema.folders.id, artifact.folderId))
+  return row?.name ?? null
+}
+
+async function published(artifact: Artifact, otherFiles: number) {
   const verb = artifact.currentVersion === 1 ? 'Published' : `Published version ${artifact.currentVersion} of`
+  const folder = await folderName(artifact)
   return text(
     `${verb} "${artifact.title}".\n` +
       `Link: ${artifactUrl(artifact.slug)}\n` +
       `artifact_id: ${artifact.slug}\n` +
       (otherFiles ? `Files: index.html and ${otherFiles} more.\n` : '') +
+      (folder ? `Folder: ${folder}\n` : '') +
       `Visibility: ${describeVisibility(artifact.visibility)}.`,
   )
 }
+
+const folderArg = z
+  .string()
+  .optional()
+  .describe(
+    `Name of a folder in the connected workspace to file the page into, up to ${MAX_FOLDER_NAME} characters; it is created if there is none by that name ` +
+      '(names ignore case). An empty string takes the page out of its folder. Leave it out to keep an existing page where it is. ' +
+      'Folders only group pages in the gallery; they never change who can open a page.',
+  )
 
 const manifest = z
   .array(
@@ -90,6 +111,7 @@ function refusal(name: string, what: string, wait: number) {
 // One server per request (stateless), bound to the person and workspace behind the token
 function buildServer(auth: McpAuth) {
   const viewer = { id: auth.userId, email: auth.email }
+  const workspace = { userId: auth.userId, organizationId: auth.organizationId }
   const server = new McpServer({ name: 'the-artifact', version: '0.1.0' })
 
   // A limit is reported as the tool's error, which the agent reads and can pass on. An HTTP 429
@@ -128,9 +150,10 @@ function buildServer(auth: McpAuth) {
           .describe(`Files next to the HTML. Allowed types: ${ALLOWED_EXTENSIONS.join(', ')}.`),
         artifact_id: z.string().optional().describe('Id or link of an existing page to publish a new version of'),
         visibility: visibility.optional(),
+        folder: folderArg,
       }),
     },
-    limited(async ({ title, html, files, artifact_id, visibility }) => {
+    limited(async ({ title, html, files, artifact_id, visibility, folder }) => {
       try {
         const artifact = await publish({
           userId: auth.userId,
@@ -142,8 +165,9 @@ function buildServer(auth: McpAuth) {
           files,
           slug: artifact_id ? parseArtifactRef(artifact_id) : undefined,
           visibility,
+          folder,
         })
-        return published(artifact, files?.length ?? 0)
+        return await published(artifact, files?.length ?? 0)
       } catch (err) {
         if (err instanceof PublishError) return text(err.message, true)
         throw err
@@ -196,9 +220,10 @@ function buildServer(auth: McpAuth) {
           files: manifest.describe('The same files you passed to prepare_upload'),
           artifact_id: z.string().optional().describe('Id or link of an existing page to publish a new version of'),
           visibility: visibility.optional(),
+          folder: folderArg,
         }),
       },
-      limited(async ({ title, upload_id, files, artifact_id, visibility }) => {
+      limited(async ({ title, upload_id, files, artifact_id, visibility, folder }) => {
         try {
           const artifact = await publishUpload({
             userId: auth.userId,
@@ -210,8 +235,9 @@ function buildServer(auth: McpAuth) {
             files,
             slug: artifact_id ? parseArtifactRef(artifact_id) : undefined,
             visibility,
+            folder,
           })
-          return published(artifact, files.length - 1)
+          return await published(artifact, files.length - 1)
         } catch (err) {
           if (err instanceof PublishError) return text(err.message, true)
           throw err
@@ -224,18 +250,97 @@ function buildServer(auth: McpAuth) {
     'list_artifacts',
     {
       title: 'List pages',
-      description: 'List the most recently updated pages in the connected workspace.',
+      description:
+        'List the pages in the connected workspace, most recently updated first, one batch at a time. ' +
+        'Narrow it with query (words in the title) or folder. When there are more, the answer ends with a cursor: pass it back to get the next ones.',
+      inputSchema: z.object({
+        query: z.string().max(200).optional().describe('Only pages whose title contains this, ignoring case'),
+        folder: z.string().optional().describe('Only pages in the folder with this name; an empty string for pages in no folder'),
+        limit: z.number().int().min(1).max(MAX_PAGE_SIZE).optional().describe(`How many to list, 1 to ${MAX_PAGE_SIZE}; 25 when left out`),
+        cursor: z.string().optional().describe('The cursor from the end of the previous answer, for the next pages'),
+      }),
+      annotations: { readOnlyHint: true },
+    },
+    limited(async ({ query, folder, limit, cursor }) => {
+      let folderId: string | null | undefined
+      if (folder !== undefined) {
+        const found = folder.trim() ? await folderNamed(db, workspace, folder.trim()) : null
+        if (folder.trim() && !found) return text(`There is no folder called "${folder.trim()}" in this workspace. Call list_folders to see them.`, true)
+        folderId = found?.id ?? null
+      }
+      const opts = { query, folder: folderId, cursor, limit: limit ?? 25 }
+      let listed: Awaited<ReturnType<typeof listForWorkspace>>
+      try {
+        listed = await listForWorkspace(auth.userId, auth.organizationId, opts)
+      } catch (err) {
+        if (err instanceof CursorError) return text(err.message, true)
+        throw err
+      }
+      if (listed.rows.length === 0) {
+        if (cursor) return text('No more pages.')
+        return text(query || folder !== undefined ? 'No pages match.' : 'No pages yet. Use publish_artifact to publish one.')
+      }
+      const total = cursor ? null : await countForWorkspace(auth.userId, auth.organizationId, opts)
+      const lines = listed.rows.map(
+        ({ artifact: a, folderName }) =>
+          `- ${a.title} (artifact_id: ${a.slug}, v${a.currentVersion}, ${VISIBILITY_LABEL[a.visibility]}${folderName ? `, folder: ${folderName}` : ''}) ${artifactUrl(a.slug)}`,
+      )
+      return text(
+        (total !== null && total > listed.rows.length ? `${total} pages match; the ${listed.rows.length} most recently updated:\n` : '') +
+          lines.join('\n') +
+          (listed.next ? `\nThere are more. To see them, call list_artifacts again with the same arguments and cursor: ${listed.next}` : ''),
+      )
+    }),
+  )
+
+  server.registerTool(
+    'list_folders',
+    {
+      title: 'List folders',
+      description:
+        'List the folders of the connected workspace, with how many pages you can see in each. Folders group pages; they never change who can open one.',
       inputSchema: z.object({}),
       annotations: { readOnlyHint: true },
     },
     limited(async () => {
-      const rows = await listForWorkspace(auth.userId, auth.organizationId, 25)
-      if (rows.length === 0) return text('No pages yet. Use publish_artifact to publish one.')
-      return text(
-        rows
-          .map(({ artifact: a }) => `- ${a.title} (artifact_id: ${a.slug}, v${a.currentVersion}, ${VISIBILITY_LABEL[a.visibility]}) ${artifactUrl(a.slug)}`)
-          .join('\n'),
-      )
+      const rows = await listFolders(workspace, auth.userId)
+      if (rows.length === 0) return text('This workspace has no folders yet. Pass folder to publish_artifact or move_artifact to create one.')
+      return text(rows.map((f) => `- ${f.name} (${f.pages} ${f.pages === 1 ? 'page' : 'pages'})`).join('\n'))
+    }),
+  )
+
+  server.registerTool(
+    'move_artifact',
+    {
+      title: 'Move a page to a folder',
+      description:
+        'File a page into a folder of the connected workspace, or take it out of its folder, without publishing a new version. ' +
+        'The folder is created if there is none by that name. For pages you can edit in this workspace. The link and who can open the page stay the same.',
+      inputSchema: z.object({
+        artifact_id: z.string().describe('Id or link of the page'),
+        folder: z.string().describe(`Folder name, up to ${MAX_FOLDER_NAME} characters, or an empty string to take the page out of its folder`),
+      }),
+      annotations: { idempotentHint: true },
+    },
+    limited(async ({ artifact_id, folder }) => {
+      const artifact = await findBySlug(parseArtifactRef(artifact_id))
+      if (!artifact || !(await canEdit(artifact, viewer))) return text(`No page you can edit has the id "${artifact_id}".`, true)
+      if (artifact.organizationId !== auth.organizationId || !(await canFile(artifact, viewer)))
+        return text("This page belongs to another workspace, so it can't be filed into a folder from here.", true)
+      if (!folder.trim()) {
+        await fileInto(artifact, null)
+        return text(`"${artifact.title}" is in no folder now.\nLink: ${artifactUrl(artifact.slug)}`)
+      }
+      const checked = checkFolderName(folder)
+      if ('error' in checked) return text(checked.error, true)
+      try {
+        const target = await ensureFolder(db, workspaceOf(artifact), checked.name, auth.userId)
+        await fileInto(artifact, target.id)
+        return text(`Moved "${artifact.title}" to the folder "${target.name}".\nLink: ${artifactUrl(artifact.slug)}`)
+      } catch (err) {
+        if (err instanceof FolderError) return text(err.message, true)
+        throw err
+      }
     }),
   )
 

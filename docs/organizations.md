@@ -14,7 +14,7 @@ On a self-hosted server, whoever sets it up names the organization everyone ther
 | --- | --- |
 | Owner | Everything: rename the organization, invite and remove anyone, change any role, make other owners |
 | Admin | Invite people, remove and change members and admins, rename the organization, edit every page |
-| Member | Publish and see the organization's pages; leave the organization |
+| Member | Publish and see the organization's pages; create, rename and delete its [folders](/docs/publishing#folders); leave the organization |
 
 An organization always keeps at least one owner. The last owner can't leave, be removed or change their own role until someone else is an owner.
 

@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { Hono, type Context } from 'hono'
 import {
   accessLevel,
@@ -10,6 +10,9 @@ import {
   findBySlug,
   getVersion,
   versionHtml,
+  countForWorkspace,
+  countSharedWith,
+  CursorError,
   listForWorkspace,
   listSharedWith,
   listVersions,
@@ -19,79 +22,105 @@ import {
   versionId,
 } from '../artifacts.js'
 import { requireUser, type AuthEnv } from '../auth/session.js'
+import { belongsTo, canFile, fileInto, folderIn, workspaceOf } from '../folders.js'
 import { db, schema } from '../db/index.js'
 import { limitInvites } from '../limits.js'
-import { currentThumbnails, getThumbnail, queueThumbnail, thumbnailsEnabled } from '../thumbnails.js'
-import type { ShareRole, Visibility } from '../db/schema.js'
+import { currentThumbnails, getThumbnail, queueThumbnail, thumbnailsEnabled, type ThumbnailState } from '../thumbnails.js'
+import type { Artifact, ShareRole, Visibility } from '../db/schema.js'
 import { allowed, downloadVersion, serveVersion } from '../content.js'
 import { getSharing, MAX_PEOPLE_PER_INVITE, parseEmails, removePerson, setPersonRole, sharePeople, SharingError } from '../sharing.js'
 
 export const artifacts = new Hono<AuthEnv>()
 
 // ?workspace=personal, ?workspace=<organization id>, or ?workspace=shared for pages shared with you.
-// ?q= narrows to titles containing it.
+// ?q= narrows to titles containing it; ?folder=<id> or ?folder=none to one folder of the workspace.
+// The body is one page of the list, newest first (?limit=, 50 by default, up to 100). X-Next-Cursor
+// holds the ?cursor= for the next one and is left out on the last; the first also says X-Total-Count.
 artifacts.get('/', requireUser, async (c) => {
   const user = c.get('user')!
   const workspace = c.req.query('workspace') ?? 'personal'
   const query = c.req.query('q')?.slice(0, 200)
+  const cursor = c.req.query('cursor') || undefined
+  const limit = c.req.query('limit') ? Number(c.req.query('limit')) : undefined
 
-  if (workspace === 'shared') {
-    const rows = (await listSharedWith(user, 50, query)).filter(({ artifact }) => artifact.ownerId !== user.id)
-    const editable = await editableIds(
-      user,
-      rows.map((r) => r.artifact),
-    )
-    const thumbs = await currentThumbnails(rows.map((r) => r.artifact))
+  const headers = (next: string | null, total: number | null) => ({
+    ...(next ? { 'X-Next-Cursor': next } : {}),
+    ...(total !== null ? { 'X-Total-Count': String(total) } : {}),
+  })
+
+  try {
+    if (workspace === 'shared') {
+      const [{ rows, next }, total] = await Promise.all([listSharedWith(user, { query, cursor, limit }), cursor ? null : countSharedWith(user, query)])
+      const [editable, thumbs] = await Promise.all([
+        editableIds(
+          user,
+          rows.map((r) => r.artifact),
+        ),
+        currentThumbnails(rows.map((r) => r.artifact)),
+      ])
+      return c.json(
+        rows.map(({ artifact: a, ownerName, ownerEmail, role }) => ({
+          ...summary(a, ownerName ?? ownerEmail, thumbs.get(a.id)),
+          mine: false,
+          canEdit: editable.has(a.id),
+          role,
+        })),
+        200,
+        headers(next, total),
+      )
+    }
+
+    const organizationId = workspace === 'personal' ? null : workspace
+    const ws = { userId: user.id, organizationId }
+    if (!(await belongsTo(user.id, ws))) return c.json({ error: 'Not found' }, 404)
+    const folderParam = c.req.query('folder')
+    let folder: string | null | undefined
+    if (folderParam === 'none') folder = null
+    else if (folderParam) {
+      if (!(await folderIn(ws, folderParam))) return c.json({ error: 'Not found' }, 404)
+      folder = folderParam
+    }
+    const [{ rows, next }, total] = await Promise.all([
+      listForWorkspace(user.id, organizationId, { query, folder, cursor, limit }),
+      cursor ? null : countForWorkspace(user.id, organizationId, { query, folder }),
+    ])
+    const [editable, thumbs] = await Promise.all([
+      editableIds(
+        user,
+        rows.map((r) => r.artifact),
+      ),
+      currentThumbnails(rows.map((r) => r.artifact)),
+    ])
     return c.json(
-      rows.map(({ artifact: a, ownerName, ownerEmail, role }) => ({
-        slug: a.slug,
-        title: a.title,
-        visibility: a.visibility,
-        version: a.currentVersion,
-        publishedWith: a.publishedWith,
-        updatedAt: a.updatedAt,
-        owner: ownerName ?? ownerEmail,
-        mine: false,
+      rows.map(({ artifact: a, ownerName, ownerEmail, folderName }) => ({
+        ...summary(a, ownerName ?? ownerEmail, thumbs.get(a.id)),
+        mine: a.ownerId === user.id,
         canEdit: editable.has(a.id),
-        // thumbnail is kept for older clients; thumbnailState says whether one is still coming
-        thumbnail: thumbs.get(a.id) === 'ready',
-        thumbnailState: thumbs.get(a.id) ?? 'none',
-        role,
+        folder: a.folderId && folderName ? { id: a.folderId, name: folderName } : null,
       })),
+      200,
+      headers(next, total),
     )
+  } catch (err) {
+    if (err instanceof CursorError) return c.json({ error: err.message, field: 'cursor' }, 400)
+    throw err
   }
-
-  const organizationId = workspace === 'personal' ? null : workspace
-  if (organizationId) {
-    const [member] = await db
-      .select()
-      .from(schema.memberships)
-      .where(and(eq(schema.memberships.organizationId, organizationId), eq(schema.memberships.userId, user.id)))
-    if (!member) return c.json({ error: 'Not found' }, 404)
-  }
-  const rows = await listForWorkspace(user.id, organizationId, 50, query)
-  const editable = await editableIds(
-    user,
-    rows.map((r) => r.artifact),
-  )
-  const thumbs = await currentThumbnails(rows.map((r) => r.artifact))
-  return c.json(
-    rows.map(({ artifact: a, ownerName, ownerEmail }) => ({
-      slug: a.slug,
-      title: a.title,
-      visibility: a.visibility,
-      version: a.currentVersion,
-      publishedWith: a.publishedWith,
-      updatedAt: a.updatedAt,
-      owner: ownerName ?? ownerEmail,
-      mine: a.ownerId === user.id,
-      canEdit: editable.has(a.id),
-      // thumbnail is kept for older clients; thumbnailState says whether one is still coming
-      thumbnail: thumbs.get(a.id) === 'ready',
-      thumbnailState: thumbs.get(a.id) ?? 'none',
-    })),
-  )
 })
+
+function summary(a: Artifact, owner: string, thumb: ThumbnailState | undefined) {
+  return {
+    slug: a.slug,
+    title: a.title,
+    visibility: a.visibility,
+    version: a.currentVersion,
+    publishedWith: a.publishedWith,
+    updatedAt: a.updatedAt,
+    owner,
+    // thumbnail is kept for older clients; thumbnailState says whether one is still coming
+    thumbnail: thumb === 'ready',
+    thumbnailState: thumb ?? 'none',
+  }
+}
 
 // A page's details. Its content is served as a document tree under /v/<version>/.
 // Pages the viewer can't open look the same as missing ones.
@@ -165,12 +194,14 @@ async function editable(c: Context<AuthEnv>) {
 const VISIBILITIES = new Set<Visibility>(['private', 'organization', 'link'])
 const ROLES = new Set<ShareRole>(['viewer', 'editor'])
 
-// Rename ({ title }) or change general access ({ visibility }); either or both
+// Rename ({ title }), change general access ({ visibility }) or file it ({ folder: <folder id> or null
+// for no folder}); any of them
 artifacts.patch('/:slug', requireUser, async (c) => {
   const artifact = await editable(c)
   if (!artifact) return c.json({ error: 'Not found' }, 404)
-  const body = (await c.req.json().catch(() => ({}))) as { visibility?: Visibility; title?: unknown }
-  if (body.title === undefined && body.visibility === undefined) return c.json({ error: 'Send a title or a visibility.' }, 400)
+  const body = (await c.req.json().catch(() => ({}))) as { visibility?: Visibility; title?: unknown; folder?: unknown }
+  if (body.title === undefined && body.visibility === undefined && body.folder === undefined)
+    return c.json({ error: 'Send a title, a visibility or a folder.' }, 400)
 
   let title: string | undefined
   if (body.title !== undefined) {
@@ -182,10 +213,27 @@ artifacts.patch('/:slug', requireUser, async (c) => {
     if (!VISIBILITIES.has(body.visibility)) return c.json({ error: 'Choose restricted, organization or anyone with the link.' }, 400)
     if (body.visibility === 'organization' && !artifact.organizationId) return c.json({ error: 'Personal pages can be restricted or shared by link.' }, 400)
   }
+  let folder: { id: string; name: string } | null | undefined
+  if (body.folder !== undefined) {
+    // Editors from outside the page's workspace get the same answer as a folder that doesn't exist
+    if (!(await canFile(artifact, c.get('user')!))) return c.json({ error: 'That folder no longer exists.', field: 'folder' }, 404)
+    if (body.folder === null) folder = null
+    else {
+      const found = typeof body.folder === 'string' ? await folderIn(workspaceOf(artifact), body.folder) : null
+      if (!found) return c.json({ error: 'That folder no longer exists.', field: 'folder' }, 404)
+      folder = { id: found.id, name: found.name }
+    }
+  }
 
   const updated = title !== undefined ? await rename(artifact, title) : artifact
   if (body.visibility) await db.update(schema.artifacts).set({ visibility: body.visibility }).where(eq(schema.artifacts.id, artifact.id))
-  return c.json({ title: updated.title, visibility: body.visibility ?? updated.visibility, updatedAt: updated.updatedAt })
+  if (folder !== undefined) await fileInto(artifact, folder?.id ?? null)
+  return c.json({
+    title: updated.title,
+    visibility: body.visibility ?? updated.visibility,
+    updatedAt: updated.updatedAt,
+    ...(folder !== undefined ? { folder } : {}),
+  })
 })
 
 // Version history is for editors only: older versions can hold things the author deliberately

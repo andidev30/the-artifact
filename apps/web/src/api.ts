@@ -88,6 +88,8 @@ export type ArtifactSummary = {
   thumbnailState?: ThumbnailState
   // Set on pages shared with you
   role?: 'viewer' | 'editor'
+  // Set in a workspace's own list (not on pages shared with you): the folder it is filed in
+  folder?: { id: string; name: string } | null
 }
 
 export type ArtifactPage = {
@@ -102,12 +104,63 @@ export type ArtifactPage = {
   isOwner: boolean
 }
 
-export async function listArtifacts(workspace: string, query = '', signal?: AbortSignal): Promise<ArtifactSummary[]> {
+export type ArtifactList = {
+  items: ArtifactSummary[]
+  // Pass back as cursor for the next pages; null on the last
+  next: string | null
+  // How many match in all; only sent with the first pages
+  total: number | null
+}
+
+// folder: 'none' for pages in no folder, or a folder id; left out for every page
+export type ListQuery = { query?: string; folder?: string; cursor?: string | null; limit?: number }
+
+export async function listArtifacts(workspace: string, q: ListQuery = {}, signal?: AbortSignal): Promise<ArtifactList> {
   const params = new URLSearchParams({ workspace })
-  if (query.trim()) params.set('q', query.trim())
+  if (q.query?.trim()) params.set('q', q.query.trim())
+  if (q.folder) params.set('folder', q.folder)
+  if (q.cursor) params.set('cursor', q.cursor)
+  if (q.limit) params.set('limit', String(q.limit))
   const res = await fetch(`/api/artifacts?${params}`, { credentials: 'same-origin', signal })
   if (!res.ok) throw new Error(`Listing pages failed with ${res.status}`)
-  return res.json()
+  const total = res.headers.get('X-Total-Count')
+  return { items: await res.json(), next: res.headers.get('X-Next-Cursor'), total: total === null ? null : Number(total) }
+}
+
+export type FolderSummary = {
+  id: string
+  name: string
+  // Pages in it that this person sees in the gallery
+  pages: number
+}
+
+export function listFolders(workspace: string) {
+  return request<FolderSummary[]>(`/folders?workspace=${encodeURIComponent(workspace)}`)
+}
+
+export async function createFolder(workspace: string, name: string): Promise<FolderSummary> {
+  try {
+    return await request<FolderSummary>('/folders', { method: 'POST', json: { workspace, name } })
+  } catch (err) {
+    throw err instanceof ApiError ? new FieldError(err.message, err.field) : err
+  }
+}
+
+export async function renameFolder(id: string, name: string): Promise<{ id: string; name: string }> {
+  try {
+    return await request<{ id: string; name: string }>(`/folders/${encodeURIComponent(id)}`, { method: 'PATCH', json: { name } })
+  } catch (err) {
+    throw err instanceof ApiError ? new FieldError(err.message, err.field) : err
+  }
+}
+
+export function deleteFolder(id: string) {
+  return request<null>(`/folders/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
+// null takes the page out of its folder
+export function moveToFolder(slug: string, folder: string | null) {
+  return request<{ folder: { id: string; name: string } | null }>(`/artifacts/${encodeURIComponent(slug)}`, { method: 'PATCH', json: { folder } })
 }
 
 // null when the page doesn't exist or this person can't open it
