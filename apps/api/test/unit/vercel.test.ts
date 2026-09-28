@@ -2,7 +2,9 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 type Rewrite = { source: string; destination: string }
-const config = JSON.parse(readFileSync(new URL('../../../../vercel.json', import.meta.url), 'utf8')) as { rewrites: Rewrite[] }
+type Headers = { source: string; headers: { key: string; value: string }[] }
+const config = JSON.parse(readFileSync(new URL('../../../../vercel.json', import.meta.url), 'utf8')) as { rewrites: Rewrite[]; headers: Headers[] }
+const robots = readFileSync(new URL('../../../web/public/robots.txt', import.meta.url), 'utf8')
 
 // Vercel's `:name*` never matches a trailing slash, and page content is served under addresses that
 // end in one (/api/artifacts/<slug>/v/<n>/), so such a request fell through to the web app's
@@ -20,4 +22,17 @@ describe('vercel.json', () => {
       expect(first?.destination).toBe('/api')
     },
   )
+
+  // The static app shell and assets never pass through the API, which sets it for its own responses
+  it('sends nosniff on every path', () => {
+    const all = config.headers.find((h) => h.source === '/(.*)')
+    expect(all?.headers).toContainEqual({ key: 'X-Content-Type-Options', value: 'nosniff' })
+  })
+
+  // Served as a static file ahead of the app shell rewrite
+  it('keeps crawlers off pages, embeds and the API', () => {
+    const everyone = robots.split(/\n\s*\n/).find((group) => /^User-agent: \*$/m.test(group))
+    for (const path of ['/api/', '/a/', '/e/']) expect(everyone).toContain(`Disallow: ${path}`)
+    expect(everyone).toContain('Allow: /')
+  })
 })

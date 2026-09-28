@@ -50,6 +50,12 @@ export const app = new Hono<AuthEnv>()
 // First, so every request gets an id, a log line and its timing
 app.use(observeRequests)
 app.onError(onUnhandledError)
+// Browsers take every response as the type it declares and never guess one from the body: API errors,
+// the app shell and its assets, health checks and redirects included
+app.use(async (c, next) => {
+  await next()
+  c.header('X-Content-Type-Options', 'nosniff')
+})
 // CONTENT_ORIGIN serves page files and nothing else: a page that escaped its sandbox there finds no app
 app.use(async (c, next) => {
   if (onContentHost(c)) return contentHost.fetch(c.req.raw, c.env)

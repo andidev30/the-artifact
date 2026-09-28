@@ -282,6 +282,8 @@ export async function serveVersion(c: Context<AuthEnv>) {
 export const contentHost = new Hono<AuthEnv>()
 contentHost.get('/api/artifacts/:slug/v/:version', (c) => c.redirect(`${new URL(c.req.url).pathname}/`, 301))
 contentHost.get('/api/artifacts/:slug/v/:version/*', serveVersion)
+// Page files are for the people a page is shared with, never for search engines
+contentHost.get('/robots.txt', (c) => c.text('User-agent: *\nDisallow: /\n', 200, { 'Cache-Control': 'public, max-age=3600' }))
 contentHost.notFound(notFound)
 contentHost.onError(onUnhandledError)
 

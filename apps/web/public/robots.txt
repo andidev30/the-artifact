@@ -1,0 +1,29 @@
+# Pages people publish here are private or shared with the people they choose, so they stay out of
+# search engines: the page links (/a/), embeds (/e/), page content and the API. The rest of the site
+# may be crawled. Self-hosted installs answer with their own rules, which keep out every crawler.
+User-agent: *
+Disallow: /api/
+Disallow: /a/
+Disallow: /e/
+Disallow: /mcp
+Disallow: /oauth/
+Disallow: /scim/
+Allow: /
+
+# Chat apps read a page link's title and screenshot for its preview. The server gives them only for
+# pages shared with anyone who has the link.
+User-agent: Slackbot-LinkExpanding
+User-agent: Twitterbot
+User-agent: facebookexternalhit
+User-agent: LinkedInBot
+User-agent: Discordbot
+User-agent: TelegramBot
+User-agent: WhatsApp
+Disallow: /api/
+Allow: /api/artifacts/*/thumbnails/
+Allow: /api/oembed
+Disallow: /e/
+Disallow: /mcp
+Disallow: /oauth/
+Disallow: /scim/
+Allow: /
