@@ -23,6 +23,7 @@ import { samlSignIn } from './ee/sso/saml.js'
 import { scim, scimAdmin } from './ee/scim.js'
 import { contentHost, onContentHost } from './content.js'
 import { embeds } from './embeds.js'
+import { exportsApi } from './routes/exports.js'
 import { env, mailEnabled } from './env.js'
 import { addPruner } from './gc.js'
 import { hasAccountsCached, instanceSettings, isInstanceAdmin } from './instance.js'
@@ -139,6 +140,7 @@ api.route('/oauth/requests', consent)
 api.route('/artifacts/:slug/comments', comments)
 api.route('/artifacts', artifacts)
 api.route('/folders', folders)
+api.route('/exports', exportsApi)
 api.route('/contact-sales', contact)
 
 api.route('/organizations/:orgId/audit-log', auditLog)

@@ -48,6 +48,10 @@ Only an instance admin can reset someone's second factor if they lose it; owners
 
 On a self-hosted server with an Enterprise license, owners and admins can choose under **Version history** in the organization's settings how long older versions of its pages are kept. See [Version retention](/docs/retention).
 
+## Exporting the organization
+
+Owners can download everything in the organization, its pages with their versions, sharing and comments, and its members and settings, as one zip under **Export data** in the organization's settings. See [Exporting your data](/docs/exporting-your-data).
+
 ## Audit log
 
 On a self-hosted server with an Enterprise license, owners and admins see who signed in, shared pages, changed members or settings, and made or revoked access tokens under **Audit log** in the organization's settings. See [Audit log](/docs/audit-log).

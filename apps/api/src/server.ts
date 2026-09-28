@@ -6,6 +6,7 @@ import { app } from './app.js'
 import { auditSettled } from './audit.js'
 import { closeDatabase } from './db/index.js'
 import { env } from './env.js'
+import { buildExportsInProcess, scheduleExportResumes } from './exports.js'
 import { scheduleSweeps } from './gc.js'
 import { inspectElsewhere, inspectHere, inspectionAnswered } from './inspect.js'
 import { log } from './log.js'
@@ -66,8 +67,12 @@ export function startServer({ background }: { background: boolean }) {
     }
   }
 
+  // Every serving process builds the exports it is asked for; the background one also picks up any
+  // left behind by a process that stopped
+  buildExportsInProcess()
   if (background) {
     scheduleSweeps()
+    scheduleExportResumes()
     if (worker) log.info('Background jobs run in this worker', { worker: cluster.worker?.id })
   }
 

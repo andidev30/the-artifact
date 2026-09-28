@@ -15,6 +15,7 @@ vi.mock('../../src/mail.js', () => ({
   sendShareNotice: vi.fn(async () => {}),
   sendInvitation: vi.fn(async () => {}),
   sendCommentNotice: vi.fn(async () => {}),
+  sendExportReady: vi.fn(async () => {}),
 }))
 vi.mock('../../src/ee/mail.js', () => ({
   sendSalesInquiry: vi.fn(async () => {}),

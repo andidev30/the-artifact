@@ -1,0 +1,81 @@
+.export-versions {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.export-versions legend {
+  margin-bottom: 8px;
+  padding: 0;
+}
+
+.export-version {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--white);
+  border: 1.5px solid var(--grid);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.export-version:hover {
+  border-color: var(--ink-soft);
+}
+
+.export-version:has(input:checked) {
+  border-color: var(--ink);
+  box-shadow: 4px 4px 0 var(--marker);
+}
+
+.export-version input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 3px 0 0;
+  accent-color: var(--ink);
+}
+
+.export-version > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.export-version strong {
+  font-size: var(--step--1);
+}
+
+.export-version > span > span {
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
+}
+
+.export-status {
+  color: var(--ink-soft);
+}
+
+.export-ready {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--white);
+  border: 1.5px solid var(--ink);
+  border-radius: 3px;
+}
+
+.export-ready p {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.export-ready .button {
+  flex: none;
+}

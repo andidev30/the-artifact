@@ -321,6 +321,31 @@ test('account and organization settings', async ({ page, browser }) => {
   await other.close()
 })
 
+test('data export in account and organization settings', async ({ page }) => {
+  const email = uniqueEmail('a11y-export')
+  await signUpPersonal(page, email)
+
+  await page.goto('/settings#export')
+  const section = page.locator('section#export')
+  await expect(section.getByRole('heading', { name: 'Export your data' })).toBeVisible()
+  await expectAccessible(page, 'account settings, data export')
+  // Keyboard only: into the choice of versions, to the second one, then the button
+  await section.getByLabel(/Only the current version/).focus()
+  await page.keyboard.press('ArrowDown')
+  await expect(section.getByLabel(/Every version/)).toBeChecked()
+  await page.keyboard.press('Tab')
+  await expect(section.getByRole('button', { name: 'Export data' })).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(section.getByText('Your export is ready.')).toBeVisible({ timeout: 20_000 })
+  await expect(section.getByRole('link', { name: 'Download zip' })).toBeVisible()
+  await expectAccessible(page, 'account settings, data export ready')
+
+  const org = await createOrganization(email, 'Export Co')
+  await page.goto(`/organizations/${org.slug}/settings#export`)
+  await expect(page.locator('section#export').getByRole('heading', { name: 'Export organization data' })).toBeVisible()
+  await expectAccessible(page, 'organization settings, data export')
+})
+
 test('version retention in organization settings, with and without a license', async ({ page }) => {
   const email = uniqueEmail('a11y-retention')
   await signUpPersonal(page, email)

@@ -121,3 +121,25 @@ export async function sendInvitation(to: string, n: InvitationNotice) {
       </div>`,
   })
 }
+
+type ExportNotice = { organization: string | null; link: string; hours: number }
+
+export async function sendExportReady(to: string, n: ExportNotice) {
+  const what = n.organization ? `The export of ${n.organization}` : 'Your data export'
+  await transport.sendMail({
+    from: env.smtp.from,
+    to: recipient(to),
+    subject: `${what} is ready to download`,
+    text: `${what} from The Artifact is ready. Download it from settings within ${n.hours} hours, signed in as ${to}:\n\n${n.link}\n\nIf you didn't ask for it, change your password or sign out of your other sessions in settings.`,
+    html: `
+      <div style="font-family: -apple-system, 'Segoe UI', sans-serif; color: #1c2b4b; max-width: 480px">
+        <p style="font-size: 16px">${escapeHtml(what)} from The Artifact is ready.</p>
+        <p>
+          <a href="${n.link}" style="display: inline-block; padding: 12px 20px; background: #ffe066; color: #1c2b4b; border: 1.5px solid #1c2b4b; border-radius: 3px; font-weight: 700; text-decoration: none">
+            Open settings to download
+          </a>
+        </p>
+        <p style="font-size: 14px; color: #4a587a">Download it within ${n.hours} hours, signed in as ${escapeHtml(to)}. If you didn't ask for it, change your password or sign out of your other sessions in settings.</p>
+      </div>`,
+  })
+}

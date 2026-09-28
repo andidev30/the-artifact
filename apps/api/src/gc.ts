@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm'
 import { db } from './db/index.js'
+import { sweepExports } from './exports.js'
 import { deleteExpiredLimits } from './limits.js'
 import { log } from './log.js'
 import { deleteBlobs, deleteStaleUploads, listBlobs } from './storage.js'
@@ -62,7 +63,8 @@ export async function runPruners() {
 }
 
 // Runs in the background every few hours while the server is up, and on the way clears rate limit
-// counters whose window is over and records of who opened a page that are past their retention
+// counters whose window is over, records of who opened a page that are past their retention, and
+// data exports that expired
 export function scheduleSweeps() {
   const run = () =>
     runPruners()
@@ -73,6 +75,8 @@ export function scheduleSweeps() {
       .catch((err) => log.error('Clearing rate limits failed', { err }))
       .then(deleteOldViews)
       .catch((err) => log.error('Deleting old page views failed', { err }))
+      .then(() => sweepExports())
+      .catch((err) => log.error('Deleting old data exports failed', { err }))
   setTimeout(run, 60_000).unref()
   setInterval(run, EVERY_MS).unref()
 }

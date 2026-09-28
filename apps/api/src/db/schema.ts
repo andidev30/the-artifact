@@ -3,6 +3,7 @@ import {
   bigint,
   boolean,
   check,
+  customType,
   date,
   index,
   integer,
@@ -695,6 +696,45 @@ export const productDailyCounts = pgTable(
   (t) => [primaryKey({ columns: [t.day, t.event] })],
 )
 
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => 'bytea' })
+
+export const exportStatusEnum = pgEnum('export_status', ['building', 'ready', 'failed'])
+
+// A zip of someone's data, built in steps (src/exports.ts) and kept in storage under exports/<id>/
+// until expires_at. organization_id null is an export of the account itself; otherwise an owner's
+// export of that organization.
+export const dataExports = pgTable(
+  'data_exports',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    organizationId: uuid('organization_id').references(() => organizations.id, { onDelete: 'cascade' }),
+    // Every version of every page, or only the current one
+    allVersions: boolean('all_versions').notNull(),
+    status: exportStatusEnum('status').notNull().default('building'),
+    // Where the build is: the page it is on, the multipart upload and the parts written so far
+    progress: jsonb('progress').$type<Record<string, unknown>>().notNull(),
+    // The zip's central directory so far, written after the last file
+    directory: bytea('directory').notNull().default(sql`''::bytea`),
+    // A process builds it until then, so two never write the same export at once
+    leaseId: text('lease_id'),
+    leaseUntil: timestamp('lease_until', { withTimezone: true }),
+    size: bigint('size', { mode: 'number' }),
+    error: text('error'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+    // Set once it is ready; the file is deleted after this
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+  },
+  (t) => [
+    index('data_exports_user_idx').on(t.userId, t.createdAt),
+    index('data_exports_org_idx').on(t.organizationId),
+    index('data_exports_status_idx').on(t.status),
+  ],
+)
+
 // Counters for rate limits (see src/limits.ts): how often something happened for one key in the
 // current window, which starts at the first hit and ends at resets_at. Kept in Postgres so every
 // server process, or serverless instance, counts the same thing.
@@ -734,3 +774,4 @@ export type Visibility = (typeof visibilityEnum.enumValues)[number]
 export type Role = (typeof roleEnum.enumValues)[number]
 export type InviteRole = (typeof inviteRoleEnum.enumValues)[number]
 export type SsoConnection = typeof ssoConnections.$inferSelect
+export type DataExport = typeof dataExports.$inferSelect

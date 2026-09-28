@@ -20,6 +20,7 @@ import {
   type Role,
 } from '../api'
 import { AccountHeader } from '../components/AccountHeader'
+import { ExportSection } from '../components/ExportSection'
 import '../components/SignInSecurity.css'
 import { APP_HOST } from '../config'
 import { RetentionSection } from '../ee/Retention'
@@ -156,6 +157,7 @@ function Page({ initial, org }: { initial: Me; org: Organization }) {
     { id: 'members', label: 'Members' },
     ...(current.role === 'member' ? [] : [{ id: 'tokens', label: 'Access tokens' }]),
     ...(retention ? [{ id: 'retention', label: 'Version history' }] : []),
+    ...(current.role === 'owner' && !current.blocked ? [{ id: 'export', label: 'Export data' }] : []),
     ...(auditOn && current.role !== 'member' ? [{ id: 'audit', label: 'Audit log' }] : []),
   ]
 
@@ -249,6 +251,7 @@ function Page({ initial, org }: { initial: Me; org: Organization }) {
             )}
             {current.role !== 'member' && !current.blocked && <TokensSection org={current} me={me} />}
             {retention && <RetentionSection orgId={current.id} orgName={current.name} />}
+            {current.role === 'owner' && !current.blocked && <ExportSection organization={{ id: current.id, name: current.name }} />}
             {current.role !== 'member' && !current.blocked && selfHosted && (
               <Suspense fallback={null}>
                 <AuditLogSection org={current} onAvailable={setAuditOn} />

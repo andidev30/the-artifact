@@ -18,6 +18,7 @@ const USING: DocPage[] = [
   { slug: 'comments', title: 'Comments' },
   { slug: 'audit-log', title: 'Audit log' },
   { slug: 'signing-in', title: 'Signing in' },
+  { slug: 'exporting-your-data', title: 'Exporting your data' },
 ]
 
 const RUNNING: DocPage[] = [

@@ -48,6 +48,8 @@ const CORE = {
   'link-password-ip': { max: 100, seconds: 15 * MINUTE },
   // Emails about new comments to one person for one page; comments past it only show in the app
   'comment-email': { max: 1, seconds: 15 * MINUTE },
+  // Data exports of one account, and of one organization; one that fails doesn't count
+  'data-export': { max: 1, seconds: HOUR },
 } satisfies Record<string, Rule>
 
 const defaults = new Map<string, Rule>(Object.entries(CORE))

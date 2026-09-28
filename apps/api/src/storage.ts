@@ -1,14 +1,20 @@
 import {
+  AbortMultipartUploadCommand,
+  CompleteMultipartUploadCommand,
   CreateBucketCommand,
+  CreateMultipartUploadCommand,
   DeleteObjectsCommand,
   GetObjectCommand,
   HeadBucketCommand,
   HeadObjectCommand,
+  ListMultipartUploadsCommand,
   ListObjectsV2Command,
   NoSuchKey,
+  NoSuchUpload,
   NotFound,
   PutObjectCommand,
   S3Client,
+  UploadPartCommand,
 } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { env } from './env.js'
@@ -226,6 +232,98 @@ export async function deleteStaleUploads(olderThanMs: number, now = Date.now()):
   for await (const o of listKeys(UPLOADS)) if (now - o.lastModified.getTime() >= olderThanMs) stale.push(o.key)
   await deleteKeys(stale)
   return stale.length
+}
+
+// Data exports (src/exports.ts): each under exports/<id>/, the zip written by a multipart upload and
+// the bytes carried between build steps as objects of their own. Private like everything else in the
+// bucket; people download them through the API.
+export const EXPORTS = 'exports/'
+
+export async function startMultipart(Key: string): Promise<string> {
+  const res = await s3.send(new CreateMultipartUploadCommand({ Bucket, Key, ContentType: 'application/zip' }))
+  if (!res.UploadId) throw new Error('The storage did not start a multipart upload')
+  return res.UploadId
+}
+
+export async function uploadPart(Key: string, UploadId: string, PartNumber: number, Body: Buffer): Promise<string> {
+  const res = await s3.send(new UploadPartCommand({ Bucket, Key, UploadId, PartNumber, Body, ContentLength: Body.length }))
+  if (!res.ETag) throw new Error('The storage did not return an ETag for an uploaded part')
+  return res.ETag
+}
+
+export async function completeMultipart(Key: string, UploadId: string, parts: { n: number; etag: string }[]) {
+  await s3.send(
+    new CompleteMultipartUploadCommand({ Bucket, Key, UploadId, MultipartUpload: { Parts: parts.map((p) => ({ PartNumber: p.n, ETag: p.etag })) } }),
+  )
+}
+
+export async function abortMultipart(Key: string, UploadId: string) {
+  try {
+    await s3.send(new AbortMultipartUploadCommand({ Bucket, Key, UploadId }))
+  } catch (err) {
+    if (!(err instanceof NoSuchUpload) && !(err instanceof NotFound)) throw err
+  }
+}
+
+// Multipart uploads under a prefix that were started and never completed or aborted
+export async function* listMultipartUploads(Prefix: string): AsyncGenerator<{ key: string; uploadId: string; initiated: Date }> {
+  let KeyMarker: string | undefined
+  let UploadIdMarker: string | undefined
+  do {
+    const res = await s3.send(new ListMultipartUploadsCommand({ Bucket, Prefix, KeyMarker, UploadIdMarker }))
+    for (const u of res.Uploads ?? []) if (u.Key && u.UploadId) yield { key: u.Key, uploadId: u.UploadId, initiated: u.Initiated ?? new Date(0) }
+    KeyMarker = res.IsTruncated ? res.NextKeyMarker : undefined
+    UploadIdMarker = res.IsTruncated ? res.NextUploadIdMarker : undefined
+  } while (KeyMarker)
+}
+
+export async function putObject(Key: string, Body: Buffer) {
+  await s3.send(new PutObjectCommand({ Bucket, Key, Body, ContentType: 'application/octet-stream' }))
+}
+
+export async function getObject(Key: string): Promise<Buffer | null> {
+  try {
+    const res = await s3.send(new GetObjectCommand({ Bucket, Key }))
+    return Buffer.from(await res.Body!.transformToByteArray())
+  } catch (err) {
+    if (err instanceof NoSuchKey) return null
+    throw err
+  }
+}
+
+// An object as a stream, for downloads through the API when browsers can't reach the bucket
+export async function streamObject(Key: string): Promise<{ body: ReadableStream; size: number | null } | null> {
+  try {
+    const res = await s3.send(new GetObjectCommand({ Bucket, Key }))
+    return { body: res.Body!.transformToWebStream(), size: res.ContentLength ?? null }
+  } catch (err) {
+    if (err instanceof NoSuchKey) return null
+    throw err
+  }
+}
+
+// A short-lived link that downloads an object straight from the bucket, for browsers that can reach
+// S3_PUBLIC_ENDPOINT
+export function presignDownload(Key: string, filename: string, expiresIn: number): Promise<string> {
+  return getSignedUrl(
+    signingClient(),
+    new GetObjectCommand({
+      Bucket,
+      Key,
+      ResponseContentDisposition: `attachment; filename="${filename}"`,
+      ResponseContentType: 'application/zip',
+      ResponseCacheControl: 'private, no-store',
+    }),
+    { expiresIn },
+  )
+}
+
+export async function* listObjects(Prefix: string) {
+  yield* listKeys(Prefix)
+}
+
+export async function deleteObjects(keys: string[]) {
+  await deleteKeys(keys)
 }
 
 // Fails early, with a clear message, when the bucket can't be reached; creates it when missing
