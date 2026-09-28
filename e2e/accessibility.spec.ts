@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import { expect, test } from '@playwright/test'
 import { createHostedOrganization, grantInstanceAdmin } from '../apps/api/test/e2e-db.ts'
 import { expectAccessible } from './axe'
-import { connectAgent, latestMail, mockAuditLog, mockRetention, publishViaMcp, signInLink, signUpPersonal, uniqueEmail } from './helpers'
+import { connectAgent, latestMail, licensedSso, mockAuditLog, mockRetention, publishViaMcp, signInLink, signUpPersonal, uniqueEmail } from './helpers'
 
 const HTML = '<!doctype html><title>Plan</title><h1>Plan</h1>'
 
@@ -408,4 +408,35 @@ test('agent consent page', async ({ page }) => {
   await page.goto(new URL(authorize.headers().location).pathname + new URL(authorize.headers().location).search)
   await expect(page.getByRole('heading', { level: 1, name: 'Connect e2e-agent' })).toBeVisible()
   await expectAccessible(page, 'consent')
+})
+
+test('single sign-on: sign-in buttons and the admin section', async ({ page, browser }) => {
+  const signedOut = await browser.newPage()
+  await licensedSso(signedOut)
+  await signedOut.goto('/login')
+  await expect(signedOut.getByRole('link', { name: 'Continue with Okta' })).toBeVisible()
+  await expectAccessible(signedOut, 'log in with single sign-on')
+  await signedOut.goto('/login?error=sso_required')
+  await expect(signedOut.getByRole('alert')).toContainText('single sign-on')
+  await expectAccessible(signedOut, 'log in, single sign-on required')
+  await signedOut.close()
+
+  const email = uniqueEmail('a11y-sso')
+  await signUpPersonal(page, email)
+  await grantInstanceAdmin(email)
+  await licensedSso(page)
+  await page.goto('/admin?sso-test=1#sso')
+  const sso = page.locator('section#sso')
+  await expect(sso.getByRole('heading', { name: /Single sign-on/ })).toBeVisible()
+  await expect(sso.getByText('Okta signed in ada@acme.example')).toBeVisible()
+  await expectAccessible(page, 'server admin, single sign-on with a test result')
+
+  await sso.getByRole('button', { name: 'Edit Okta' }).click()
+  await expect(sso.getByLabel('Issuer URL')).toHaveValue('https://acme.okta.com')
+  await expectAccessible(page, 'server admin, editing a single sign-on connection')
+  await sso.getByRole('button', { name: 'Close Okta' }).click()
+
+  await sso.getByRole('button', { name: 'Remove Okta' }).click()
+  await expect(sso.getByRole('group', { name: 'Confirm: remove Okta' })).toBeVisible()
+  await expectAccessible(page, 'server admin, removing a single sign-on connection')
 })

@@ -30,6 +30,7 @@
     "drizzle-orm": "^0.45.3",
     "hono": "^4.13.9",
     "nodemailer": "^10.0.10",
+    "openid-client": "6.8.8",
     "playwright-core": "1.63.0",
     "postgres": "^3.4.9",
     "prom-client": "^15.1.3",

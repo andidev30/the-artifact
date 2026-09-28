@@ -1,0 +1,37 @@
+/* Single sign-on in Server admin (SsoSection) */
+
+.sso-issuer,
+.sso-mono {
+  font-family: var(--mono);
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+
+.sso-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sso-form select.admin-input {
+  width: 100%;
+}
+
+.sso-test {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  background: var(--white);
+  border: 1.5px solid var(--ink);
+  border-left-width: 6px;
+  border-radius: 3px;
+}
+
+.sso-test[data-tone='bad'] {
+  border-left-color: #b3261e;
+}
+
+.sso-test:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
+}

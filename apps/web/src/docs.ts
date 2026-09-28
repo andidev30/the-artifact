@@ -25,6 +25,7 @@ const RUNNING: DocPage[] = [
   { slug: 'kubernetes', title: 'Kubernetes' },
   { slug: 'configuration', title: 'Configuration reference' },
   { slug: 'licenses', title: 'Licenses' },
+  { slug: 'sso', title: 'Single sign-on' },
   { slug: 'backups', title: 'Backup and restore' },
   { slug: 'upgrading', title: 'Upgrading' },
 ]

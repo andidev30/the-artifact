@@ -50,10 +50,11 @@ A page in a personal workspace is restricted until you share it. A page that som
 - Passwords (on servers without email, or once someone sets one) are hashed with scrypt. Wrong ones are [rate limited](/docs/configuration#rate-limits) per address and per network.
 - Sessions are `HttpOnly`, `SameSite=Lax` cookies (`Secure` over HTTPS); the database stores only a hash of the session token.
 - Google sign-in uses the authorization code flow with state and PKCE, and only accepts verified Google email addresses.
+- [Single sign-on](/docs/sso) (Enterprise) uses OpenID Connect with PKCE, state and nonce, checks the ID token's signature against the provider's keys, and links to an existing account only by an address the provider verified (or one you chose to trust). Client secrets are encrypted at rest. An instance admin can always sign in without it.
 
 ## Two-factor sign-in
 
-An account with a passkey or an authenticator app has two-factor sign-in on (how to set it up: [Signing in](/docs/signing-in)). Every first factor ends the same way: a password, an email link (including one an instance admin made), and Google each only make a pending sign-in, and the session starts once the second factor checks out.
+An account with a passkey or an authenticator app has two-factor sign-in on (how to set it up: [Signing in](/docs/signing-in)). Every first factor ends the same way: a password, an email link (including one an instance admin made), Google and single sign-on each only make a pending sign-in, and the session starts once the second factor checks out.
 
 - **Pending sign-ins** live in their own `HttpOnly`, `SameSite=Lax` cookie, scoped to `/api/auth` and stored as a hash, for at most 10 minutes. It isn't a session: with it you can only finish or abandon the sign-in. It is used up when the session starts, and deleted when the password changes, the account is suspended, or an admin resets its second factor.
 - **An email link is one factor.** It proves you can read the mailbox, which is also what an attacker who got into it can do, so it never skips the second factor. The same goes for an admin's sign-in link on a server without email: it sets a new password, and the second factor is still asked for.

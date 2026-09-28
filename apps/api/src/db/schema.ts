@@ -551,6 +551,55 @@ export const auditEvents = pgTable(
   (t) => [index('audit_events_org_idx').on(t.organizationId, t.createdAt, t.id), index('audit_events_created_at_idx').on(t.createdAt)],
 )
 
+export const ssoProtocolEnum = pgEnum('sso_protocol', ['oidc', 'saml'])
+
+// Single sign-on through an identity provider the instance admin sets up (src/ee/sso/), an
+// Enterprise feature. Each row is one sign-in button; the protocol decides the shape of `config`
+// (SsoConfig in src/ee/sso/connections.ts). Secrets such as an OIDC client secret go in `secret`,
+// sealed with a server secret, never in `config`.
+export const ssoConnections = pgTable('sso_connections', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  protocol: ssoProtocolEnum('protocol').notNull(),
+  // Shown on the button: "Continue with <name>"
+  name: text('name').notNull(),
+  // Off until the admin turns it on, so it can be tested first
+  enabled: boolean('enabled').notNull().default(false),
+  // Protocol-specific settings that aren't secret, e.g. the OIDC issuer and client id
+  config: jsonb('config').$type<Record<string, unknown>>().notNull(),
+  secret: text('secret'),
+  // Email domains the provider may sign people in for; empty accepts any
+  allowedDomains: jsonb('allowed_domains').$type<string[]>().notNull().default([]),
+  // People at those domains (everyone, when there are none) must sign in through this connection;
+  // instance admins never are, so they can't be locked out
+  required: boolean('required').notNull().default(false),
+  // The organization people join as members the first time they sign in through the connection
+  organizationId: uuid('organization_id').references(() => organizations.id, { onDelete: 'set null' }),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+// Which account a person at an identity provider signs in to: the provider's stable id for them
+// (the OIDC `sub`, a SAML NameID), so a later change of address at the provider keeps the account
+export const ssoIdentities = pgTable(
+  'sso_identities',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    connectionId: uuid('connection_id')
+      .notNull()
+      .references(() => ssoConnections.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    subject: text('subject').notNull(),
+    // The address the provider gave at the last sign-in
+    email: text('email').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('sso_identities_subject_unique').on(t.connectionId, t.subject), index('sso_identities_user_idx').on(t.userId)],
+)
+
 // Counters for rate limits (see src/limits.ts): how often something happened for one key in the
 // current window, which starts at the first hit and ends at resets_at. Kept in Postgres so every
 // server process, or serverless instance, counts the same thing.
@@ -589,3 +638,4 @@ export type Comment = typeof artifactComments.$inferSelect
 export type Visibility = (typeof visibilityEnum.enumValues)[number]
 export type Role = (typeof roleEnum.enumValues)[number]
 export type InviteRole = (typeof inviteRoleEnum.enumValues)[number]
+export type SsoConnection = typeof ssoConnections.$inferSelect

@@ -17,6 +17,7 @@ describe('config for the web app', () => {
       passwordSignUp: false,
       instanceName: null,
       newOrganizations: false,
+      sso: [],
     })
   })
 })

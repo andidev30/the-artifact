@@ -7,6 +7,7 @@ import { hashToken, randomToken, requireUser, startSession, type AuthEnv } from 
 import { createPasswordAccount, userExists } from '../auth/users.js'
 import { db, schema } from '../db/index.js'
 import type { InviteRole, Role, User } from '../db/schema.js'
+import { ssoRequiredError, ssoRequiredFor } from '../ee/sso/connections.js'
 import { env, mailEnabled } from '../env.js'
 import { limitInvites } from '../limits.js'
 import { log } from '../log.js'
@@ -420,6 +421,7 @@ invitations.post('/:token/sign-up', async (c) => {
   if (await userExists(row.invitation.email)) {
     return c.json({ error: `${row.invitation.email} already has an account. Log in to accept.`, code: 'account_exists' }, 409)
   }
+  if (await ssoRequiredFor({ email: row.invitation.email, isAdmin: false, suspendedAt: null })) return c.json(ssoRequiredError, 403)
   const body = (await c.req.json().catch(() => null)) as { password?: unknown; name?: unknown } | null
   const problem = passwordProblem(body?.password)
   if (problem) return c.json({ error: problem, field: 'password' }, 400)
