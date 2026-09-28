@@ -28,6 +28,9 @@ const MAX_SHOT_HEIGHT = 2000
 const MAX_PNG_BYTES = 1_000_000
 const JPEG_QUALITY = 70
 const MAX_ITEMS = 20
+// Distinct items kept per list: a page can log errors or hold links without end, and only MAX_ITEMS
+// of them are shown
+export const MAX_COLLECTED = 1000
 const MAX_VIOLATIONS = 20
 const MAX_TARGETS = 3
 const MAX_TEXT = 300
@@ -65,8 +68,17 @@ const clip = (s: string, n = MAX_TEXT) => (s.length > n ? `${s.slice(0, n - 1)}â
 // Addresses on the page's made-up origin read as its file paths
 const short = (url: string) => (url.startsWith(`${PAGE_ORIGIN}/`) ? url.slice(PAGE_ORIGIN.length + 1) || 'index.html' : url)
 
-function add(list: string[], item: string) {
-  if (!list.includes(item)) list.push(item)
+function add(set: Set<string>, item: string) {
+  if (set.size < MAX_COLLECTED) set.add(item)
+}
+
+const distinct = (items: Iterable<string>) => {
+  const set = new Set<string>()
+  for (const item of items) {
+    if (set.size >= MAX_COLLECTED) break
+    set.add(item)
+  }
+  return [...set]
 }
 
 type Found = { errors: string[]; missing: string[]; failed: string[]; brokenLinks: string[]; blocked: string[]; violations: Violation[]; shot: Shot }
@@ -95,7 +107,7 @@ const HEIGHT = 'Math.max(document.documentElement.scrollHeight, document.body ? 
 
 async function inspectOnce(tree: PageTree, width: Width): Promise<Found> {
   const view = VIEWS[width]
-  const errors: string[] = []
+  const errors = new Set<string>()
   const notes: RequestNotes = { missing: [], failed: [] }
   const files = new Set(['', 'index.html', ...tree.files.map((f) => f.path)])
   return inPage(
@@ -126,8 +138,9 @@ async function inspectOnce(tree: PageTree, width: Width): Promise<Found> {
       const links = (await evaluate(cdp, executionContextId, LINKS)) as string[]
       const pageHeight = Math.ceil(Number(await evaluate(cdp, executionContextId, HEIGHT)) || view.height)
 
-      const brokenLinks: string[] = []
+      const brokenLinks = new Set<string>()
       for (const href of links) {
+        if (brokenLinks.size >= MAX_COLLECTED) break
         let url: URL
         try {
           url = new URL(href)
@@ -158,11 +171,11 @@ async function inspectOnce(tree: PageTree, width: Width): Promise<Found> {
       }
 
       return {
-        errors,
-        missing: [...new Set(notes.missing)],
-        failed: notes.failed.map((f) => `${f.url} (${f.status})`),
-        brokenLinks,
-        blocked: [...new Set(blocked)],
+        errors: [...errors],
+        missing: distinct(notes.missing),
+        failed: distinct(notes.failed.map((f) => `${f.url} (${f.status})`)),
+        brokenLinks: [...brokenLinks],
+        blocked: distinct(blocked),
         violations: found.map((v) => ({ ...v, help: clip(v.help), widths: [width] })),
         shot: { width: view.width, height, pageHeight, mimeType, data: shot.data },
       }
@@ -172,10 +185,11 @@ async function inspectOnce(tree: PageTree, width: Width): Promise<Found> {
 
 function merge(results: { width: Width; found: Found }[]): Inspection {
   const out: Inspection = { widths: [], shots: [], errors: [], missing: [], failed: [], brokenLinks: [], blocked: [], violations: [] }
+  const keys = ['errors', 'missing', 'failed', 'brokenLinks', 'blocked'] as const
+  for (const key of keys) out[key] = distinct(results.flatMap(({ found }) => found[key]))
   for (const { width, found } of results) {
     out.widths.push(width)
     out.shots.push(found.shot)
-    for (const key of ['errors', 'missing', 'failed', 'brokenLinks', 'blocked'] as const) for (const item of found[key]) add(out[key], item)
     for (const v of found.violations) {
       const same = out.violations.find((o) => o.rule === v.rule)
       if (!same) out.violations.push(v)
@@ -280,8 +294,9 @@ export function inspect(versionId: string, widths: Width[]): Promise<InspectAnsw
 function section(title: string, items: string[], none: string): string {
   if (items.length === 0) return `${title}: ${none}`
   const shown = items.slice(0, MAX_ITEMS).map((i) => `- ${i}`)
-  if (items.length > MAX_ITEMS) shown.push(`- and ${items.length - MAX_ITEMS} more`)
-  return `${title} (${items.length}):\n${shown.join('\n')}`
+  const atLeast = items.length >= MAX_COLLECTED
+  if (items.length > MAX_ITEMS) shown.push(`- and ${atLeast ? 'at least ' : ''}${items.length - MAX_ITEMS} more`)
+  return `${title} (${items.length}${atLeast ? ' or more' : ''}):\n${shown.join('\n')}`
 }
 
 // The tool's answer: a text report, then a screenshot per width

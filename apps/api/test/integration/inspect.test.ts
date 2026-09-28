@@ -175,6 +175,32 @@ describe.skipIf(!hasChrome)('inspecting in headless Chrome', { timeout: 60_000 }
     expect(text).toMatch(/desktop 1280×2000 \(the page is \d+ px tall; cut off at 2000\)/)
   })
 
+  it('keeps at most a thousand distinct console errors and broken links', async () => {
+    enable()
+    const owner = await createUser()
+    const page = await publishSite(
+      owner,
+      `<!doctype html><html lang="en"><head><title>Many</title></head><body><main><h1>Many</h1><div id="links"></div>
+      <script>
+        const links = document.getElementById('links')
+        for (let i = 0; i < 1500; i++) {
+          console.error('Problem ' + i); console.error('Problem 0')
+          const a = document.createElement('a')
+          a.href = 'gone-' + i + '.html'
+          a.textContent = 'Gone ' + i
+          links.append(a)
+        }
+      </script></main></body></html>`,
+      [],
+    )
+    const { text, isError } = await inspectRaw(await agentFor(owner), { artifact_id: page.slug })
+    expect(isError).toBe(false)
+    expect(text).toContain('Console errors and uncaught exceptions (1000 or more):\n- Problem 0 (index.html:')
+    expect(text).toContain('- and at least 980 more')
+    expect(text).toContain("Links to files the page doesn't have (1000 or more):\n- gone-0.html\n- gone-1.html")
+    expect(text.match(/- Problem 0 /g)).toHaveLength(1)
+  })
+
   it('finds nothing wrong with a clean page, at desktop and phone width', async () => {
     enable()
     const owner = await createUser()
