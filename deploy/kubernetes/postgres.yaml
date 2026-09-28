@@ -45,7 +45,7 @@ spec:
             - containerPort: 5432
           readinessProbe:
             exec:
-              command: ['pg_isready', '-U', 'artifact']
+              command: ['pg_isready', '-U', 'artifact', '-h', '127.0.0.1']
             periodSeconds: 5
           resources:
             requests:
