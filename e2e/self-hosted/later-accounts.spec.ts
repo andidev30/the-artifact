@@ -86,9 +86,14 @@ test('an admin who has not set the server up yet can skip naming an organization
   await expectPersonalWorkspace(page)
 })
 
-test('the hosted service legal pages are not found on a self-hosted install', async ({ page }) => {
+test('the hosted service legal pages and Vercel analytics are not on a self-hosted install', async ({ page }) => {
+  const vercel: string[] = []
+  page.on('request', (req) => {
+    if (req.url().includes('/_vercel/')) vercel.push(req.url())
+  })
   for (const doc of ['terms', 'privacy', 'subprocessors', 'dpa']) {
     await page.goto(`/legal/${doc}`)
     await expect(page.getByRole('heading', { name: /This page doesn.t exist/ })).toBeVisible()
   }
+  expect(vercel).toEqual([])
 })

@@ -84,7 +84,7 @@ If you use the contact sales form, we receive your name, work email, company, te
 
 ### Website analytics
 
-On the website and in the app, we use Vercel Web Analytics and Vercel Speed Insights. They record the address of the screen you open, the page you came from, your browser, operating system, device type and country, and how fast the screen loaded. They use no cookies. Vercel tells visitors apart with a hash of the request that changes every day, so they can't follow you over time or across sites. We use this to see which parts of the site are used and to find slow screens.
+On the website and in the app, we use Vercel Web Analytics and Vercel Speed Insights. They record the address of the screen you open, the page you came from, your browser, operating system, device type and country, and how fast the screen loaded. Before an address leaves your browser, we remove everything after a "?" or "#", invitation tokens and page links, so sign-in links and private links never reach Vercel. The analytics are not loaded on self-hosted installs. They use no cookies. Vercel tells visitors apart with a hash of the request that changes every day, so they can't follow you over time or across sites. We use this to see which parts of the site are used and to find slow screens.
 
 ### Rate limits
 

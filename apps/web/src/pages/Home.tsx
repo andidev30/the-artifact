@@ -7,6 +7,7 @@ import { ServerUnreachable } from './Status'
 const Landing = lazy(() => import('../ee/Landing').then((m) => ({ default: m.Landing })))
 const ContactSales = lazy(() => import('../ee/ContactSales').then((m) => ({ default: m.ContactSales })))
 const Legal = lazy(() => import('../ee/Legal').then((m) => ({ default: m.Legal })))
+const Insights = lazy(() => import('../ee/Insights').then((m) => ({ default: m.Insights })))
 
 // Nothing until the config says which kind of install this is, so a self-hosted one never flashes
 // the marketing site. A self-hosted install is the product itself.
@@ -36,6 +37,18 @@ export function LegalPage() {
     <CloudOnly>
       <Legal />
     </CloudOnly>
+  )
+}
+
+// Vercel Web Analytics and Speed Insights, on the hosted service only: a self-hosted install sends
+// nothing to Vercel
+export function HostedInsights() {
+  const config = useConfig()
+  if (!config || config.unreachable || config.selfHosted) return null
+  return (
+    <Suspense fallback={null}>
+      <Insights />
+    </Suspense>
   )
 }
 
