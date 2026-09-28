@@ -721,7 +721,9 @@ test('webhooks in account settings', async ({ page }) => {
   await section.getByRole('button', { name: 'Done' }).click()
 
   await section.getByRole('button', { name: 'Send a test to hooks.example.invalid' }).press('Enter')
-  await expect(section.getByText('hooks.example.invalid could not be found.')).toBeVisible()
+  await expect(
+    section.getByText('Webhooks can’t reach hooks.example.invalid: it could not be found, or it is on a private network or a reserved address.'),
+  ).toBeVisible()
   await section.getByRole('button', { name: 'Recent deliveries' }).press('Enter')
   await expect(section.getByRole('table', { name: 'Recent deliveries to hooks.example.invalid' })).toBeVisible()
   await expectAccessible(page, 'account settings, webhook deliveries')
