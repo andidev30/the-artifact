@@ -173,6 +173,29 @@ describe('users', () => {
     expect([403, 409]).toContain(statuses[1])
   })
 
+  it('won’t let two admins delete their own accounts at the same moment and leave none', async () => {
+    const other = await createUser({ admin: true })
+    await createUser()
+    const results = await Promise.all([
+      call('/api/me', { method: 'DELETE', cookie: admin.cookie, json: { confirmEmail: admin.email } }),
+      call('/api/me', { method: 'DELETE', cookie: other.cookie, json: { confirmEmail: other.email } }),
+    ])
+    expect(results.map((r) => r.status).sort()).toEqual([204, 409])
+    expect(await db.select().from(schema.users).where(eq(schema.users.isAdmin, true))).toHaveLength(1)
+  })
+
+  it('won’t let two admins delete each other at the same moment', async () => {
+    const other = await createUser({ admin: true })
+    await createUser()
+    const results = await Promise.all([
+      call(`/api/admin/users/${other.id}`, { method: 'DELETE', cookie: admin.cookie, json: { confirmEmail: other.email } }),
+      call(`/api/admin/users/${admin.id}`, { method: 'DELETE', cookie: other.cookie, json: { confirmEmail: admin.email } }),
+    ])
+    // The second finds it is no longer an admin, or no longer has an account
+    expect(results.map((r) => r.status).sort()).toEqual([204, 403])
+    expect(await db.select().from(schema.users).where(eq(schema.users.isAdmin, true))).toHaveLength(1)
+  })
+
   it('won’t let you delete your own account while you are the only admin', async () => {
     await createUser()
     const res = await call('/api/me', { method: 'DELETE', cookie: admin.cookie, json: { confirmEmail: admin.email } })

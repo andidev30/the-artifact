@@ -150,9 +150,10 @@ export const lastAdminError = {
   code: 'last_admin',
 }
 
-// True when deleting this person would leave an instance with other people but no admin
-export async function isLastAdmin(user: Pick<User, 'id' | 'isAdmin' | 'suspendedAt'>): Promise<boolean> {
-  if (!isInstanceAdmin(user) || (await activeAdminCount()) > 1) return false
-  const [other] = await db.select({ id: schema.users.id }).from(schema.users).where(ne(schema.users.id, user.id)).limit(1)
+// True when deleting this person would leave an instance with other people but no admin. Only
+// final inside a transaction holding lockAdmins, with `user` read under it.
+export async function isLastAdmin(user: Pick<User, 'id' | 'isAdmin' | 'suspendedAt'>, tx: Tx | typeof db = db): Promise<boolean> {
+  if (!isInstanceAdmin(user) || (await activeAdminCount(tx)) > 1) return false
+  const [other] = await tx.select({ id: schema.users.id }).from(schema.users).where(ne(schema.users.id, user.id)).limit(1)
   return Boolean(other)
 }

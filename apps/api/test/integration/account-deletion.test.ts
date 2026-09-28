@@ -131,6 +131,36 @@ describe('deleting an account', () => {
     expect(await db.select().from(schema.users).where(eq(schema.users.id, founder.id))).toHaveLength(1)
   })
 
+  it('leaves an owner when two owners delete their accounts at the same moment', async () => {
+    const [ana, ben] = [await createUser({ email: 'ana@example.com' }), await createUser({ email: 'ben@example.com' })]
+    const org = await createOrg(ana, 'Acme', 'acme')
+    await addMember(org.id, ben, 'owner')
+    await addMember(org.id, await createUser(), 'member')
+
+    const results = await Promise.all([deleteAccount(ana), deleteAccount(ben)])
+    expect(results.map((r) => r.status).sort()).toEqual([204, 409])
+    const owners = await db
+      .select()
+      .from(schema.memberships)
+      .where(and(eq(schema.memberships.organizationId, org.id), eq(schema.memberships.role, 'owner')))
+    expect(owners).toHaveLength(1)
+  })
+
+  it('leaves an owner when one owner deletes their account while the other leaves', async () => {
+    const [ana, ben] = [await createUser({ email: 'ana@example.com' }), await createUser({ email: 'ben@example.com' })]
+    const org = await createOrg(ana, 'Acme', 'acme')
+    await addMember(org.id, ben, 'owner')
+    await addMember(org.id, await createUser(), 'member')
+
+    const results = await Promise.all([deleteAccount(ana), call(`/api/organizations/${org.id}/members/${ben.id}`, { method: 'DELETE', cookie: ben.cookie })])
+    expect(results.map((r) => r.status).sort()).toEqual([204, 409])
+    const owners = await db
+      .select()
+      .from(schema.memberships)
+      .where(and(eq(schema.memberships.organizationId, org.id), eq(schema.memberships.role, 'owner')))
+    expect(owners).toHaveLength(1)
+  })
+
   it('deletes organizations with nobody else in them, with their pages', async () => {
     const solo = await createUser({ email: 'solo@example.com' })
     const org = await createOrg(solo, 'Solo Co', 'solo')
