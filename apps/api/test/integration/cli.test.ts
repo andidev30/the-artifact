@@ -232,6 +232,8 @@ describe('the-artifact publish --watch', () => {
     env.storage.publicEndpoint = process.env.S3_PUBLIC_ENDPOINT ?? ''
   })
 
+  // Each change waits for a poll (1 s) and the debounce (0.5 s) before it publishes, so a test with a
+  // few changes outlasts vitest's 5 s default on a busy runner; the tests get 30 s
   async function until(check: () => boolean, what: string) {
     const end = Date.now() + 15_000
     while (!check()) {
@@ -272,7 +274,7 @@ describe('the-artifact publish --watch', () => {
     expect(res.stdout.trim().split('\n').map(pageId)).toEqual([slug, slug])
     const [, second] = await versions(slug)
     expect(second.publishedWith).toBe('GitHub Actions')
-  })
+  }, 30_000)
 
   it('sends whole pages to a server without direct uploads, and keeps going after a refused one', async () => {
     env.storage.publicEndpoint = ''
@@ -293,7 +295,7 @@ describe('the-artifact publish --watch', () => {
 
     watch.child.kill('SIGINT')
     expect((await watch.done).code).toBe(0)
-  })
+  }, 30_000)
 })
 
 describe('the-artifact list and share', () => {
