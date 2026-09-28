@@ -10,8 +10,9 @@ The app aims to meet WCAG 2.1 AA. Every screen works with a keyboard alone and w
 | A page's **⋯** menu | **Enter**, **Space** or **↓** opens it on the first item, **↑** on the last. **↑** and **↓** move between items, **Home** and **End** go to the first and last. **Escape** closes it and returns focus to the button. |
 | Your name and the workspace switcher in the header | **Enter** or **Space** opens the list. **↑** and **↓** move through it, **Tab** moves on and closes it, **Escape** closes it and returns focus to the button. |
 | Gallery tabs | **←** and **→** switch between your pages and **Shared with you**. |
-| Dialogs (**Share**, **Rename**, **Move to folder**, **Tags**, **Delete**) | Focus moves into the dialog and stays there while you tab. **Escape** closes it and returns focus to the button that opened it. |
-| **History** and **Comments** | The panel takes focus when it opens. **Escape** closes it and returns focus to its button. |
+| Dialogs (**Share**, **Rename**, **Move to folder**, **Duplicate**, **Move to workspace**, **Tags**, **Delete**, and the folder dialogs **New folder**, **Rename folder** and **Delete folder**) | Focus moves into the dialog and stays there while you tab. **Escape** closes it and returns focus to the button that opened it. |
+| Buttons that ask before they act (**Delete**, **Revoke**, **Remove**, **Suspend**) | Focus moves to the button that confirms, or to the field where you type to confirm. **Cancel** returns focus to the button you started from. |
+| **History** and **Comments** | The panel takes focus when it opens. **Escape** closes it and returns focus to its button. In a reply or an edit, **Ctrl+Enter** (**⌘+Enter** on a Mac) sends it and **Escape** cancels it without closing the panel. |
 
 The focused control always has a visible outline.
 
