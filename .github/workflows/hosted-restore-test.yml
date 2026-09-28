@@ -52,8 +52,9 @@ jobs:
           POSTGRES_DB: restore
         ports:
           - 5432:5432
+        # Over TCP: the image's init server listens only on the socket and then shuts down
         options: >-
-          --health-cmd "pg_isready -U artifact"
+          --health-cmd "pg_isready -U artifact -h 127.0.0.1"
           --health-interval 2s
           --health-timeout 5s
           --health-retries 30

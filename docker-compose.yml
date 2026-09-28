@@ -9,6 +9,13 @@ services:
       - '5432:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
+    # Over TCP on purpose: on first start the image runs a temporary server for init that listens only on the
+    # socket, so a socket check passes and then the server shuts down under whoever trusted it
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-U', 'artifact', '-h', '127.0.0.1']
+      interval: 2s
+      timeout: 5s
+      retries: 30
 
   # Catches outgoing mail locally; open http://localhost:8025 to read it
   mailpit:

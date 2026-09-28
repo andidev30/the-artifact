@@ -72,10 +72,9 @@ jobs:
 
       - name: Start Postgres, MinIO and Mailpit
         run: |
-          docker compose up -d
-          until docker compose exec -T postgres pg_isready -U artifact; do sleep 1; done
+          docker compose up -d --wait --wait-timeout 120
           until curl -sf http://localhost:9000/minio/health/live; do sleep 1; done
-          docker compose exec -T postgres createdb -U artifact artifact_test
+          docker compose exec -T postgres createdb -U artifact -h 127.0.0.1 artifact_test
 
       # Chrome's sandbox needs unprivileged user namespaces, which Ubuntu 24.04 restricts by default
       - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
@@ -102,10 +101,9 @@ jobs:
 
       - name: Start Postgres, MinIO and Mailpit
         run: |
-          docker compose up -d
-          until docker compose exec -T postgres pg_isready -U artifact; do sleep 1; done
+          docker compose up -d --wait --wait-timeout 120
           until curl -sf http://localhost:9000/minio/health/live; do sleep 1; done
-          docker compose exec -T postgres createdb -U artifact artifact_test
+          docker compose exec -T postgres createdb -U artifact -h 127.0.0.1 artifact_test
 
       - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
