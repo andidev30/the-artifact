@@ -1,11 +1,11 @@
 name: Hosted migrate
 
-# Applies new migrations to the hosted service's database on every push to main. The Vercel function
-# never runs them, so without this a release that adds a table ships code that queries a table that
-# isn't there (it happened with 0016-0022). A backup runs first and is kept like the nightly ones.
-# Runs on every push, not only ones that touch migrations, so Vercel can require this check before it
-# promotes any production deployment (Deployment Checks); pushes without a new migration finish in
-# about a minute. Skipped until HOSTED_DATABASE_URL exists. See ee/ops/runbook.md.
+# Applies new migrations to the hosted service's database on every push to main, then deploys it. The
+# Vercel function never runs migrations, and Vercel no longer deploys main by itself (vercel.json turns
+# git deployments of main off): production is deployed here, through the deploy hook, only after the
+# migrations for that commit are in. Without that a release could query tables that aren't there yet,
+# which happened with 0016-0022. A backup runs before any migration and is kept like the nightly ones.
+# Pull request previews still deploy on their own. Setup: ee/ops/runbook.md.
 on:
   push:
     branches: [main]
@@ -91,3 +91,16 @@ jobs:
         run: |
           pnpm --filter @the-artifact/api db:migrate
           echo "Applied ${{ steps.pending.outputs.count }} migration(s)" >> "$GITHUB_STEP_SUMMARY"
+
+      # success() is also true when the database secrets are missing and the steps above were skipped,
+      # so production keeps deploying before backups are set up
+      - name: Deploy production
+        env:
+          VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$VERCEL_DEPLOY_HOOK" ]; then
+            echo "::error::VERCEL_DEPLOY_HOOK is not set, so nothing deploys main (see ee/ops/runbook.md)"
+            exit 1
+          fi
+          curl -fsS -X POST "$VERCEL_DEPLOY_HOOK" > /dev/null
+          echo "Production deployment started" >> "$GITHUB_STEP_SUMMARY"
