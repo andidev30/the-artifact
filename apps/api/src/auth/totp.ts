@@ -1,5 +1,5 @@
-import { createCipheriv, createDecipheriv, createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
-import { serverSecret } from '../secrets.js'
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
+import { seal, unseal } from '../secrets.js'
 
 // Authenticator apps (RFC 6238): 6 digits, 30-second steps, HMAC-SHA1, which is what every app
 // supports. A code is accepted for the step before and after the current one too, for clocks that
@@ -86,19 +86,5 @@ export function otpauthUrl(secret: Buffer, issuer: string, account: string): str
 // Secrets are stored encrypted (AES-256-GCM) with a key from server_secrets, so a copy of the
 // totp_secrets table alone, or a query log, doesn't give anyone the codes. A full database backup
 // holds the key too; see docs/security.md.
-const key = () => serverSecret('two-factor')
-
-export async function sealSecret(secret: Buffer): Promise<string> {
-  const iv = randomBytes(12)
-  const cipher = createCipheriv('aes-256-gcm', await key(), iv)
-  const body = Buffer.concat([cipher.update(secret), cipher.final()])
-  return ['v1', iv.toString('base64url'), body.toString('base64url'), cipher.getAuthTag().toString('base64url')].join('.')
-}
-
-export async function openSecret(sealed: string): Promise<Buffer> {
-  const [version, iv, body, tag] = sealed.split('.')
-  if (version !== 'v1' || !iv || !body || !tag) throw new Error('Unknown TOTP secret format')
-  const decipher = createDecipheriv('aes-256-gcm', await key(), Buffer.from(iv, 'base64url'))
-  decipher.setAuthTag(Buffer.from(tag, 'base64url'))
-  return Buffer.concat([decipher.update(Buffer.from(body, 'base64url')), decipher.final()])
-}
+export const sealSecret = (secret: Buffer) => seal('two-factor', secret)
+export const openSecret = (sealed: string) => unseal('two-factor', sealed)

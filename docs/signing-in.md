@@ -4,15 +4,20 @@ You sign in with an email link, a password (on servers that don't send email), G
 
 Everything here is in **Account settings**, under **Sign-in security** and **Sessions**.
 
+## Single sign-on
+
+On a server set up for [single sign-on](/docs/sso), the login page has a **Continue with** button for your organization's identity provider, such as Okta or Microsoft Entra ID. It signs you in to the account with your work address, and creates one the first time if you don't have one yet. If the server requires single sign-on for your address, the other ways in send you back to that button.
+
 ## Two-factor sign-in
 
-Two-factor sign-in is on once your account has a passkey or an authenticator app. After your password, email link or Google, the app shows **Confirm it’s you** and asks for one of them. You are signed in only after that step, and the step has to be finished within 10 minutes.
+Two-factor sign-in is on once your account has a passkey or an authenticator app. After your password, email link, Google or single sign-on, the app shows **Confirm it’s you** and asks for one of them. You are signed in only after that step, and the step has to be finished within 10 minutes.
 
 | You sign in with | Also asked for |
 | --- | --- |
 | A password | A passkey, a code from your authenticator app, or a recovery code |
 | An email link, including one an admin gave you | The same |
 | Google | The same |
+| Single sign-on | The same |
 | A passkey on its own | Nothing: the passkey is something you have, and unlocking it (fingerprint, face, PIN) is something you are or know |
 
 Changes under **Sign-in security** need a sign-in from the last hour. If yours is older, choose **Sign in again** first. This keeps someone who got hold of a browser where you are signed in from adding their own passkey or taking your recovery codes.

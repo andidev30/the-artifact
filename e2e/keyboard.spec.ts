@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
-import { createHostedOrganization, forgetSignInLinks } from '../apps/api/test/e2e-db.ts'
-import { connectAgent, latestMail, mockAuditLog, mockRetention, publishViaMcp, signUpPersonal, uniqueEmail } from './helpers'
+import { createHostedOrganization, forgetSignInLinks, grantInstanceAdmin } from '../apps/api/test/e2e-db.ts'
+import { connectAgent, latestMail, licensedSso, mockAuditLog, mockRetention, publishViaMcp, signUpPersonal, uniqueEmail } from './helpers'
 
 // Every flow here is driven with the keyboard alone: no clicks, no fill()
 
@@ -406,4 +406,66 @@ test('set a version retention policy, confirming what it removes', async ({ page
   await expect(section.getByText('Saved.')).toBeVisible()
   await expect(section.getByText('Now: Older versions are kept for 2 years, and at most 5 versions per page.')).toBeFocused()
   expect(saves).toEqual([{ keepDays: 730, keepVersions: 5 }])
+})
+
+test('single sign-on: the sign-in button and adding a provider in Server admin', async ({ page, browser }) => {
+  const signedOutContext = await browser.newContext()
+  const signedOut = await signedOutContext.newPage()
+  await licensedSso(signedOut)
+  await signedOut.goto('/login')
+  const button = signedOut.getByRole('link', { name: 'Continue with Okta' })
+  await tabTo(signedOut, button)
+  await expectFocusRing(button)
+  await signedOutContext.close()
+
+  const email = uniqueEmail('kb-sso')
+  await signUpPersonal(page, email)
+  await grantInstanceAdmin(email)
+  await licensedSso(page)
+  await page.goto('/admin')
+  const sso = page.locator('section#sso')
+  await expect(sso.getByRole('button', { name: 'Add a provider' })).toBeVisible()
+
+  // The section rail jumps there, so the lists above (which grow with every account on the server)
+  // don't decide how many Tabs it takes
+  const railLink = page.getByRole('navigation', { name: 'Admin sections' }).getByRole('link', { name: 'Single sign-on' })
+  await tabTo(page, railLink)
+  await expectFocusRing(railLink)
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(/#sso$/)
+
+  // Adding a provider: the form takes focus, and saving puts it back on the button that opened it
+  const add = sso.getByRole('button', { name: 'Add a provider' })
+  await tabTo(page, add, { max: 20 })
+  await expectFocusRing(add)
+  await page.keyboard.press('Enter')
+  await expect(sso.getByLabel('Name on the button')).toBeFocused()
+  await page.keyboard.type('Keycloak')
+  await page.keyboard.press('Tab')
+  await page.keyboard.type('https://sso.acme.example/realms/acme')
+  await page.keyboard.press('Tab')
+  await page.keyboard.type('the-artifact')
+  await page.keyboard.press('Tab')
+  await page.keyboard.type('a-client-secret')
+  await page.keyboard.press('Enter')
+  await expect(sso.getByText('Keycloak', { exact: true })).toBeVisible()
+  await expect(add).toBeFocused()
+
+  // Remove asks first; cancelling puts focus back on Remove
+  const remove = sso.getByRole('button', { name: 'Remove Okta' })
+  await tabTo(page, remove, { back: true })
+  await page.keyboard.press('Enter')
+  await expect(sso.getByRole('button', { name: 'Remove', exact: true })).toBeFocused()
+  await page.keyboard.press('Tab')
+  await page.keyboard.press('Enter')
+  await expect(remove).toBeFocused()
+
+  // Edit opens the form on the first field; Cancel closes it and returns to Edit
+  const edit = sso.getByRole('button', { name: 'Edit Okta' })
+  await tabTo(page, edit, { back: true })
+  await page.keyboard.press('Enter')
+  await expect(sso.getByLabel('Name on the button')).toBeFocused()
+  await tabTo(page, sso.getByRole('button', { name: 'Cancel' }))
+  await page.keyboard.press('Enter')
+  await expect(edit).toBeFocused()
 })

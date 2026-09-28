@@ -14,6 +14,8 @@ import { contact } from './ee/contact.js'
 import { issuedLicenses } from './ee/licenses.js'
 import { historyCron, organizationPlan, personalPlan } from './ee/plans.js'
 import { pruneRetention, retention } from './ee/retention.js'
+import { ssoButtons } from './ee/sso/connections.js'
+import { ssoAdmin, ssoSignIn } from './ee/sso/routes.js'
 import { embeds } from './embeds.js'
 import { env, mailEnabled } from './env.js'
 import { addPruner } from './gc.js'
@@ -86,6 +88,8 @@ api.get('/config', async (c) =>
     instanceName: (await instanceSettings()).instanceName,
     // Off on the hosted service until the Organization plan has billing; the app hides the ways in
     newOrganizations: newOrganizationsOpen(),
+    // Enterprise single sign-on buttons; none without a license that counts
+    sso: await ssoButtons(),
   }),
 )
 
@@ -94,6 +98,7 @@ api.route('/auth/email', email)
 api.route('/auth/password', password)
 api.route('/auth/two-factor', twoFactor)
 api.route('/auth/passkey', passkeySignIn)
+api.route('/auth/sso', ssoSignIn)
 
 api.post('/auth/logout', async (c) => {
   await endSession(c)
@@ -118,6 +123,7 @@ api.route('/me/security', security)
 api.route('/me/sessions', sessions)
 api.route('/me', settings)
 api.route('/admin/issued-licenses', issuedLicenses)
+api.route('/admin/sso', ssoAdmin)
 api.route('/admin', admin)
 api.route('/cron/history', historyCron)
 api.route('/cron', cron)

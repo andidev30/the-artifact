@@ -5,6 +5,7 @@ import { db, schema } from '../db/index.js'
 import { mailEnabled } from '../env.js'
 import { hasAccounts, instanceSettings, lockAdmins, newAccountFields } from '../instance.js'
 import { atLimit, clearHits, clientIp, hit, limitRequest, tooManyRequests, waitText } from '../limits.js'
+import { ssoRequiredError, ssoRequiredFor } from '../ee/sso/connections.js'
 import { startSession } from './session.js'
 import { continueSignIn, signInFailed } from './twofactor.js'
 import { EMAIL_RE } from '../validation.js'
@@ -159,6 +160,7 @@ password.post('/sign-up', async (c) => {
       409,
     )
   }
+  if (await ssoRequiredFor({ email, isAdmin: false, suspendedAt: null })) return c.json({ ...ssoRequiredError, field: 'email' }, 403)
   const problem = passwordProblem(body?.password)
   if (problem) return c.json({ error: problem, field: 'password' }, 400)
 

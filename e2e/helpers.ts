@@ -171,3 +171,57 @@ export async function mockAuditLog(page: Page, { licensed = true, events = 60 } 
   )
   return asked
 }
+
+export const SSO_CONNECTION = {
+  id: '0b5e8a52-8f3c-4d59-9a53-5f0f3f7d2c11',
+  protocol: 'oidc',
+  name: 'Okta',
+  enabled: true,
+  issuer: 'https://acme.okta.com',
+  clientId: 'the-artifact',
+  hasClientSecret: true,
+  trustEmail: false,
+  allowedDomains: ['acme.example'],
+  required: true,
+  organizationId: null,
+  createdAt: '2026-09-01T00:00:00.000Z',
+  updatedAt: '2026-09-01T00:00:00.000Z',
+}
+
+// Single sign-on needs an Enterprise license on a self-hosted install, which the e2e servers don't
+// have (license keys are only signed by the hosted service), so its screens are shown by answering
+// the API the way a licensed install would. What the API does is in apps/api/test/integration/sso.test.ts.
+export async function licensedSso(page: Page) {
+  await page.route('**/api/config', async (route) => {
+    const response = await route.fetch()
+    await route.fulfill({ response, json: { ...(await response.json()), selfHosted: true, sso: [{ id: SSO_CONNECTION.id, name: 'Okta' }] } })
+  })
+  await page.route('**/api/admin/sso', (route) =>
+    route.request().method() === 'POST'
+      ? route.fulfill({ status: 201, json: { ...SSO_CONNECTION, id: '7d0c1f4e-2b8a-4c3d-9e6f-1a2b3c4d5e6f', name: 'Keycloak', required: false } })
+      : route.fulfill({ json: { redirectUri: 'http://localhost:5177/api/auth/sso/oidc/callback', connections: [SSO_CONNECTION], organizations: [] } }),
+  )
+  await page.route('**/api/admin/license', (route) =>
+    route.fulfill({
+      json: {
+        status: 'active',
+        invalid: null,
+        license: {
+          id: '6f1c0b8e-4a8f-4f8e-9d7a-2b1f1c0e5a11',
+          customer: 'Acme Inc',
+          email: 'it@acme.example',
+          seats: 50,
+          issuedAt: '2026-01-01T00:00:00.000Z',
+          expiresAt: '2099-01-01T00:00:00.000Z',
+          graceEndsAt: '2099-01-15T00:00:00.000Z',
+        },
+        seatsInUse: 3,
+      },
+    }),
+  )
+  await page.route('**/api/admin/sso/test-result', (route) =>
+    route.fulfill({
+      json: { connectionId: SSO_CONNECTION.id, ok: true, subject: '00u1abcd', email: 'ada@acme.example', emailVerified: true, name: 'Ada', accepted: true },
+    }),
+  )
+}

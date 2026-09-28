@@ -13,7 +13,8 @@ import { hasSecondFactor, organizationsRequiringFactor } from './factors.js'
 import { authenticationOptions, PasskeyError, verifyAuthentication } from './passkeys.js'
 import { hashToken, randomToken, startSession } from './session.js'
 import { matchTotp, openSecret } from './totp.js'
-import { afterSignInUrl, safeNext } from './users.js'
+import { ssoRequiredError, ssoRequiredFor } from '../ee/sso/connections.js'
+import { afterSignInUrl, safeNext, signInErrorUrl } from './users.js'
 
 // Two-factor sign-in. Every first factor (a password, an email link, an admin's link, Google) ends in
 // continueSignIn: an account with a passkey or an authenticator app gets a pending sign-in instead of
@@ -31,13 +32,18 @@ const RECOVERY_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789'
 const RECOVERY_LENGTH = 10
 
 // After the first factor: a session, or a pending sign-in when the account has a second factor.
-// Returns where the browser goes next.
+// Returns where the browser goes next. Someone who must sign in through SSO (an Enterprise feature,
+// src/ee/sso/) is sent back to the sign-in page unless this first factor was SSO.
 export async function continueSignIn(
   c: Context,
-  user: Pick<User, 'id' | 'email'>,
+  user: Pick<User, 'id' | 'email' | 'isAdmin' | 'suspendedAt'>,
   redirect: string,
-  method: 'password' | 'email link' | 'google',
+  method: 'password' | 'email link' | 'google' | 'sso',
 ): Promise<string> {
+  if (method !== 'sso' && (await ssoRequiredFor(user))) {
+    signInFailed(user, 'single sign-on required')
+    return signInErrorUrl('sso_required')
+  }
   if (await hasSecondFactor(user.id)) {
     const token = randomToken()
     await db.delete(schema.pendingSignIns).where(lt(schema.pendingSignIns.expiresAt, new Date()))
@@ -256,12 +262,16 @@ passkeySignIn.post('/', async (c) => {
     throw err
   }
   const [user] = await db
-    .select({ id: schema.users.id, email: schema.users.email, suspendedAt: schema.users.suspendedAt })
+    .select({ id: schema.users.id, email: schema.users.email, isAdmin: schema.users.isAdmin, suspendedAt: schema.users.suspendedAt })
     .from(schema.users)
     .where(eq(schema.users.id, passkey.userId))
   if (user?.suspendedAt) {
     signInFailed(user, 'account suspended')
     return c.json({ error: 'This account is suspended. Ask an admin of this server to restore it.', code: 'account_suspended' }, 403)
+  }
+  if (user && (await ssoRequiredFor(user))) {
+    signInFailed(user, 'single sign-on required')
+    return c.json(ssoRequiredError, 403)
   }
   await startSession(c, passkey.userId)
   if (user) signedIn(user, { method: 'passkey' })
