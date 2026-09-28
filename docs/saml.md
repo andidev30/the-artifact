@@ -57,7 +57,7 @@ In **Server admin** > **Single sign-on**, choose **Add a provider**, choose **SA
 | **Metadata URL** | The IdP's metadata URL. The server downloads it on every save, which also picks up a new signing certificate after the IdP rotates it |
 | **Or paste the metadata XML** | The metadata file, for IdPs that only give you one. When editing, leave both empty to keep the IdP as it is |
 | **Email attribute**, **Name attribute** | Optional; see [What your IdP needs](#what-your-idp-needs-from-this-server) |
-| **Allow sign-in started from the IdP's app dashboard** | Off unless you need it; see [below](#signing-in-from-the-idp-s-dashboard) |
+| **Allow sign-in started from the IdP's app dashboard** | Off unless you need it; see [below](#signing-in-from-the-idps-dashboard) |
 | **Email domains**, **Organization for new people**, **Require single sign-on**, **Show on the sign-in page** | As for any provider; see [Set it up](/docs/sso#set-it-up) |
 
 When you save, the server reads the metadata and refuses it if it has no sign-in address for the HTTP-Redirect binding or no signing certificate. SAML providers have no **Test connection**; sign in with the button in a private window to try one.

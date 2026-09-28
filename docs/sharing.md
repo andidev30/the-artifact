@@ -87,7 +87,7 @@ What is recorded:
 - After 90 days, the record of who opened a page and when is deleted. The counts stay. Deleting your account deletes the records of what you opened; deleting a page deletes its views.
 - **Views** lists each person once, with when they last opened the page, which version, and how many times in the last 90 days.
 
-Agents can read the same numbers with `list_views` (see [Publishing](/docs/publishing#list-views)).
+Agents can read the same numbers with `list_views` (see [Publishing](/docs/publishing#list_views)).
 
 ## Link previews
 

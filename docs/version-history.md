@@ -29,7 +29,7 @@ To keep a copy, choose **Download** in the **…** menu while viewing a version:
 
 ## From your agent
 
-Agents see the same history with `list_versions`, compare two versions with `diff_versions`, restore with `restore_version` and download a version with `download_artifact`, with the same rules as the app (see [Publishing](/docs/publishing#list-versions)). Ask in plain words, for example "what changed since yesterday?" or "go back to the version from this morning".
+Agents see the same history with `list_versions`, compare two versions with `diff_versions`, restore with `restore_version` and download a version with `download_artifact`, with the same rules as the app (see [Publishing](/docs/publishing#list_versions)). Ask in plain words, for example "what changed since yesterday?" or "go back to the version from this morning".
 
 ## How long versions are kept
 
