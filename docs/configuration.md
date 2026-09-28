@@ -145,6 +145,7 @@ Each limit counts something for one key (an email address, an account, or a netw
 | `unshare` | People one account removes from pages | 200 per hour |
 | `mcp` | MCP tool calls by one account, all agents together | 600 per 10 minutes |
 | `publish` | New pages and versions one account publishes through agents (`publish_artifact`, `update_files`, `publish_upload`, `restore_version`, `duplicate_artifact`, also counted in `mcp`), with an access token (`POST /api/publish`), or by duplicating a page in the app | 200 per hour |
+| `upload` | Megabytes one account gets upload links for from `prepare_upload` (only with `S3_PUBLIC_ENDPOINT`), rounded up per call. Content already stored in its own pages doesn't count | 2048 per hour |
 | `inspect` | Pages one account has opened on the server with `inspect_artifact`, each a few seconds of Chromium (also counted in `mcp`) | 100 per hour |
 | `access-token` | [Access tokens](/docs/connect-your-agent#publishing-from-ci) one account creates in **Account settings** | 20 per hour |
 | `comment` | Comments and replies one account writes, in the app or through agents (`add_comment`, `reply_comment`) | 120 per hour |
