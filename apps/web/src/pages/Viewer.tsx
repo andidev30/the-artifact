@@ -5,6 +5,7 @@ import { CommentsPanel } from '../components/CommentsPanel'
 import { HistoryPanel, OldVersionBar, type Viewing } from '../components/HistoryPanel'
 import { DeleteDialog, PageMenu, RenameDialog, type MenuItem } from '../components/PageActions'
 import { ShareDialog } from '../components/ShareDialog'
+import { ViewsPanel } from '../components/ViewsPanel'
 import { Wordmark } from '../components/Wordmark'
 import { LOGIN_URL } from '../config'
 import { timeAgo } from '../time'
@@ -130,15 +131,16 @@ function PageFrame({ page, email, onChange }: { page: ArtifactPage; email: strin
   const pageRef = useRef(page)
   pageRef.current = page
   // One side panel at a time. Links in comment emails end in ?comments, which opens that one.
-  const [panel, setPanel] = useState<'history' | 'comments' | null>(() =>
+  const [panel, setPanel] = useState<'history' | 'comments' | 'views' | null>(() =>
     page.comments && new URLSearchParams(window.location.search).has('comments') ? 'comments' : null,
   )
-  const toggle = (which: 'history' | 'comments') => setPanel((p) => (p === which ? null : which))
+  const toggle = (which: 'history' | 'comments' | 'views') => setPanel((p) => (p === which ? null : which))
   const historyButton = useRef<HTMLButtonElement>(null)
   const commentsButton = useRef<HTMLButtonElement>(null)
+  const viewsButton = useRef<HTMLButtonElement>(null)
   // The panel took focus when it opened; closing it hands focus back to the button that opened it
   function closePanel() {
-    const button = panel === 'history' ? historyButton : commentsButton
+    const button = panel === 'history' ? historyButton : panel === 'views' ? viewsButton : commentsButton
     setPanel(null)
     button.current?.focus()
   }
@@ -209,6 +211,19 @@ function PageFrame({ page, email, onChange }: { page: ArtifactPage; email: strin
               )}
             </button>
           )}
+          {page.canEdit && typeof page.views === 'number' && (
+            <button
+              ref={viewsButton}
+              type="button"
+              className="viewer-history viewer-comments"
+              aria-expanded={panel === 'views'}
+              aria-controls="views-panel"
+              onClick={() => toggle('views')}
+            >
+              Views
+              {page.views > 0 && <span className="viewer-count">{page.views}</span>}
+            </button>
+          )}
           {page.canEdit && (
             <button
               ref={historyButton}
@@ -256,6 +271,7 @@ function PageFrame({ page, email, onChange }: { page: ArtifactPage; email: strin
         {panel === 'history' && (
           <HistoryPanel slug={page.slug} currentVersion={page.version} selected={viewing?.version ?? page.version} onSelect={setViewing} onClose={closePanel} />
         )}
+        {panel === 'views' && <ViewsPanel slug={page.slug} currentVersion={page.version} visibility={page.visibility} onClose={closePanel} />}
         {panel === 'comments' && page.comments && (
           <CommentsPanel
             slug={page.slug}

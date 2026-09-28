@@ -182,7 +182,7 @@ test('gallery with pages and folders, its menus and dialogs', async ({ page }) =
   await page.keyboard.press('Escape')
 })
 
-test('viewer with its history and comments panels, and the share dialog', async ({ page }) => {
+test('viewer with its history, views and comments panels, and the share dialog', async ({ page }) => {
   await signUpPersonal(page, uniqueEmail('a11y-viewer'))
   const token = await connectAgent(page)
   const slug = await publishViaMcp(page.request, token, { title: 'Launch plan', html: HTML, visibility: 'link' })
@@ -200,6 +200,12 @@ test('viewer with its history and comments panels, and the share dialog', async 
   await expect(page.getByRole('region', { name: 'Older version' })).toBeVisible()
   await expectAccessible(page, 'viewing an older version')
   await page.getByRole('button', { name: 'Back to latest' }).click()
+
+  await page.getByRole('button', { name: /^Views/ }).click()
+  const views = page.getByRole('complementary', { name: 'Views' })
+  await expect(views.getByRole('heading', { name: 'By version' })).toBeVisible()
+  await expectAccessible(page, 'views panel')
+  await views.getByRole('button', { name: 'Close views' }).click()
 
   await page.getByRole('button', { name: 'Comments' }).click()
   const comments = page.getByRole('complementary', { name: 'Comments' })
