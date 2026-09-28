@@ -118,6 +118,10 @@ Agents already connected to the organization and access tokens already made for 
 - Resetting someone's two-factor sign-in is logged; see [Losing every factor](#losing-every-factor).
 - The last admin can't be removed, suspended or deleted, so an install always keeps a way in.
 
+## Page views
+
+Opening a page is counted, and for pages shared with specific people or an organization, the server records who opened it and when. That record is deleted after 90 days, and only people who can edit the page see it. Visits through a link shared with **Anyone with the link** are counted without recording who made them or their address. See [Who opened a page](/docs/sharing#who-opened-a-page).
+
 ## Self-hosted data
 
 Everything lives in your own Postgres database and object storage: accounts and version history in Postgres, page HTML, files and thumbnails in the bucket. Nothing is sent to us. The bucket should stay private; pages are only ever served through the app, which checks access and adds the sandbox headers. While rendering thumbnails, the server may fetch scripts and fonts that pages load from the public CDNs listed above; set `THUMBNAIL_CDN_HOSTS=none` to turn that off.

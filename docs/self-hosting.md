@@ -48,7 +48,7 @@ The image includes a headless Chromium for gallery thumbnails. The compose file 
 
 ## Where content is stored
 
-Postgres holds accounts, organizations, sharing and the list of versions. The content itself (every version's HTML, its files and its thumbnail) is in object storage, one object per distinct content under `blobs/<sha256>`. Versions that reuse a stylesheet or image, and restored versions, store nothing new. When pages or accounts are deleted, their objects are removed by a sweep that runs every few hours; to run it now:
+Postgres holds accounts, organizations, sharing and the list of versions. The content itself (every version's HTML, its files and its thumbnail) is in object storage, one object per distinct content under `blobs/<sha256>`. Versions that reuse a stylesheet or image, and restored versions, store nothing new. When pages or accounts are deleted, their objects are removed by a sweep that runs every few hours. The same sweep deletes records of [who opened a page](/docs/sharing#who-opened-a-page) once they are 90 days old. To run it now:
 
 ```sh
 docker compose exec app node dist/scripts/sweep-storage.js
