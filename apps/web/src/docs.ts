@@ -76,7 +76,12 @@ export function headingId(text: string) {
     prev = plain
     plain = plain.replace(/<[^<>]*>/g, '')
   }
-  return plain.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+  // The anchors GitHub makes, so one link works in both places: underscores kept, other punctuation dropped, each space a dash.
+  // The entities marked escapes (&amp; &#39; &quot; …) all stand for punctuation, so they go too.
+  return plain
+    .replace(/&(?:#\d+|#x[0-9a-f]+|[a-z]+);/g, '')
+    .replace(/[^\p{L}\p{N}\p{M}\p{Pc} -]/gu, '')
+    .replace(/ /g, '-')
 }
 
 const LANG_LABEL: Record<string, string> = { sh: 'Terminal', html: 'HTML', json: 'JSON', toml: 'TOML', yaml: 'YAML' }
