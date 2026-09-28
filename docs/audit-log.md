@@ -20,7 +20,8 @@ Every event says when it happened, who did it, what it was about, and the addres
 | Changed a page's link settings | The link of an organization page gets or loses an expiry date or a password, or is reset. The password itself is never recorded |
 | Shared a page, changed someone's access, removed someone | People are added to an organization page by email, their role changes, or they are removed |
 | Invited someone, revoked an invitation | An owner or admin invites someone or revokes an invitation |
-| Joined, changed a role, removed a member, left | Someone accepts an invitation, a role changes, an owner or admin removes someone, or someone leaves |
+| Joined, changed a role, removed a member, left | Someone accepts an invitation or joins through single sign-on or SCIM, a role changes, an owner or admin removes someone, or someone leaves |
+| Suspended, reactivated | Your identity provider deactivates or reactivates a member's account over [SCIM](/docs/scim) |
 | Changed settings | The organization's name or its two-factor requirement changes |
 | Created an access token, revoked an access token | A member makes an access token for the organization, or someone revokes one |
 

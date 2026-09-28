@@ -25,6 +25,7 @@ import {
 import { AccountHeader } from '../components/AccountHeader'
 import { CopyCommand } from '../components/CopyCommand'
 import { ReleaseNotice } from '../components/ReleaseNotice'
+import { ScimSection } from '../ee/ScimSection'
 import { SsoSection } from '../ee/SsoSection'
 import { useConfig } from '../useConfig'
 import { timeAgo } from '../time'
@@ -98,6 +99,7 @@ function AdminPage({ me }: { me: Me }) {
     { id: 'signup', label: 'Sign-up' },
     ...(config?.selfHosted === true ? [{ id: 'license', label: 'License' }] : []),
     ...(config?.selfHosted === true ? [{ id: 'sso', label: 'Single sign-on' }] : []),
+    ...(config?.selfHosted === true ? [{ id: 'scim', label: 'Provisioning' }] : []),
     ...(config?.selfHosted === false ? [{ id: 'license-keys', label: 'License keys' }] : []),
   ]
 
@@ -136,6 +138,7 @@ function AdminPage({ me }: { me: Me }) {
             <SignupSection onChanged={changed} />
             {config?.selfHosted === true && <LicenseSection />}
             {config?.selfHosted === true && <SsoSection />}
+            {config?.selfHosted === true && <ScimSection />}
             {config?.selfHosted === false && (
               <Suspense fallback={null}>
                 <IssuedLicensesSection />

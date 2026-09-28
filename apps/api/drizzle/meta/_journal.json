@@ -162,6 +162,13 @@
       "when": 1790598763918,
       "tag": "0022_sso_connections",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1790599389092,
+      "tag": "0023_saml_scim",
+      "breakpoints": true
     }
   ]
 }

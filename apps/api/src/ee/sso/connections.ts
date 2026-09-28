@@ -14,8 +14,8 @@ import { UUID_RE } from '../../validation.js'
 // not per organization: on a self-hosted install the instance admin is the one who controls the
 // identity provider, and people who arrive through it land in the organization the connection names.
 //
-// `protocol` says how `config` reads. Only OIDC exists so far; SAML adds its own shape to SsoConfig
-// and its own sign-in routes, and reuses the rest (domains, required, organization, sso_identities).
+// `protocol` says how `config` reads: OidcConfig here, SamlConfig in saml.ts. Both share the rest
+// (domains, required, organization, sso_identities) and the account logic in routes.ts.
 
 export type OidcConfig = {
   // Issuer URL; the settings come from <issuer>/.well-known/openid-configuration
@@ -25,8 +25,6 @@ export type OidcConfig = {
   // one (Microsoft Entra ID); only safe when the admin controls the addresses there.
   trustEmail: boolean
 }
-
-export type SsoConfig = { protocol: 'oidc'; oidc: OidcConfig }
 
 // The server secret that seals connection secrets (client secrets) in sso_connections.secret
 const SECRET_KEY = 'sso'
@@ -124,12 +122,36 @@ export function parseIssuer(value: unknown): string | null {
   return url.toString().replace(/\/$/, '')
 }
 
-// Validates what the admin form sends. `creating` makes the client secret required.
-export function parseConnection(body: unknown, creating: boolean): Parsed {
-  const b = (body ?? {}) as Record<string, unknown>
+export type SharedInput = Pick<ConnectionInput, 'name' | 'allowedDomains' | 'required' | 'enabled' | 'organizationId'>
+
+// The settings every protocol has: the button's name, domains, required, on or off, organization
+export function parseShared(b: Record<string, unknown>): { ok: true; value: SharedInput } | { ok: false; error: string; field: string } {
   const name = typeof b.name === 'string' ? b.name.trim().replace(/\s+/g, ' ') : ''
   if (!name) return { ok: false, error: 'Name the provider, for example Okta.', field: 'name' }
   if (name.length > 40) return { ok: false, error: 'Use at most 40 characters for the name.', field: 'name' }
+
+  const raw = Array.isArray(b.allowedDomains) ? b.allowedDomains : typeof b.allowedDomains === 'string' ? b.allowedDomains.split(/[\s,]+/) : []
+  const domains: string[] = []
+  for (const item of raw) {
+    if (typeof item !== 'string') return { ok: false, error: 'List domains like example.com.', field: 'allowedDomains' }
+    const d = item.trim().toLowerCase().replace(/^@/, '')
+    if (!d) continue
+    if (!DOMAIN_RE.test(d)) return { ok: false, error: `${d} is not a domain. List domains like example.com.`, field: 'allowedDomains' }
+    if (!domains.includes(d)) domains.push(d)
+  }
+  if (domains.length > 100) return { ok: false, error: 'List at most 100 domains.', field: 'allowedDomains' }
+
+  const organizationId = typeof b.organizationId === 'string' && b.organizationId ? b.organizationId : null
+  if (organizationId && !UUID_RE.test(organizationId)) return { ok: false, error: 'Choose an organization from the list.', field: 'organizationId' }
+
+  return { ok: true, value: { name, allowedDomains: domains, required: b.required === true, enabled: b.enabled === true, organizationId } }
+}
+
+// Validates what the admin form sends for an OIDC connection. `creating` makes the client secret required.
+export function parseConnection(body: unknown, creating: boolean): Parsed {
+  const b = (body ?? {}) as Record<string, unknown>
+  const shared = parseShared(b)
+  if (!shared.ok) return shared
 
   const issuer = parseIssuer(b.issuer)
   if (!issuer) {
@@ -146,48 +168,25 @@ export function parseConnection(body: unknown, creating: boolean): Parsed {
   if (creating && !secret) return { ok: false, error: 'Enter the client secret from your provider.', field: 'clientSecret' }
   if (secret.length > 2000) return { ok: false, error: 'That client secret is too long.', field: 'clientSecret' }
 
-  const raw = Array.isArray(b.allowedDomains) ? b.allowedDomains : typeof b.allowedDomains === 'string' ? b.allowedDomains.split(/[\s,]+/) : []
-  const domains: string[] = []
-  for (const item of raw) {
-    if (typeof item !== 'string') return { ok: false, error: 'List domains like example.com.', field: 'allowedDomains' }
-    const d = item.trim().toLowerCase().replace(/^@/, '')
-    if (!d) continue
-    if (!DOMAIN_RE.test(d)) return { ok: false, error: `${d} is not a domain. List domains like example.com.`, field: 'allowedDomains' }
-    if (!domains.includes(d)) domains.push(d)
-  }
-  if (domains.length > 100) return { ok: false, error: 'List at most 100 domains.', field: 'allowedDomains' }
-
-  const organizationId = typeof b.organizationId === 'string' && b.organizationId ? b.organizationId : null
-  if (organizationId && !UUID_RE.test(organizationId)) return { ok: false, error: 'Choose an organization from the list.', field: 'organizationId' }
-
   return {
     ok: true,
-    value: {
-      name,
-      issuer,
-      clientId,
-      clientSecret: secret || null,
-      trustEmail: b.trustEmail === true,
-      allowedDomains: domains,
-      required: b.required === true,
-      enabled: b.enabled === true,
-      organizationId,
-    },
+    value: { ...shared.value, issuer, clientId, clientSecret: secret || null, trustEmail: b.trustEmail === true },
   }
 }
 
-// What the admin page shows; never the secret
-export function describeConnection(conn: SsoConnection) {
+// What the admin page shows; never the secret. `saml` is filled in by saml.ts for SAML connections.
+export function describeConnection(conn: SsoConnection, saml: Record<string, unknown> | null = null) {
   const oidc = oidcConfig(conn)
   return {
     id: conn.id,
     protocol: conn.protocol,
     name: conn.name,
     enabled: conn.enabled,
-    issuer: oidc.issuer,
-    clientId: oidc.clientId,
+    issuer: conn.protocol === 'oidc' ? oidc.issuer : '',
+    clientId: conn.protocol === 'oidc' ? oidc.clientId : '',
     hasClientSecret: Boolean(conn.secret),
     trustEmail: oidc.trustEmail,
+    saml,
     allowedDomains: conn.allowedDomains,
     required: conn.required,
     organizationId: conn.organizationId,

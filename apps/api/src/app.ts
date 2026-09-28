@@ -16,6 +16,8 @@ import { historyCron, organizationPlan, personalPlan } from './ee/plans.js'
 import { pruneRetention, retention } from './ee/retention.js'
 import { ssoButtons } from './ee/sso/connections.js'
 import { ssoAdmin, ssoSignIn } from './ee/sso/routes.js'
+import { samlSignIn } from './ee/sso/saml.js'
+import { scim, scimAdmin } from './ee/scim.js'
 import { embeds } from './embeds.js'
 import { env, mailEnabled } from './env.js'
 import { addPruner } from './gc.js'
@@ -67,6 +69,8 @@ app.route('/mcp', mcp)
 // Bearer tokens only, outside the cookie-authenticated routes below
 app.route('/api/publish', publishApi)
 app.route('/api/whoami', whoamiApi)
+// SCIM provisioning for an IdP (Enterprise, self-hosted): its own bearer tokens and error format
+app.route('/scim/v2', scim)
 
 // /e/<slug> and /api/oembed, outside the session middleware: embeds never look at who is signed in
 app.route('/', embeds)
@@ -98,6 +102,7 @@ api.route('/auth/email', email)
 api.route('/auth/password', password)
 api.route('/auth/two-factor', twoFactor)
 api.route('/auth/passkey', passkeySignIn)
+api.route('/auth/sso/saml', samlSignIn)
 api.route('/auth/sso', ssoSignIn)
 
 api.post('/auth/logout', async (c) => {
@@ -124,6 +129,7 @@ api.route('/me/sessions', sessions)
 api.route('/me', settings)
 api.route('/admin/issued-licenses', issuedLicenses)
 api.route('/admin/sso', ssoAdmin)
+api.route('/admin/scim', scimAdmin)
 api.route('/admin', admin)
 api.route('/cron/history', historyCron)
 api.route('/cron', cron)

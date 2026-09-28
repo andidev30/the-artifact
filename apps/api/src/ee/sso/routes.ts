@@ -25,6 +25,7 @@ import {
   usableConnection,
   type ConnectionInput,
 } from './connections.js'
+import { acsUrl, describeSaml, parseSamlConnection, spEntityId, startSaml } from './saml.js'
 import { authorizationUrl, discover, finishOidc, newChecks, OidcSetupError, oidcErrorText, type SsoIdentity } from './oidc.js'
 
 // Starting an SSO sign-in and coming back from the provider, from one address
@@ -97,7 +98,7 @@ function refusal(conn: SsoConnection, identity: SsoIdentity): string | null {
 // account with their (verified) address, else a new one. New accounts skip the sign-up policy only
 // when the connection lists its domains; a connection open to any address follows the policy, so
 // a provider anyone can sign up at (a public Google client, say) doesn't open the server to all.
-async function accountFor(conn: SsoConnection, identity: SsoIdentity & { email: string }): Promise<User> {
+export async function accountFor(conn: SsoConnection, identity: SsoIdentity & { email: string }): Promise<User> {
   const [linked] = await db
     .select({ user: schema.users })
     .from(schema.ssoIdentities)
@@ -195,6 +196,7 @@ ssoSignIn.get('/:id', async (c) => {
   const busy = await limitRequest(c, 'sso-ip', clientIp(c), 'Too many sign-in attempts from your network.')
   if (busy) return busy
   const conn = await usableConnection(c.req.param('id'))
+  if (conn?.protocol === 'saml') return startSaml(c, conn, safeNext(c.req.query('next')))
   if (conn?.protocol !== 'oidc') return c.redirect(signInErrorUrl('sso_unavailable'))
   return startFlow(c, conn, { next: safeNext(c.req.query('next')), plan: c.req.query('plan') ?? null })
 })
@@ -218,7 +220,13 @@ async function listing() {
     .from(schema.organizations)
     .orderBy(sql`lower(${schema.organizations.name})`)
     .limit(500)
-  return { redirectUri: oidcRedirectUri(), connections: rows.map(describeConnection), organizations }
+  return {
+    redirectUri: oidcRedirectUri(),
+    // What a SAML IdP needs from this server, the same for every SAML connection
+    saml: { entityId: spEntityId(), acsUrl: acsUrl() },
+    connections: rows.map(describe),
+    organizations,
+  }
 }
 
 ssoAdmin.get('/', async (c) => c.json(await listing()))
@@ -230,6 +238,36 @@ ssoAdmin.get('/test-result', (c) => {
   if (!result) return c.json({ error: 'There is no test result. Test the connection again.' }, 404)
   return c.json(result)
 })
+
+const describe = (conn: SsoConnection) => (conn.protocol === 'saml' ? describeSaml(conn) : describeConnection(conn))
+
+// A SAML connection, added (existing null) or changed; the IdP comes from its metadata
+async function saveSaml(c: Context, existing: SsoConnection | null): Promise<Response> {
+  const parsed = await parseSamlConnection(await c.req.json().catch(() => null), existing)
+  if (!parsed.ok) return c.json({ error: parsed.error, field: parsed.field }, 400)
+  const v = parsed.shared
+  if (!(await checkOrganization(v.organizationId))) return c.json({ error: 'That organization no longer exists.', field: 'organizationId' }, 400)
+  const values = {
+    name: v.name,
+    enabled: v.enabled,
+    config: parsed.config,
+    allowedDomains: v.allowedDomains,
+    required: v.required,
+    organizationId: v.organizationId,
+  }
+  const [row] = existing
+    ? await db
+        .update(schema.ssoConnections)
+        .set({ ...values, updatedAt: new Date() })
+        .where(eq(schema.ssoConnections.id, existing.id))
+        .returning()
+    : await db
+        .insert(schema.ssoConnections)
+        .values({ protocol: 'saml', createdBy: c.get('user')!.id, ...values })
+        .returning()
+  log.info(existing ? 'SSO connection changed' : 'SSO connection added', { connectionId: row.id, userId: c.get('user')!.id })
+  return c.json(describeSaml(row), existing ? 200 : 201)
+}
 
 async function checkOrganization(id: string | null): Promise<boolean> {
   if (!id) return true
@@ -248,7 +286,9 @@ async function checkProvider(value: ConnectionInput, secret: string) {
 }
 
 ssoAdmin.post('/', async (c) => {
-  const parsed = parseConnection(await c.req.json().catch(() => null), true)
+  const body = await c.req.json().catch(() => null)
+  if ((body as { protocol?: unknown } | null)?.protocol === 'saml') return saveSaml(c, null)
+  const parsed = parseConnection(body, true)
   if (!parsed.ok) return c.json({ error: parsed.error, field: parsed.field }, 400)
   const v = parsed.value
   if (!(await checkOrganization(v.organizationId))) return c.json({ error: 'That organization no longer exists.', field: 'organizationId' }, 400)
@@ -275,6 +315,7 @@ ssoAdmin.post('/', async (c) => {
 ssoAdmin.put('/:id', async (c) => {
   const conn = await findConnection(c.req.param('id'))
   if (!conn) return c.json({ error: 'This connection no longer exists.' }, 404)
+  if (conn.protocol === 'saml') return saveSaml(c, conn)
   const parsed = parseConnection(await c.req.json().catch(() => null), false)
   if (!parsed.ok) return c.json({ error: parsed.error, field: parsed.field }, 400)
   const v = parsed.value

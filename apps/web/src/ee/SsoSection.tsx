@@ -16,7 +16,7 @@ import {
 } from './ssoApi'
 import './Sso.css'
 
-// Server admin: single sign-on through an OpenID Connect provider, an Enterprise feature of
+// Server admin: single sign-on through an OpenID Connect or SAML provider, an Enterprise feature of
 // self-hosted installs. Rendered by pages/Admin.tsx on self-hosted installs only.
 
 type State = { kind: 'loading' } | { kind: 'ready'; data: SsoListing } | { kind: 'unlicensed'; message: string } | { kind: 'error' }
@@ -97,9 +97,12 @@ export function SsoSection() {
           Single sign-on <span className="admin-badge">Enterprise</span>
         </h2>
         <p>
-          People sign in through your identity provider with OpenID Connect: Google Workspace, Microsoft Entra ID, Okta, Keycloak and others.{' '}
+          People sign in through your identity provider with OpenID Connect or SAML: Google Workspace, Microsoft Entra ID, Okta, Keycloak and others.{' '}
           <Link className="text-link" to="/docs/sso">
             How to set it up
+          </Link>{' '}
+          <Link className="text-link" to="/docs/saml">
+            SAML
           </Link>
         </p>
       </header>
@@ -136,6 +139,12 @@ export function SsoSection() {
             <CopyCommand command={data.redirectUri} plain label="Copy the redirect URI" />
             <p className="field-hint">Register this address with your provider as the redirect (callback) URI of the app.</p>
           </div>
+          <div className="field">
+            <span className="settings-label">SAML entity ID and ACS URL</span>
+            <CopyCommand command={data.saml.entityId} plain label="Copy the SAML entity ID" />
+            <CopyCommand command={data.saml.acsUrl} plain label="Copy the SAML ACS URL" />
+            <p className="field-hint">For a SAML app: the entity ID (audience URI) and the ACS (single sign-on) URL to enter at your IdP.</p>
+          </div>
 
           {data.connections.length > 0 && (
             <ul className="settings-list">
@@ -150,13 +159,15 @@ export function SsoSection() {
                       {!c.enabled && <span className="admin-badge">Off</span>}
                       {c.enabled && c.required && <span className="admin-badge">Required</span>}
                     </strong>
-                    <span className="sso-issuer">{c.issuer}</span>
+                    <span className="sso-issuer">{c.protocol === 'saml' ? `SAML, ${c.saml?.idpEntityId ?? ''}` : c.issuer}</span>
                   </span>
                   <span className="settings-meta">{c.allowedDomains.length ? c.allowedDomains.join(', ') : 'Any address'}</span>
                   <span className="settings-actions sso-actions">
-                    <a className="button button-small button-quiet" href={ssoTestUrl(c.id)} aria-label={`Test connection ${c.name}`}>
-                      Test connection
-                    </a>
+                    {c.protocol === 'oidc' && (
+                      <a className="button button-small button-quiet" href={ssoTestUrl(c.id)} aria-label={`Test connection ${c.name}`}>
+                        Test connection
+                      </a>
+                    )}
                     <button
                       type="button"
                       id={editId(c.id)}
@@ -326,6 +337,7 @@ function SsoForm({
   const id = (field: string) => `sso-${key}-${field}`
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<{ text: string; field?: string } | null>(null)
+  const [protocol, setProtocol] = useState<'oidc' | 'saml'>(connection?.protocol ?? 'oidc')
   const first = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -336,6 +348,7 @@ function SsoForm({
     e.preventDefault()
     const f = new FormData(e.currentTarget)
     const input: SsoInput = {
+      protocol,
       name: String(f.get('name') ?? ''),
       issuer: String(f.get('issuer') ?? ''),
       clientId: String(f.get('clientId') ?? ''),
@@ -347,6 +360,15 @@ function SsoForm({
       trustEmail: f.get('trustEmail') === 'on',
       required: f.get('required') === 'on',
       enabled: f.get('enabled') === 'on',
+      ...(protocol === 'saml'
+        ? {
+            metadataUrl: String(f.get('metadataUrl') ?? ''),
+            metadataXml: String(f.get('metadataXml') ?? ''),
+            emailAttribute: String(f.get('emailAttribute') ?? ''),
+            nameAttribute: String(f.get('nameAttribute') ?? ''),
+            allowIdpInitiated: f.get('allowIdpInitiated') === 'on',
+          }
+        : {}),
     }
     setBusy(true)
     setProblem(null)
@@ -363,6 +385,25 @@ function SsoForm({
 
   return (
     <form className="settings-form sso-form" onSubmit={onSubmit} noValidate aria-label={connection ? `Edit ${connection.name}` : 'Add a provider'}>
+      {!connection && (
+        <fieldset className="admin-policies">
+          <legend className="settings-label">Protocol</legend>
+          <label className="admin-policy">
+            <input type="radio" name="protocol" value="oidc" checked={protocol === 'oidc'} onChange={() => setProtocol('oidc')} />
+            <span>
+              <strong>OpenID Connect</strong>
+              <span>An issuer URL, a client ID and a client secret.</span>
+            </span>
+          </label>
+          <label className="admin-policy">
+            <input type="radio" name="protocol" value="saml" checked={protocol === 'saml'} onChange={() => setProtocol('saml')} />
+            <span>
+              <strong>SAML</strong>
+              <span>The IdP’s metadata, by URL or as XML.</span>
+            </span>
+          </label>
+        </fieldset>
+      )}
       <div className="field">
         <label htmlFor={id('name')}>Name on the button</label>
         <input
@@ -381,54 +422,129 @@ function SsoForm({
           The sign-in page shows “Continue with” and this name.
         </p>
       </div>
-      <div className="field">
-        <label htmlFor={id('issuer')}>Issuer URL</label>
-        <input
-          id={id('issuer')}
-          name="issuer"
-          type="url"
-          className="admin-input"
-          defaultValue={connection?.issuer ?? ''}
-          placeholder="https://acme.okta.com"
-          spellCheck={false}
-          required
-          aria-invalid={invalid('issuer')}
-          aria-describedby={describedBy('issuer', id('issuer-hint'))}
-        />
-        <p id={id('issuer-hint')} className="field-hint">
-          The server reads the provider’s settings from this address plus /.well-known/openid-configuration.
-        </p>
-      </div>
-      <div className="field">
-        <label htmlFor={id('clientId')}>Client ID</label>
-        <input
-          id={id('clientId')}
-          name="clientId"
-          className="admin-input"
-          defaultValue={connection?.clientId ?? ''}
-          spellCheck={false}
-          autoComplete="off"
-          required
-          aria-invalid={invalid('clientId')}
-          aria-describedby={describedBy('clientId')}
-        />
-      </div>
-      <div className="field">
-        <label htmlFor={id('clientSecret')}>Client secret</label>
-        <input
-          id={id('clientSecret')}
-          name="clientSecret"
-          type="password"
-          className="admin-input"
-          autoComplete="new-password"
-          required={!connection}
-          aria-invalid={invalid('clientSecret')}
-          aria-describedby={describedBy('clientSecret', id('secret-hint'))}
-        />
-        <p id={id('secret-hint')} className="field-hint">
-          {connection ? 'Leave empty to keep the current secret. ' : ''}Stored encrypted, and never shown again.
-        </p>
-      </div>
+      {protocol === 'oidc' ? (
+        <>
+          <div className="field">
+            <label htmlFor={id('issuer')}>Issuer URL</label>
+            <input
+              id={id('issuer')}
+              name="issuer"
+              type="url"
+              className="admin-input"
+              defaultValue={connection?.issuer ?? ''}
+              placeholder="https://acme.okta.com"
+              spellCheck={false}
+              required
+              aria-invalid={invalid('issuer')}
+              aria-describedby={describedBy('issuer', id('issuer-hint'))}
+            />
+            <p id={id('issuer-hint')} className="field-hint">
+              The server reads the provider’s settings from this address plus /.well-known/openid-configuration.
+            </p>
+          </div>
+          <div className="field">
+            <label htmlFor={id('clientId')}>Client ID</label>
+            <input
+              id={id('clientId')}
+              name="clientId"
+              className="admin-input"
+              defaultValue={connection?.clientId ?? ''}
+              spellCheck={false}
+              autoComplete="off"
+              required
+              aria-invalid={invalid('clientId')}
+              aria-describedby={describedBy('clientId')}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor={id('clientSecret')}>Client secret</label>
+            <input
+              id={id('clientSecret')}
+              name="clientSecret"
+              type="password"
+              className="admin-input"
+              autoComplete="new-password"
+              required={!connection}
+              aria-invalid={invalid('clientSecret')}
+              aria-describedby={describedBy('clientSecret', id('secret-hint'))}
+            />
+            <p id={id('secret-hint')} className="field-hint">
+              {connection ? 'Leave empty to keep the current secret. ' : ''}Stored encrypted, and never shown again.
+            </p>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="field">
+            <label htmlFor={id('metadataUrl')}>Metadata URL</label>
+            <input
+              id={id('metadataUrl')}
+              name="metadataUrl"
+              type="url"
+              className="admin-input"
+              defaultValue={connection?.saml?.metadataUrl ?? ''}
+              placeholder="https://acme.okta.com/app/…/sso/saml/metadata"
+              spellCheck={false}
+              aria-invalid={invalid('metadataUrl')}
+              aria-describedby={describedBy('metadataUrl', id('metadata-hint'))}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor={id('metadataXml')}>Or paste the metadata XML</label>
+            <textarea
+              id={id('metadataXml')}
+              name="metadataXml"
+              className="admin-textarea"
+              rows={3}
+              spellCheck={false}
+              placeholder="<md:EntityDescriptor …"
+              aria-invalid={invalid('metadataXml')}
+              aria-describedby={describedBy('metadataXml', id('metadata-hint'))}
+            />
+            <p id={id('metadata-hint')} className="field-hint">
+              {connection?.saml
+                ? `Now: ${connection.saml.idpEntityId}, ${connection.saml.certificates} signing certificate${connection.saml.certificates === 1 ? '' : 's'}. Leave both empty to keep it; a URL is downloaded again on every save.`
+                : 'A URL is downloaded again on every save, which picks up a new signing certificate.'}
+            </p>
+          </div>
+          <div className="field">
+            <label htmlFor={id('emailAttribute')}>Email attribute</label>
+            <input
+              id={id('emailAttribute')}
+              name="emailAttribute"
+              className="admin-input"
+              defaultValue={connection?.saml?.emailAttribute ?? ''}
+              placeholder="email"
+              spellCheck={false}
+              aria-describedby={id('attr-hint')}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor={id('nameAttribute')}>Name attribute</label>
+            <input
+              id={id('nameAttribute')}
+              name="nameAttribute"
+              className="admin-input"
+              defaultValue={connection?.saml?.nameAttribute ?? ''}
+              placeholder="displayName"
+              spellCheck={false}
+              aria-describedby={id('attr-hint')}
+            />
+            <p id={id('attr-hint')} className="field-hint">
+              Optional. Leave empty to read the usual attributes from Okta, Entra ID and Google Workspace.
+            </p>
+          </div>
+          <div className="field">
+            <label className="settings-check">
+              <input type="checkbox" name="allowIdpInitiated" defaultChecked={connection?.saml?.allowIdpInitiated ?? false} aria-describedby={id('idp-hint')} />
+              <span>Allow sign-in started from the IdP’s app dashboard</span>
+            </label>
+            <p id={id('idp-hint')} className="field-hint">
+              Off is safer: such sign-ins can’t be tied to the browser that asked for them.
+            </p>
+          </div>
+        </>
+      )}
       <div className="field">
         <label htmlFor={id('allowedDomains')}>Email domains</label>
         <textarea
@@ -468,15 +584,17 @@ function SsoForm({
           People join it as members the first time they sign in through this provider.
         </p>
       </div>
-      <div className="field">
-        <label className="settings-check">
-          <input type="checkbox" name="trustEmail" defaultChecked={connection?.trustEmail ?? false} aria-describedby={id('trust-hint')} />
-          <span>Trust addresses the provider doesn’t mark as verified</span>
-        </label>
-        <p id={id('trust-hint')} className="field-hint">
-          Only for providers that don’t send email_verified, such as Microsoft Entra ID, and only when your IT team controls every address there.
-        </p>
-      </div>
+      {protocol === 'oidc' && (
+        <div className="field">
+          <label className="settings-check">
+            <input type="checkbox" name="trustEmail" defaultChecked={connection?.trustEmail ?? false} aria-describedby={id('trust-hint')} />
+            <span>Trust addresses the provider doesn’t mark as verified</span>
+          </label>
+          <p id={id('trust-hint')} className="field-hint">
+            Only for providers that don’t send email_verified, such as Microsoft Entra ID, and only when your IT team controls every address there.
+          </p>
+        </div>
+      )}
       <div className="field">
         <label className="settings-check">
           <input type="checkbox" name="required" defaultChecked={connection?.required ?? false} aria-describedby={id('required-hint')} />
@@ -493,7 +611,13 @@ function SsoForm({
           <span>Show on the sign-in page</span>
         </label>
         <p id={id('enabled-hint')} className="field-hint">
-          Leave off until <strong>Test connection</strong> works.
+          {protocol === 'oidc' ? (
+            <>
+              Leave off until <strong>Test connection</strong> works.
+            </>
+          ) : (
+            'Turn it on once the IdP has this server’s entity ID and ACS URL.'
+          )}
         </p>
       </div>
       {problem && (

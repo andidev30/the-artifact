@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto'
-import { expect, test } from '@playwright/test'
+import { expect, type Page, test } from '@playwright/test'
 import { createHostedOrganization, grantInstanceAdmin } from '../apps/api/test/e2e-db.ts'
 import { expectAccessible } from './axe'
 import { connectAgent, latestMail, licensedSso, mockAuditLog, mockRetention, publishViaMcp, signInLink, signUpPersonal, uniqueEmail } from './helpers'
@@ -410,7 +410,16 @@ test('agent consent page', async ({ page }) => {
   await expectAccessible(page, 'consent')
 })
 
-test('single sign-on: sign-in buttons and the admin section', async ({ page, browser }) => {
+// An instance admin of a licensed install, as licensedSso answers for one, on Server admin
+async function ssoAdmin(page: Page, name: string, path = '/admin#sso') {
+  const email = uniqueEmail(name)
+  await signUpPersonal(page, email)
+  await grantInstanceAdmin(email)
+  await licensedSso(page)
+  await page.goto(path)
+}
+
+test('single sign-on: sign-in buttons', async ({ browser }) => {
   const signedOutContext = await browser.newContext()
   const signedOut = await signedOutContext.newPage()
   await licensedSso(signedOut)
@@ -421,12 +430,10 @@ test('single sign-on: sign-in buttons and the admin section', async ({ page, bro
   await expect(signedOut.getByRole('alert')).toContainText('single sign-on')
   await expectAccessible(signedOut, 'log in, single sign-on required')
   await signedOutContext.close()
+})
 
-  const email = uniqueEmail('a11y-sso')
-  await signUpPersonal(page, email)
-  await grantInstanceAdmin(email)
-  await licensedSso(page)
-  await page.goto('/admin?sso-test=1#sso')
+test('single sign-on: OIDC provider in Server admin', async ({ page }) => {
+  await ssoAdmin(page, 'a11y-sso-oidc', '/admin?sso-test=1#sso')
   const sso = page.locator('section#sso')
   await expect(sso.getByRole('heading', { name: /Single sign-on/ })).toBeVisible()
   await expect(sso.getByText('Okta signed in ada@acme.example')).toBeVisible()
@@ -440,4 +447,27 @@ test('single sign-on: sign-in buttons and the admin section', async ({ page, bro
   await sso.getByRole('button', { name: 'Remove Okta' }).click()
   await expect(sso.getByRole('group', { name: 'Confirm: remove Okta' })).toBeVisible()
   await expectAccessible(page, 'server admin, removing a single sign-on connection')
+})
+
+test('single sign-on: SAML provider', async ({ page }) => {
+  await ssoAdmin(page, 'a11y-sso-saml')
+  const sso = page.locator('section#sso')
+  // By keyboard: the protocol choice, then the metadata fields
+  await sso.getByRole('button', { name: 'Add a provider' }).click()
+  await sso.getByRole('radio', { name: /OpenID Connect/ }).focus()
+  await page.keyboard.press('ArrowDown')
+  await expect(sso.getByRole('radio', { name: /SAML/ })).toBeChecked()
+  await expect(sso.getByLabel('Metadata URL')).toBeVisible()
+  await expectAccessible(page, 'server admin, adding a SAML connection')
+})
+
+test('SCIM provisioning', async ({ page }) => {
+  await ssoAdmin(page, 'a11y-scim', '/admin#scim')
+  const scim = page.locator('section#scim')
+  await expect(scim.getByRole('heading', { name: /Provisioning \(SCIM\)/ })).toBeVisible()
+  await scim.getByLabel('Token name').focus()
+  await page.keyboard.type('Entra ID')
+  await page.keyboard.press('Enter')
+  await expect(scim.getByText('It is not shown again.')).toBeVisible()
+  await expectAccessible(page, 'server admin, a new SCIM token')
 })
