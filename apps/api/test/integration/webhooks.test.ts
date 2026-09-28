@@ -340,11 +340,36 @@ describe('private networks', () => {
     }
   })
 
-  it('refuses plain http to this machine in production', async () => {
-    configureWebhooks({ allowLocalHttp: false })
+  it('refuses plain http to this machine outside a development server, whatever APP_URL is', async () => {
+    expect(env.appUrl.startsWith('http://')).toBe(true)
     const owner = await createUser()
-    const res = await call('/api/me/webhooks', { cookie: owner.cookie, json: { url: `${base}/hook`, events: ['page.published'] } })
+    const { webhook } = await addHook(owner, '/api/me', {})
+
+    configureWebhooks({ allowLocalHttp: false })
+    const res = await call('/api/me/webhooks', { cookie: owner.cookie, json: { url: `${base}/other`, events: ['page.published'] } })
     expect(res.status).toBe(400)
+    // One saved while it was allowed isn't sent either
+    await createPage(owner)
+    const [d] = await deliveries(owner, '/api/me', webhook.id)
+    expect(d.lastError).toMatch(/Only https/)
+    expect(received).toHaveLength(0)
+  })
+
+  it('gives the same error for a name that is not found as for one on a private network', async () => {
+    const owner = await createUser()
+    configureWebhooks({
+      lookup: async (host) => {
+        if (host === 'inside.example.com') return [{ address: '10.1.2.3', family: 4 }]
+        throw Object.assign(new Error('not found'), { code: 'ENOTFOUND' })
+      },
+    })
+    const inside = (await addHook(owner, '/api/me', { url: 'https://inside.example.com/hook' })).webhook
+    const missing = (await addHook(owner, '/api/me', { url: 'https://missing.example.com/hook' })).webhook
+    await createPage(owner)
+    const [a] = await deliveries(owner, '/api/me', inside.id)
+    const [b] = await deliveries(owner, '/api/me', missing.id)
+    expect(a.lastError?.replace('inside', 'missing')).toBe(b.lastError)
+    expect(b.lastError).toMatch(/could not be found, or it is on a private network/)
   })
 
   it('checks where a name resolves every time it sends', async () => {

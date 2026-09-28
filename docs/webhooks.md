@@ -11,6 +11,8 @@ A webhook tells another service when something happens in a workspace: a page is
 
 Members of an organization don't see its webhooks. A workspace can have up to 20.
 
+A webhook keeps sending to the address it was given after the person who added it stops being an admin or leaves the organization, and events carry page titles, commenters' names and comment excerpts. When an admin leaves, review the organization's webhooks and remove or change any that go somewhere only they control.
+
 ## Adding a webhook
 
 1. Open **Webhooks** in the settings above and choose **Add webhook**.
@@ -131,4 +133,6 @@ On a self-hosted server, events are queued in the database and one process sends
 
 Webhooks only go to public addresses. The server looks the name up every time it sends and refuses it if any address it resolves to is private, loopback, link-local (including cloud metadata at `169.254.169.254`) or otherwise reserved, then connects to the address it checked. Addresses like that are refused when you save them too. See [Webhooks can't reach private networks](/docs/security#webhooks-can-t-reach-private-networks).
 
-Only `https://` addresses are accepted, without a user name or password in them. On a server whose `APP_URL` is plain `http://`, like a laptop in development, `http://localhost`, `http://127.0.0.1` and `http://[::1]` are allowed as well, to try webhooks against a local receiver.
+Only `https://` addresses are accepted, without a user name or password in them. On a development server run from a checkout with `pnpm dev`, `http://localhost`, `http://127.0.0.1` and `http://[::1]` are allowed as well, to try webhooks against a local receiver. A deployed server never allows them, even when its `APP_URL` is plain `http://`.
+
+When a delivery is refused because the name can't be found or resolves to a private address, the error says the same thing in both cases.
