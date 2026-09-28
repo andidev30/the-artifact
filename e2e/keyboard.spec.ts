@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
 import { createHostedOrganization, forgetSignInLinks, grantInstanceAdmin } from '../apps/api/test/e2e-db.ts'
-import { fromApp, connectAgent, latestMail, licensedSso, mockAuditLog, mockRetention, publishViaMcp, signUpPersonal, uniqueEmail } from './helpers'
+import { fromApp, connectAgent, focusLost, latestMail, licensedSso, mockAuditLog, mockRetention, publishViaMcp, signUpPersonal, uniqueEmail } from './helpers'
 
 // Every flow here is driven with the keyboard alone: no clicks, no fill()
 
@@ -32,7 +32,6 @@ async function expectFocusRing(target: Locator) {
 }
 
 const focusInside = (page: Page, selector: string) => page.evaluate((s) => Boolean(document.querySelector(s)?.contains(document.activeElement)), selector)
-const focusLost = (page: Page) => page.evaluate(() => document.activeElement === document.body || document.activeElement === null)
 
 test('sign in with a sign-in link', async ({ page }) => {
   const email = uniqueEmail('kb-sign-in')

@@ -59,6 +59,9 @@ export async function signUpPersonal(page: Page, email: string) {
   await expect(page).toHaveURL(/\/app$/)
 }
 
+// Whether keyboard focus fell back to the document, as it does when the focused control is removed
+export const focusLost = (page: Page) => page.evaluate(() => document.activeElement === document.body || document.activeElement === null)
+
 // Headers for page.request calls that change something with the browser's session: it isn't a browser,
 // so it sends no Origin by itself, and the API refuses changes from anywhere but the app
 export function fromApp(page: Page) {
