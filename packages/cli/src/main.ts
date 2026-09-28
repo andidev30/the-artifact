@@ -72,6 +72,7 @@ Lists the pages in the workspace you're signed in to, most recently updated firs
 Options:
   --query <words>    Only pages whose title contains this, or whose text has these words
   --folder <name>    Only pages in this folder ("" for pages in no folder)
+  --tag <tag>        Only pages with this tag
   --limit <n>        How many, 1 to 100. Default: 25
   --cursor <cursor>  Continue a previous list`,
   share: `Usage: the-artifact share <page> [options]
@@ -127,7 +128,7 @@ const OPTIONS: Record<string, ParseArgsConfig['options']> = {
     poll: { type: 'boolean' },
     'dry-run': { type: 'boolean' },
   },
-  list: { query: { type: 'string' }, folder: { type: 'string' }, limit: { type: 'string' }, cursor: { type: 'string' } },
+  list: { query: { type: 'string' }, folder: { type: 'string' }, tag: { type: 'string' }, limit: { type: 'string' }, cursor: { type: 'string' } },
   share: {
     visibility: { type: 'string' },
     expires: { type: 'string' },
@@ -423,7 +424,7 @@ async function list(io: Io, { positionals, values }: Parsed) {
   const server = await resolveServer(str(values, 'server'), io.env)
   const auth = await resolveAuth(server, { token: str(values, 'token'), env: io.env })
   const args: Record<string, unknown> = {}
-  for (const key of ['query', 'folder', 'cursor']) if (str(values, key) !== undefined) args[key] = str(values, key)
+  for (const key of ['query', 'folder', 'tag', 'cursor']) if (str(values, key) !== undefined) args[key] = str(values, key)
   if (limit !== undefined) args.limit = limit
   const { text, structured } = await callTool(auth, 'list_artifacts', args)
   const listed = structured as Listed | undefined
@@ -438,7 +439,7 @@ async function list(io: Io, { positionals, values }: Parsed) {
     return
   }
   if (listed.pages.length === 0) {
-    const narrowed = args.query !== undefined || args.folder !== undefined
+    const narrowed = args.query !== undefined || args.folder !== undefined || args.tag !== undefined
     io.stderr.write(args.cursor ? 'No more pages.\n' : narrowed ? 'No pages match.\n' : 'No pages yet.\n')
     return
   }

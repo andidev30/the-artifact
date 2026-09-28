@@ -94,6 +94,7 @@ It publishes to the page from `--id` or `.the-artifact.json` if there is one, ot
 
 ```sh
 the-artifact list --query report
+the-artifact list --tag q3 --folder Reports
 the-artifact share k3v9x2m8pq --visibility link
 the-artifact share k3v9x2m8pq --expires 2026-12-31 --password "open sesame"
 the-artifact share k3v9x2m8pq --new-link
