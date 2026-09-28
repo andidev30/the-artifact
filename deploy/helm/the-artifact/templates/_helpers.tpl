@@ -105,6 +105,10 @@ Secret already holds, else a new random one. (list $ given secretName key)
 {{- define "the-artifact.env" -}}
 - name: APP_URL
   value: {{ include "the-artifact.appUrl" . | quote }}
+{{- with .Values.contentOrigin }}
+- name: CONTENT_ORIGIN
+  value: {{ . | quote }}
+{{- end }}
 - name: SELF_HOSTED
   value: {{ .Values.selfHosted | toString | quote }}
 - name: TRUST_PROXY

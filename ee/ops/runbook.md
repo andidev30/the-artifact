@@ -11,6 +11,7 @@ On-call notes for the hosted service at https://the-artifact-pi.vercel.app. Self
 | Scheduled jobs | Vercel crons: `/api/cron/history` 18:30 UTC, `/api/cron/sweep` 19:00 UTC | Need `CRON_SECRET` in Vercel |
 | Postgres | Supabase, reached through the transaction pooler (port 6543, `DATABASE_PREPARE=false`) | Data API is off |
 | Page content | Supabase Storage, private bucket, S3 protocol | Objects under `blobs/<sha256>` |
+| Page files in the browser | The same Vercel project on a second alias, `https://the-artifact-content.vercel.app`, set as `CONTENT_ORIGIN` (Production) | `vercel.app` is on the Public Suffix List, so the alias is another site and the app's cookies never reach it. `vercel.json` redirects everything but `/api/` on that host to the app; change the host there if the alias changes |
 | Email | Brevo SMTP (`smtp-relay.brevo.com:587`) | |
 | Backups | GitHub Actions in this repository: **Hosted backup** nightly, **Hosted restore test** weekly | See [Backups](#backups) |
 

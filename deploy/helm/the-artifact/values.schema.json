@@ -31,6 +31,11 @@
       "description": "The address people use, without a trailing slash",
       "pattern": "^(https?://[^/]+.*)?$"
     },
+    "contentOrigin": {
+      "type": "string",
+      "description": "Origin that serves page files only, on another host than appUrl, e.g. https://artifact-content.example.net",
+      "pattern": "^(https?://[^/?#]+/?)?$"
+    },
     "selfHosted": {
       "type": "boolean"
     },

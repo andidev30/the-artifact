@@ -20,6 +20,12 @@ fullnameOverride: ''
 # and http://localhost:8080 otherwise, for trying it through kubectl port-forward.
 appUrl: ''
 
+# A second address that serves page files and nothing else (CONTENT_ORIGIN), on another host than
+# appUrl, preferably another registrable domain, e.g. https://artifact-content.example.net. Browsers
+# then never send the app's cookies where untrusted pages run. With the ingress on, its host is added
+# to the Ingress and to its TLS hosts. Empty serves pages from appUrl. See docs/self-hosting.md.
+contentOrigin: ''
+
 # Skips the marketing pages and makes the first account the instance admin. Only the hosted
 # service turns it off.
 selfHosted: true

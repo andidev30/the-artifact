@@ -15,6 +15,11 @@ const SELF_HOSTED_BUCKET = process.env.TEST_SELF_HOSTED_S3_BUCKET ?? `${BUCKET}-
 // Uses the installed Google Chrome; set PW_CHROMIUM=1 after `npx playwright install chromium` to use Chromium instead
 const browser = { ...devices['Desktop Chrome'], ...(process.env.PW_CHROMIUM ? {} : { channel: 'chrome' as const }) }
 
+// The hosted pair serves pages from a content origin of their own, as the hosted service does: the API's
+// own address on 127.0.0.1, another site than localhost, so the browser keeps the app's cookies away
+// from it. The self-hosted pair serves them from the app, the default.
+const contentOrigin = (ports: { api: number }) => `http://127.0.0.1:${ports.api}`
+
 function servers(ports: { api: number; web: number }, selfHosted: boolean, databaseUrl: string, bucket: string) {
   return [
     {
@@ -44,6 +49,7 @@ function servers(ports: { api: number; web: number }, selfHosted: boolean, datab
         RATE_LIMITS: 'off',
         TRUST_PROXY: '',
         EMBED_FRAME_ANCESTORS: '',
+        CONTENT_ORIGIN: selfHosted ? '' : contentOrigin(ports),
         WORKSPACE_MAX_PAGES: '',
         WORKSPACE_MAX_VERSIONS: '',
         WORKSPACE_MAX_STORAGE: '',
@@ -78,7 +84,7 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   projects: [
-    { name: 'chrome', testIgnore: 'self-hosted/**', use: { ...browser, baseURL: webUrl(HOSTED) } },
+    { name: 'chrome', testIgnore: 'self-hosted/**', use: { ...browser, baseURL: webUrl(HOSTED) }, metadata: { contentOrigin: contentOrigin(HOSTED) } },
     // Runs alone before the other self-hosted specs, on the freshly emptied database. A retry would no
     // longer be the first account, so it gets none.
     {
