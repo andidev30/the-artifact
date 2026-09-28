@@ -9,21 +9,37 @@ export class MailDisabledError extends Error {
 
 let smtp: Transporter | null = null
 
+// A mail server on this machine (Mailpit in development and tests) is reached without crossing a network
+function isLoopback(host: string): boolean {
+  const h = host
+    .trim()
+    .toLowerCase()
+    .replace(/^\[|\]$/g, '')
+  return h === 'localhost' || h.endsWith('.localhost') || h === '::1' || /^127(\.\d{1,3}){3}$/.test(h)
+}
+
+// SMTP_SECURE connects with TLS from the start; otherwise STARTTLS is required unless SMTP_REQUIRE_TLS=false
+// or the server is on this machine, so a network attacker can't downgrade the connection to plain text
+export function transportOptions(smtp: Pick<typeof env.smtp, 'host' | 'port' | 'secure' | 'requireTls' | 'user' | 'pass'>) {
+  return {
+    host: smtp.host,
+    port: smtp.port,
+    secure: smtp.secure,
+    requireTLS: !smtp.secure && smtp.requireTls && !isLoopback(smtp.host),
+    auth: smtp.user ? { user: smtp.user, pass: smtp.pass } : undefined,
+    // Sign-in links and invitations are sent while the person waits; with nodemailer's defaults a mail
+    // server that hangs would hold the request for 2 minutes to connect or 10 of silence
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 30_000,
+  }
+}
+
 // Every send fails with MailDisabledError when SMTP isn't configured; callers fall back to a link
 export const transport = {
   async sendMail(message: SendMailOptions) {
     if (!mailEnabled()) throw new MailDisabledError()
-    smtp ??= nodemailer.createTransport({
-      host: env.smtp.host,
-      port: env.smtp.port,
-      secure: env.smtp.secure,
-      auth: env.smtp.user ? { user: env.smtp.user, pass: env.smtp.pass } : undefined,
-      // Sign-in links and invitations are sent while the person waits; with nodemailer's defaults a mail
-      // server that hangs would hold the request for 2 minutes to connect or 10 of silence
-      connectionTimeout: 10_000,
-      greetingTimeout: 10_000,
-      socketTimeout: 30_000,
-    })
+    smtp ??= nodemailer.createTransport(transportOptions(env.smtp))
     return smtp.sendMail(message)
   },
 }

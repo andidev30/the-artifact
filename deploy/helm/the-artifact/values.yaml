@@ -70,7 +70,10 @@ workspaceQuota:
 smtp:
   host: ''
   port: 587
+  # true for implicit TLS, usually port 465
   secure: false
+  # Refuse to send unless the server offers STARTTLS; false for a relay that doesn't
+  requireTls: true
   user: ''
   # Or SMTP_PASS in existingSecret
   password: null

@@ -122,6 +122,9 @@
         "secure": {
           "type": "boolean"
         },
+        "requireTls": {
+          "type": "boolean"
+        },
         "user": {
           "type": "string"
         },

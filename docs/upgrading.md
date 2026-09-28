@@ -197,3 +197,4 @@ Only releases that need you to do something are listed. Each section is copied i
   ```
 
   Postgres already ran as its own user, so its volume is fine. The Helm chart is unchanged.
+- **Email needs an encrypted connection.** Without `SMTP_SECURE=true`, the app now sends only after the mail server agrees to STARTTLS; before, it sent in plain text when the server didn't offer it. A mail server on the same machine is exempt. If yours is a relay without TLS on a network you trust, set `SMTP_REQUIRE_TLS=false` (`smtp.requireTls: false` in Helm values), or sign-in links and invitations stop being sent.
