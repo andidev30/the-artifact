@@ -169,7 +169,7 @@ function SecondFactor({ methods, onExpired }: { methods: SecondFactorMethods; on
       )}
       <p className="field-hint">
         Lost your passkeys and recovery codes? Ask an admin of this server to reset two-factor sign-in for you.{' '}
-        <a className="text-link" href="/docs/two-factor#if-you-lose-your-second-factor">
+        <a className="text-link" href="/docs/signing-in#if-you-lose-your-second-factor">
           What to do
         </a>
       </p>

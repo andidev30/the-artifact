@@ -102,6 +102,7 @@ Admins see **Server admin** in the menu under their name, which opens `/admin`:
 - **People**: search everyone by name or email and see their organizations, page count and when they were last seen. From there you can:
   - **Make admin** or **Remove admin**. The last admin can't be removed.
   - **Suspend** someone. They are signed out everywhere, their connected agents stop working, and they can't sign in again until you unsuspend them. Their pages stay where they are, and links to them keep working.
+  - **Reset two-factor sign-in** for someone who lost every passkey, their authenticator app and their recovery codes. It removes all of them and signs them out everywhere, so check it is really them first. See [Losing every factor](/docs/security#losing-every-factor).
   - **Delete** an account, with the same rules as deleting your own in Account settings: organizations with nobody else in them go with it, and someone who is the only owner of an organization with other members can't be deleted until another owner is chosen or the organization is deleted.
 - **Organizations**: every organization with its owners, member and page counts. Deleting one removes its pages, memberships and invitations; the people keep their accounts.
 - **Sign-up**: who can create an account, and an optional instance name shown next to the logo.
@@ -137,11 +138,11 @@ Leave `SMTP_HOST` empty and The Artifact sends no email:
 - **Signing up on their own**: under the **Anyone** or **Email domains** policy, the sign-up page asks for an email and a password. Nobody checks that the address belongs to the person typing it, so an address someone invited or shared a page with can't be taken there; that person uses their invitation link or a sign-up link. If people you don't trust can reach the server, choose **Invited people only**.
 - **Adding people**: under **Server admin**, **People**, enter their address and choose **Make sign-up link**. Send them the link however you like; it works once, for 7 days, and asks them to choose a password. It creates their account whatever the sign-up policy says.
 - **Organization invitations**: inviting someone gives you the invitation link to pass on. Someone without an account creates one from that page with a password.
-- **Forgotten passwords**: an admin opens the person under **People** and chooses **Password reset link**. Using it signs them out everywhere else.
+- **Forgotten passwords**: an admin opens the person under **People** and chooses **Password reset link**. Using it signs them out everywhere else. If they use [two-factor sign-in](/docs/signing-in), it is still asked for after the new password; a lost second factor is reset separately with **Reset two-factor sign-in**.
 - **Sharing pages**: people are added without an email; send them the page link.
 - **Comments**: nobody is emailed about new ones. They show as new on gallery cards and on the page's **Comments** button.
 
-Anyone can change or set their password under **Account settings**, **Password**. Wrong passwords are limited to 10 per address every 15 minutes. Add SMTP later and sign-in links work as usual; existing passwords keep working too.
+Anyone can change or set their password under **Account settings**, **Password**. Wrong passwords are limited to 10 per address every 15 minutes. A password is the only thing between an account and the server here, so encourage people to add a passkey or an authenticator app, or have organizations [require one](/docs/organizations#requiring-two-factor-sign-in). Add SMTP later and sign-in links work as usual; existing passwords keep working too.
 
 ## Google sign-in (optional)
 
