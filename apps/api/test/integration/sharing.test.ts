@@ -16,12 +16,19 @@ function share(base: string, user: TestUser, body: Record<string, unknown>) {
 
 describe('sharing endpoints', () => {
   it('starts with just the owner', async () => {
-    const { owner, base } = await setup()
+    const { owner, page, base } = await setup()
     const res = await call(base, { cookie: owner.cookie })
     expect(await res.json()).toEqual({
       owner: { name: 'Olivia Owner', email: 'owner@example.com', avatarUrl: null },
       people: [],
       visibility: 'private',
+      link: {
+        expiresAt: null,
+        password: false,
+        expired: false,
+        url: `http://localhost:5177/a/${page.slug}`,
+        embedUrl: `http://localhost:5177/e/${page.slug}`,
+      },
       organizationName: null,
     })
   })

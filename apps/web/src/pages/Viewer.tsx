@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
-import { downloadUrl, fetchMe, getArtifact, logout, versionUrl, type ArtifactPage, type Visibility } from '../api'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
+import { downloadUrl, fetchMe, getArtifact, logout, PasswordNeeded, unlockPage, versionUrl, type ArtifactPage, type Visibility } from '../api'
 import { CommentsPanel } from '../components/CommentsPanel'
 import { HistoryPanel, OldVersionBar, type Viewing } from '../components/HistoryPanel'
 import { DeleteDialog, PageMenu, RenameDialog, type MenuItem } from '../components/PageActions'
@@ -12,7 +12,12 @@ import { timeAgo } from '../time'
 import './Auth.css'
 import './Viewer.css'
 
-type State = { kind: 'loading' } | { kind: 'ready'; page: ArtifactPage; email: string | null } | { kind: 'missing'; email: string | null } | { kind: 'error' }
+type State =
+  | { kind: 'loading' }
+  | { kind: 'ready'; page: ArtifactPage; email: string | null }
+  | { kind: 'missing'; email: string | null }
+  | { kind: 'locked' }
+  | { kind: 'error' }
 
 const VISIBILITY_LABEL: Record<Visibility, string> = {
   private: 'Restricted',
@@ -27,10 +32,14 @@ const SANDBOX = 'allow-scripts allow-forms allow-popups allow-popups-to-escape-s
 export function Viewer() {
   const { slug = '' } = useParams()
   const [state, setState] = useState<State>({ kind: 'loading' })
+  const [attempt, setAttempt] = useState(0)
+  // The key of a public link (/a/<slug>?k=<key>), for people without access of their own
+  const key = useSearchParams()[0].get('k')
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt loads the page again once the password is entered
   useEffect(() => {
     let active = true
-    getArtifact(slug)
+    getArtifact(slug, key)
       .then(async (page) => {
         if (!active) return
         if (page) {
@@ -43,12 +52,18 @@ export function Viewer() {
           if (active) setState({ kind: 'missing', email: me?.email ?? null })
         }
       })
-      .catch(() => active && setState({ kind: 'error' }))
+      .catch((err) => active && setState(err instanceof PasswordNeeded ? { kind: 'locked' } : { kind: 'error' }))
     return () => {
       active = false
-      document.title = 'The Artifact'
     }
-  }, [slug])
+  }, [slug, key, attempt])
+
+  useEffect(
+    () => () => {
+      document.title = 'The Artifact'
+    },
+    [],
+  )
 
   if (state.kind === 'loading')
     return (
@@ -63,8 +78,73 @@ export function Viewer() {
       </div>
     )
   if (state.kind === 'missing') return <Unavailable slug={slug} email={state.email} />
+  if (state.kind === 'locked') return <PasswordGate slug={slug} linkKey={key} onUnlocked={() => setAttempt((n) => n + 1)} />
 
   return <PageFrame page={state.page} email={state.email} onChange={(page) => setState({ ...state, page })} />
+}
+
+// A page shared by a link with a password. It says nothing about the page until the password is right.
+function PasswordGate({ slug, linkKey, onUnlocked }: { slug: string; linkKey: string | null; onUnlocked: () => void }) {
+  const [password, setPassword] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault()
+    if (!password) {
+      setError('Enter the password.')
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      await unlockPage(slug, password, linkKey)
+      onUnlocked()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'The password could not be checked. Try again.')
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="auth">
+      <header className="nav">
+        <Wordmark />
+      </header>
+      <main id="main" className="auth-main">
+        <section className="auth-box unavailable" aria-labelledby="locked-title">
+          <span className="unavailable-icon" aria-hidden="true">
+            <svg viewBox="0 0 20 20">
+              <path d="M6 9V7a4 4 0 1 1 8 0v2M5 9h10v8H5z" />
+            </svg>
+          </span>
+          <h1 id="locked-title">This page needs a password</h1>
+          <p className="auth-lede">Ask the person who sent you the link for it.</p>
+          <form className="auth-form" onSubmit={onSubmit} noValidate>
+            <label htmlFor="page-password">Password</label>
+            <input
+              id="page-password"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? 'page-password-error' : undefined}
+              autoFocus
+            />
+            {error && (
+              <p id="page-password-error" className="auth-error" role="alert">
+                {error}
+              </p>
+            )}
+            <button type="submit" className="button" disabled={busy}>
+              {busy ? 'Opening' : 'Open page'}
+            </button>
+          </form>
+        </section>
+      </main>
+    </div>
+  )
 }
 
 // Missing and no-access look the same on purpose, so private pages don't reveal they exist
@@ -144,9 +224,12 @@ function PageFrame({ page, email, onChange }: { page: ArtifactPage; email: strin
     setPanel(null)
     button.current?.focus()
   }
-  // Once opened, drop ?comments so Copy link hands on the page's plain address
+  // Once opened, drop ?comments so Copy link hands on the page's address, with its key if it has one
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).has('comments')) navigate({ search: '' }, { replace: true })
+    const search = new URLSearchParams(window.location.search)
+    if (!search.has('comments')) return
+    search.delete('comments')
+    navigate({ search: search.size ? `?${search}` : '' }, { replace: true })
   }, [navigate])
   const [viewing, setViewing] = useState<Viewing | null>(null)
   const [dialog, setDialog] = useState<'rename' | 'delete' | null>(null)

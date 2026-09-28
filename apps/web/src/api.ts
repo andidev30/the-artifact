@@ -179,10 +179,16 @@ export function moveToFolder(slug: string, folder: string | null) {
   return request<{ folder: { id: string; name: string } | null }>(`/artifacts/${encodeURIComponent(slug)}`, { method: 'PATCH', json: { folder } })
 }
 
-// null when the page doesn't exist or this person can't open it
-export async function getArtifact(slug: string): Promise<ArtifactPage | null> {
-  const res = await fetch(`/api/artifacts/${encodeURIComponent(slug)}`, { credentials: 'same-origin' })
+// Thrown by getArtifact for a page shared by a link with a password nobody has entered here yet
+export class PasswordNeeded extends Error {}
+
+// null when the page doesn't exist or this person can't open it. key: the ?k= of a public link; the
+// server remembers it for the page's other requests.
+export async function getArtifact(slug: string, key?: string | null): Promise<ArtifactPage | null> {
+  const query = key ? `?k=${encodeURIComponent(key)}` : ''
+  const res = await fetch(`/api/artifacts/${encodeURIComponent(slug)}${query}`, { credentials: 'same-origin' })
   if (res.status === 404) return null
+  if (res.status === 401) throw new PasswordNeeded('Enter the password to open this page.')
   if (!res.ok) throw new Error(`Loading the page failed with ${res.status}`)
   return res.json()
 }
@@ -195,6 +201,40 @@ export async function setVisibility(slug: string, visibility: Visibility): Promi
     body: JSON.stringify({ visibility }),
   })
   if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Visibility could not be changed.')
+}
+
+// Remembered by this browser for a while, for this page only
+export async function unlockPage(slug: string, password: string, key: string | null): Promise<void> {
+  const res = await fetch(`/api/artifacts/${encodeURIComponent(slug)}/unlock`, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password, k: key ?? undefined }),
+  })
+  if (res.ok) return
+  const data = await res.json().catch(() => ({}))
+  if (res.status === 404) throw new FieldError('This page no longer asks for a password. Reload to open it.')
+  throw new FieldError(data.error ?? 'The password could not be checked. Try again.', data.field)
+}
+
+// url and embedUrl are the public link and embed address, with the link's key once it was reset
+export type LinkSettings = { expiresAt: string | null; password: boolean; expired: boolean; url: string; embedUrl: string }
+
+// linkExpiresAt: an ISO date and time, or null for none. linkPassword: null removes it.
+// rotateLink resets the public link.
+export async function updateLink(
+  slug: string,
+  change: { linkExpiresAt?: string | null; linkPassword?: string | null; rotateLink?: boolean },
+): Promise<{ link: LinkSettings }> {
+  const res = await fetch(`/api/artifacts/${encodeURIComponent(slug)}`, {
+    method: 'PATCH',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(change),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new FieldError(data.error ?? 'The link could not be changed. Try again.', data.field)
+  return data
 }
 
 export const MAX_COMMENT_LENGTH = 5000
@@ -304,6 +344,7 @@ export type Sharing = {
   owner: { name: string | null; email: string; avatarUrl: string | null }
   people: { email: string; role: ShareRole; name: string | null; avatarUrl: string | null; pending: boolean }[]
   visibility: Visibility
+  link: LinkSettings
   organizationName: string | null
 }
 

@@ -1,11 +1,11 @@
 import { eq } from 'drizzle-orm'
 import { Hono, type Context } from 'hono'
 import {
-  accessLevel,
   canDelete,
   canEdit,
   checkTitle,
   deleteArtifact,
+  keyMatches,
   editableIds,
   findBySlug,
   getVersion,
@@ -26,7 +26,20 @@ import { requireUser, type AuthEnv } from '../auth/session.js'
 import { commentCounts, type CommentCount } from '../comments.js'
 import { belongsTo, canFile, fileInto, folderIn, workspaceOf } from '../folders.js'
 import { db, schema } from '../db/index.js'
-import { limitInvites } from '../limits.js'
+import { atLimit, clientIp, hit, limitInvites, limitRequest, tooManyRequests, waitText } from '../limits.js'
+import {
+  accessFor,
+  checkLinkPassword,
+  keyLetsIn,
+  LinkError,
+  linkSettings,
+  needsPassword,
+  parseLinkExpiry,
+  setGrantCookie,
+  updateLink,
+  type LinkChange,
+} from '../links.js'
+import { verifyPassword } from '../auth/password.js'
 import { currentThumbnails, getThumbnail, queueThumbnail, thumbnailsEnabled, type ThumbnailState } from '../thumbnails.js'
 import type { Artifact, ShareRole, Visibility } from '../db/schema.js'
 import { allowed, downloadVersion, serveVersion } from '../content.js'
@@ -142,8 +155,14 @@ function summary(a: Artifact, owner: string, thumb: ThumbnailState | undefined, 
 artifacts.get('/:slug', async (c) => {
   const user = c.get('user')
   const artifact = await findBySlug(c.req.param('slug'))
-  const access = artifact ? await accessLevel(artifact, user) : null
+  const access = artifact ? await accessFor(c, artifact) : null
+  const key = c.req.query('k')
+  // Only that the link asks for a password: no title, owner or content. An old key is a missing page.
+  if (artifact && !access && needsPassword(artifact) && keyMatches(artifact, key))
+    return c.json({ error: 'Enter the password to open this page.', field: 'password' }, 401)
   if (!artifact || !access) return c.json({ error: 'Not found' }, 404)
+  // The app's next requests for the page (its frame, comments, download) don't carry the key
+  if (keyLetsIn(artifact, key)) await setGrantCookie(c, artifact)
   const [owner] = await db.select({ name: schema.users.name, email: schema.users.email }).from(schema.users).where(eq(schema.users.id, artifact.ownerId))
   // Only signed-in people see comments (see routes/comments.ts)
   const counts = user ? await commentCounts(user.id, [artifact.id]) : null
@@ -175,7 +194,7 @@ artifacts.get('/:slug/download', downloadVersion)
 // Older link to the current HTML, from before pages were served as a tree
 artifacts.get('/:slug/content', async (c) => {
   const artifact = await findBySlug(c.req.param('slug'))
-  if (!artifact || !(await accessLevel(artifact, c.get('user')))) return c.text('Not found', 404)
+  if (!artifact || !(await accessFor(c, artifact))) return c.text('Not found', 404)
   return c.redirect(`/api/artifacts/${artifact.slug}/v/${artifact.currentVersion}/`, 302)
 })
 
@@ -184,7 +203,7 @@ artifacts.get('/:slug/thumbnails/:version', async (c) => {
   const artifact = await findBySlug(c.req.param('slug'))
   const n = Number(c.req.param('version'))
   if (!artifact || !Number.isInteger(n) || n < 1) return c.json({ error: 'Not found' }, 404)
-  if (!allowed(await accessLevel(artifact, c.get('user')), n === artifact.currentVersion)) return c.json({ error: 'Not found' }, 404)
+  if (!allowed(await accessFor(c, artifact), n === artifact.currentVersion)) return c.json({ error: 'Not found' }, 404)
   const id = await versionId(artifact, n)
   if (!id) return c.json({ error: 'Not found' }, 404)
   const thumb = await getThumbnail(id)
@@ -205,6 +224,29 @@ artifacts.get('/:slug/thumbnails/:version', async (c) => {
   return c.body(new Uint8Array(thumb.image), 200, headers)
 })
 
+const WRONG_LINK_PASSWORD = 'That password is wrong.'
+
+// The password of a link-shared page, with the link's key ({ password, k }). Wrong ones count per page, so guessing from many addresses
+// runs into the same limit; every try also counts per address.
+artifacts.post('/:slug/unlock', async (c) => {
+  const busy = await limitRequest(c, 'link-password-ip', clientIp(c), 'Too many password attempts from your network.')
+  if (busy) return busy
+  const artifact = await findBySlug(c.req.param('slug'))
+  const body = (await c.req.json().catch(() => ({}))) as { password?: unknown; k?: unknown }
+  const key = typeof body.k === 'string' ? body.k : null
+  if (!artifact || !needsPassword(artifact) || !keyMatches(artifact, key)) return c.json({ error: 'Not found' }, 404)
+  const given = typeof body.password === 'string' ? body.password : ''
+  if (!given) return c.json({ error: 'Enter the password.', field: 'password' }, 400)
+  const locked = await atLimit('link-password', artifact.id)
+  if (locked) return tooManyRequests(c, `Too many wrong passwords for this page. Try again in ${waitText(locked)}.`, locked)
+  if (!(await verifyPassword(given, artifact.linkPasswordHash))) {
+    await hit('link-password', artifact.id)
+    return c.json({ error: WRONG_LINK_PASSWORD, field: 'password' }, 401)
+  }
+  await setGrantCookie(c, artifact)
+  return c.body(null, 204)
+})
+
 // Everything below changes the page or who can open it, so it needs edit access
 async function editable(c: Context<AuthEnv>) {
   const artifact = await findBySlug(c.req.param('slug')!)
@@ -215,14 +257,32 @@ async function editable(c: Context<AuthEnv>) {
 const VISIBILITIES = new Set<Visibility>(['private', 'organization', 'link'])
 const ROLES = new Set<ShareRole>(['viewer', 'editor'])
 
-// Rename ({ title }), change general access ({ visibility }) or file it ({ folder: <folder id> or null
-// for no folder}); any of them
+// Rename ({ title }), change general access ({ visibility }), file it ({ folder: <folder id> or null
+// for no folder}), or change the link ({ linkExpiresAt: <ISO date> or null, linkPassword: <text> or
+// null, rotateLink: true for a new public link }); any of them
 artifacts.patch('/:slug', requireUser, async (c) => {
   const artifact = await editable(c)
   if (!artifact) return c.json({ error: 'Not found' }, 404)
-  const body = (await c.req.json().catch(() => ({}))) as { visibility?: Visibility; title?: unknown; folder?: unknown }
-  if (body.title === undefined && body.visibility === undefined && body.folder === undefined)
-    return c.json({ error: 'Send a title, a visibility or a folder.' }, 400)
+  const body = (await c.req.json().catch(() => ({}))) as {
+    visibility?: Visibility
+    title?: unknown
+    folder?: unknown
+    linkExpiresAt?: unknown
+    linkPassword?: unknown
+    rotateLink?: unknown
+  }
+  const changesLink = body.linkExpiresAt !== undefined || body.linkPassword !== undefined || body.rotateLink === true
+  if (body.title === undefined && body.visibility === undefined && body.folder === undefined && !changesLink)
+    return c.json({ error: 'Send a title, a visibility, a folder or link settings.' }, 400)
+
+  const link: LinkChange = { reset: body.rotateLink === true }
+  try {
+    if (body.linkExpiresAt !== undefined) link.expiresAt = parseLinkExpiry(body.linkExpiresAt)
+    if (body.linkPassword !== undefined) link.password = checkLinkPassword(body.linkPassword)
+  } catch (err) {
+    if (err instanceof LinkError) return c.json({ error: err.message, field: err.field === 'expiresAt' ? 'linkExpiresAt' : 'linkPassword' }, 400)
+    throw err
+  }
 
   let title: string | undefined
   if (body.title !== undefined) {
@@ -246,13 +306,16 @@ artifacts.patch('/:slug', requireUser, async (c) => {
     }
   }
 
-  const updated = title !== undefined ? await rename(artifact, title) : artifact
+  let updated = title !== undefined ? await rename(artifact, title) : artifact
   if (body.visibility) await db.update(schema.artifacts).set({ visibility: body.visibility }).where(eq(schema.artifacts.id, artifact.id))
   if (folder !== undefined) await fileInto(artifact, folder?.id ?? null)
+  if (changesLink) updated = await updateLink(updated, link)
   return c.json({
+    slug: updated.slug,
     title: updated.title,
     visibility: body.visibility ?? updated.visibility,
     updatedAt: updated.updatedAt,
+    link: linkSettings(updated),
     ...(folder !== undefined ? { folder } : {}),
   })
 })

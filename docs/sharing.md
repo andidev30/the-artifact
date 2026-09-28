@@ -20,6 +20,33 @@ Who can open the page with just the link:
 - **Your organization**: everyone in the organization the page belongs to (organization pages only)
 - **Anyone with the link**: no account needed
 
+## Link expiry, password and reset
+
+When a page is set to **Anyone with the link**, **Share** shows three more options under it:
+
+- **Link expires**: after the end of this day, the link opens nothing. Leave it empty to keep the link working.
+- **Link password**: people who open the link enter it first, on a small password page, before they see anything of the page. It needs at least 8 characters. Your browser remembers it for that page for 12 hours. **Remove password** takes it off.
+- **Reset link**: the page gets a new public link, `{{APP_URL}}/a/<page id>?k=<key>`. Every public link shared before stops working. **Copy link** and the embed code give the new one.
+
+These only change what the link does for people with no access of their own. The owner, the people added above and, for **Your organization** pages, the organization's members keep opening the page at its own address, `{{APP_URL}}/a/<page id>`: no key, no password and no expiry. A reset never changes that address, so the links in sharing emails keep working.
+
+Until you reset it for the first time, a page's public link is its own address, as it was before keys existed, so links you already shared keep working. After the first reset, the plain address only opens the page for people with access of their own.
+
+An expired link, and a public link from before a reset, behave exactly like a page that doesn't exist: "This page isn't available", and nothing in link previews or embeds.
+
+Changing the password asks everyone for the new one, including people who entered the old one. Too many wrong passwords for one page, from anywhere, pause new tries for a while (the `link-password` [rate limit](/docs/configuration#rate-limits)).
+
+Agents do the same with `set_artifact_visibility`:
+
+| Argument | Meaning |
+| --- | --- |
+| `visibility` | `private` (restricted), `organization` or `link`. Leave it out to keep it as it is. |
+| `link_expires` | A date (`2026-12-31`, the end of that day in UTC) or an ISO 8601 date and time. An empty string or `never` removes the expiry. |
+| `link_password` | The password, at least 8 characters. An empty string removes it. |
+| `rotate_link` | `true` resets the public link. The answer has the new one as `Public link`. The page keeps its id. |
+
+The CLI has `--expires`, `--password` and `--new-link` on `the-artifact share` (see [Publishing](/docs/publishing#listing-and-sharing)).
+
 ## Organization admins
 
 In an organization, owners and admins can edit every page in it, even pages that are restricted to other people.
@@ -33,7 +60,7 @@ In an organization, owners and admins can edit every page in it, even pages that
 | Invited viewer | View | View | View |
 | Organization owner or admin | Edit | Edit | Edit |
 | Organization member | – | View | View |
-| Anyone else, signed in or not | – | – | View |
+| Anyone else, signed in or not | – | – | View, until the link expires, with its password if it has one |
 
 When someone can't open a page, they see "This page isn't available", whether the page is private or doesn't exist. That way a link doesn't reveal that a private page exists.
 
@@ -63,7 +90,7 @@ Agents can read the same numbers with `list_views` (see [Publishing](/docs/publi
 
 When you paste a page's link into Slack, WhatsApp, an email or anything else that shows previews, a page set to **Anyone with the link** shows its title and its screenshot. Without a screenshot (it is still being taken, or the server doesn't take them), the preview shows the title only.
 
-**Restricted** and **Your organization** pages, and links to pages that don't exist, all preview as plain "The Artifact". The service that builds the preview isn't signed in, so it learns nothing about the page, not even that it exists. If you switch a page from **Anyone with the link** back to **Restricted**, new previews stop showing it, but apps that already fetched one may keep showing what they saw.
+**Restricted** and **Your organization** pages, links with a password or past their expiry, public links from before a reset, and links to pages that don't exist, all preview as plain "The Artifact". The service that builds the preview isn't signed in, so it learns nothing about the page, not even that it exists. If you switch a page from **Anyone with the link** back to **Restricted**, new previews stop showing it, but apps that already fetched one may keep showing what they saw.
 
 ## Embedding
 
@@ -77,11 +104,13 @@ A page set to **Anyone with the link** can be embedded in Notion, Confluence, a 
 <iframe src="{{APP_URL}}/e/<page id>" width="100%" height="600" style="border:0" title="Signups by week" loading="lazy" allowfullscreen></iframe>
 ```
 
+Once the link was [reset](#link-expiry-password-and-reset), the embed address carries its key, `{{APP_URL}}/e/<page id>?k=<key>`, and embeds of an earlier address show the sign-in card. A link with a password can't be embedded.
+
 The page runs in the same sandbox as in the app: its scripts work, but they can't reach the site it is embedded in or your account.
 
-An embed never uses your sign-in, even if you are signed in: the site it sits on shows the same thing to everyone who opens it. So a **Restricted** or **Your organization** page, or a link to a page that doesn't exist, shows the same "Sign in to view this page" card, with a link to open the page in The Artifact. The card never shows the page's title, content or screenshot. If you switch a page from **Anyone with the link** back to **Restricted**, its embeds show the card the next time they load.
+An embed never uses your sign-in, even if you are signed in: the site it sits on shows the same thing to everyone who opens it. So a **Restricted** or **Your organization** page, a link with a password or past its expiry, or a link to a page that doesn't exist, shows the same "Sign in to view this page" card, with a link to open the page in The Artifact. The card never shows the page's title, content or screenshot. If you switch a page from **Anyone with the link** back to **Restricted**, its embeds show the card the next time they load.
 
-Tools that embed by link ask `{{APP_URL}}/api/oembed?url=<page link>` for the embed code. It answers only for pages shared with **Anyone with the link**; for every other page it answers "not found", as if the page didn't exist.
+Tools that embed by link ask `{{APP_URL}}/api/oembed?url=<page link>` for the embed code. It answers only for pages shared with **Anyone with the link**, with no password and not expired; for every other page it answers "not found", as if the page didn't exist.
 
 If your server is only reachable on a private network, browsers such as Chrome ask each person before a public site like Notion may show its embeds, or refuse.
 

@@ -24,6 +24,7 @@ import {
 } from '../comments.js'
 import type { Comment } from '../db/schema.js'
 import { limitRequest } from '../limits.js'
+import { linkPassFor } from '../links.js'
 
 // Mounted at /api/artifacts/:slug/comments. Signed-out visitors of a link-shared page don't see
 // comments: they can be a team's internal feedback on a page it shows to outsiders.
@@ -33,7 +34,7 @@ comments.use(requireUser)
 
 async function load(c: Context<AuthEnv>) {
   const artifact = await findBySlug(c.req.param('slug')!)
-  const access = artifact ? await commentAccess(artifact, c.get('user')!) : null
+  const access = artifact ? await commentAccess(artifact, c.get('user')!, await linkPassFor(c, artifact)) : null
   return artifact && access ? { artifact, ...access } : null
 }
 

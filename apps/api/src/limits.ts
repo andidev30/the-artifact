@@ -40,6 +40,10 @@ const CORE = {
   'access-token': { max: 20, seconds: HOUR },
   // Comments and replies one account writes, in the app or through agents
   comment: { max: 120, seconds: HOUR },
+  // Wrong passwords for one link-shared page, from anyone
+  'link-password': { max: 30, seconds: 15 * MINUTE },
+  // Link password attempts from one address, right or wrong
+  'link-password-ip': { max: 100, seconds: 15 * MINUTE },
   // Emails about new comments to one person for one page; comments past it only show in the app
   'comment-email': { max: 1, seconds: 15 * MINUTE },
 } satisfies Record<string, Rule>

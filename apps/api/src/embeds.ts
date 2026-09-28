@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import type { Artifact } from './db/schema.js'
 import { env } from './env.js'
+import { embedLink, keyQuery, publicLink } from './links.js'
 import { escapeHtml, IMAGE, linkSharedPage, SITE, SLUG_RE } from './previews.js'
 import { currentThumbnails } from './thumbnails.js'
 
@@ -9,8 +10,9 @@ import { currentThumbnails } from './thumbnails.js'
 //
 // Like link previews, access is checked as a signed-out visitor, never with the request's session:
 // third-party frames often get no cookies, and an embed must look the same to everyone who sees the
-// site it sits on. So only a page anyone with the link can open is embedded; restricted,
-// organization and missing pages all get the same "sign in" card, with no title, content or
+// site it sits on. So only a page anyone with the link can open is embedded, asked for with the link's
+// current key (?k=) and without a password; restricted, organization, protected, expired and missing
+// pages all get the same "sign in" card, with no title, content or
 // screenshot. The page itself still loads from /api/artifacts/<slug>/v/<n>/ under its sandbox CSP.
 
 // Same as the viewer's frame in the web app (pages/Viewer.tsx)
@@ -59,10 +61,11 @@ ${body}
 }
 
 export function embedHtml(artifact: Artifact) {
-  const open = `${env.appUrl}/a/${artifact.slug}`
+  const open = publicLink(artifact)
+  const src = `/api/artifacts/${artifact.slug}/v/${artifact.currentVersion}/${keyQuery(artifact)}`
   return embedDocument(
     `${artifact.title} | ${SITE}`,
-    `<iframe class="page" src="/api/artifacts/${artifact.slug}/v/${artifact.currentVersion}/" title="${escapeHtml(artifact.title)}" sandbox="${SANDBOX}" allow="fullscreen"></iframe>
+    `<iframe class="page" src="${escapeHtml(src)}" title="${escapeHtml(artifact.title)}" sandbox="${SANDBOX}" allow="fullscreen"></iframe>
 <div class="bar"><a href="${escapeHtml(open)}" target="_blank" rel="noopener">Open in ${SITE}</a></div>`,
   )
 }
@@ -109,7 +112,7 @@ export const embeds = new Hono()
 
 embeds.get('/e/:slug', async (c) => {
   const slug = c.req.param('slug')
-  const artifact = await linkSharedPage(slug)
+  const artifact = await linkSharedPage(slug, c.req.query('k'))
   const headers = {
     'Content-Security-Policy': embedCsp(),
     'X-Content-Type-Options': 'nosniff',
@@ -130,14 +133,14 @@ embeds.get('/api/oembed', async (c) => {
   const link = c.req.query('url')
   if (!link) return c.json({ error: 'Add the link to a page as url.', field: 'url' }, 400, cors)
   const slug = slugFromLink(link)
-  const artifact = slug ? await linkSharedPage(slug) : null
+  const artifact = slug ? await linkSharedPage(slug, new URL(link).searchParams.get('k')) : null
   if (!artifact) return c.json({ error: 'Not found' }, 404, cors)
 
   const maxWidth = dimension(c.req.query('maxwidth'))
   const maxHeight = dimension(c.req.query('maxheight'))
   const width = Math.min(SIZE.width, maxWidth ?? SIZE.width)
   const height = Math.min(SIZE.height, maxHeight ?? SIZE.height)
-  const src = `${env.appUrl}/e/${artifact.slug}`
+  const src = embedLink(artifact)
   const html = `<iframe src="${escapeHtml(src)}" width="${width}" height="${height}" style="border:0" title="${escapeHtml(artifact.title)}" loading="lazy" allowfullscreen></iframe>`
 
   // Only a rendered screenshot, and only when it fits the size asked for
@@ -146,7 +149,7 @@ embeds.get('/api/oembed', async (c) => {
   const thumbnail =
     ready && fits
       ? {
-          thumbnail_url: `${env.appUrl}/api/artifacts/${artifact.slug}/thumbnails/${artifact.currentVersion}`,
+          thumbnail_url: `${env.appUrl}/api/artifacts/${artifact.slug}/thumbnails/${artifact.currentVersion}${keyQuery(artifact)}`,
           thumbnail_width: IMAGE.width,
           thumbnail_height: IMAGE.height,
         }

@@ -67,6 +67,9 @@ Changes who can open a page, or shares it with people by email. <page> is its id
 
 Options:
   --visibility <who>   restricted (you and the people it's shared with), organization, or link
+  --expires <date>     The link stops working after this date (YYYY-MM-DD, end of day UTC); never to remove
+  --password <text>    People who open the link must enter this password; "" to remove
+  --new-link           Reset the public link: earlier public links stop working
   --email <address>    Share with this person; repeat for more. They get an email with the link
   --role <role>        viewer or editor, for --email. Default: viewer
   --message <text>     A note for the email`,
@@ -108,7 +111,15 @@ const OPTIONS: Record<string, ParseArgsConfig['options']> = {
     'dry-run': { type: 'boolean' },
   },
   list: { query: { type: 'string' }, folder: { type: 'string' }, limit: { type: 'string' }, cursor: { type: 'string' } },
-  share: { visibility: { type: 'string' }, email: { type: 'string', multiple: true }, role: { type: 'string' }, message: { type: 'string' } },
+  share: {
+    visibility: { type: 'string' },
+    expires: { type: 'string' },
+    password: { type: 'string' },
+    'new-link': { type: 'boolean' },
+    email: { type: 'string', multiple: true },
+    role: { type: 'string' },
+    message: { type: 'string' },
+  },
   login: { 'with-token': { type: 'boolean' }, 'no-browser': { type: 'boolean' } },
   logout: {},
   whoami: {},
@@ -271,11 +282,17 @@ async function share(io: Io, { positionals, values }: Parsed) {
   const role = str(values, 'role')
   if (role !== undefined && role !== 'viewer' && role !== 'editor') throw new UsageError('--role is viewer or editor.')
   if ((role !== undefined || str(values, 'message') !== undefined) && emails.length === 0) throw new UsageError('--role and --message go with --email.')
-  if (!visibility && emails.length === 0) throw new UsageError('Say what to change: --visibility restricted|organization|link, or --email someone@example.com.')
+  const link: Record<string, unknown> = {}
+  if (visibility) link.visibility = visibility
+  if (str(values, 'expires') !== undefined) link.link_expires = str(values, 'expires')
+  if (str(values, 'password') !== undefined) link.link_password = str(values, 'password')
+  if (values['new-link']) link.rotate_link = true
+  if (Object.keys(link).length === 0 && emails.length === 0)
+    throw new UsageError('Say what to change: --visibility restricted|organization|link, --expires, --password, --new-link, or --email someone@example.com.')
   const server = await resolveServer(str(values, 'server'), io.env)
   const auth = await resolveAuth(server, { token: str(values, 'token'), env: io.env })
   const messages: string[] = []
-  if (visibility) messages.push((await callTool(auth, 'set_artifact_visibility', { artifact_id: page, visibility })).text)
+  if (Object.keys(link).length) messages.push((await callTool(auth, 'set_artifact_visibility', { artifact_id: page, ...link })).text)
   if (emails.length) {
     const args: Record<string, unknown> = { artifact_id: page, emails, role: role ?? 'viewer' }
     if (str(values, 'message') !== undefined) args.message = str(values, 'message')
