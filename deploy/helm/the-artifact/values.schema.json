@@ -189,6 +189,10 @@
         }
       }
     },
+    "encryptionKey": {
+      "type": "string",
+      "pattern": "^$|^[0-9a-fA-F]{64}$|^[A-Za-z0-9+/_-]{43}=?$"
+    },
     "existingSecret": {
       "type": "string"
     },

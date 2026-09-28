@@ -108,6 +108,12 @@ metrics:
     scrapeTimeout: 10s
     labels: {}
 
+# Recommended: encrypts the keys the server keeps in its database (ENCRYPTION_KEY), so a copy of the
+# database alone doesn't give them away. The output of openssl rand -base64 32; or ENCRYPTION_KEY in
+# existingSecret. The chart never makes one. Once set, the app needs it to start, so keep a copy
+# apart from your backups. See docs/configuration.md.
+encryptionKey: ''
+
 # A Secret of your own whose keys are added to the app's environment, named as the settings,
 # e.g. SMTP_PASS, GOOGLE_CLIENT_SECRET, METRICS_TOKEN. Its keys win over the same settings given
 # here as secrets. The database and bucket have their own existingSecret below.
