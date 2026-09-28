@@ -77,6 +77,7 @@ import { thumbnailsEnabled } from './thumbnails.js'
 import { prepareUpload } from './uploads.js'
 import { MAX_VIEWERS, pageViewers, REPEAT_MINUTES, versionViews, VIEWER_RETENTION_DAYS } from './views.js'
 import { MAX_VERSION } from './validation.js'
+import { canMove, duplicatePage, movePage, TransferError } from './transfer.js'
 
 const visibility = z
   .enum(['private', 'organization', 'link'])
@@ -501,39 +502,140 @@ function buildServer(auth: McpAuth) {
     }),
   )
 
+  const workspaceArg = z
+    .string()
+    .optional()
+    .describe(
+      '"personal" for your personal workspace, or the id of an organization you are a member of. ' +
+        'A wrong one is answered with the workspaces you can use and their ids.',
+    )
+
+  // Where this person can publish, for an agent that named a workspace that isn't one of them
+  async function workspaceChoices(): Promise<string> {
+    const orgs = await db
+      .select({ id: schema.organizations.id, name: schema.organizations.name })
+      .from(schema.memberships)
+      .innerJoin(schema.organizations, eq(schema.organizations.id, schema.memberships.organizationId))
+      .where(eq(schema.memberships.userId, auth.userId))
+      .orderBy(schema.organizations.name)
+    const usable = orgs.filter((o) => !auth.blockedOrgs?.includes(o.id))
+    return ['- personal (your personal workspace)', ...usable.map((o) => `- ${o.id} (${o.name})`)].join('\n')
+  }
+
+  async function transferFailed(err: unknown) {
+    if (err instanceof TransferError && err.status === 404 && err.message !== 'Not found')
+      return text(`${err.message} Workspaces you can use:\n${await workspaceChoices()}`, true)
+    if (err instanceof TransferError || err instanceof PublishError) return text(err.message, true)
+    throw err
+  }
+
+  // The name people see for a workspace
+  async function workspaceLabel(organizationId: string | null) {
+    if (!organizationId) return 'your personal workspace'
+    const [org] = await db.select({ name: schema.organizations.name }).from(schema.organizations).where(eq(schema.organizations.id, organizationId))
+    return org?.name ?? 'the organization'
+  }
+
   server.registerTool(
     'move_artifact',
     {
-      title: 'Move a page to a folder',
+      title: 'Move a page to a folder or another workspace',
       description:
-        'File a page into a folder of the connected workspace, or take it out of its folder, without publishing a new version. ' +
-        'The folder is created if there is none by that name. For pages you can edit in this workspace. The link and who can open the page stay the same.',
+        'File a page into a folder, or take it out of its folder, without publishing a new version. The folder is created if there is none by that name. ' +
+        'Pass workspace to move the page to another workspace (your personal workspace or an organization you are in); its folder is then one of that workspace. ' +
+        'For pages you can edit in a workspace you belong to; only the owner can move a page into or out of their personal workspace. ' +
+        'The link stays the same. Moving keeps the people it is shared with, its link settings, comments and views; ' +
+        'a page open to its organization becomes restricted when it moves to a personal workspace.',
       inputSchema: z.object({
         artifact_id: z.string().describe('Id or link of the page'),
-        folder: z.string().describe(`Folder name, up to ${MAX_FOLDER_NAME} characters, or an empty string to take the page out of its folder`),
+        folder: z
+          .string()
+          .optional()
+          .describe(
+            `Folder name, up to ${MAX_FOLDER_NAME} characters, or an empty string to take the page out of its folder. Needed unless workspace is given.`,
+          ),
+        workspace: workspaceArg,
       }),
       annotations: { idempotentHint: true },
     },
-    limited(async ({ artifact_id, folder }) => {
-      const artifact = await findBySlug(parseArtifactRef(artifact_id))
+    limited(async ({ artifact_id, folder, workspace: to }) => {
+      let artifact = await findBySlug(parseArtifactRef(artifact_id))
       if (!artifact || !(await canEdit(artifact, viewer))) return text(`No page you can edit has the id "${artifact_id}".`, true)
-      if (artifact.organizationId !== auth.organizationId || !(await canFile(artifact, viewer)))
+      if (folder === undefined && to === undefined) return text('Say where to move the page: folder, workspace or both.', true)
+      const lines: string[] = []
+      if (to !== undefined && to !== (artifact.organizationId ?? 'personal')) {
+        if (!(await canMove(artifact, viewer, true)))
+          return text("This page belongs to a workspace you aren't in, so you can't move it. Its owner or a member of that workspace can.", true)
+        try {
+          const before = artifact.visibility
+          artifact = await movePage(artifact, viewer, to)
+          lines.push(`Moved "${artifact.title}" to ${await workspaceLabel(artifact.organizationId)}.`)
+          if (artifact.visibility !== before) lines.push(`It is now ${describeVisibility(artifact.visibility)}.`)
+        } catch (err) {
+          return transferFailed(err)
+        }
+      } else if (folder === undefined) {
+        return text(`"${artifact.title}" is already in that workspace.\nLink: ${artifactUrl(artifact.slug)}`, true)
+      } else if ((to === undefined && artifact.organizationId !== auth.organizationId) || !(await canFile(artifact, viewer))) {
+        // Folder names are looked up in the connected workspace unless the agent names the page's own
         return text("This page belongs to another workspace, so it can't be filed into a folder from here.", true)
-      if (!folder.trim()) {
-        await fileInto(artifact, null)
-        return text(`"${artifact.title}" is in no folder now.\nLink: ${artifactUrl(artifact.slug)}`)
       }
-      const checked = checkFolderName(folder)
-      if ('error' in checked) return text(checked.error, true)
-      try {
-        const target = await ensureFolder(db, workspaceOf(artifact), checked.name, auth.userId)
-        await fileInto(artifact, target.id)
-        return text(`Moved "${artifact.title}" to the folder "${target.name}".\nLink: ${artifactUrl(artifact.slug)}`)
-      } catch (err) {
-        if (err instanceof FolderError) return text(err.message, true)
-        throw err
+      if (folder !== undefined) {
+        if (!folder.trim()) {
+          await fileInto(artifact, null)
+          lines.push(`"${artifact.title}" is in no folder now.`)
+        } else {
+          const checked = checkFolderName(folder)
+          if ('error' in checked) return text([...lines, checked.error].join('\n'), true)
+          try {
+            const target = await ensureFolder(db, workspaceOf(artifact), checked.name, auth.userId)
+            await fileInto(artifact, target.id)
+            lines.push(`Moved "${artifact.title}" to the folder "${target.name}".`)
+          } catch (err) {
+            if (err instanceof FolderError) return text([...lines, err.message].join('\n'), true)
+            throw err
+          }
+        }
       }
+      return text(`${lines.join('\n')}\nLink: ${artifactUrl(artifact.slug)}`)
     }),
+  )
+
+  server.registerTool(
+    'duplicate_artifact',
+    {
+      title: 'Duplicate a page',
+      description:
+        'Make a new page with a copy of the current version of a page you can open, in the connected workspace or another one you can publish to. ' +
+        'The copy is yours, has its own link and starts restricted: nobody else is added, and it has no link settings, comments or views. ' +
+        'Its title gets " (copy)" unless you give one.',
+      inputSchema: z.object({
+        artifact_id: z.string().describe('Id or link of the page to copy'),
+        workspace: workspaceArg,
+        title: z.string().optional().describe(`Title of the copy, 1 to ${MAX_TITLE_LENGTH} characters`),
+      }),
+    },
+    limited(async ({ artifact_id, workspace: to, title }) => {
+      const artifact = await findBySlug(parseArtifactRef(artifact_id))
+      if (!artifact || !(await canView(artifact, viewer))) return text(`No page you can open has the id "${artifact_id}".`, true)
+      let name: string | undefined
+      if (title !== undefined) {
+        const checked = checkTitle(title)
+        if ('error' in checked) return text(checked.error, true)
+        name = checked.title
+      }
+      try {
+        const copy = await duplicatePage(artifact, viewer, to ?? auth.organizationId ?? 'personal', { title: name, clientName: auth.clientName })
+        return text(
+          `Duplicated "${artifact.title}" as "${copy.title}" in ${await workspaceLabel(copy.organizationId)}.\n` +
+            `Link: ${artifactUrl(copy.slug)}\n` +
+            `artifact_id: ${copy.slug}\n` +
+            `Visibility: ${describeVisibility(copy.visibility)}.`,
+        )
+      } catch (err) {
+        return transferFailed(err)
+      }
+    }, true),
   )
 
   server.registerTool(

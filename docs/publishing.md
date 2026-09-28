@@ -106,12 +106,23 @@ Lists the folders of the connected workspace, by name, with how many of the page
 
 ### move_artifact
 
-Files a page into a folder of the connected workspace, or takes it out of its folder, without publishing a new version. For people who can edit the page, from the workspace the page is in. The link and who can open the page stay the same.
+Files a page into a folder, or takes it out of its folder, without publishing a new version. With `workspace`, it moves the page to another workspace first, like **Move to workspace** in the app (see [Moving a page to another workspace](/docs/sharing#moving-a-page-to-another-workspace)). For people who can edit the page, from the workspace the page is in; only the owner moves a page into or out of their personal workspace. The link stays the same.
 
 | Argument | Required | Meaning |
 | --- | --- | --- |
 | `artifact_id` | yes | Id or link of the page |
-| `folder` | yes | Folder name, created if there is none by that name, or an empty string to take the page out of its folder |
+| `folder` | no | Folder name, created if there is none by that name, or an empty string to take the page out of its folder. Without `workspace`, a folder of the connected workspace; with it, a folder of that workspace. Needed unless `workspace` is given. |
+| `workspace` | no | `personal` for your personal workspace, or the id of an organization you are a member of. A wrong one is answered with the workspaces you can use and their ids. |
+
+### duplicate_artifact
+
+Makes a new page with a copy of the current version of a page you can open, like **Duplicate** in the app. The copy is yours, with its own link, and starts **Restricted**: nobody else is added, and it has no link settings, comments or views. It counts toward the `publish` [rate limit](/docs/configuration#rate-limits) and the target workspace's [quota](/docs/configuration#workspace-quotas).
+
+| Argument | Required | Meaning |
+| --- | --- | --- |
+| `artifact_id` | yes | Id or link of the page to copy |
+| `workspace` | no | Where the copy goes: `personal` or the id of an organization you are a member of. The connected workspace by default. |
+| `title` | no | Title of the copy, 1 to 200 characters. By default the page's title with " (copy)" after it. |
 
 ### get_artifact
 
@@ -472,7 +483,7 @@ Ask for the change in the same conversation ("make the chart a line chart"), or 
 
 ## Managing pages in the app
 
-In the gallery and the page viewer, the **…** menu lets anyone who can open a page **Download** it as a zip of `index.html` and its files, lets editors rename it and lets the owner delete it. In the viewer, **Download** saves the version you are looking at, including an older one picked in the history.
+In the gallery and the page viewer, the **…** menu lets anyone who can open a page **Download** it as a zip of `index.html` and its files or, once signed in, **Duplicate** it; lets editors rename it and move it to another workspace; and lets the owner delete it. See [Duplicating and moving pages](/docs/sharing#duplicating-a-page). In the viewer, **Download** saves the version you are looking at, including an older one picked in the history.
 
 The gallery shows the newest pages first and loads more as you scroll, so a workspace with thousands of pages opens as fast as one with ten. The search box above it filters by title, ignoring case, within the folder you are looking at.
 

@@ -12,6 +12,15 @@ async function tabTo(page: Page, target: Locator, { max = 60, back = false } = {
   await expect(target, 'reachable with Tab').toBeFocused()
 }
 
+// Moves through an open menu with the arrow keys until `target` has focus; the items vary with what the person may do
+async function arrowTo(page: Page, target: Locator, { key = 'ArrowDown', max = 12 } = {}) {
+  for (let i = 0; i < max; i++) {
+    if (await target.evaluate((el) => el === document.activeElement).catch(() => false)) return
+    await page.keyboard.press(key)
+  }
+  await expect(target, `reachable with ${key}`).toBeFocused()
+}
+
 // Focus has to be visible: an outline, or the box shadow some fields use instead
 async function expectFocusRing(target: Locator) {
   await expect(target).toBeFocused()
@@ -158,8 +167,7 @@ test('open a page from the gallery, share it, and use its history, comments and 
   await expect(more).toBeFocused()
   await page.keyboard.press('ArrowUp')
   await expect(page.getByRole('menuitem', { name: 'Delete' })).toBeFocused()
-  await page.keyboard.press('ArrowUp')
-  await expect(page.getByRole('menuitem', { name: 'Rename' })).toBeFocused()
+  await arrowTo(page, page.getByRole('menuitem', { name: 'Rename' }), { key: 'ArrowUp' })
   await page.keyboard.press('Enter')
   const rename = page.getByRole('dialog', { name: 'Rename page' })
   await expect(rename.getByLabel('Name')).toBeFocused()
@@ -181,10 +189,7 @@ test('move a page to a folder from its card menu', async ({ page }) => {
   await tabTo(page, more)
   await page.keyboard.press('Enter')
   await expect(page.getByRole('menuitem', { name: 'Open' })).toBeFocused()
-  await page.keyboard.press('ArrowDown')
-  await page.keyboard.press('ArrowDown')
-  await page.keyboard.press('ArrowDown')
-  await expect(page.getByRole('menuitem', { name: 'Move to folder' })).toBeFocused()
+  await arrowTo(page, page.getByRole('menuitem', { name: 'Move to folder' }))
   await page.keyboard.press('Enter')
 
   const move = page.getByRole('dialog', { name: 'Move “Roadmap draft”' })
@@ -198,9 +203,7 @@ test('move a page to a folder from its card menu', async ({ page }) => {
 
   // Escape closes the dialog without moving anything, and focus goes back to the menu button
   await page.keyboard.press('Enter')
-  await page.keyboard.press('ArrowDown')
-  await page.keyboard.press('ArrowDown')
-  await page.keyboard.press('ArrowDown')
+  await arrowTo(page, page.getByRole('menuitem', { name: 'Move to folder' }))
   await page.keyboard.press('Enter')
   await expect(move).toBeVisible()
   await page.keyboard.press('Escape')

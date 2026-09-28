@@ -144,6 +144,12 @@
   box-shadow: 3px 3px 0 var(--marker);
 }
 
+.move-option[data-disabled] {
+  color: var(--ink-soft);
+  border-style: dashed;
+  cursor: default;
+}
+
 .move-option input {
   accent-color: var(--ink);
 }

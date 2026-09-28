@@ -89,6 +89,8 @@ export type ArtifactSummary = {
   owner: string
   mine: boolean
   canEdit: boolean
+  // Can be moved to another workspace; missing from older servers
+  canMove?: boolean
   // Whether a screenshot of the current version exists yet
   thumbnail: boolean
   // Whether one is still being rendered ('pending'), so the gallery should ask again.
@@ -114,6 +116,10 @@ export type ArtifactPage = {
   inOrganization: boolean
   canEdit: boolean
   isOwner: boolean
+  // Can be moved to another workspace; missing from older servers
+  canMove?: boolean
+  // 'personal' or the organization's id, sent only with canMove
+  workspace?: string
   // null when signed out: only signed-in people see comments
   comments?: { total: number; unread: number } | null
   // How often it was opened; null for people who can't edit it, missing from older servers
@@ -701,6 +707,29 @@ export function renameArtifact(slug: string, title: string) {
     method: 'PATCH',
     body: JSON.stringify({ title }),
   })
+}
+
+// workspace: 'personal' or an organization id. The copy starts Restricted.
+export async function duplicateArtifact(slug: string, workspace: string, title?: string) {
+  try {
+    return await request<{ slug: string; title: string; workspace: string }>(`/artifacts/${encodeURIComponent(slug)}/duplicate`, {
+      method: 'POST',
+      json: { workspace, title },
+    })
+  } catch (err) {
+    throw err instanceof ApiError ? new FieldError(err.message, err.field) : err
+  }
+}
+
+export async function moveArtifact(slug: string, workspace: string) {
+  try {
+    return await request<{ slug: string; visibility: Visibility; workspace: string }>(`/artifacts/${encodeURIComponent(slug)}/move`, {
+      method: 'POST',
+      json: { workspace },
+    })
+  } catch (err) {
+    throw err instanceof ApiError ? new FieldError(err.message, err.field) : err
+  }
 }
 
 export function deleteArtifact(slug: string) {

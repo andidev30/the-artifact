@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { downloadUrl, listArtifacts, listFolders, thumbnailUrl, type ArtifactSummary, type FolderSummary, type Visibility } from '../api'
 import { pollThumbnails, withFreshThumbnails } from '../thumbnailPoll'
 import { timeAgo } from '../time'
 import { DeleteFolderDialog, FolderBar, FolderIcon, FolderNameDialog, MoveDialog, type FolderFilter } from './Folders'
 import { DeleteDialog, PageMenu, RenameDialog, type MenuItem } from './PageActions'
+import { DuplicateDialog, MoveWorkspaceDialog } from './WorkspaceDialogs'
 import './Gallery.css'
 
 const VISIBILITY_LABEL: Record<Visibility, string> = {
@@ -31,7 +32,7 @@ type Ready = {
 type List = { kind: 'loading' } | Ready | { kind: 'error' }
 type Tab = 'workspace' | 'shared'
 type Pending =
-  | { kind: 'rename' | 'delete' | 'move'; page: ArtifactSummary }
+  | { kind: 'rename' | 'delete' | 'move' | 'duplicate' | 'move-workspace'; page: ArtifactSummary }
   | { kind: 'new-folder' }
   | { kind: 'rename-folder' | 'delete-folder'; folder: FolderSummary }
   | null
@@ -57,6 +58,7 @@ export function Gallery({ workspaceId, workspaceName, email, aside, onWorkspaceC
   const [totals, setTotals] = useState<Record<Tab, number | null>>({ workspace: null, shared: null })
   const [pending, setPending] = useState<Pending>(null)
   const [announce, setAnnounce] = useState('')
+  const navigate = useNavigate()
   const countRef = useRef(onWorkspaceCount)
   const listsRef = useRef(lists)
   const sentinel = useRef<HTMLDivElement>(null)
@@ -201,9 +203,9 @@ export function Gallery({ workspaceId, workspaceName, email, aside, onWorkspaceC
     setAnnounce(`Renamed to “${title}”.`)
   }
 
-  function onDeleted(page: ArtifactSummary) {
+  // A page that left the workspace, deleted or moved to another one. Both are offered in the workspace tab only, so its count goes down.
+  function onGone(page: ArtifactSummary, message: string) {
     update(page.slug, () => null)
-    // Only your own pages can be deleted, and those are listed in the workspace tab
     if (totals.workspace !== null) {
       const left = Math.max(0, totals.workspace - 1)
       setTotals((c) => ({ ...c, workspace: left }))
@@ -211,8 +213,10 @@ export function Gallery({ workspaceId, workspaceName, email, aside, onWorkspaceC
     }
     if (page.folder) reloadFolders()
     setPending(null)
-    setAnnounce(`Deleted “${page.title}”.`)
+    setAnnounce(message)
   }
+
+  const onDeleted = (page: ArtifactSummary) => onGone(page, `Deleted “${page.title}”.`)
 
   function onMoved(page: ArtifactSummary, folder: { id: string; name: string } | null) {
     // A page that left the folder on screen leaves the list too
@@ -387,9 +391,12 @@ export function Gallery({ workspaceId, workspaceName, email, aside, onWorkspaceC
                       page={a}
                       showFolder={tab === 'workspace' && filter === 'all'}
                       canMove={tab === 'workspace' && a.canEdit}
+                      canMoveWorkspace={tab === 'workspace' && (a.canMove ?? false)}
                       onRename={() => setPending({ kind: 'rename', page: a })}
                       onDelete={() => setPending({ kind: 'delete', page: a })}
                       onMove={() => setPending({ kind: 'move', page: a })}
+                      onDuplicate={() => setPending({ kind: 'duplicate', page: a })}
+                      onMoveWorkspace={() => setPending({ kind: 'move-workspace', page: a })}
                     />
                   </li>
                 ))}
@@ -443,6 +450,26 @@ export function Gallery({ workspaceId, workspaceName, email, aside, onWorkspaceC
           onMoved={(folder) => onMoved(pending.page, folder)}
         />
       )}
+      {pending?.kind === 'duplicate' && (
+        <DuplicateDialog
+          slug={pending.page.slug}
+          title={pending.page.title}
+          preferred={workspaceId}
+          onClose={() => setPending(null)}
+          onDuplicated={(copy) => navigate(`/a/${copy.slug}`)}
+        />
+      )}
+      {pending?.kind === 'move-workspace' && (
+        <MoveWorkspaceDialog
+          slug={pending.page.slug}
+          title={pending.page.title}
+          current={workspaceId}
+          isOwner={pending.page.mine}
+          visibility={pending.page.visibility}
+          onClose={() => setPending(null)}
+          onMoved={(_, name) => onGone(pending.page, `Moved “${pending.page.title}” to ${name}.`)}
+        />
+      )}
       {pending?.kind === 'new-folder' && (
         <FolderNameDialog workspaceId={workspaceId} onClose={() => setPending(null)} onSaved={(f) => onFolderSaved(f, true)} />
       )}
@@ -460,18 +487,23 @@ type CardProps = {
   page: ArtifactSummary
   showFolder: boolean
   canMove: boolean
+  canMoveWorkspace: boolean
   onRename: () => void
   onDelete: () => void
   onMove: () => void
+  onDuplicate: () => void
+  onMoveWorkspace: () => void
 }
 
-function Card({ page: a, showFolder, canMove, onRename, onDelete, onMove }: CardProps) {
+function Card({ page: a, showFolder, canMove, canMoveWorkspace, onRename, onDelete, onMove, onDuplicate, onMoveWorkspace }: CardProps) {
   const menu: MenuItem[] = [
     { label: 'Open', to: `/a/${a.slug}` },
     { label: 'Download', download: downloadUrl(a.slug) },
   ]
   if (a.canEdit) menu.push({ label: 'Rename', onSelect: onRename })
+  menu.push({ label: 'Duplicate', onSelect: onDuplicate })
   if (canMove) menu.push({ label: 'Move to folder', onSelect: onMove })
+  if (canMoveWorkspace) menu.push({ label: 'Move to workspace…', onSelect: onMoveWorkspace })
   if (a.mine) menu.push({ label: 'Delete', onSelect: onDelete, danger: true })
 
   return (

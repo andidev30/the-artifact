@@ -15,6 +15,11 @@ function read(): string | null {
   }
 }
 
+// The stored choice, for screens without the account at hand; it may name an organization the person left
+export function storedWorkspace(): string | null {
+  return read()
+}
+
 export function chooseWorkspace(id: string) {
   memory = id
   try {

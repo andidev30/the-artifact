@@ -6,6 +6,8 @@ import { PickBar, PinLayer, useFrameHelper } from '../components/PagePins'
 import { HistoryPanel, OldVersionBar, type Viewing } from '../components/HistoryPanel'
 import { DeleteDialog, PageMenu, RenameDialog, type MenuItem } from '../components/PageActions'
 import { ShareDialog } from '../components/ShareDialog'
+import { DuplicateDialog, MoveWorkspaceDialog } from '../components/WorkspaceDialogs'
+import { storedWorkspace } from '../workspace'
 import { ViewsPanel } from '../components/ViewsPanel'
 import { Wordmark } from '../components/Wordmark'
 import { LOGIN_URL } from '../config'
@@ -78,7 +80,8 @@ export function Viewer() {
   if (state.kind === 'missing') return <Unavailable slug={slug} email={state.email} />
   if (state.kind === 'locked') return <PasswordGate slug={slug} linkKey={key} onUnlocked={() => setAttempt((n) => n + 1)} />
 
-  return <PageFrame page={state.page} email={state.email} onChange={(page) => setState({ ...state, page })} />
+  // Keyed by page, so opening another one (such as a copy just made) starts with its panels and dialogs closed
+  return <PageFrame key={state.page.slug} page={state.page} email={state.email} onChange={(page) => setState({ ...state, page })} />
 }
 
 // A page shared by a link with a password. It says nothing about the page until the password is right.
@@ -230,7 +233,7 @@ function PageFrame({ page, email, onChange }: { page: ArtifactPage; email: strin
     navigate({ search: search.size ? `?${search}` : '' }, { replace: true })
   }, [navigate])
   const [viewing, setViewing] = useState<Viewing | null>(null)
-  const [dialog, setDialog] = useState<'rename' | 'delete' | null>(null)
+  const [dialog, setDialog] = useState<'rename' | 'delete' | 'duplicate' | 'move' | null>(null)
   const [announce, setAnnounce] = useState('')
   // Signed-in people get the comment helper in the frame, to pin comments to elements of the page
   const frameRef = useRef<HTMLIFrameElement>(null)
@@ -248,6 +251,9 @@ function PageFrame({ page, email, onChange }: { page: ArtifactPage; email: strin
   // Downloads what the frame shows, which can be an older version picked in the history
   const menu: MenuItem[] = [{ label: 'Download', download: downloadUrl(page.slug, viewing?.version) }]
   if (page.canEdit) menu.push({ label: 'Rename', onSelect: () => setDialog('rename') })
+  // Comments come only to people who are signed in, and only they can keep a copy
+  if (page.comments) menu.push({ label: 'Duplicate', onSelect: () => setDialog('duplicate') })
+  if (page.canMove && page.workspace) menu.push({ label: 'Move to workspace…', onSelect: () => setDialog('move') })
   if (page.isOwner) menu.push({ label: 'Delete', onSelect: () => setDialog('delete'), danger: true })
 
   async function copyLink() {
@@ -403,6 +409,30 @@ function PageFrame({ page, email, onChange }: { page: ArtifactPage; email: strin
       )}
       {dialog === 'delete' && (
         <DeleteDialog slug={page.slug} title={page.title} onClose={() => setDialog(null)} onDeleted={() => navigate('/app', { replace: true })} />
+      )}
+      {dialog === 'duplicate' && (
+        <DuplicateDialog
+          slug={page.slug}
+          title={page.title}
+          preferred={page.workspace ?? storedWorkspace() ?? 'personal'}
+          onClose={() => setDialog(null)}
+          onDuplicated={(copy) => navigate(`/a/${copy.slug}`)}
+        />
+      )}
+      {dialog === 'move' && page.workspace && (
+        <MoveWorkspaceDialog
+          slug={page.slug}
+          title={page.title}
+          current={page.workspace}
+          isOwner={page.isOwner}
+          visibility={page.visibility}
+          onClose={() => setDialog(null)}
+          onMoved={(moved, name) => {
+            onChange({ ...page, visibility: moved.visibility, workspace: moved.workspace, inOrganization: moved.workspace !== 'personal' })
+            setDialog(null)
+            setAnnounce(`Moved to ${name}.`)
+          }}
+        />
       )}
       {sharing && (
         <ShareDialog

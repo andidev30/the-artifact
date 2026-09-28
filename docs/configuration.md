@@ -135,7 +135,7 @@ Each limit counts something for one key (an email address, an account, or a netw
 | `invite` | People one account invites to an organization or shares a page with by email, in the app or through an agent | 200 per hour |
 | `invite-ip` | The same, from one network | 500 per hour |
 | `mcp` | MCP tool calls by one account, all agents together | 600 per 10 minutes |
-| `publish` | New pages and versions one account publishes through agents (`publish_artifact`, `update_files`, `publish_upload`, `restore_version`, also counted in `mcp`) or with an access token (`POST /api/publish`) | 200 per hour |
+| `publish` | New pages and versions one account publishes through agents (`publish_artifact`, `update_files`, `publish_upload`, `restore_version`, `duplicate_artifact`, also counted in `mcp`), with an access token (`POST /api/publish`), or by duplicating a page in the app | 200 per hour |
 | `inspect` | Pages one account has opened on the server with `inspect_artifact`, each a few seconds of Chromium (also counted in `mcp`) | 100 per hour |
 | `access-token` | [Access tokens](/docs/connect-your-agent#publishing-from-ci) one account creates in **Account settings** | 20 per hour |
 | `comment` | Comments and replies one account writes, in the app or through agents (`add_comment`, `reply_comment`) | 120 per hour |
@@ -152,8 +152,8 @@ Change or turn off single limits with `RATE_LIMITS`, e.g. `RATE_LIMITS=mcp=2000/
 
 A self-hosted server has no quotas unless you set them. `WORKSPACE_MAX_PAGES`, `WORKSPACE_MAX_VERSIONS` and `WORKSPACE_MAX_STORAGE` apply to every workspace: each person's personal workspace, and each organization as a whole. They are checked when a page or a version is added, so a server that already holds more keeps it and only refuses new ones.
 
-Storage is the size of every version of every page in the workspace, the HTML and its files, each version counted in full as its history shows it (content that versions share is stored once, but counting it once would make the total something people can't work out). Restoring a version adds a version, so it counts too. Deleting a page frees what its versions used.
+Storage is the size of every version of every page in the workspace, the HTML and its files, each version counted in full as its history shows it (content that versions share is stored once, but counting it once would make the total something people can't work out). Restoring a version adds a version, so it counts too. Deleting a page frees what its versions used. [Duplicating a page](/docs/sharing#duplicating-a-page) adds a page and one version; [moving one in](/docs/sharing#moving-a-page-to-another-workspace) from another workspace adds the page with all its versions, and frees them in the workspace it left.
 
-When a publish would go past a quota, the agent gets an error that says which one and what to do, e.g. "Your personal workspace has 500 pages, the most this server allows. Publish a new version of a page you have (pass its artifact_id), or delete one you no longer need in the gallery." Restoring a version in the app shows the same message.
+When a publish would go past a quota, the agent gets an error that says which one and what to do, e.g. "Your personal workspace has 500 pages, the most this server allows. Publish a new version of a page you have (pass its artifact_id), or delete one you no longer need in the gallery." Restoring a version, duplicating a page or moving one to another workspace in the app shows the same message.
 
 On the hosted service, the free Personal plan holds 50 pages and 1 GB of storage in a personal workspace, and keeps older versions for 7 days. Organizations have no quota there. New organizations can't be created there until the Organization plan has billing; see [Organizations](/docs/organizations#creating-one).

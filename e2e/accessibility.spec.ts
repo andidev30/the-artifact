@@ -229,6 +229,36 @@ test('comparing two versions', async ({ page }) => {
   await expectAccessible(page, 'changes between versions')
 })
 
+test('duplicate and move to another workspace dialogs', async ({ page }) => {
+  const email = uniqueEmail('a11y-transfer')
+  await signUpPersonal(page, email)
+  const org = await createOrganization(email, 'Transfer Co')
+  await page.evaluate((id) => localStorage.setItem('the-artifact.workspace', id), org.id)
+  const token = await connectAgent(page, org.id)
+  await publishViaMcp(page.request, token, { title: 'Budget', html: HTML })
+  await page.reload()
+  await expect(page.getByRole('list', { name: 'Pages in Transfer Co' }).locator('.page-card')).toHaveCount(1)
+
+  await page.getByRole('button', { name: 'More actions for Budget' }).click()
+  await page.getByRole('menuitem', { name: 'Duplicate' }).click()
+  const duplicate = page.getByRole('dialog', { name: 'Duplicate “Budget”' })
+  await expect(duplicate.getByRole('radio', { name: 'Transfer Co' })).toBeChecked()
+  await expect(duplicate.getByLabel('Name of the copy')).toHaveValue('Budget (copy)')
+  await expectAccessible(page, 'duplicate dialog')
+  await page.keyboard.press('Escape')
+
+  // Keyboard alone: open the menu, pick the item, choose Personal with the arrow keys
+  await page.getByRole('button', { name: 'More actions for Budget' }).focus()
+  await page.keyboard.press('ArrowDown')
+  await page.getByRole('menuitem', { name: 'Move to workspace…' }).focus()
+  await page.keyboard.press('Enter')
+  const move = page.getByRole('dialog', { name: 'Move “Budget” to another workspace' })
+  await expect(move.getByRole('radio', { name: 'Personal' })).toBeChecked()
+  await expect(move.getByRole('radio', { name: /Transfer Co/ })).toBeDisabled()
+  await expectAccessible(page, 'move to another workspace dialog')
+  await page.keyboard.press('Escape')
+})
+
 test('viewer with its history, views and comments panels, and the share dialog', async ({ page, browser }) => {
   await signUpPersonal(page, uniqueEmail('a11y-viewer'))
   const token = await connectAgent(page)
