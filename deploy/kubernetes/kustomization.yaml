@@ -18,7 +18,7 @@ resources:
 images:
   - name: the-artifact
     newName: ghcr.io/andidev30/the-artifact
-    newTag: '0.1.0' # x-release-please-version
+    newTag: '0.2.0' # x-release-please-version
 
 # Every setting, in one Secret: the app reads all of it, Postgres and MinIO their passwords
 secretGenerator:
