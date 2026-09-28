@@ -28,7 +28,7 @@ Each code from an authenticator app works once. Wait for the app to show the nex
 
 The organization's owners require a passkey or an authenticator app. Add one under **Account settings**, **Sign-in security**, and the organization opens again at once. See [Organizations that require it](/docs/signing-in#organizations-that-require-it).
 
-## "Sign in again to change how you sign in"
+## "For your security, sign in again to change how you sign in"
 
 Adding or removing passkeys and the authenticator app, making new recovery codes, and adding a password to an account that has none, need a sign-in from the last hour. Choose **Sign in again**, sign in, and you return to where you were in **Account settings**.
 

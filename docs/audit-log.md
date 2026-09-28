@@ -46,7 +46,7 @@ Narrow the list by **Action**, by **Person** (part of the email address of who d
 | `time` | When, in UTC (ISO 8601) |
 | `action` | The event, e.g. `sign_in.succeeded`, `page.visibility_changed`, `member.role_changed` |
 | `actor_email`, `actor_id` | Who did it |
-| `target_type`, `target_id`, `target_label` | What it was about: a page (by its id and title), a member, an invitation, an access token or the organization |
+| `target_type`, `target_id`, `target_label` | What it was about: a page (by its id and title), a member, an invitation, an access token, a webhook or the organization |
 | `details` | More about the event as JSON, e.g. `{"from":"private","to":"link"}` or `{"password":"set","reset":true}` |
 | `ip`, `user_agent` | Where the request came from |
 

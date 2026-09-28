@@ -15,8 +15,10 @@ React 19, React Router 8, Vite 8, TypeScript. No UI or state library: plain comp
 | `src/useConfig.ts` | `/api/config` (self-hosted, email on/off, setup needed, instance name), fetched once per load |
 | `src/workspace.ts` | Current workspace (`'personal'` or an organization id), kept in `localStorage` |
 | `src/invitations.ts` | Pending invitations shared by the home notice, switcher and onboarding |
-| `src/docs.ts` | Loads `/docs/*.md` at build time and lists the sidebar order |
+| `src/docs.ts` | Loads `/docs/*.md` at build time and lists the sidebar order; `headingId` makes the same heading anchors as GitHub |
 | `src/thumbnailPoll.ts` | Backoff polling for screenshots still being rendered |
+| `src/livePoll.ts` | The viewer's check for a newer version every few seconds (slower while the tab is hidden), so a page updates without a reload |
+| `src/frameMessages.ts` | Parses the untrusted messages from the comment helper inside a page's frame into known shapes with limits (`PagePins`, `Viewer`) |
 | `src/config.ts` | `APP_URL`, `MCP_URL` and auth endpoints |
 
 ## Conventions

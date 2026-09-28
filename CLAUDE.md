@@ -51,7 +51,7 @@ An enterprise feature asks one gate, `hasEnterprise()` from `apps/api/src/licens
 
 ## Conventions
 
-- Node 26, TypeScript 7, ESM. Biome (`biome.json`) formats and lints everything: no semicolons, single quotes, 2-space indent, 160 columns. Run `pnpm format` before committing; `pnpm lint` fails on unformatted code.
+- Node 26 (the image, CI and `.nvmrc`; `engines` in `package.json` allows 24 and later), TypeScript 7, ESM. Biome (`biome.json`) formats and lints everything: no semicolons, single quotes, 2-space indent, 160 columns. Run `pnpm format` before committing; `pnpm lint` fails on unformatted code.
 - Silence a Biome rule only at the line, with `// biome-ignore <rule>: <why>`; the reason is required.
 - The API imports local files with a `.js` suffix; the web app imports without one (`.tsx` in `main.tsx`); the CLI imports with `.ts` (rewritten to `.js` by `tsc`), so Node runs its sources directly in tests.
 - Comments say why, or state a rule that isn't visible in the code (security, races, compatibility). Don't add comments that restate the code, section labels, or change logs.

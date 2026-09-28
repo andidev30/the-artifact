@@ -9,6 +9,7 @@ A self-hosted install is free under AGPL-3.0 and does everything described in th
 | [Audit log](/docs/audit-log) | Records sign-ins, sharing, member changes, organization settings and access tokens per organization, for its owners and admins to filter and export |
 | [Single sign-on](/docs/sso) | People sign in through your identity provider (OpenID Connect or [SAML](/docs/saml)), with accounts made or linked on first sign-in, and sign-in through it can be required |
 | [SCIM provisioning](/docs/scim) | Your identity provider creates accounts, keeps them current and suspends people it deactivates |
+| [Version retention](/docs/retention) | An organization removes older versions of its pages by age, by count or both; the current version always stays |
 
 ## Nothing phones home
 
@@ -28,10 +29,10 @@ Your server refuses a key that:
 
 | Problem | What it says |
 | --- | --- |
-| Isn't a key, or only part of one | This is not a license key. Paste the whole key. |
-| Was changed after it was issued | This license key has been changed or is incomplete. |
-| Was signed by a key your version doesn't know | Update the server, or ask for a new license key. |
-| Has expired | This license key expired on the date it names. Ask for a new license key. |
+| Isn't a key, or only part of one | This is not a license key. A license key starts with art_lic_. Paste the whole key. |
+| Was changed after it was issued | This license key has been changed or is incomplete. Paste the whole key again, exactly as you received it. |
+| Was signed by a key your version doesn't know | This license key was signed by a key this version doesn’t know. Update the server, or ask for a new license key. |
+| Has expired | This license key expired on *its end date*. Ask for a new license key. |
 
 ## Renew or replace a key
 

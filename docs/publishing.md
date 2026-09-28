@@ -5,7 +5,7 @@ Agents publish through the MCP tools below. You don't call them yourself: ask th
 ## What makes a good page
 
 - **One HTML document, or a small site.** A single self-contained document (inline CSS and JavaScript) is simplest. When a page is easier to build from several files, the agent sends the HTML as the entry plus its CSS, JavaScript, images, fonts and data, referenced by relative paths like `css/site.css` or `img/logo.png`. Scripts and fonts from public CDNs load fine either way.
-- **Small.** The HTML can be up to 2 MB, each other file up to 5 MB, and all of it together up to 10 MB in at most 100 files. Compress images, or load large media from a URL.
+- **Small.** The HTML can be up to 2 MB, each other file up to 5 MB, and all of it together up to 10 MB, with at most 100 files besides the HTML. Compress images, or load large media from a URL.
 - **On the hosted service's free Personal plan**, a personal workspace holds up to 50 pages and 1 GB of storage. New versions of a page don't count toward the 50, so when you reach it, update a page you have or delete one you no longer need. Pages in an organization don't count either. See [Limits](#limits).
 - **A short title.** It shows in the gallery and the browser tab (up to 200 characters).
 
@@ -141,7 +141,12 @@ Pass `add`, `remove` or both.
 
 ### get_artifact
 
-Returns the current version of a page, so the agent can edit it and publish a new version: its title, version number, tags, the list of its files with their sizes, and the entry HTML. With `path` (for example `css/site.css`) it returns that one file instead, as text or, for binary files, as base64.
+Returns the current version of a page, so the agent can edit it and publish a new version: its title, version number, tags, the list of its files with their sizes, and the entry HTML. With `path` (for example `css/site.css`) it returns that one file instead, as text or, for binary files, as base64. For anyone who can open the page.
+
+| Argument | Required | Meaning |
+| --- | --- | --- |
+| `artifact_id` | yes | Id or link of the page |
+| `path` | no | A file of the page to read, e.g. `css/site.css`. Left out, or `index.html`, returns the entry HTML and the list of files. |
 
 ### inspect_artifact
 
@@ -182,7 +187,14 @@ When the page is shared by link, the answer ends with its `Public link`, to hand
 
 ### share_artifact
 
-Shares a page with people by email, as `viewer` or `editor`, with an optional message. They get an email with the link.
+Shares a page with people by email, as `viewer` or `editor`, with an optional message. They get an email with the link. For people who can edit the page. It counts toward the `invite` [rate limit](#limits), with invitations in the app.
+
+| Argument | Required | Meaning |
+| --- | --- | --- |
+| `artifact_id` | yes | Id or link of the page |
+| `emails` | yes | Email addresses to share with, 1 to 20 at a time |
+| `role` | no | `viewer` (the default) can open the page; `editor` can also publish new versions and share it |
+| `message` | no | A note included in the email; the email shows its first 500 characters |
 
 ### delete_artifact
 
@@ -289,7 +301,7 @@ With `publish_artifact`, a page travels inside the MCP call, so it is limited by
 2. The agent uploads each file to its link, for example with `curl -T`.
 3. On `publish_upload`, the server hashes every uploaded file itself. A file that is missing, or whose bytes don't match its size and hash, stops the publish with a message, and nothing is published.
 
-Files already stored in one of your own pages, like the images of a page you publish a new version of, need no upload. Uploads that are never published are deleted after an hour.
+Files already stored in one of your own pages, like the images of a page you publish a new version of, need no upload. Uploads that are never published are deleted 1 to 7 hours later: the storage sweep, every 6 hours, removes the ones over an hour old.
 
 Agents that can't make requests of their own keep using `publish_artifact`.
 
@@ -503,7 +515,7 @@ Besides the size of each page, a server limits how fast an account uses these to
 | Limit | Default |
 | --- | --- |
 | Tool calls, by every agent of one account together | 600 per 10 minutes |
-| New pages and versions (`publish_artifact`, `update_files`, `publish_upload`, `restore_version`, `POST /api/publish`) | 200 per hour |
+| New pages and versions (`publish_artifact`, `update_files`, `publish_upload`, `restore_version`, `duplicate_artifact`, `POST /api/publish`) | 200 per hour |
 | People shared with by email (`share_artifact`, counted with invitations in the app) | 200 per hour |
 | Comments and replies (`add_comment`, `reply_comment`, counted with comments in the app) | 120 per hour |
 | Page inspections (`inspect_artifact`) | 100 per hour |

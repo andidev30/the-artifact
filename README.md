@@ -124,7 +124,8 @@ Other clients, HTTPS, email and backups are covered in [Self-hosting](docs/self-
 | --- | --- |
 | `publish_artifact` | Publishes a page (or a new version of one), optionally into a folder, and returns its link |
 | `update_files` | Publishes a new version that changes only some files of a page, like refreshed data |
-| `list_artifacts` | Lists the most recently updated pages in the connected workspace, by title or folder, a batch at a time |
+| `prepare_upload`, `publish_upload` | Publishes a page whose files the agent uploads straight to storage, for large pages; when `S3_PUBLIC_ENDPOINT` is set |
+| `list_artifacts` | Lists the most recently updated pages in the connected workspace, searching titles and page text, by folder or tag, a batch at a time |
 | `list_folders` | Lists the workspace's folders |
 | `move_artifact` | Files a page into a folder, or takes it out, or moves it to another workspace |
 | `duplicate_artifact` | Copies a page's current version into a new, restricted page, in any workspace you can publish to |
