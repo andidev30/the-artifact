@@ -7,7 +7,7 @@ import { requireRecentSignIn, requireUser, startSession, type AuthEnv } from '..
 import { track } from '../analytics.js'
 import { db, schema } from '../db/index.js'
 import { deleteExportFiles, exportsOf } from '../exports.js'
-import { forgetAccounts, isLastAdmin, lastAdminError } from '../instance.js'
+import { forgetAccounts, isInstanceAdmin, isLastAdmin, lastAdminError, lockAdmins } from '../instance.js'
 import { clearHits, hit, limitRequest, tooManyRequests, waitText } from '../limits.js'
 import { auditToken, checkExpiry, checkTokenName, createToken, describeToken, revokeToken, tokensOf } from '../tokens.js'
 import { CONTROL_CHARS_ERROR, hasControlChars, UUID_RE } from '../validation.js'
@@ -147,10 +147,13 @@ settings.delete('/access-tokens/:id', async (c) => {
   return c.body(null, 204)
 })
 
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0]
+type Query = Tx | typeof db
+
 // Organizations this person owns alone. Those with other people in them block deleting the account;
 // those with nobody else are deleted along with it.
-export async function ownedAlone(userId: string) {
-  const owned = await db
+export async function ownedAlone(userId: string, q: Query = db) {
+  const owned = await q
     .select({ id: schema.organizations.id, name: schema.organizations.name })
     .from(schema.memberships)
     .innerJoin(schema.organizations, eq(schema.memberships.organizationId, schema.organizations.id))
@@ -159,7 +162,7 @@ export async function ownedAlone(userId: string) {
   const blocked: { id: string; name: string }[] = []
   const empty: string[] = []
   for (const org of owned) {
-    const others = await db
+    const others = await q
       .select({ role: schema.memberships.role, n: count() })
       .from(schema.memberships)
       .where(and(eq(schema.memberships.organizationId, org.id), ne(schema.memberships.userId, userId)))
@@ -177,8 +180,8 @@ const ROLE_RANK = sql`case ${schema.memberships.role} when 'owner' then 0 when '
 // the longest-standing other owner, or else the longest-standing admin, or else member.
 // While the account can be deleted, every organization with other people in it has another owner,
 // so in practice it is always an owner; the fallbacks cover anything unexpected.
-async function successorIn(organizationId: string, userId: string) {
-  const [row] = await db
+async function successorIn(organizationId: string, userId: string, q: Query) {
+  const [row] = await q
     .select({ id: schema.users.id, email: schema.users.email, name: schema.users.name })
     .from(schema.memberships)
     .innerJoin(schema.users, eq(schema.memberships.userId, schema.users.id))
@@ -192,9 +195,9 @@ type Transfer = { organizationId: string; organization: string; to: { id: string
 
 // What deleting the account does: organizations it is blocked by or deletes, pages that move to
 // someone else in their organization, and pages deleted with the account
-async function deletionPlan(userId: string) {
-  const { blocked, empty } = await ownedAlone(userId)
-  const pages = await db
+async function deletionPlan(userId: string, q: Query = db) {
+  const { blocked, empty } = await ownedAlone(userId, q)
+  const pages = await q
     .select({ id: schema.artifacts.id, organizationId: schema.artifacts.organizationId, organization: schema.organizations.name })
     .from(schema.artifacts)
     .leftJoin(schema.organizations, eq(schema.artifacts.organizationId, schema.organizations.id))
@@ -209,7 +212,7 @@ async function deletionPlan(userId: string) {
       continue
     }
     if (!transfers.has(page.organizationId)) {
-      const to = await successorIn(page.organizationId, userId)
+      const to = await successorIn(page.organizationId, userId, q)
       transfers.set(page.organizationId, to ? { organizationId: page.organizationId, organization: page.organization!, to, pageIds: [] } : null)
     }
     const transfer = transfers.get(page.organizationId)
@@ -219,20 +222,59 @@ async function deletionPlan(userId: string) {
   return { blocked, empty, transfers: [...transfers.values()].filter((t): t is Transfer => t !== null), deletedPages }
 }
 
-// Removes the account once nothing blocks it (see ownedAlone): pages in organizations with other
-// people move to a successor, the rest goes with the account. Also used by the admin area.
-export async function deleteAccountData(user: { id: string; email: string }) {
-  const { empty, transfers } = await deletionPlan(user.id)
-  const exports = await exportsOf(user.id)
+// Why an account can't be deleted: it is the only owner of organizations with other people in them
+// (last_owner) or the only admin of an instance with other people (last_admin); or, when an admin
+// deletes someone, the admin no longer is one (not_admin) or the account is gone (not_found)
+export class DeletionRefused extends Error {
+  constructor(
+    readonly code: 'last_owner' | 'last_admin' | 'not_admin' | 'not_found',
+    readonly organizations: { id: string; name: string }[] = [],
+  ) {
+    super(code)
+  }
+}
+
+// Removes an account once nothing blocks it (see ownedAlone): pages in organizations with other
+// people move to a successor, the rest goes with the account. `adminId` is the instance admin who
+// deletes someone else. The checks run inside the transaction, under the locks the members routes
+// take (the owner rows of every organization the account owns) and the one admin changes take
+// (lockAdmins). Checked before it, two owners deleting their accounts at once, or one deleting while
+// the other leaves, could both pass and leave an organization with people but no owner, and two
+// admins deleting each other could leave the instance without an admin.
+export async function deleteAccount(userId: string, adminId?: string) {
+  const exports = await exportsOf(userId)
   await db.transaction(async (tx) => {
+    await lockAdmins(tx)
+    if (adminId) {
+      const [self] = await tx.select().from(schema.users).where(eq(schema.users.id, adminId))
+      if (!self || !isInstanceAdmin(self)) throw new DeletionRefused('not_admin')
+    }
+    const [user] = await tx.select().from(schema.users).where(eq(schema.users.id, userId)).for('update')
+    if (!user) throw new DeletionRefused('not_found')
+    const owned = tx
+      .select({ id: schema.memberships.organizationId })
+      .from(schema.memberships)
+      .where(and(eq(schema.memberships.userId, userId), eq(schema.memberships.role, 'owner')))
+    // In one order, so two of these can't each hold a row the other waits for
+    await tx
+      .select({ userId: schema.memberships.userId })
+      .from(schema.memberships)
+      .where(and(inArray(schema.memberships.organizationId, owned), eq(schema.memberships.role, 'owner')))
+      .orderBy(schema.memberships.organizationId, schema.memberships.userId)
+      .for('update')
+
+    const plan = await deletionPlan(userId, tx)
+    if (plan.blocked.length) throw new DeletionRefused('last_owner', plan.blocked)
+    if (await isLastAdmin(user, tx)) throw new DeletionRefused('last_admin')
+
     // Pages in organizations with other people stay, with their history, under a new owner
-    for (const t of transfers) {
+    for (const t of plan.transfers) {
       await tx.update(schema.artifacts).set({ ownerId: t.to.id }).where(inArray(schema.artifacts.id, t.pageIds))
       // The new owner no longer needs to be on the page's share list
       await tx.delete(schema.artifactShares).where(and(inArray(schema.artifactShares.artifactId, t.pageIds), eq(schema.artifactShares.email, t.to.email)))
     }
     // Organizations with nobody else in them go too
-    if (empty.length) await tx.delete(schema.organizations).where(inArray(schema.organizations.id, empty))
+    if (plan.empty.length) await tx.delete(schema.organizations).where(inArray(schema.organizations.id, plan.empty))
     await tx.delete(schema.artifactShares).where(eq(schema.artifactShares.email, user.email))
     await tx.delete(schema.invitations).where(eq(schema.invitations.email, user.email))
     await tx.delete(schema.emailTokens).where(eq(schema.emailTokens.email, user.email))
@@ -268,21 +310,22 @@ settings.delete('/', async (c) => {
   const typed = typeof body?.confirmEmail === 'string' ? body.confirmEmail.trim().toLowerCase() : ''
   if (typed !== user.email) return c.json({ error: 'Type your email address exactly to confirm.', field: 'confirmEmail' }, 400)
 
-  const { blocked } = await deletionPlan(user.id)
-  if (blocked.length) {
-    const names = blocked.map((o) => o.name).join(', ')
+  try {
+    await deleteAccount(user.id)
+  } catch (err) {
+    if (!(err instanceof DeletionRefused)) throw err
+    if (err.code === 'last_admin') return c.json(lastAdminError, 409)
+    if (err.code !== 'last_owner') return c.json({ error: 'Your account was already deleted.' }, 404)
+    const names = err.organizations.map((o) => o.name).join(', ')
     return c.json(
       {
         error: `You are the only owner of ${names}. Make someone else an owner, or remove the other people, before you delete your account.`,
         code: 'last_owner',
-        organizations: blocked,
+        organizations: err.organizations,
       },
       409,
     )
   }
-
-  if (await isLastAdmin(user)) return c.json(lastAdminError, 409)
-  await deleteAccountData(user)
   deleteCookie(c, 'session', { path: '/' })
   return c.body(null, 204)
 })

@@ -12,7 +12,7 @@ import { mailEnabled } from '../env.js'
 import { activeAdminCount, adminCondition, instanceSettings, isInstanceAdmin, lockAdmins, parseSettings, revokeAccess, saveSettings } from '../instance.js'
 import { license } from './license.js'
 import { releaseStatus } from '../releases.js'
-import { deleteAccountData, ownedAlone } from './settings.js'
+import { DeletionRefused, deleteAccount, ownedAlone } from './settings.js'
 
 // The instance admin area, mounted at /api/admin. Only instance admins get past requireAdmin.
 export const admin = new Hono<AuthEnv>()
@@ -251,20 +251,25 @@ admin.delete('/users/:id', async (c) => {
   const typed = typeof body?.confirmEmail === 'string' ? body.confirmEmail.trim().toLowerCase() : ''
   if (typed !== target.email) return c.json({ error: 'Type their email address exactly to confirm.', field: 'confirmEmail' }, 400)
 
-  const { blocked } = await ownedAlone(target.id)
-  if (blocked.length) {
-    const names = blocked.map((o) => o.name).join(', ')
+  try {
+    // Checks again that the actor is still an admin, under the lock admin changes take, so two
+    // admins deleting each other at once can't leave the instance without one
+    await deleteAccount(target.id, actor.id)
+  } catch (err) {
+    if (!(err instanceof DeletionRefused)) throw err
+    if (err.code === 'not_admin') return c.json({ error: 'Only instance admins can open this.', code: 'not_admin' }, 403)
+    if (err.code === 'not_found') return c.json({ error: 'This person no longer has an account.' }, 404)
+    if (err.code === 'last_admin') return c.json({ error: 'This is the only admin. Make someone else an admin first.', code: 'last_admin' }, 409)
+    const names = err.organizations.map((o) => o.name).join(', ')
     return c.json(
       {
         error: `${target.email} is the only owner of ${names}. Make someone else an owner there first, or delete the organization.`,
         code: 'last_owner',
-        organizations: blocked,
+        organizations: err.organizations,
       },
       409,
     )
   }
-  // The actor is an active admin, so removing someone else never leaves the instance without one
-  await deleteAccountData(target)
   return c.body(null, 204)
 })
 
