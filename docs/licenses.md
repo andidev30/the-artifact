@@ -1,6 +1,6 @@
 # Licenses
 
-A self-hosted install is free under AGPL-3.0 and does everything described in these docs without a license. An Enterprise license key turns on enterprise features on a self-hosted install. It says who the license is for, how many seats it has, and until when it is valid.
+A self-hosted install is free under AGPL-3.0 and does everything described in these docs without a license. An Enterprise license key turns on enterprise features on a self-hosted install, such as [version retention](/docs/retention). It says who the license is for, how many seats it has, and until when it is valid.
 
 ## Nothing phones home
 

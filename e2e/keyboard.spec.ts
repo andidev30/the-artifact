@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
 import { forgetSignInLinks } from '../apps/api/test/e2e-db.ts'
-import { connectAgent, latestMail, publishViaMcp, signUpPersonal, uniqueEmail } from './helpers'
+import { connectAgent, latestMail, mockRetention, publishViaMcp, signUpPersonal, uniqueEmail } from './helpers'
 
 // Every flow here is driven with the keyboard alone: no clicks, no fill()
 
@@ -317,4 +317,45 @@ test('put a password on a link, reset the link, and open a page with its passwor
   await expect(visitorPage.getByRole('heading', { level: 1, name: 'Board deck' })).toBeVisible()
   await expect(visitorPage.frameLocator('iframe.viewer-frame').getByRole('heading', { name: 'Numbers' })).toBeVisible()
   await visitor.close()
+})
+
+test('set a version retention policy, confirming what it removes', async ({ page }) => {
+  await signUpPersonal(page, uniqueEmail('kb-retention'))
+  const res = await page.request.post('/api/organizations', { data: { name: 'Keep Co', slug: `kb-${Date.now().toString(36)}` } })
+  const org = (await res.json()) as { slug: string }
+  const saves = await mockRetention(page, { keepDays: null, keepVersions: null, license: 'active' })
+  await page.goto(`/organizations/${org.slug}/settings`)
+  const section = page.locator('section#retention')
+
+  const days = section.getByLabel('Keep older versions for')
+  await tabTo(page, days)
+  await expectFocusRing(days)
+  // Type-ahead picks "2 years"; arrow keys open the native menu on some platforms instead of changing it
+  await page.keyboard.type('2')
+  await expect(days).toHaveValue('730')
+
+  const limit = section.getByLabel('Also keep at most a number of versions per page')
+  await tabTo(page, limit)
+  await page.keyboard.press('Space')
+  await expect(limit).toBeChecked()
+  const count = section.getByLabel('Versions per page, the current one included')
+  await tabTo(page, count)
+  await page.keyboard.press('ControlOrMeta+a')
+  await page.keyboard.type('5')
+  await expect(section.getByText('About 12 versions on 3 pages would be removed.')).toBeVisible()
+
+  // Saving asks first; Cancel puts focus back on Save
+  await page.keyboard.press('Enter')
+  const confirm = section.getByRole('button', { name: 'Save and remove 12 versions' })
+  await expect(confirm).toBeFocused()
+  await tabTo(page, section.getByRole('button', { name: 'Cancel' }))
+  await page.keyboard.press('Enter')
+  const save = section.getByRole('button', { name: 'Save', exact: true })
+  await expect(save).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(confirm).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(section.getByText('Saved.')).toBeVisible()
+  await expect(section.getByText('Now: Older versions are kept for 2 years, and at most 5 versions per page.')).toBeFocused()
+  expect(saves).toEqual([{ keepDays: 730, keepVersions: 5 }])
 })

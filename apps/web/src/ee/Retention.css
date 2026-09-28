@@ -1,0 +1,88 @@
+.retention-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 8px;
+  font: 600 0.75rem var(--mono);
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+  color: var(--ink);
+  background: var(--marker);
+  border: 1.5px solid var(--ink);
+  border-radius: 3px;
+}
+
+.retention-now {
+  font-family: var(--sans);
+  font-size: var(--step--1);
+}
+
+.retention-select {
+  justify-self: start;
+  min-width: 12rem;
+  height: 40px;
+  border-color: var(--ink);
+}
+
+.retention-select:disabled,
+.retention-count input:disabled {
+  color: var(--ink-faint);
+  cursor: not-allowed;
+}
+
+.retention-count {
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+  padding-left: 28px;
+}
+
+.retention-count label {
+  font-size: var(--step--1);
+  font-weight: 600;
+}
+
+.retention-count input {
+  width: 8rem;
+  height: 40px;
+  padding: 0 12px;
+}
+
+.retention-license,
+.retention-warning {
+  padding: 10px 12px;
+  font-size: var(--step--1);
+  border: 1.5px solid var(--ink);
+  border-radius: 3px;
+}
+
+.retention-license {
+  color: var(--ink);
+  background: var(--grid-fine);
+}
+
+.retention-warning {
+  color: #7a1c16;
+  background: #fdecea;
+  border-color: #b3261e;
+}
+
+.retention-preview:empty {
+  display: none;
+}
+
+.retention-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+@media (max-width: 480px) {
+  .retention-count {
+    padding-left: 0;
+  }
+
+  .retention-select {
+    justify-self: stretch;
+  }
+}

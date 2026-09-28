@@ -22,6 +22,7 @@ import {
 import { AccountHeader } from '../components/AccountHeader'
 import '../components/SignInSecurity.css'
 import { APP_HOST } from '../config'
+import { RetentionSection } from '../ee/Retention'
 import { expiryText, timeAgo } from '../time'
 import { useConfig } from '../useConfig'
 import { useMe } from '../useMe'
@@ -87,6 +88,8 @@ function Page({ initial, org }: { initial: Me; org: Organization }) {
   const [problem, setProblem] = useState<string | null>(null)
   const [confirming, setConfirming] = useState<string | null>(null)
   const current = me.organizations.find((o) => o.id === org.id) ?? org
+  // Version retention is an enterprise feature for self-hosted installs (ee/Retention.tsx)
+  const retention = useConfig()?.selfHosted === true && current.role !== 'member' && !current.blocked
   const refreshMe = () =>
     fetchMe()
       .then((m) => m && setMe(m))
@@ -146,6 +149,7 @@ function Page({ initial, org }: { initial: Me; org: Organization }) {
     { id: 'general', label: 'General' },
     { id: 'members', label: 'Members' },
     ...(current.role === 'member' ? [] : [{ id: 'tokens', label: 'Access tokens' }]),
+    ...(retention ? [{ id: 'retention', label: 'Version history' }] : []),
   ]
 
   return (
@@ -237,6 +241,7 @@ function Page({ initial, org }: { initial: Me; org: Organization }) {
               />
             )}
             {current.role !== 'member' && !current.blocked && <TokensSection org={current} me={me} />}
+            {retention && <RetentionSection orgId={current.id} orgName={current.name} />}
           </div>
         </div>
       </main>

@@ -10,8 +10,10 @@ import { db, schema } from './db/index.js'
 import { contact } from './ee/contact.js'
 import { issuedLicenses } from './ee/licenses.js'
 import { historyCron, organizationPlan, personalPlan } from './ee/plans.js'
+import { pruneRetention, retention } from './ee/retention.js'
 import { embeds } from './embeds.js'
 import { env, mailEnabled } from './env.js'
+import { addPruner } from './gc.js'
 import { hasAccounts, instanceSettings, isInstanceAdmin } from './instance.js'
 import { checkRateLimits } from './limits.js'
 import { mcp } from './mcp.js'
@@ -42,6 +44,8 @@ app.route('/', health)
 // only its own WORKSPACE_MAX_* settings and can always create organizations.
 setPlanQuota(personalPlan)
 setOrganizationPolicy(organizationPlan)
+// Version retention for organizations with an Enterprise license; checks the license itself
+addPruner(pruneRetention)
 // Every limit is defined by now, ee/ ones included; a mistake in RATE_LIMITS stops the start here
 checkRateLimits()
 
@@ -98,6 +102,7 @@ api.route('/folders', folders)
 api.route('/contact-sales', contact)
 
 api.route('/organizations/:orgId', members)
+api.route('/organizations/:orgId/retention', retention)
 api.route('/invitations', invitations)
 api.route('/me/invitations', myInvitations)
 api.route('/me/security', security)
