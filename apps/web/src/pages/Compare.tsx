@@ -98,40 +98,42 @@ export function Compare() {
           </Link>
         </div>
       </header>
-      <div className="compare-controls">
-        <div className="compare-pickers">
-          <label>
-            <span>From</span>
-            <select value={from} onChange={(e) => update({ from: Number(e.target.value) })}>
-              {versions.map((v) => (
-                <option key={v.version} value={v.version}>
-                  {label(v)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span>To</span>
-            <select value={to} onChange={(e) => update({ to: Number(e.target.value) })}>
-              {versions.map((v) => (
-                <option key={v.version} value={v.version}>
-                  {label(v)}
-                </option>
-              ))}
-            </select>
-          </label>
+      <main id="main" className="compare-main">
+        <div className="compare-controls">
+          <div className="compare-pickers">
+            <div className="compare-picker">
+              <label htmlFor="compare-from">From</label>
+              <select id="compare-from" value={from} onChange={(e) => update({ from: Number(e.target.value) })}>
+                {versions.map((v) => (
+                  <option key={v.version} value={v.version}>
+                    {label(v)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="compare-picker">
+              <label htmlFor="compare-to">To</label>
+              <select id="compare-to" value={to} onChange={(e) => update({ to: Number(e.target.value) })}>
+                {versions.map((v) => (
+                  <option key={v.version} value={v.version}>
+                    {label(v)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="compare-modes" role="group" aria-label="Show">
+            <button type="button" aria-pressed={mode === 'side'} onClick={() => update({ view: 'side' })}>
+              Side by side
+            </button>
+            <button type="button" aria-pressed={mode === 'changes'} onClick={() => update({ view: 'changes' })}>
+              Changes
+            </button>
+          </div>
         </div>
-        <div className="compare-modes" role="group" aria-label="Show">
-          <button type="button" aria-pressed={mode === 'side'} onClick={() => update({ view: 'side' })}>
-            Side by side
-          </button>
-          <button type="button" aria-pressed={mode === 'changes'} onClick={() => update({ view: 'changes' })}>
-            Changes
-          </button>
+        <div className="compare-body">
+          {mode === 'side' ? <SideBySide page={page} from={from} to={to} /> : <Changes slug={page.slug} from={from} to={to} />}
         </div>
-      </div>
-      <main id="main" className="compare-body">
-        {mode === 'side' ? <SideBySide page={page} from={from} to={to} /> : <Changes slug={page.slug} from={from} to={to} />}
       </main>
     </div>
   )

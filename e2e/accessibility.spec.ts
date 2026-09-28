@@ -218,7 +218,7 @@ test('comparing two versions', async ({ page }) => {
   await history.getByRole('checkbox', { name: 'Compare version 1' }).check()
   await history.getByRole('checkbox', { name: 'Compare version 2' }).check()
   await expectAccessible(page, 'history panel with two versions picked')
-  await history.getByRole('button', { name: 'Compare' }).click()
+  await history.getByRole('button', { name: 'Compare', exact: true }).click()
 
   await expect(page.getByRole('heading', { level: 1, name: 'Compare versions' })).toBeVisible()
   await expect(page.frameLocator('iframe[title="Launch plan, version 2"]').getByRole('heading', { name: 'Plan, second draft' })).toBeVisible()

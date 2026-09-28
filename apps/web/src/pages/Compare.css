@@ -37,7 +37,7 @@
   min-width: 0;
 }
 
-.compare-pickers label {
+.compare-picker {
   display: grid;
   gap: 2px;
   min-width: 0;
@@ -91,12 +91,19 @@
   z-index: 1;
 }
 
-.compare-body {
+.compare-main {
+  display: flex;
   flex: 1;
+  flex-direction: column;
   width: 100%;
   min-height: 0;
   margin: 0;
   padding: 0;
+}
+
+.compare-body {
+  flex: 1;
+  min-height: 0;
 }
 
 .compare-sides {

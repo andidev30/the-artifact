@@ -29,7 +29,7 @@ test('compare two versions of a multi-file page side by side and as changes', as
   await page.goto(`/a/${slug}`)
   await page.getByRole('button', { name: 'History' }).click()
   const history = page.getByRole('complementary', { name: 'Version history' })
-  const compare = history.getByRole('button', { name: 'Compare' })
+  const compare = history.getByRole('button', { name: 'Compare', exact: true })
   await expect(compare).toBeDisabled()
   for (const n of [1, 2]) {
     await history.getByRole('checkbox', { name: `Compare version ${n}` }).focus()
