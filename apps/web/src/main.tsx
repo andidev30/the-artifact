@@ -8,7 +8,7 @@ import './App.css'
 import { AppHome } from './pages/AppHome.tsx'
 import { Auth } from './pages/Auth.tsx'
 import { Authorize } from './pages/Authorize.tsx'
-import { ContactSalesPage, Home } from './pages/Home.tsx'
+import { ContactSalesPage, Home, LegalPage } from './pages/Home.tsx'
 import { NotFound } from './pages/NotFound.tsx'
 import { Onboarding } from './pages/Onboarding.tsx'
 import { Viewer } from './pages/Viewer.tsx'
@@ -39,6 +39,7 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/signup" element={<Auth mode="signup" />} />
         <Route path="/login/two-factor" element={<TwoFactor />} />
         <Route path="/contact-sales" element={<ContactSalesPage />} />
+        <Route path="/legal/:doc" element={<LegalPage />} />
         <Route path="/auth/confirm" element={<ConfirmSignIn />} />
         <Route path="/app" element={<AppHome />} />
         <Route path="/onboarding" element={<Onboarding />} />

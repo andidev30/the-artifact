@@ -6,6 +6,7 @@ import { ServerUnreachable } from './Status'
 
 const Landing = lazy(() => import('../ee/Landing').then((m) => ({ default: m.Landing })))
 const ContactSales = lazy(() => import('../ee/ContactSales').then((m) => ({ default: m.ContactSales })))
+const Legal = lazy(() => import('../ee/Legal').then((m) => ({ default: m.Legal })))
 
 // Nothing until the config says which kind of install this is, so a self-hosted one never flashes
 // the marketing site. A self-hosted install is the product itself.
@@ -25,6 +26,15 @@ export function ContactSalesPage() {
   return (
     <CloudOnly>
       <ContactSales />
+    </CloudOnly>
+  )
+}
+
+// The hosted service's terms, privacy policy, sub-processors and DPA; a self-hosted install has none of its own
+export function LegalPage() {
+  return (
+    <CloudOnly>
+      <Legal />
     </CloudOnly>
   )
 }

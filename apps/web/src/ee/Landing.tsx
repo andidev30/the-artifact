@@ -5,6 +5,7 @@ import { ConnectTabs } from '../components/ConnectTabs'
 import { Wordmark } from '../components/Wordmark'
 import { APP_HOST, DOCS_URL, LOGIN_URL, SELF_HOSTING_URL, SIGNUP_URL } from '../config'
 import { FlowDemo } from './FlowDemo'
+import { LegalFooter } from './LegalFooter'
 import { Pricing } from './Pricing'
 import './Landing.css'
 
@@ -182,10 +183,7 @@ export function Landing() {
         </section>
       </main>
 
-      <footer className="footer">
-        <span>The Artifact</span>
-        <span>andidev30</span>
-      </footer>
+      <LegalFooter />
     </>
   )
 }
