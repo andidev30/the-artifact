@@ -35,6 +35,7 @@ Settings for the compose file, read from the environment or a `load/.env`:
 | `RATE_LIMITS` | `off` | k6 sends everything from one address and a few accounts, which the limits would stop. To include what the limits cost (one Postgres statement per MCP call and per publish), set high ones instead, e.g. `mcp=1000000/10m,publish=1000000/1h` |
 | `METRICS_TOKEN` | `load-test-metrics` | Bearer token for `GET /metrics` |
 | `CHROME_PATH` | the image's Chromium | Empty turns thumbnails off |
+| `THUMBNAIL_CONCURRENCY` | `2` | Thumbnails rendered at once |
 
 Against a staging server instead, set `RATE_LIMITS` and `METRICS_TOKEN` there the same way, and give the seeding script its database and bucket.
 
@@ -110,7 +111,7 @@ Thresholds: p95 of the first page under 500 ms, later pages under 400 ms, search
 
 ### Thumbnail queue
 
-Publishes a new 30 KB page (`HTML_KB`) `RATE` times a minute (100) for `DURATION` (`10m`), while a second scenario reads `/metrics` every `SAMPLE_EVERY` seconds (5) until `DRAIN` (`3m`) after publishing stops. It needs `METRICS_TOKEN` and a server with thumbnails on. Renders run one at a time per server process, and past 1000 waiting versions the server stops queueing (`MAX_QUEUE` in `apps/api/src/thumbnails.ts`).
+Publishes a new 30 KB page (`HTML_KB`) `RATE` times a minute (100) for `DURATION` (`10m`), while a second scenario reads `/metrics` every `SAMPLE_EVERY` seconds (5) until `DRAIN` (`3m`) after publishing stops. It needs `METRICS_TOKEN` and a server with thumbnails on. Renders run `THUMBNAIL_CONCURRENCY` at a time per server process (2 by default), and past 1000 waiting versions the server stops queueing (`MAX_QUEUE` in `apps/api/src/thumbnails.ts`).
 
 It reports `thumbnail_queue_length` (every sample), `thumbnail_queue_now` (the last one), `thumbnails_rendered` and `thumbnails_failed` (since the run started) and `thumbnail_render_mean_seconds` (mean since the server started). Thresholds: the queue's p95 under 100 and its maximum under 500, empty again by the end of the drain, publishes under 1 s at p95.
 
@@ -134,6 +135,7 @@ The metrics, from `apps/api/src/metrics.ts`:
 | `artifact_db_pool_active`, `artifact_db_pool_max` | Active above max means queries wait for a connection. The pool is postgres.js's default of 10 per process |
 | `artifact_s3_request_duration_seconds` (`operation`, `outcome`) | Object storage time and errors; few `get` calls means the blob cache answers |
 | `artifact_thumbnail_queue_length` | Grows when publishes outpace renders |
+| `artifact_thumbnail_renders_active` | Renders running now, at most `THUMBNAIL_CONCURRENCY` |
 | `artifact_thumbnail_render_duration_seconds` (`outcome`) | Render time, and failures |
 | `artifact_process_cpu_seconds_total` | One Node process uses one core: `rate(...[1m])` near 1 means the process is the limit, whatever the machine has |
 | `artifact_nodejs_eventloop_lag_p99_seconds` | Rising lag means JavaScript work (JSON, hashing, base64) holds up every request |

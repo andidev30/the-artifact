@@ -51,6 +51,7 @@ Put your values in a file and pass it with `-f`. `helm show values oci://ghcr.io
 | `smtp.host`, `smtp.port`, `smtp.user`, `smtp.password`, `smtp.from` | no email | Email, as in the [configuration reference](/docs/configuration). Without `smtp.host` the server [runs without email](/docs/self-hosting#running-without-email). |
 | `google.clientId`, `google.clientSecret` | off | **Continue with Google** |
 | `thumbnails.enabled` | `true` | Gallery thumbnails. Needs the [seccomp profile](#3-the-seccomp-profile) on the nodes. |
+| `thumbnails.concurrency` | `2` | `THUMBNAIL_CONCURRENCY`: how many thumbnails render at once, 1 to 8. Each extra one needs about 150Mi more in `resources.limits.memory`. |
 | `metrics.token`, `metrics.serviceMonitor.enabled` | off | [Prometheus metrics](#health-checks-and-metrics) |
 | `releaseCheck` | `true` | `false` sets `RELEASE_CHECK=false`: no daily request to GitHub for [new releases](/docs/upgrading#new-releases), for clusters without internet access |
 | `rateLimits`, `workspaceQuota.maxPages`, `workspaceQuota.maxVersions`, `workspaceQuota.maxStorage` | the defaults | `RATE_LIMITS` and the [workspace quotas](/docs/configuration#workspace-quotas) |

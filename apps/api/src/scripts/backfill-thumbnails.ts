@@ -4,6 +4,7 @@
 //   docker compose exec app node dist/scripts/backfill-thumbnails.js [--retry-failed]
 import { and, eq, isNull, or } from 'drizzle-orm'
 import { db, schema } from '../db/index.js'
+import { env } from '../env.js'
 import { closeThumbnailBrowser, renderThumbnail, thumbnailsEnabled } from '../thumbnails.js'
 
 const retryFailed = process.argv.includes('--retry-failed')
@@ -24,11 +25,18 @@ const rows = await db
 
 console.log(`${rows.length} page${rows.length === 1 ? '' : 's'} to render`)
 let failed = 0
-for (const [i, row] of rows.entries()) {
-  const result = await renderThumbnail(row.versionId)
-  if (result === 'failed') failed += 1
-  console.log(`${i + 1}/${rows.length} ${row.slug}: ${result}`)
+let done = 0
+// THUMBNAIL_CONCURRENCY at a time, like the server's queue; the workers share one list
+const next = rows.values()
+async function worker() {
+  for (const row of next) {
+    const result = await renderThumbnail(row.versionId)
+    if (result === 'failed') failed += 1
+    done += 1
+    console.log(`${done}/${rows.length} ${row.slug}: ${result}`)
+  }
 }
+await Promise.all(Array.from({ length: env.thumbnails.concurrency }, worker))
 await closeThumbnailBrowser()
 await db.$client.end()
 console.log(failed ? `Done, ${failed} failed (run again with --retry-failed to retry them)` : 'Done')

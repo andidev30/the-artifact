@@ -19,6 +19,16 @@ function count(name: string): number | null {
   return n
 }
 
+// Thumbnails rendered at once: 2 unless set, from 1 to 8. Each is a page in one shared Chromium, so
+// more costs memory and CPU the requests could use; see docs/configuration.md
+export function thumbnailConcurrency(raw: string | undefined): number {
+  const value = raw?.trim()
+  if (!value) return 2
+  const n = Number(value)
+  if (!Number.isSafeInteger(n) || n < 1 || n > 8) throw new Error('THUMBNAIL_CONCURRENCY must be a whole number from 1 to 8, e.g. THUMBNAIL_CONCURRENCY=2.')
+  return n
+}
+
 const SIZE_UNITS: Record<string, number> = { B: 1, KB: 1024, MB: 1024 ** 2, GB: 1024 ** 3, TB: 1024 ** 4 }
 
 // Bytes from a size like 500MB, 10GB or 1TB (powers of 1024), or null when unset
@@ -138,11 +148,12 @@ export const env = {
     // publishing inline only, e.g. with Docker Compose, where MinIO is on an internal network.
     publicEndpoint: process.env.S3_PUBLIC_ENDPOINT ?? '',
   },
-  // Gallery thumbnails: a Chrome or Chromium binary (empty skips them) and the CDN hosts pages may
-  // load from while rendering (unset uses a built-in list)
+  // Gallery thumbnails: a Chrome or Chromium binary (empty skips them), the CDN hosts pages may
+  // load from while rendering (unset uses a built-in list) and how many render at once
   thumbnails: {
     chromePath: process.env.CHROME_PATH ?? '',
     cdnHosts: process.env.THUMBNAIL_CDN_HOSTS,
+    concurrency: thumbnailConcurrency(process.env.THUMBNAIL_CONCURRENCY),
   },
 }
 

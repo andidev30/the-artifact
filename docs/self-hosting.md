@@ -286,6 +286,7 @@ On Kubernetes, scrape the service inside the cluster (`the-artifact.the-artifact
 | `artifact_db_pool_active` | gauge | Queries and transactions holding or waiting for a database connection. Above `artifact_db_pool_max`, requests are queueing for the database. |
 | `artifact_s3_request_duration_seconds` | histogram | Object storage requests by `operation` (`GetObject`, `PutObject`, ...) and `outcome` (`ok`, `not_found`, `error`), retries included |
 | `artifact_thumbnail_queue_length` | gauge | Versions waiting for a thumbnail or being rendered |
+| `artifact_thumbnail_renders_active` | gauge | Thumbnails being rendered right now, at most `THUMBNAIL_CONCURRENCY` |
 | `artifact_thumbnail_render_duration_seconds` | histogram | Thumbnail renders by `outcome` (`stored`, `failed`) |
 | `artifact_process_*`, `artifact_nodejs_*` | various | CPU, memory, event loop lag and garbage collection of the Node.js process |
 

@@ -1,6 +1,6 @@
 import type { Context } from 'hono'
 import { afterEach, describe, expect, it } from 'vitest'
-import { env, parseSize } from '../../src/env.js'
+import { env, parseSize, thumbnailConcurrency } from '../../src/env.js'
 import { clientIp, normalizeIp, parseRateLimits, waitText, windowText } from '../../src/limits.js'
 
 describe('RATE_LIMITS', () => {
@@ -39,6 +39,17 @@ describe('sizes', () => {
     expect(parseSize('2048', 'X')).toBe(2048)
     expect(parseSize('', 'X')).toBeNull()
     expect(() => parseSize('lots', 'WORKSPACE_MAX_STORAGE')).toThrow(/WORKSPACE_MAX_STORAGE must be a size/)
+  })
+})
+
+describe('THUMBNAIL_CONCURRENCY', () => {
+  it('is 2 unless set, and 1 to 8', () => {
+    expect(thumbnailConcurrency(undefined)).toBe(2)
+    expect(thumbnailConcurrency(' ')).toBe(2)
+    expect(thumbnailConcurrency('1')).toBe(1)
+    expect(thumbnailConcurrency(' 8 ')).toBe(8)
+    for (const value of ['0', '9', '2.5', '-1', 'two'])
+      expect(() => thumbnailConcurrency(value), value).toThrow(/THUMBNAIL_CONCURRENCY must be a whole number from 1 to 8/)
   })
 })
 

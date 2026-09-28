@@ -3,13 +3,13 @@ import { request } from 'node:https'
 import { BlockList, isIP } from 'node:net'
 import { tmpdir } from 'node:os'
 import { and, eq, or, sql } from 'drizzle-orm'
-import { chromium, type Browser, type Request, type Route } from 'playwright-core'
+import { chromium, type Browser, type BrowserContext, type Request, type Route } from 'playwright-core'
 import { db, schema } from './db/index.js'
 import { env } from './env.js'
 import { sha256 } from './files.js'
 import { holdStorageLock } from './gc.js'
 import { log, requestContext } from './log.js'
-import { thumbnailDuration, thumbnailQueue } from './metrics.js'
+import { thumbnailDuration, thumbnailQueue, thumbnailRendering } from './metrics.js'
 import { getBlob, getText, putBlob } from './storage.js'
 
 // Gallery thumbnails are screenshots of a version, taken in headless Chromium after it is published.
@@ -20,6 +20,8 @@ import { getBlob, getText, putBlob } from './storage.js'
 // - as a backstop, Chromium is pointed at a proxy that doesn't exist (loopback included), so traffic
 //   that interception doesn't see (WebSockets, workers) goes nowhere; WebRTC UDP is disabled
 // - a fresh browser context per render, fixed viewport, no downloads, no service workers, short timeouts
+// - renders that run at once (THUMBNAIL_CONCURRENCY) share one Chromium but never a context, and each
+//   has its own interception, CDN budget and timeouts; nothing above is relaxed for them
 
 export const VIEWPORT = { width: 1280, height: 720 }
 // Stored at half size: 640x360, enough for a card on a 2x screen
@@ -54,7 +56,7 @@ export const DEFAULT_CDN_HOSTS = [
   'rsms.me',
 ]
 
-type Config = { chromePath: string; cdnHosts: Set<string>; loadTimeout: number; renderTimeout: number }
+type Config = { chromePath: string; cdnHosts: Set<string>; concurrency: number; launchTimeout: number; loadTimeout: number; renderTimeout: number }
 
 function hostsFrom(value: string | undefined): Set<string> {
   // Unset means the defaults; set (even to nothing) replaces them, so "" or "none" blocks every host
@@ -70,6 +72,8 @@ function hostsFrom(value: string | undefined): Set<string> {
 let config: Config = {
   chromePath: env.thumbnails.chromePath,
   cdnHosts: hostsFrom(env.thumbnails.cdnHosts),
+  concurrency: env.thumbnails.concurrency,
+  launchTimeout: 15_000,
   loadTimeout: 8_000,
   renderTimeout: 20_000,
 }
@@ -187,8 +191,17 @@ export async function fetchFromCdn(url: URL, accept = '*/*'): Promise<Fetched | 
   })
 }
 
-let browser: Promise<Browser> | null = null
+// One Chromium serves every render. A render that fails or hangs may have wedged it, so it is retired:
+// the next render starts a fresh one at once, and the old one closes when the renders still on it are
+// done (each has its own timeout), or after the longest a render may take. One bad page never makes
+// the others wait. If Chromium dies, it is retired the same way and the renders on it fail with
+// BrowserGone, which renderThumbnail retries once on the new browser.
+type Instance = { browser: Promise<Browser>; renders: number; retired: boolean; gone: boolean; closed: boolean }
+let current: Instance | null = null
 let explainedSandbox = false
+let rendering = 0
+
+export class BrowserGone extends Error {}
 
 // Chromium doesn't inherit this server's environment (database URL, SMTP password...)
 function browserEnv(): Record<string, string> {
@@ -200,14 +213,14 @@ function browserEnv(): Record<string, string> {
   return keep
 }
 
-function launch(): Promise<Browser> {
-  browser ??= chromium
-    .launch({
+function launch(): Instance {
+  const instance: Instance = {
+    browser: chromium.launch({
       executablePath: config.chromePath,
       headless: true,
       chromiumSandbox: true,
       env: browserEnv(),
-      timeout: 15_000,
+      timeout: config.launchTimeout,
       args: [
         `--proxy-server=${DEAD_PROXY}`,
         // Without this, Chromium sends localhost straight past the proxy
@@ -225,9 +238,21 @@ function launch(): Promise<Browser> {
         '--mute-audio',
         '--hide-scrollbars',
       ],
-    })
-    .catch((err) => {
-      browser = null
+    }),
+    renders: 0,
+    retired: false,
+    gone: false,
+    closed: false,
+  }
+  instance.browser.then(
+    (b) =>
+      b.on('disconnected', () => {
+        instance.gone = true
+        retire(instance)
+      }),
+    (err) => {
+      instance.closed = true
+      if (current === instance) current = null
       if (!explainedSandbox && /sandbox|namespace/i.test(String(err))) {
         explainedSandbox = true
         log.error(
@@ -235,15 +260,43 @@ function launch(): Promise<Browser> {
             'deploy/seccomp-chromium.json (deploy/docker-compose does; on Kubernetes see docs/kubernetes.md). See docs/security.md.',
         )
       }
-      throw err
-    })
-  return browser
+    },
+  )
+  return instance
+}
+
+async function close(instance: Instance) {
+  if (instance.closed) return
+  instance.closed = true
+  await instance.browser.then((b) => b.close()).catch(() => {})
+}
+
+function retire(instance: Instance) {
+  if (current === instance) current = null
+  if (instance.retired) return
+  instance.retired = true
+  if (instance.renders === 0) void close(instance)
+  // By then every render on it has timed out; this only catches a browser too wedged to answer
+  else setTimeout(() => void close(instance), config.renderTimeout + 10_000).unref()
+}
+
+function release(instance: Instance) {
+  instance.renders -= 1
+  if (instance.retired && instance.renders === 0) void close(instance)
 }
 
 export async function closeThumbnailBrowser() {
-  const b = browser
-  browser = null
-  if (b) await b.then((x) => x.close()).catch(() => {})
+  const instance = current
+  current = null
+  if (instance) {
+    instance.retired = true
+    await close(instance)
+  }
+}
+
+// Renders in progress right now
+export function thumbnailsRendering(): number {
+  return rendering
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
@@ -259,59 +312,70 @@ function withTimeout<T>(promise: Promise<T>, ms: number, what: string): Promise<
 // Renders the page and returns a WebP screenshot, plus every URL it tried to reach and was refused
 export async function renderPage(tree: PageTree): Promise<RenderResult> {
   if (!config.chromePath) throw new Error('No browser configured (CHROME_PATH)')
-  const b = await launch()
-  const context = await b.newContext({
-    viewport: VIEWPORT,
-    deviceScaleFactor: 1,
-    javaScriptEnabled: true,
-    serviceWorkers: 'block',
-    acceptDownloads: false,
-    reducedMotion: 'reduce',
-    colorScheme: 'light',
-  })
-  const blocked: string[] = []
-  let cdnBytes = 0
-  let cdnRequests = 0
-  const files = new Map(tree.files.map((f) => [f.path, f]))
-
-  async function handle(route: Route, req: Request) {
-    const url = new URL(req.url())
-    if (url.origin === PAGE_ORIGIN) {
-      let path: string
-      try {
-        path = decodeURIComponent(url.pathname.slice(1))
-      } catch {
-        return route.fulfill({ status: 404, body: '' })
-      }
-      if (path === '' || path === 'index.html') return route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: tree.html })
-      const file = files.get(path)
-      if (!file) return route.fulfill({ status: 404, body: '' })
-      return route.fulfill({ status: 200, contentType: file.contentType, body: file.content })
-    }
-    if (req.method() === 'GET' && cdnRequests < MAX_CDN_REQUESTS && cdnBytes < MAX_CDN_TOTAL) {
-      cdnRequests += 1
-      const res = await fetchFromCdn(url, req.headers().accept).catch(() => null)
-      if (res && cdnBytes + res.body.length <= MAX_CDN_TOTAL) {
-        cdnBytes += res.body.length
-        // Redirects go back through this handler, so their targets are checked too
-        return route.fulfill({ status: res.status, headers: res.headers, body: res.body })
-      }
-    }
-    blocked.push(url.href)
-    return route.abort('blockedbyclient')
-  }
-
+  current ??= launch()
+  const instance = current
+  instance.renders += 1
+  rendering += 1
+  thumbnailRendering.set(rendering)
+  const contexts: Promise<BrowserContext>[] = []
+  let ok = false
   try {
-    await context.route('**/*', (route, req) => handle(route, req).catch(() => route.abort().catch(() => {})))
-    await context.routeWebSocket(/.*/, (ws) => {
-      blocked.push(ws.url())
-      ws.close()
-    })
-    const page = await context.newPage()
+    const b = await instance.browser
+    const blocked: string[] = []
+    let cdnBytes = 0
+    let cdnRequests = 0
+    const files = new Map(tree.files.map((f) => [f.path, f]))
+
+    async function handle(route: Route, req: Request) {
+      const url = new URL(req.url())
+      if (url.origin === PAGE_ORIGIN) {
+        let path: string
+        try {
+          path = decodeURIComponent(url.pathname.slice(1))
+        } catch {
+          return route.fulfill({ status: 404, body: '' })
+        }
+        if (path === '' || path === 'index.html') return route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: tree.html })
+        const file = files.get(path)
+        if (!file) return route.fulfill({ status: 404, body: '' })
+        return route.fulfill({ status: 200, contentType: file.contentType, body: file.content })
+      }
+      if (req.method() === 'GET' && cdnRequests < MAX_CDN_REQUESTS && cdnBytes < MAX_CDN_TOTAL) {
+        cdnRequests += 1
+        const res = await fetchFromCdn(url, req.headers().accept).catch(() => null)
+        if (res && cdnBytes + res.body.length <= MAX_CDN_TOTAL) {
+          cdnBytes += res.body.length
+          // Redirects go back through this handler, so their targets are checked too
+          return route.fulfill({ status: res.status, headers: res.headers, body: res.body })
+        }
+      }
+      blocked.push(url.href)
+      return route.abort('blockedbyclient')
+    }
+
+    // Everything from the new context to the screenshot is under one timeout, so a browser that
+    // stops answering can't hold this render (and its place in the queue) longer than that
     const shot = (async () => {
+      const context = b.newContext({
+        viewport: VIEWPORT,
+        deviceScaleFactor: 1,
+        javaScriptEnabled: true,
+        serviceWorkers: 'block',
+        acceptDownloads: false,
+        reducedMotion: 'reduce',
+        colorScheme: 'light',
+      })
+      contexts.push(context)
+      const ctx = await context
+      await ctx.route('**/*', (route, req) => handle(route, req).catch(() => route.abort().catch(() => {})))
+      await ctx.routeWebSocket(/.*/, (ws) => {
+        blocked.push(ws.url())
+        ws.close()
+      })
+      const page = await ctx.newPage()
       await page.goto(`${PAGE_ORIGIN}/`, { waitUntil: 'load', timeout: config.loadTimeout }).catch(() => {})
       await new Promise((r) => setTimeout(r, SETTLE_MS))
-      const cdp = await context.newCDPSession(page)
+      const cdp = await ctx.newCDPSession(page)
       const { data } = await cdp.send('Page.captureScreenshot', {
         format: 'webp',
         quality: QUALITY,
@@ -319,15 +383,27 @@ export async function renderPage(tree: PageTree): Promise<RenderResult> {
       })
       return Buffer.from(data, 'base64')
     })()
+    // It may still reject after the timeout below has given up on it
+    shot.catch(() => {})
     const image = await withTimeout(shot, config.renderTimeout, 'Rendering the thumbnail')
+    ok = true
     return { image, blocked }
   } catch (err) {
-    // A page that hangs its renderer can wedge the browser too; start a fresh one next time
-    await withTimeout(context.close(), 5_000, 'Closing the context').catch(() => {})
-    await closeThumbnailBrowser()
+    const b = await instance.browser.catch(() => null)
+    // Closing or closed under this render: not the page's doing (errors can arrive before Chromium says it is gone)
+    if (b && (instance.closed || instance.gone || !b.isConnected())) throw new BrowserGone('The browser closed while rendering')
     throw err
   } finally {
-    await withTimeout(context.close(), 5_000, 'Closing the context').catch(() => {})
+    for (const context of contexts)
+      await withTimeout(
+        context.then((c) => c.close()),
+        5_000,
+        'Closing the context',
+      ).catch(() => {})
+    if (!ok) retire(instance)
+    release(instance)
+    rendering -= 1
+    thumbnailRendering.set(rendering)
   }
 }
 
@@ -362,7 +438,11 @@ export async function renderThumbnail(versionId: string): Promise<'stored' | 'fa
   if (!tree) return 'missing'
   const end = thumbnailDuration.startTimer()
   try {
-    const { image } = await renderPage(tree)
+    // Chromium dying takes every render on it down; each gets one more try on a fresh one
+    const { image } = await renderPage(tree).catch((err) => {
+      if (err instanceof BrowserGone) return renderPage(tree)
+      throw err
+    })
     await store(versionId, { image, contentType: THUMBNAIL_TYPE, error: null })
     end({ outcome: 'stored' })
     return 'stored'
@@ -376,10 +456,10 @@ export async function renderThumbnail(versionId: string): Promise<'stored' | 'fa
   }
 }
 
-// One render at a time, in the background, so publishing never waits for a browser
+// Up to `concurrency` renders at a time, in the background, so publishing never waits for a browser
 const pending: string[] = []
 const queued = new Set<string>()
-let draining: Promise<void> | null = null
+const workers = new Set<Promise<void>>()
 
 // True when the version is (now) waiting for a render or being rendered
 export function queueThumbnail(versionId: string): boolean {
@@ -389,15 +469,16 @@ export function queueThumbnail(versionId: string): boolean {
   queued.add(versionId)
   thumbnailQueue.set(queued.size)
   pending.push(versionId)
-  // Outside the request's context: the queue outlives it and renders other people's versions too,
-  // so its log lines shouldn't carry this request's id
-  draining ??= requestContext.exit(drain).finally(() => {
-    draining = null
-  })
+  if (workers.size < config.concurrency) {
+    // Outside the request's context: the queue outlives it and renders other people's versions too,
+    // so its log lines shouldn't carry this request's id
+    const worker: Promise<void> = requestContext.exit(work).finally(() => workers.delete(worker))
+    workers.add(worker)
+  }
   return true
 }
 
-async function drain() {
+async function work() {
   // Let the publish that queued this finish its response first
   await new Promise((r) => setImmediate(r))
   while (pending.length) {
@@ -444,5 +525,5 @@ export async function getThumbnail(versionId: string) {
 
 // Resolves once the queue is empty (tests and the backfill script wait on it)
 export async function thumbnailQueueIdle() {
-  while (draining) await draining
+  while (workers.size) await Promise.all(workers)
 }

@@ -49,6 +49,12 @@ export const thumbnailQueue = new Gauge({
   registers: [registry],
 })
 
+export const thumbnailRendering = new Gauge({
+  name: 'artifact_thumbnail_renders_active',
+  help: 'Thumbnails being rendered right now, at most THUMBNAIL_CONCURRENCY',
+  registers: [registry],
+})
+
 new Gauge({
   name: 'artifact_db_pool_max',
   help: 'Connections the database pool may open',
