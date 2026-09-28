@@ -8,7 +8,7 @@ import { type FromWorker, restartDelay, STABLE_MS, type ToWorker } from './worke
 // The primary of a cluster of WEB_CONCURRENCY workers (src/index.ts). It serves nothing itself: it
 // migrates and checks the bucket once, starts the workers, which share the port, and restarts any
 // that exits. Worker 1's slot is the background one (src/server.ts): it runs the storage sweep and
-// renders every thumbnail; the others send it the versions to render through here.
+// renders every thumbnail and inspection; the others send it the versions to render through here.
 //
 // Kept light on purpose: on Linux the primary accepts every connection and hands it to a worker.
 
@@ -51,7 +51,18 @@ export async function runPrimary(count: number) {
     worker.on('message', (message: FromWorker) => {
       if (message?.type === 'artifact:thumbnail') sendTo(background.worker, message)
       else if (message?.type === 'artifact:thumbnail-queue-full') broadcast(message.full)
-      else if (message?.type === 'artifact:metrics') {
+      else if (message?.type === 'artifact:inspect') {
+        // Worker ids are never reused, so an answer can't reach a restarted worker that asked something else
+        if (background.worker?.isConnected()) sendTo(background.worker, { ...message, from: worker.id })
+        else
+          sendTo(worker, {
+            type: 'artifact:inspected',
+            id: message.id,
+            answer: { ok: false, reason: 'failed', message: 'The renderer is restarting. Try again in a few seconds.' },
+          })
+      } else if (message?.type === 'artifact:inspected') {
+        sendTo(cluster.workers?.[message.to] ?? null, { type: 'artifact:inspected', id: message.id, answer: message.answer })
+      } else if (message?.type === 'artifact:metrics') {
         aggregator.clusterMetrics().then(
           (text) => sendTo(worker, { type: 'artifact:metrics', id: message.id, text }),
           (err: Error) => sendTo(worker, { type: 'artifact:metrics', id: message.id, error: err.message }),

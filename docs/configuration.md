@@ -26,7 +26,7 @@ Settings are environment variables. With Docker Compose they go in `deploy/docke
 | `SMTP_USER`, `SMTP_PASS` | empty | Leave empty for servers without authentication |
 | `SALES_EMAIL` | the `SMTP_FROM` address | Where the **Contact sales** form sends messages. Each one has Reply-To set to the sender. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | empty | Enables **Continue with Google**. Register `APP_URL/api/auth/google/callback` as the redirect URI. |
-| `CHROME_PATH` | empty (the image sets it) | Chrome or Chromium binary that renders gallery thumbnails. Empty skips thumbnails; cards show a sketch. |
+| `CHROME_PATH` | empty (the image sets it) | Chrome or Chromium binary that renders gallery thumbnails and the pages agents check with [`inspect_artifact`](/docs/publishing#inspect_artifact). Empty skips thumbnails, cards show a sketch, and `inspect_artifact` answers that it isn't available. |
 | `THUMBNAIL_CDN_HOSTS` | a built-in list | Comma-separated hosts pages may load scripts, styles and fonts from while their thumbnail renders, e.g. `cdn.jsdelivr.net,fonts.gstatic.com`. `none` blocks every host (pages that need a CDN then render without it). The built-in list: `cdn.jsdelivr.net`, `unpkg.com`, `cdnjs.cloudflare.com`, `esm.sh`, `ga.jspm.io`, `cdn.skypack.dev`, `cdn.tailwindcss.com`, `code.jquery.com`, `d3js.org`, `cdn.plot.ly`, `fonts.googleapis.com`, `fonts.gstatic.com`, `rsms.me`. |
 | `THUMBNAIL_CONCURRENCY` | `2` | How many thumbnails render at once, from 1 to 8, on the whole server: with several [workers](#more-than-one-worker), one of them renders every thumbnail. Each is a page in one shared Chromium, with the same network rules. A typical page renders in under a second, so 2 keeps up with about 150 new pages a minute and 4 with about 300. Raise it when `artifact_thumbnail_queue_length` keeps growing. Each render in progress is another Chromium page, so it costs some memory and CPU the requests could use: in a load test of small pages, 4 at once kept the whole app under 400 MB and half a core. |
 | `EMBED_FRAME_ANCESTORS` | `*` | Which sites may [embed pages](/docs/sharing#embedding) in a frame. `*` lets any site. `none` allows only this install, which turns embedding off. Otherwise origins separated by spaces or commas, e.g. `https://www.notion.so https://*.atlassian.net`; each is `http(s)://host[:port]`, and `*.` matches subdomains. List every site in the chain of frames: some tools show embeds through an embedding service of their own, whose site has to be listed too. It applies to `/e/<page id>` and to page content; the rest of the app can only ever be framed by itself. |
@@ -49,7 +49,7 @@ Settings are environment variables. With Docker Compose they go in `deploy/docke
 
 With `WEB_CONCURRENCY` above 1, the server starts a primary process and that many workers, which share its port. The primary serves nothing itself: it migrates the database and checks the bucket, starts the workers, and starts a worker again when one stops, waiting a little longer each time one keeps crashing (up to 30 seconds). On `SIGTERM` (`docker compose stop`, a Kubernetes rollout) every worker stops taking new connections, finishes the requests it has for up to 8 seconds, writes what it still has to write, and exits.
 
-The first worker also runs the storage sweep and renders every thumbnail; the others hand it the pages to render. Everything else is shared through Postgres, such as rate limits, so it doesn't matter which worker answers. A few things are kept in each worker's memory, which is fine but worth knowing:
+The first worker also runs the storage sweep and renders every thumbnail and every `inspect_artifact` check; the others hand it the pages to render and, for checks, pass its answer back. Everything else is shared through Postgres, such as rate limits, so it doesn't matter which worker answers. A few things are kept in each worker's memory, which is fine but worth knowing:
 
 - Recently read content (up to 64 MB) and the file lists of recent versions: each worker keeps its own, so more workers use more memory.
 - Repeat [page views](/docs/sharing#who-opened-a-page): a visitor who opens the same page again within 30 minutes isn't counted again, but each worker remembers this on its own, so a repeat visit that another worker answers can be counted once more. People who are signed in are checked in the database too, so this only affects visits by link.
@@ -98,6 +98,7 @@ Instance admins change these under **Server admin** (`/admin`); they are stored 
 | Page and files together | 10 MB |
 | File path | 200 characters |
 | Thumbnail render | 8 seconds to load, 20 in all; 640×360 WebP of a 1280×720 viewport |
+| Page inspection (`inspect_artifact`) | The same timeouts for each width; screenshots 1280 or 390 pixels wide and up to 2,000 tall; `THUMBNAIL_CONCURRENCY` at once besides thumbnails, with up to 20 more waiting at most 30 seconds |
 | Page title | 200 characters |
 | Folders | 500 per workspace, names up to 80 characters |
 | Gallery and `list_artifacts` | 50 and 25 pages at a time by default, at most 100 |
@@ -135,6 +136,7 @@ Each limit counts something for one key (an email address, an account, or a netw
 | `invite-ip` | The same, from one network | 500 per hour |
 | `mcp` | MCP tool calls by one account, all agents together | 600 per 10 minutes |
 | `publish` | New pages and versions one account publishes through agents (`publish_artifact`, `update_files`, `publish_upload`, `restore_version`, also counted in `mcp`) or with an access token (`POST /api/publish`) | 200 per hour |
+| `inspect` | Pages one account has opened on the server with `inspect_artifact`, each a few seconds of Chromium (also counted in `mcp`) | 100 per hour |
 | `access-token` | [Access tokens](/docs/connect-your-agent#publishing-from-ci) one account creates in **Account settings** | 20 per hour |
 | `comment` | Comments and replies one account writes, in the app or through agents (`add_comment`, `reply_comment`) | 120 per hour |
 | `link-password` | Wrong passwords for one page's link, from anyone; right ones don't count. Past it, nobody can try until the window ends. | 30 per 15 minutes |

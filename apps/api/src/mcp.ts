@@ -62,12 +62,14 @@ import { allowed, downloadLink, TOKEN_HOURS } from './content.js'
 import { checkLinkPassword, describeLink, LinkError, parseLinkExpiry, publicLink, updateLink, type LinkChange } from './links.js'
 import { db, schema } from './db/index.js'
 import type { Artifact } from './db/schema.js'
+import { describeInspection, inspect, type Width } from './inspect.js'
 import { hit, rule, waitText, windowText } from './limits.js'
 import { canFile, checkFolderName, ensureFolder, fileInto, FolderError, folderNamed, listFolders, MAX_FOLDER_NAME, workspaceOf } from './folders.js'
 import { ALLOWED_EXTENSIONS, checkPath, ENTRY_PATH, isText, MAX_FILE_BYTES, MAX_FILES, MAX_HTML_BYTES, MAX_TOTAL_BYTES } from './files.js'
 import { MAX_PEOPLE_PER_INVITE, parseEmails, sharePeople, SharingError } from './sharing.js'
 import { authenticateBearer, RESOURCE_METADATA_URL, type McpAuth } from './oauth/server.js'
 import { directUploads, UPLOAD_TTL_SECONDS } from './storage.js'
+import { thumbnailsEnabled } from './thumbnails.js'
 import { prepareUpload } from './uploads.js'
 import { MAX_VIEWERS, pageViewers, REPEAT_MINUTES, versionViews, VIEWER_RETENTION_DAYS } from './views.js'
 import { MAX_VERSION } from './validation.js'
@@ -820,6 +822,56 @@ function buildServer(auth: McpAuth) {
           `Download: ${link}\n` +
           `For example: curl -fsSL -o page.zip '${link}'`,
       )
+    }),
+  )
+
+  server.registerTool(
+    'inspect_artifact',
+    {
+      title: 'Check a page before sharing it',
+      description:
+        'Open a page in a headless browser on the server and report what is wrong with it: a screenshot at desktop width (and at phone width if you ask), ' +
+        "console errors and uncaught exceptions, files the page asks for that it doesn't have, links to its own files that don't exist, " +
+        'and accessibility problems found by axe-core (WCAG 2.1 A and AA) with the rule, impact and element. ' +
+        'Call it after publishing and before you share the link or say the page is done; fix what it finds, publish a new version and inspect again. ' +
+        "While inspecting, the page only reaches its own files and a few public CDNs, so requests to other servers are listed as not loaded even when they work in people's browsers. " +
+        'For people who can edit the page. Only on servers that render thumbnails.',
+      inputSchema: z.object({
+        artifact_id: z.string().describe('Id or link of the page'),
+        version: z.number().int().positive().max(MAX_VERSION).optional().describe('A version number from list_versions; omit for the current version'),
+        widths: z
+          .array(z.union([z.literal(1280), z.literal(390)]))
+          .min(1)
+          .max(2)
+          .optional()
+          .describe('Widths to render at, in CSS pixels: 1280 (desktop) and 390 (a phone). [1280] when left out; [1280, 390] checks both.'),
+      }),
+      annotations: { readOnlyHint: true },
+    },
+    limited(async ({ artifact_id, version, widths }) => {
+      const artifact = await findBySlug(parseArtifactRef(artifact_id))
+      if (!artifact || !(await canEdit(artifact, viewer))) return text(`No page you can edit has the id "${artifact_id}".`, true)
+      const n = version ?? artifact.currentVersion
+      const v = await getVersion(artifact, n)
+      if (!v) return text(`"${artifact.title}" has no version ${n}. Call list_versions to see its versions.`, true)
+      if (!thumbnailsEnabled())
+        return text(
+          "Inspecting pages isn't available on this server: it has no browser to render them (CHROME_PATH isn't set). Open the page's link to check it instead.",
+          true,
+        )
+      const wait = await hit('inspect', auth.userId)
+      if (wait) return text(refusal('inspect', 'page inspections', wait), true)
+      const answer = await inspect(v.id, [...new Set<Width>(widths ?? [1280])])
+      if (!answer.ok) {
+        if (answer.reason === 'missing') return text(`No page you can edit has the id "${artifact_id}".`, true)
+        return text(
+          answer.reason === 'busy'
+            ? answer.message
+            : `The page could not be inspected: ${answer.message}. A page that never finishes loading ends up here too.`,
+          true,
+        )
+      }
+      return describeInspection(answer.inspection, `Inspected version ${n} of "${artifact.title}" (artifact_id: ${artifact.slug}).`)
     }),
   )
 

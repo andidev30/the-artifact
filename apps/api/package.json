@@ -29,6 +29,7 @@
     "@node-saml/node-saml": "5.1.0",
     "@simplewebauthn/server": "^14.0.3",
     "@xmldom/xmldom": "0.8.15",
+    "axe-core": "^4.13.0",
     "drizzle-orm": "^0.45.3",
     "hono": "^4.13.9",
     "nodemailer": "^10.0.10",

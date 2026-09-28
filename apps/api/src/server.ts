@@ -7,6 +7,7 @@ import { auditSettled } from './audit.js'
 import { closeDatabase } from './db/index.js'
 import { env } from './env.js'
 import { scheduleSweeps } from './gc.js'
+import { inspectElsewhere, inspectHere, inspectionAnswered } from './inspect.js'
 import { log } from './log.js'
 import { collectProcessMetrics, reportClusterMetrics } from './metrics.js'
 import { closeThumbnailBrowser, queueThumbnail, renderThumbnailsElsewhere, rendererQueueFull, reportQueueFull } from './thumbnails.js'
@@ -20,7 +21,7 @@ const EXIT_MS = 9_500
 
 // One process that serves requests: the only one, or a worker of a cluster (src/primary.ts). The
 // background jobs run in exactly one process per server: the storage sweep with its pruners, and
-// the thumbnail queue with Chromium.
+// the thumbnail queue with Chromium, which also runs every inspection (src/inspect.ts).
 export function startServer({ background }: { background: boolean }) {
   const worker = cluster.isWorker
   const send = (message: FromWorker) => process.send?.(message)
@@ -51,11 +52,18 @@ export function startServer({ background }: { background: boolean }) {
         else request?.resolve(message.text ?? '')
       } else if (message?.type === 'artifact:thumbnail') queueThumbnail(message.versionId)
       else if (message?.type === 'artifact:thumbnail-queue-full') rendererQueueFull(message.full)
+      else if (message?.type === 'artifact:inspect') {
+        const { id, from } = message
+        void inspectHere(message.versionId, message.widths).then((answer) => send({ type: 'artifact:inspected', id, to: from, answer }))
+      } else if (message?.type === 'artifact:inspected') inspectionAnswered(message.id, message.answer)
     })
     // The primary is gone, and with it the listening socket
     process.on('disconnect', () => void stop('disconnect'))
     if (background) reportQueueFull((full) => send({ type: 'artifact:thumbnail-queue-full', full }))
-    else renderThumbnailsElsewhere((versionId) => send({ type: 'artifact:thumbnail', versionId }))
+    else {
+      renderThumbnailsElsewhere((versionId) => send({ type: 'artifact:thumbnail', versionId }))
+      inspectElsewhere((request) => send({ type: 'artifact:inspect', ...request }))
+    }
   }
 
   if (background) {

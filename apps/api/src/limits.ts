@@ -36,6 +36,8 @@ const CORE = {
   // MCP tool calls by one account, and the ones among them (or through POST /api/publish) that publish a version
   mcp: { max: 600, seconds: 10 * MINUTE },
   publish: { max: 200, seconds: HOUR },
+  // Pages one account has rendered on the server with inspect_artifact (each takes a few seconds of Chromium)
+  inspect: { max: 100, seconds: HOUR },
   // Access tokens one account creates in settings
   'access-token': { max: 20, seconds: HOUR },
   // Comments and replies one account writes, in the app or through agents
