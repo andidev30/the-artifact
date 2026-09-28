@@ -152,10 +152,10 @@ export async function getText(hash: string): Promise<string | null> {
   return data ? data.toString('utf8') : null
 }
 
-async function* listKeys(Prefix: string): AsyncGenerator<{ key: string; lastModified: Date }> {
+async function* listKeys(Prefix: string, StartAfter?: string): AsyncGenerator<{ key: string; lastModified: Date }> {
   let ContinuationToken: string | undefined
   do {
-    const res = await s3.send(new ListObjectsV2Command({ Bucket, Prefix, ContinuationToken }))
+    const res = await s3.send(new ListObjectsV2Command({ Bucket, Prefix, ContinuationToken, ...(ContinuationToken ? {} : { StartAfter }) }))
     for (const o of res.Contents ?? []) {
       if (o.Key) yield { key: o.Key, lastModified: o.LastModified ?? new Date(0) }
     }
@@ -170,9 +170,11 @@ async function deleteKeys(keys: string[]) {
   }
 }
 
-// Every stored blob with when it was written, a page of the listing at a time
-export async function* listBlobs(): AsyncGenerator<{ hash: string; lastModified: Date }> {
-  for await (const o of listKeys(PREFIX)) yield { hash: o.key.slice(PREFIX.length), lastModified: o.lastModified }
+// Every stored blob with when it was written, a page of the listing at a time, in order of hash
+// (after `startAfter` when given)
+export async function* listBlobs({ startAfter }: { startAfter?: string } = {}): AsyncGenerator<{ hash: string; lastModified: Date }> {
+  for await (const o of listKeys(PREFIX, startAfter === undefined ? undefined : blobKey(startAfter)))
+    yield { hash: o.key.slice(PREFIX.length), lastModified: o.lastModified }
 }
 
 export async function deleteBlobs(hashes: string[]) {
@@ -226,10 +228,14 @@ export async function promoteUpload(uploadId: string, hash: string, size: number
   return 'stored'
 }
 
-// Uploads never committed, once their links have long expired
-export async function deleteStaleUploads(olderThanMs: number, now = Date.now()): Promise<number> {
+// Uploads never committed, once their links have long expired. Stops listing once `deadline` passes
+// and deletes what it found by then; the next sweep finds the rest.
+export async function deleteStaleUploads(olderThanMs: number, now = Date.now(), deadline = Number.POSITIVE_INFINITY): Promise<number> {
   const stale: string[] = []
-  for await (const o of listKeys(UPLOADS)) if (now - o.lastModified.getTime() >= olderThanMs) stale.push(o.key)
+  for await (const o of listKeys(UPLOADS)) {
+    if (Date.now() >= deadline) break
+    if (now - o.lastModified.getTime() >= olderThanMs) stale.push(o.key)
+  }
   await deleteKeys(stale)
   return stale.length
 }
