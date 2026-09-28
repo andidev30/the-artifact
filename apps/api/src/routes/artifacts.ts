@@ -44,6 +44,7 @@ import { verifyPassword } from '../auth/password.js'
 import { currentThumbnails, getThumbnail, queueThumbnail, thumbnailsEnabled, type ThumbnailState } from '../thumbnails.js'
 import type { Artifact, ShareRole, Visibility } from '../db/schema.js'
 import { allowed, downloadVersion, serveVersion } from '../content.js'
+import { compareVersions } from '../compare.js'
 import { MAX_VIEWERS, pageViewers, totalViews, versionViews, VIEWER_RETENTION_DAYS } from '../views.js'
 import { parseVersion } from '../validation.js'
 import { getSharing, MAX_PEOPLE_PER_INVITE, parseEmails, removePerson, setPersonRole, sharePeople, SharingError } from '../sharing.js'
@@ -367,6 +368,18 @@ artifacts.get('/:slug/versions/:version', requireUser, async (c) => {
   const v = artifact && n ? await getVersion(artifact, n) : null
   if (!v) return c.json({ error: 'Not found' }, 404)
   return c.json({ version: v.version, createdAt: v.createdAt, html: await versionHtml(v), contentUrl: `/api/artifacts/${artifact!.slug}/v/${v.version}/` })
+})
+
+// What changed between two versions (?from=<n>&to=<n>, in either order): the files added, removed and
+// changed, with a line diff of the text ones. Editors only, like the history.
+artifacts.get('/:slug/compare', requireUser, async (c) => {
+  const artifact = await editable(c)
+  const from = parseVersion(c.req.query('from'))
+  const to = parseVersion(c.req.query('to'))
+  if (!artifact || from === null || to === null) return c.json({ error: 'Not found' }, 404)
+  const [a, b] = await Promise.all([getVersion(artifact, from), getVersion(artifact, to)])
+  if (!a || !b) return c.json({ error: 'Not found' }, 404)
+  return c.json(await compareVersions(a, b), 200, { 'Cache-Control': 'private, no-store' })
 })
 
 artifacts.post('/:slug/versions/:version/restore', requireUser, async (c) => {

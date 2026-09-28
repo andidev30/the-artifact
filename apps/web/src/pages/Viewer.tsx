@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
-import { downloadUrl, fetchMe, getArtifact, logout, PasswordNeeded, unlockPage, versionUrl, type ArtifactPage, type Visibility } from '../api'
+import { downloadUrl, FRAME_SANDBOX, fetchMe, getArtifact, logout, PasswordNeeded, unlockPage, versionUrl, type ArtifactPage, type Visibility } from '../api'
 import { CommentsPanel } from '../components/CommentsPanel'
 import { HistoryPanel, OldVersionBar, type Viewing } from '../components/HistoryPanel'
 import { DeleteDialog, PageMenu, RenameDialog, type MenuItem } from '../components/PageActions'
@@ -24,10 +24,6 @@ const VISIBILITY_LABEL: Record<Visibility, string> = {
   organization: 'Organization',
   link: 'Anyone with the link',
 }
-
-// Opaque origin: the page's scripts run, but can't read cookies or reach this app. The frame loads the
-// version from its own URL, so a page's files resolve by relative paths.
-const SANDBOX = 'allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads'
 
 export function Viewer() {
   const { slug = '' } = useParams()
@@ -348,7 +344,7 @@ function PageFrame({ page, email, onChange }: { page: ArtifactPage; email: strin
           key={viewing ? `v${viewing.version}` : 'current'}
           className="viewer-frame"
           title={viewing ? `${page.title}, version ${viewing.version}` : page.title}
-          sandbox={SANDBOX}
+          sandbox={FRAME_SANDBOX}
           src={versionUrl(page.slug, viewing ? viewing.version : page.version)}
         />
         {panel === 'history' && (

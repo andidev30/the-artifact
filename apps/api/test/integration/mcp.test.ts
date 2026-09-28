@@ -36,6 +36,7 @@ describe('MCP over /mcp', () => {
     expect(body.result.tools.map((t: { name: string }) => t.name).sort()).toEqual([
       'add_comment',
       'delete_artifact',
+      'diff_versions',
       'download_artifact',
       'get_artifact',
       'inspect_artifact',
@@ -373,6 +374,7 @@ describe('MCP over /mcp for 2026-07-28 clients', () => {
     expect(tools.map((t) => t.name).sort()).toEqual([
       'add_comment',
       'delete_artifact',
+      'diff_versions',
       'download_artifact',
       'get_artifact',
       'inspect_artifact',

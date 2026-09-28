@@ -199,6 +199,36 @@ test('gallery with pages and folders, its menus and dialogs', async ({ page }) =
   await page.keyboard.press('Escape')
 })
 
+// Its own test, to stay inside the per-test time limit on CI
+test('comparing two versions', async ({ page }) => {
+  await signUpPersonal(page, uniqueEmail('a11y-compare'))
+  const token = await connectAgent(page)
+  const files = (css: string) => [{ path: 'site.css', content: css }]
+  const slug = await publishViaMcp(page.request, token, { title: 'Launch plan', html: HTML, files: files('h1 { color: navy }\n') })
+  await publishViaMcp(page.request, token, {
+    title: 'Launch plan',
+    html: '<h1>Plan, second draft</h1>',
+    artifact_id: slug,
+    files: files('h1 { color: teal }\n'),
+  })
+
+  await page.goto(`/a/${slug}`)
+  await page.getByRole('button', { name: 'History' }).click()
+  const history = page.getByRole('complementary', { name: 'Version history' })
+  await history.getByRole('checkbox', { name: 'Compare version 1' }).check()
+  await history.getByRole('checkbox', { name: 'Compare version 2' }).check()
+  await expectAccessible(page, 'history panel with two versions picked')
+  await history.getByRole('button', { name: 'Compare', exact: true }).click()
+
+  await expect(page.getByRole('heading', { level: 1, name: 'Compare versions' })).toBeVisible()
+  await expect(page.frameLocator('iframe[title="Launch plan, version 2"]').getByRole('heading', { name: 'Plan, second draft' })).toBeVisible()
+  await expectAccessible(page, 'versions side by side')
+
+  await page.getByRole('button', { name: 'Changes' }).click()
+  await expect(page.getByRole('region', { name: 'Changed: site.css' })).toBeVisible()
+  await expectAccessible(page, 'changes between versions')
+})
+
 test('viewer with its history, views and comments panels, and the share dialog', async ({ page, browser }) => {
   await signUpPersonal(page, uniqueEmail('a11y-viewer'))
   const token = await connectAgent(page)

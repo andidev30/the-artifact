@@ -119,6 +119,7 @@ Other clients, HTTPS, email and backups are covered in [Self-hosting](docs/self-
 | `share_artifact` | Shares a page with people by email |
 | `delete_artifact` | Deletes a page (owner only) |
 | `list_versions` | Lists a page's versions, as the history shows them |
+| `diff_versions` | What changed between two versions: files added, removed and changed, with a diff of the text ones |
 | `restore_version` | Makes an older version current again |
 | `list_views` | How often a page was opened, and who opened it |
 | `download_artifact` | A link to download a page and its files as a zip |
