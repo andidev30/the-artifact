@@ -5,6 +5,7 @@ import { AccountHeader } from '../components/AccountHeader'
 import { ConnectTabs } from '../components/ConnectTabs'
 import { Gallery } from '../components/Gallery'
 import { InvitationNotice } from '../components/InvitationNotice'
+import '../components/SignInSecurity.css'
 import { APP_HOST } from '../config'
 import { useMe } from '../useMe'
 import { useWorkspace } from '../workspace'
@@ -47,63 +48,84 @@ function Home({ me }: { me: Me }) {
     <div className="auth">
       <AccountHeader me={me} workspace={workspace} />
       <main id="main" className="app-main">
+        <TwoFactorNotice me={me} />
         <InvitationNotice me={me} />
         <div className="app-title">
           <h1>Pages</h1>
           <p>{org ? `Everything published to ${org.name}. Your role: ${ROLE_LABEL[org.role]}.` : 'Everything your agents publish for you.'}</p>
         </div>
 
-        <Gallery
-          key={org?.id ?? 'personal'}
-          workspaceId={org?.id ?? 'personal'}
-          workspaceName={workspace}
-          email={me.email}
-          onWorkspaceCount={setOwnCount}
-          aside={
-            allDone ? null : (
-              <section className="auth-box getting-started" aria-labelledby="gs-title">
-                <h2 id="gs-title">Get started</h2>
-                <ol className="checklist">
-                  <li data-state={stateOf(0)}>
-                    <h3>{org ? `Create ${org.name}` : 'Set up your workspace'}</h3>
-                    <p>Done. {org ? `Its address is ${APP_HOST}/${org.slug}.` : 'Pages you publish stay private until you share them.'}</p>
-                  </li>
-                  <li data-state={stateOf(1)}>
-                    <h3>Connect your agent</h3>
-                    {steps[1] ? (
-                      <p>Done. Your agent can publish to {workspace}.</p>
-                    ) : (
-                      <>
-                        <p>Add The Artifact once to the agent you use.</p>
-                        <ConnectTabs />
-                        <p className="field-hint">
-                          Stuck?{' '}
-                          <Link className="text-link" to="/docs/connect-your-agent">
-                            Connect your agent
-                          </Link>{' '}
-                          covers every client.
+        {!org?.blocked && (
+          <Gallery
+            key={org?.id ?? 'personal'}
+            workspaceId={org?.id ?? 'personal'}
+            workspaceName={workspace}
+            email={me.email}
+            onWorkspaceCount={setOwnCount}
+            aside={
+              allDone ? null : (
+                <section className="auth-box getting-started" aria-labelledby="gs-title">
+                  <h2 id="gs-title">Get started</h2>
+                  <ol className="checklist">
+                    <li data-state={stateOf(0)}>
+                      <h3>{org ? `Create ${org.name}` : 'Set up your workspace'}</h3>
+                      <p>Done. {org ? `Its address is ${APP_HOST}/${org.slug}.` : 'Pages you publish stay private until you share them.'}</p>
+                    </li>
+                    <li data-state={stateOf(1)}>
+                      <h3>Connect your agent</h3>
+                      {steps[1] ? (
+                        <p>Done. Your agent can publish to {workspace}.</p>
+                      ) : (
+                        <>
+                          <p>Add The Artifact once to the agent you use.</p>
+                          <ConnectTabs />
+                          <p className="field-hint">
+                            Stuck?{' '}
+                            <Link className="text-link" to="/docs/connect-your-agent">
+                              Connect your agent
+                            </Link>{' '}
+                            covers every client.
+                          </p>
+                        </>
+                      )}
+                    </li>
+                    <li data-state={stateOf(2)}>
+                      <h3>Publish your first page</h3>
+                      <p>Ask your agent for a page in plain words, for example:</p>
+                      <div className="transcript">
+                        <p>
+                          <span className="caret" aria-hidden="true">
+                            &gt;
+                          </span>
+                          turn this CSV into a chart I can send to the team
                         </p>
-                      </>
-                    )}
-                  </li>
-                  <li data-state={stateOf(2)}>
-                    <h3>Publish your first page</h3>
-                    <p>Ask your agent for a page in plain words, for example:</p>
-                    <div className="transcript">
-                      <p>
-                        <span className="caret" aria-hidden="true">
-                          &gt;
-                        </span>
-                        turn this CSV into a chart I can send to the team
-                      </p>
-                    </div>
-                  </li>
-                </ol>
-              </section>
-            )
-          }
-        />
+                      </div>
+                    </li>
+                  </ol>
+                </section>
+              )
+            }
+          />
+        )}
       </main>
+    </div>
+  )
+}
+
+// Organizations that require a second factor this person hasn't set up yet
+function TwoFactorNotice({ me }: { me: Me }) {
+  const blocked = me.organizations.filter((o) => o.blocked)
+  if (!blocked.length) return null
+  const names = blocked.map((o) => o.name).join(', ')
+  return (
+    <div className="security-required two-factor-notice" role="status">
+      <p>
+        {names} {blocked.length === 1 ? 'requires' : 'require'} two-factor sign-in. Add a passkey or an authenticator app to open{' '}
+        {blocked.length === 1 ? 'its' : 'their'} pages here.
+      </p>
+      <Link className="button button-small" to="/settings#security">
+        Set up two-factor sign-in
+      </Link>
     </div>
   )
 }

@@ -10,6 +10,7 @@ import {
   listOrganizations,
   listUsers,
   createSignUpLink,
+  resetTwoFactor,
   saveSettings,
   updateUser,
   type AdminOrganization,
@@ -418,6 +419,7 @@ function Badges({ user }: { user: AdminUser }) {
       {user.isYou && <span className="settings-you">You</span>}
       {user.isAdmin && <span className="admin-badge">Admin</span>}
       {user.suspended && <span className="admin-badge admin-badge-bad">Suspended</span>}
+      {user.twoFactor && <span className="admin-badge">2FA</span>}
     </>
   )
 }
@@ -471,7 +473,8 @@ function UserPanel({ id, user: u, onUpdated, onDeleted }: { id: string; user: Ad
   const [resetLink, setResetLink] = useState<SignUpLink | null>(null)
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
-  const [confirm, setConfirm] = useState<'suspend' | 'delete' | 'demote' | null>(null)
+  const [confirm, setConfirm] = useState<'suspend' | 'delete' | 'demote' | 'reset-two-factor' | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
 
   async function change(patch: { admin?: boolean; suspended?: boolean }, fallback: string) {
     setBusy(true)
@@ -481,6 +484,19 @@ function UserPanel({ id, user: u, onUpdated, onDeleted }: { id: string; user: Ad
       setConfirm(null)
     } catch (err) {
       setProblem(errorText(err, fallback))
+    }
+    setBusy(false)
+  }
+
+  async function resetFactors() {
+    setBusy(true)
+    setProblem(null)
+    try {
+      onUpdated(await resetTwoFactor(u.id))
+      setConfirm(null)
+      setNotice(`Two-factor sign-in was reset. ${u.name ?? u.email} can sign in without it and set it up again.`)
+    } catch (err) {
+      setProblem(errorText(err, 'Two-factor sign-in could not be reset. Try again.'))
     }
     setBusy(false)
   }
@@ -559,6 +575,11 @@ function UserPanel({ id, user: u, onUpdated, onDeleted }: { id: string; user: Ad
               Password reset link
             </button>
           )}
+          {!u.isYou && u.twoFactor && (
+            <button type="button" className="button button-small button-quiet" disabled={busy} onClick={() => setConfirm('reset-two-factor')}>
+              Reset two-factor sign-in
+            </button>
+          )}
           {!u.isYou && (
             <button type="button" className="auth-reset admin-delete-link" onClick={() => setConfirm('delete')}>
               Delete account
@@ -577,6 +598,20 @@ function UserPanel({ id, user: u, onUpdated, onDeleted }: { id: string; user: Ad
       )}
 
       {resetLink && confirm === null && <LinkResult link={resetLink} />}
+      {notice && confirm === null && (
+        <p className="field-hint" role="status">
+          {notice}
+        </p>
+      )}
+      {confirm === 'reset-two-factor' && (
+        <Confirm
+          text={`Removes every passkey, authenticator app and recovery code of ${u.name ?? u.email}, and signs them out everywhere. Do this only once you are sure it is them asking, for example in person or on a call. They sign in with their password, an email link or Google alone, and set up two-factor sign-in again.`}
+          action="Reset two-factor sign-in"
+          busy={busy}
+          onConfirm={resetFactors}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
 
       {confirm === 'demote' && (
         <Confirm

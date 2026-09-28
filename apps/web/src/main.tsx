@@ -16,6 +16,7 @@ import { Invite } from './pages/Invite.tsx'
 import { NewOrganization } from './pages/NewOrganization.tsx'
 import { ConfirmSignIn } from './pages/ConfirmSignIn.tsx'
 import { Loading } from './pages/Status.tsx'
+import { TwoFactor } from './pages/TwoFactor.tsx'
 
 // Pages most visits never open stay out of the first download. The signed-in ones show Loading
 // while their chunk arrives, which is what they render first anyway, so nothing changes on screen.
@@ -32,6 +33,7 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Auth mode="login" />} />
         <Route path="/signup" element={<Auth mode="signup" />} />
+        <Route path="/login/two-factor" element={<TwoFactor />} />
         <Route path="/contact-sales" element={<ContactSalesPage />} />
         <Route path="/auth/confirm" element={<ConfirmSignIn />} />
         <Route path="/app" element={<AppHome />} />

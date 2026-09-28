@@ -684,6 +684,16 @@
   accent-color: var(--ink);
 }
 
+.consent-option[data-disabled] {
+  color: var(--ink-soft);
+  cursor: not-allowed;
+}
+
+.consent-blocked {
+  display: block;
+  font-size: 0.8125rem;
+}
+
 .gallery-tabs {
   display: flex;
   gap: 4px;

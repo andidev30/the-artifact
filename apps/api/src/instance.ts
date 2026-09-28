@@ -110,6 +110,7 @@ export async function saveSettings(value: SettingsInput, updatedBy: string) {
 // in progress and unused sign-in links
 export async function revokeAccess(tx: Tx, user: Pick<User, 'id' | 'email'>) {
   await tx.delete(schema.sessions).where(eq(schema.sessions.userId, user.id))
+  await tx.delete(schema.pendingSignIns).where(eq(schema.pendingSignIns.userId, user.id))
   await tx.delete(schema.oauthTokens).where(eq(schema.oauthTokens.userId, user.id))
   await tx.delete(schema.accessTokens).where(eq(schema.accessTokens.userId, user.id))
   await tx.delete(schema.oauthGrants).where(eq(schema.oauthGrants.userId, user.id))

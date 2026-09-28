@@ -6,6 +6,8 @@ import { db, schema } from '../db/index.js'
 import type { User } from '../db/schema.js'
 import { likeTerm } from '../artifacts.js'
 import { createAdminLink } from '../auth/email.js'
+import { resetSecondFactor } from '../auth/twofactor.js'
+import { log } from '../log.js'
 import { mailEnabled } from '../env.js'
 import { activeAdminCount, adminCondition, instanceSettings, isInstanceAdmin, lockAdmins, parseSettings, revokeAccess, saveSettings } from '../instance.js'
 import { deleteAccountData, ownedAlone } from './settings.js'
@@ -59,7 +61,7 @@ type UserRow = Pick<User, 'id' | 'email' | 'name' | 'avatarUrl' | 'isAdmin' | 's
 async function describeUsers(rows: UserRow[], viewerId: string) {
   const ids = rows.map((r) => r.id)
   if (!ids.length) return []
-  const [orgs, pages, tokens] = await Promise.all([
+  const [orgs, pages, tokens, passkeyUsers, totpUsers] = await Promise.all([
     db
       .select({
         userId: schema.memberships.userId,
@@ -81,7 +83,13 @@ async function describeUsers(rows: UserRow[], viewerId: string) {
       .from(schema.oauthTokens)
       .where(inArray(schema.oauthTokens.userId, ids))
       .groupBy(schema.oauthTokens.userId),
+    db.selectDistinct({ userId: schema.passkeys.userId }).from(schema.passkeys).where(inArray(schema.passkeys.userId, ids)),
+    db
+      .select({ userId: schema.totpSecrets.userId })
+      .from(schema.totpSecrets)
+      .where(and(inArray(schema.totpSecrets.userId, ids), isNotNull(schema.totpSecrets.confirmedAt))),
   ])
+  const withFactor = new Set([...passkeyUsers, ...totpUsers].map((r) => r.userId))
   return rows.map((u) => {
     const agentSeen = tokens.find((t) => t.userId === u.id)?.lastUsedAt
     const seen = [u.lastSeenAt, agentSeen ? new Date(agentSeen) : null].filter((d): d is Date => Boolean(d))
@@ -97,6 +105,7 @@ async function describeUsers(rows: UserRow[], viewerId: string) {
       suspendedAt: u.suspendedAt?.toISOString() ?? null,
       organizations: orgs.filter((o) => o.userId === u.id).map(({ id, name, role }) => ({ id, name, role })),
       pageCount: pages.find((p) => p.userId === u.id)?.n ?? 0,
+      twoFactor: withFactor.has(u.id),
       isYou: u.id === viewerId,
     }
   })
@@ -198,6 +207,21 @@ admin.patch('/users/:id', async (c) => {
     .select(userColumns)
     .from(schema.users)
     .where(eq(schema.users.id, c.req.param('id')))
+  const [described] = await describeUsers([row], actor.id)
+  return c.json(described)
+})
+
+// For someone who lost every passkey, their authenticator app and their recovery codes: removes all
+// of them and signs the person out everywhere. They sign in with their password, email or Google
+// alone next time, and set up a second factor again. Logged, since it weakens the account.
+admin.post('/users/:id/reset-two-factor', async (c) => {
+  const actor = c.get('user')!
+  const target = await findUser(c.req.param('id'))
+  if (!target) return c.json({ error: 'This person no longer has an account.' }, 404)
+  if (target.id === actor.id) return c.json({ error: 'Change your own sign-in security from your account settings.', code: 'self' }, 409)
+  await resetSecondFactor(target.id)
+  log.warn('Two-factor sign-in reset by an admin', { adminId: actor.id, userId: target.id })
+  const [row] = await db.select(userColumns).from(schema.users).where(eq(schema.users.id, target.id))
   const [described] = await describeUsers([row], actor.id)
   return c.json(described)
 })

@@ -122,8 +122,8 @@ describe('authorization', () => {
       clientName: 'Claude Code',
       redirectHost: '127.0.0.1:43123',
       workspaces: [
-        { id: org.id, name: 'Acme' },
-        { id: null, name: 'Personal' },
+        { id: org.id, name: 'Acme', blocked: false },
+        { id: null, name: 'Personal', blocked: false },
       ],
     })
     expect((await call('/api/oauth/requests/unknown', { cookie: user.cookie })).status).toBe(404)

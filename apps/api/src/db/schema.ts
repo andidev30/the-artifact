@@ -1,5 +1,20 @@
 import { sql } from 'drizzle-orm'
-import { boolean, check, index, integer, jsonb, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid, type AnyPgColumn } from 'drizzle-orm/pg-core'
+import {
+  bigint,
+  boolean,
+  check,
+  index,
+  integer,
+  jsonb,
+  pgEnum,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+  type AnyPgColumn,
+} from 'drizzle-orm/pg-core'
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -29,9 +44,97 @@ export const sessions = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    // The browser's User-Agent at sign-in, for the list of sessions in settings
+    userAgent: text('user_agent'),
+    // Updated at most every few minutes while the session is used
+    lastActiveAt: timestamp('last_active_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('sessions_user_id_idx').on(t.userId)],
+)
+
+// Someone who passed the first factor (password, email link or Google) of an account with a second
+// factor. The cookie holds a random token; only its hash is stored. The session starts once the
+// second factor is checked.
+export const pendingSignIns = pgTable(
+  'pending_sign_ins',
+  {
+    id: text('id').primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    // Where to go once signed in
+    redirect: text('redirect').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('pending_sign_ins_user_idx').on(t.userId), index('pending_sign_ins_expires_at_idx').on(t.expiresAt)],
+)
+
+// Passkeys (WebAuthn credentials). They sign in on their own, or serve as the second factor.
+export const passkeys = pgTable(
+  'passkeys',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    // base64url, as the browser reports it
+    credentialId: text('credential_id').notNull().unique(),
+    // COSE public key, base64url
+    publicKey: text('public_key').notNull(),
+    // The authenticator's signature counter; many passkeys always report 0
+    counter: bigint('counter', { mode: 'number' }).notNull().default(0),
+    transports: jsonb('transports').$type<string[]>().notNull().default([]),
+    name: text('name').notNull(),
+    // Synced to a cloud account (iCloud Keychain, Google Password Manager...) rather than one device
+    backedUp: boolean('backed_up').notNull().default(false),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('passkeys_user_idx').on(t.userId)],
+)
+
+// A WebAuthn challenge the server handed out, keyed by its SHA-256 and deleted as it is used, so
+// every one works once. user_id is null for signing in with a passkey before anyone is known.
+export const webauthnChallenges = pgTable(
+  'webauthn_challenges',
+  {
+    id: text('id').primaryKey(),
+    // "register", "sign-in" or "second-factor"
+    purpose: text('purpose').notNull(),
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('webauthn_challenges_expires_at_idx').on(t.expiresAt)],
+)
+
+// An authenticator app (TOTP, RFC 6238). The secret is encrypted with a server key (src/auth/totp.ts).
+// It counts as a second factor once confirmed with a first code.
+export const totpSecrets = pgTable('totp_secrets', {
+  userId: uuid('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  secret: text('secret').notNull(),
+  confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
+  // The last 30-second step a code was accepted for; codes from it or earlier don't work again
+  lastStep: bigint('last_step', { mode: 'number' }).notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+// Single-use codes for when the second factor is lost. Stored as SHA-256; deleted as they are used.
+export const recoveryCodes = pgTable(
+  'recovery_codes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    codeHash: text('code_hash').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('recovery_codes_user_code_unique').on(t.userId, t.codeHash)],
 )
 
 // One-time sign-in links sent by email, or made by an instance admin to pass on when the server
@@ -49,6 +152,8 @@ export const organizations = pgTable('organizations', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
   slug: text('slug').notNull().unique(),
+  // Members need a passkey or an authenticator app to use the organization (see src/auth/twofactor.ts)
+  requireTwoFactor: boolean('require_two_factor').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
@@ -357,6 +462,7 @@ export const rateLimits = pgTable(
 )
 
 export type User = typeof users.$inferSelect
+export type Passkey = typeof passkeys.$inferSelect
 export type SignupPolicy = (typeof signupPolicyEnum.enumValues)[number]
 export type ShareRole = (typeof shareRoleEnum.enumValues)[number]
 export type Artifact = typeof artifacts.$inferSelect

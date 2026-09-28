@@ -1,5 +1,6 @@
-import { and, asc, count, eq, gt, notExists } from 'drizzle-orm'
+import { and, asc, count, eq, gt, notExists, sql } from 'drizzle-orm'
 import { Hono, type Context } from 'hono'
+import { hasSecondFactor, twoFactorRequiredError } from '../auth/factors.js'
 import { hashPassword, passwordProblem } from '../auth/password.js'
 import { hashToken, randomToken, requireUser, startSession, type AuthEnv } from '../auth/session.js'
 import { createPasswordAccount, userExists } from '../auth/users.js'
@@ -65,7 +66,7 @@ async function actor(c: Context<AuthEnv>) {
 }
 
 async function listMembers(organizationId: string) {
-  return db
+  const rows = await db
     .select({
       id: schema.users.id,
       email: schema.users.email,
@@ -73,11 +74,15 @@ async function listMembers(organizationId: string) {
       avatarUrl: schema.users.avatarUrl,
       role: schema.memberships.role,
       joinedAt: schema.memberships.createdAt,
+      // A passkey or a confirmed authenticator app
+      twoFactor: sql<boolean>`(exists (select 1 from ${schema.passkeys} where ${schema.passkeys.userId} = ${schema.users.id})
+        or exists (select 1 from ${schema.totpSecrets} where ${schema.totpSecrets.userId} = ${schema.users.id} and ${schema.totpSecrets.confirmedAt} is not null))`,
     })
     .from(schema.memberships)
     .innerJoin(schema.users, eq(schema.memberships.userId, schema.users.id))
     .where(eq(schema.memberships.organizationId, organizationId))
     .orderBy(asc(schema.memberships.createdAt))
+  return rows.map((r) => ({ ...r, twoFactor: Boolean(r.twoFactor) }))
 }
 
 async function listInvitations(organizationId: string) {
@@ -109,6 +114,7 @@ async function details(organizationId: string, role: Role) {
     name: org.name,
     slug: org.slug,
     role,
+    requireTwoFactor: org.requireTwoFactor,
     members: await listMembers(organizationId),
     // Only people who can manage members see who is invited
     invitations: role === 'member' ? [] : await listInvitations(organizationId),
@@ -123,6 +129,15 @@ function fail(c: Context<AuthEnv>, err: unknown) {
 // Mounted at /api/organizations/:orgId
 export const members = new Hono<AuthEnv>()
 members.use(requireUser)
+// Members an organization blocks until they set up a second factor can still leave it
+members.use(async (c, next) => {
+  const orgId = c.req.param('orgId') ?? ''
+  const user = c.get('user')!
+  if (!user.blockedOrgs.includes(orgId)) return next()
+  const leaving = c.req.method === 'DELETE' && c.req.path.endsWith(`/members/${user.id}`)
+  if (leaving) return next()
+  return c.json(await twoFactorRequiredError(orgId), 403)
+})
 
 members.get('/', async (c) => {
   const me = await actor(c)
@@ -133,11 +148,27 @@ members.get('/', async (c) => {
 members.patch('/', async (c) => {
   const me = await actor(c)
   if (!me) return c.json({ error: 'Not found' }, 404)
-  if (me.role === 'member') return c.json({ error: 'Only owners and admins can rename the organization.' }, 403)
-  const body = (await c.req.json().catch(() => null)) as { name?: unknown } | null
-  const name = typeof body?.name === 'string' ? body.name.trim() : ''
-  if (name.length < 2 || name.length > 60) return c.json({ error: 'Use 2 to 60 characters for the name.', field: 'name' }, 400)
-  await db.update(schema.organizations).set({ name }).where(eq(schema.organizations.id, me.org.id))
+  if (me.role === 'member') return c.json({ error: 'Only owners and admins can change the organization.' }, 403)
+  const body = (await c.req.json().catch(() => null)) as { name?: unknown; requireTwoFactor?: unknown } | null
+  const set: { name?: string; requireTwoFactor?: boolean } = {}
+  if (body?.name !== undefined) {
+    const name = typeof body.name === 'string' ? body.name.trim() : ''
+    if (name.length < 2 || name.length > 60) return c.json({ error: 'Use 2 to 60 characters for the name.', field: 'name' }, 400)
+    set.name = name
+  }
+  if (body?.requireTwoFactor !== undefined) {
+    if (typeof body.requireTwoFactor !== 'boolean') return c.json({ error: 'Send requireTwoFactor as true or false.', field: 'requireTwoFactor' }, 400)
+    // Otherwise the person turning it on would lock themselves out at once
+    if (body.requireTwoFactor && !(await hasSecondFactor(c.get('user')!.id))) {
+      return c.json({ error: 'Add a passkey or an authenticator app to your own account first.', code: 'two_factor_needed', field: 'requireTwoFactor' }, 409)
+    }
+    set.requireTwoFactor = body.requireTwoFactor
+  }
+  if (!Object.keys(set).length) return c.json({ error: 'Send a name or requireTwoFactor.' }, 400)
+  await db.update(schema.organizations).set(set).where(eq(schema.organizations.id, me.org.id))
+  if (set.requireTwoFactor !== undefined && set.requireTwoFactor !== me.org.requireTwoFactor) {
+    log.info('Organization two-factor requirement changed', { organizationId: me.org.id, userId: c.get('user')!.id, requireTwoFactor: set.requireTwoFactor })
+  }
   return c.json(await details(me.org.id, me.role))
 })
 

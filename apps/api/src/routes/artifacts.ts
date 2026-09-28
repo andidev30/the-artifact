@@ -21,6 +21,7 @@ import {
   restoreVersion,
   versionId,
 } from '../artifacts.js'
+import { twoFactorRequiredError } from '../auth/factors.js'
 import { requireUser, type AuthEnv } from '../auth/session.js'
 import { commentCounts, type CommentCount } from '../comments.js'
 import { belongsTo, canFile, fileInto, folderIn, workspaceOf } from '../folders.js'
@@ -77,7 +78,8 @@ artifacts.get('/', requireUser, async (c) => {
 
     const organizationId = workspace === 'personal' ? null : workspace
     const ws = { userId: user.id, organizationId }
-    if (!(await belongsTo(user.id, ws))) return c.json({ error: 'Not found' }, 404)
+    if (organizationId && user.blockedOrgs.includes(organizationId)) return c.json(await twoFactorRequiredError(organizationId), 403)
+    if (!(await belongsTo(user, ws))) return c.json({ error: 'Not found' }, 404)
     const folderParam = c.req.query('folder')
     let folder: string | null | undefined
     if (folderParam === 'none') folder = null

@@ -33,11 +33,15 @@ export const workspaceOf = (a: Artifact): Workspace => ({ userId: a.ownerId, org
 
 const folderWorkspace = (folder: Folder): Workspace => ({ userId: folder.ownerId ?? '', organizationId: folder.organizationId })
 
+// blockedOrgs as on Viewer: organizations the person can't use in the web app until they set up a second factor
+export type Member = { id: string; blockedOrgs?: readonly string[] }
+
 // Anyone who can publish in a workspace organizes its folders: every member of an organization, and
 // the person whose personal workspace it is
-export async function belongsTo(viewerId: string, ws: Workspace): Promise<boolean> {
+export async function belongsTo(member: Member, ws: Workspace): Promise<boolean> {
+  const viewerId = member.id
   if (!ws.organizationId) return ws.userId === viewerId
-  if (!UUID_RE.test(ws.organizationId)) return false
+  if (!UUID_RE.test(ws.organizationId) || member.blockedOrgs?.includes(ws.organizationId)) return false
   const [m] = await db
     .select({ role: schema.memberships.role })
     .from(schema.memberships)
@@ -48,7 +52,7 @@ export async function belongsTo(viewerId: string, ws: Workspace): Promise<boolea
 // Filing a page changes it, so it takes edit access to the page as well as a place in its workspace.
 // Someone a page is shared with from another workspace can't file it: its folders aren't theirs to see.
 export async function canFile(artifact: Artifact, viewer: Viewer): Promise<boolean> {
-  return (await belongsTo(viewer.id, workspaceOf(artifact))) && (await canEdit(artifact, viewer))
+  return (await belongsTo(viewer, workspaceOf(artifact))) && (await canEdit(artifact, viewer))
 }
 
 // With how many of their pages this person sees in each, counted like the gallery lists them
@@ -70,9 +74,9 @@ export async function findFolder(id: string): Promise<Folder | null> {
 }
 
 // A folder the viewer may organize, or null so that missing and someone else's look the same
-export async function folderFor(viewerId: string, id: string): Promise<Folder | null> {
+export async function folderFor(member: Member, id: string): Promise<Folder | null> {
   const folder = await findFolder(id)
-  return folder && (await belongsTo(viewerId, folderWorkspace(folder))) ? folder : null
+  return folder && (await belongsTo(member, folderWorkspace(folder))) ? folder : null
 }
 
 export async function folderIn(ws: Workspace, id: string): Promise<Folder | null> {

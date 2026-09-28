@@ -27,7 +27,7 @@ describe('organizations', () => {
 
     const me = await (await call('/api/me', { cookie: user.cookie })).json()
     expect(me.onboarded).toBe(true)
-    expect(me.organizations).toEqual([{ id: org.id, name: 'Acme Inc', slug: 'acme', role: 'owner' }])
+    expect(me.organizations).toEqual([{ id: org.id, name: 'Acme Inc', slug: 'acme', role: 'owner', requireTwoFactor: false, blocked: false }])
   })
 
   it('checks slug availability', async () => {
