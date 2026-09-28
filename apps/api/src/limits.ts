@@ -41,6 +41,8 @@ const CORE = {
   // MCP tool calls by one account, and the ones among them (or through POST /api/publish) that publish a version or duplicate a page
   mcp: { max: 600, seconds: 10 * MINUTE },
   publish: { max: 200, seconds: HOUR },
+  // Megabytes one account is handed upload links for by prepare_upload, rounded up per call; content already stored doesn't count
+  upload: { max: 2048, seconds: HOUR },
   // Pages one account has rendered on the server with inspect_artifact (each takes a few seconds of Chromium)
   inspect: { max: 100, seconds: HOUR },
   // Access tokens one account creates in settings

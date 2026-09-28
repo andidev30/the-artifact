@@ -3,6 +3,7 @@ import { and, eq, inArray } from 'drizzle-orm'
 import { ownedPages } from './artifacts.js'
 import { db, schema } from './db/index.js'
 import { checkManifest, type FileMeta, type ManifestEntry, PublishError } from './files.js'
+import { hit, rule, waitText, windowText } from './limits.js'
 import { blobSize, presignUpload, promoteUpload } from './storage.js'
 
 // Publishing in two steps, for agents that can make HTTP requests of their own: prepare_upload
@@ -56,6 +57,21 @@ async function reusable(owner: Uploader, files: FileMeta[]): Promise<Set<string>
   return new Set(found.filter((h) => h !== null))
 }
 
+const MB = 1024 * 1024
+
+// Upload links sign for bytes nobody may ever claim, which stay in the bucket until the storage sweep
+// removes them, so they count toward the "upload" limit by the megabyte (rounded up), as handed out
+async function checkUploadLimit(userId: string, bytes: number) {
+  if (bytes === 0) return
+  const wait = await hit('upload', userId, Math.ceil(bytes / MB))
+  if (wait === null) return
+  const r = rule('upload')!
+  throw new PublishError(
+    `This account is past this server's limit of ${r.max} MB of uploads per ${windowText(r.seconds)}. ` +
+      `Try again in ${waitText(wait)}, or publish with publish_artifact in the meantime.`,
+  )
+}
+
 // partial: only some files of a page, for an update of it (index.html optional)
 export async function prepareUpload(entries: ManifestEntry[], owner: Uploader, opts: { partial?: boolean } = {}): Promise<PreparedUpload> {
   const { html, files } = opts.partial ? checkManifest(entries, { partial: true }) : checkManifest(entries)
@@ -65,6 +81,10 @@ export async function prepareUpload(entries: ManifestEntry[], owner: Uploader, o
   const skip = await reusable(
     owner,
     [...byHash.values()].map((same) => same[0]),
+  )
+  await checkUploadLimit(
+    owner.id,
+    [...byHash].reduce((sum, [hash, same]) => (skip.has(hash) ? sum : sum + same[0].size), 0),
   )
 
   const uploads: PreparedUpload['uploads'] = []

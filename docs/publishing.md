@@ -77,7 +77,7 @@ Publish a page in two steps, with the files going straight to storage. Available
 
 With `update: true`, `files` lists only the files to add or replace, and `index.html` only if it changes too.
 
-It answers with an `upload_id` and a link for each file that isn't stored yet, as text and as structured content (`upload_id`, `uploads` with the `paths`, `size` and `url` of each link, and `stored`). The agent sends each file's bytes to its link with an HTTP `PUT` within 15 minutes, then calls `publish_upload`:
+It answers with an `upload_id` and a link for each file that isn't stored yet, as text and as structured content (`upload_id`, `uploads` with the `paths`, `size` and `url` of each link, and `stored`). The sizes of the files it hands out links for count toward the `upload` [rate limit](#limits), whether or not they are then published; files already stored in your own pages don't. The agent sends each file's bytes to its link with an HTTP `PUT` within 15 minutes, then calls `publish_upload`:
 
 | Argument | Required | Meaning |
 | --- | --- | --- |
@@ -522,6 +522,7 @@ Besides the size of each page, a server limits how fast an account uses these to
 | --- | --- |
 | Tool calls, by every agent of one account together | 600 per 10 minutes |
 | New pages and versions (`publish_artifact`, `update_files`, `publish_upload`, `restore_version`, `duplicate_artifact`, `POST /api/publish`) | 200 per hour |
+| Upload links from `prepare_upload`, by the size of the files still to upload | 2048 MB per hour |
 | People shared with by email (`share_artifact`, counted with invitations in the app) | 200 per hour |
 | Comments and replies (`add_comment`, `reply_comment`, counted with comments in the app) | 120 per hour |
 | Page inspections (`inspect_artifact`) | 100 per hour |

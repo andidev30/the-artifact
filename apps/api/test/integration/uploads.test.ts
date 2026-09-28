@@ -35,8 +35,33 @@ async function agent() {
 }
 
 describe('publishing by direct upload', () => {
+  const rateLimits = env.rateLimits
   afterEach(() => {
     env.storage.publicEndpoint = process.env.S3_PUBLIC_ENDPOINT ?? ''
+    env.rateLimits = rateLimits
+  })
+
+  it('counts the megabytes it hands out links for toward the upload limit, but not content already stored', async () => {
+    env.rateLimits = 'upload=7/1h'
+    const { token } = await agent()
+    const { files, manifest } = page()
+    // Just over 5 MB, so 6 of the 7
+    const first = await callTool(token, 'prepare_upload', { files: manifest })
+    expect(first.isError).toBe(false)
+    for (const [path, url] of links(first.text)) await put(url, files[path])
+    const firstId = first.text.match(/upload_id: ([0-9a-f]+)/)![1]
+    const slug = slugFrom((await callTool(token, 'publish_upload', { title: 'Page', upload_id: firstId, files: manifest })).text)
+
+    const css = Buffer.from(`/* ${crypto.randomUUID()} */`)
+    const next = manifest.map((f) => (f.path === 'site.css' ? { path: f.path, size: css.length, sha256: sha256(css) } : f))
+    expect((await callTool(token, 'prepare_upload', { files: next })).isError).toBe(false)
+
+    const refused = await callTool(token, 'prepare_upload', { files: page().manifest })
+    expect(refused.isError).toBe(true)
+    expect(refused.text).toMatch(/^This account is past this server's limit of 7 MB of uploads per hour\. Try again in /)
+    // Publishing inline still works, and so does the page already published
+    expect((await callTool(token, 'publish_artifact', { title: 'Small', html: '<p>small</p>' })).isError).toBe(false)
+    expect((await callTool(token, 'get_artifact', { artifact_id: slug })).isError).toBe(false)
   })
 
   it('makes an owner who left an organization upload again what its pages hold', async () => {
