@@ -23,6 +23,12 @@ const CORE = {
   password: { max: 10, seconds: 15 * MINUTE },
   // Password sign-in, sign-up and setup attempts from one address
   'password-ip': { max: 100, seconds: 15 * MINUTE },
+  // Wrong authenticator app and recovery codes for one account, at sign-in or while setting the app up; a right one clears the count
+  'two-factor': { max: 10, seconds: HOUR },
+  // Second-factor steps and passkey sign-ins from one address
+  'two-factor-ip': { max: 100, seconds: 15 * MINUTE },
+  // Passkeys, authenticator app set-ups and new recovery codes one account asks for
+  'two-factor-setup': { max: 30, seconds: HOUR },
   'oauth-register-ip': { max: 60, seconds: HOUR },
   // People one account invites to an organization or shares a page with
   invite: { max: 200, seconds: HOUR },

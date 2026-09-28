@@ -17,7 +17,7 @@ function workspaceParam(value: unknown, userId: string) {
 folders.get('/', requireUser, async (c) => {
   const user = c.get('user')!
   const ws = workspaceParam(c.req.query('workspace'), user.id)
-  if (!(await belongsTo(user.id, ws))) return c.json({ error: 'Not found' }, 404)
+  if (!(await belongsTo(user, ws))) return c.json({ error: 'Not found' }, 404)
   return c.json(await listFolders(ws, user.id))
 })
 
@@ -26,7 +26,7 @@ folders.post('/', requireUser, async (c) => {
   const user = c.get('user')!
   const body = (await c.req.json().catch(() => ({}))) as { workspace?: unknown; name?: unknown }
   const ws = workspaceParam(body.workspace, user.id)
-  if (!(await belongsTo(user.id, ws))) return c.json({ error: 'Not found' }, 404)
+  if (!(await belongsTo(user, ws))) return c.json({ error: 'Not found' }, 404)
   const checked = checkFolderName(body.name)
   if ('error' in checked) return c.json({ error: checked.error, field: 'name' }, 400)
   try {
@@ -42,7 +42,7 @@ folders.post('/', requireUser, async (c) => {
 // { name }
 folders.patch('/:id', requireUser, async (c) => {
   const user = c.get('user')!
-  const folder = await folderFor(user.id, c.req.param('id'))
+  const folder = await folderFor(user, c.req.param('id'))
   if (!folder) return c.json({ error: 'Not found' }, 404)
   const body = (await c.req.json().catch(() => ({}))) as { name?: unknown }
   const checked = checkFolderName(body.name)
@@ -54,7 +54,7 @@ folders.patch('/:id', requireUser, async (c) => {
 
 // The pages in it stay, in no folder
 folders.delete('/:id', requireUser, async (c) => {
-  const folder = await folderFor(c.get('user')!.id, c.req.param('id'))
+  const folder = await folderFor(c.get('user')!, c.req.param('id'))
   if (!folder) return c.json({ error: 'Not found' }, 404)
   await deleteFolder(folder)
   return c.body(null, 204)

@@ -78,7 +78,7 @@ describe('pending invitations inside the app', () => {
     expect(await res.json()).toEqual({ id: org.id, name: 'Acme', slug: 'acme', role: 'admin' })
 
     const me = await (await call('/api/me', { cookie: guest.cookie })).json()
-    expect(me.organizations).toEqual([{ id: org.id, name: 'Acme', slug: 'acme', role: 'admin' }])
+    expect(me.organizations).toEqual([{ id: org.id, name: 'Acme', slug: 'acme', role: 'admin', requireTwoFactor: false, blocked: false }])
     // Joining a team finishes onboarding
     expect(me.onboarded).toBe(true)
     expect(await pending(guest)).toEqual([])

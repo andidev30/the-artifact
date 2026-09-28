@@ -8,7 +8,8 @@ import { log } from '../log.js'
 import { sendSignInLink } from '../mail.js'
 import { EMAIL_RE } from '../validation.js'
 import { hashPassword, passwordProblem } from './password.js'
-import { hashToken, randomToken, startSession } from './session.js'
+import { hashToken, randomToken } from './session.js'
+import { continueSignIn } from './twofactor.js'
 import { afterSignInUrl, canSignUp, findOrCreateUser, safeNext, signInErrorUrl, SignupClosedError, userExists } from './users.js'
 
 const LINK_TTL = 15 * 60 * 1000
@@ -171,8 +172,8 @@ email.post('/confirm', async (c) => {
     }
     throw err
   }
-  await startSession(c, user.id)
   const plan = typeof body?.plan === 'string' ? body.plan : null
   const next = typeof body?.next === 'string' ? body.next : null
-  return c.json({ redirect: afterSignInUrl(plan, next) })
+  // An email link is one factor: an account with a second factor still needs it, even when the link came from an admin
+  return c.json({ redirect: await continueSignIn(c, user, afterSignInUrl(plan, next)) })
 })

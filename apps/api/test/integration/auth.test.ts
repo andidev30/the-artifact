@@ -233,6 +233,7 @@ describe('sessions', () => {
       hasPassword: false,
       onboarded: true,
       organizations: [],
+      twoFactor: false,
       agentConnected: false,
       hasPublished: false,
       isAdmin: false,

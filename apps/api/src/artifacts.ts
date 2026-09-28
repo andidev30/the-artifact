@@ -30,7 +30,11 @@ export function parseArtifactRef(ref: string): string {
   return match ? match[1] : ref.trim()
 }
 
-async function roleIn(userId: string, organizationId: string) {
+// Organizations in viewer.blockedOrgs require a second factor this person hasn't set up; in the web
+// app they count as not being a member there (src/auth/factors.ts)
+async function roleIn(viewer: Viewer, organizationId: string) {
+  if (viewer.blockedOrgs?.includes(organizationId)) return null
+  const userId = viewer.id
   const [m] = await db
     .select({ role: schema.memberships.role })
     .from(schema.memberships)
@@ -39,7 +43,7 @@ async function roleIn(userId: string, organizationId: string) {
 }
 
 // The person asking: pages are shared by email, so both are needed
-export type Viewer = { id: string; email: string }
+export type Viewer = { id: string; email: string; blockedOrgs?: readonly string[] }
 
 export type Access = 'edit' | 'view' | null
 
@@ -58,7 +62,7 @@ export async function accessLevel(artifact: Artifact, viewer: Viewer | null): Pr
   if (share) level = 'view'
 
   if (artifact.organizationId) {
-    const role = await roleIn(viewer.id, artifact.organizationId)
+    const role = await roleIn(viewer, artifact.organizationId)
     if (role === 'owner' || role === 'admin') return 'edit'
     if (role && artifact.visibility === 'organization') level = 'view'
   }
@@ -201,7 +205,7 @@ async function publishContent(input: PublishTarget, content: Content): Promise<A
     const ws = { userId: existing.ownerId, organizationId: existing.organizationId }
     // Folder names are looked up in the connected workspace, so a page from elsewhere (shared with
     // this person) can't be filed from here
-    if (folder !== undefined && (existing.organizationId !== input.organizationId || !(await belongsTo(input.userId, ws)))) {
+    if (folder !== undefined && (existing.organizationId !== input.organizationId || !(await belongsTo({ id: input.userId }, ws)))) {
       throw new PublishError("This page belongs to another workspace, so it can't be filed into a folder from here. Publish again without folder.")
     }
     const { updated, versionId } = await db.transaction(async (tx) => {
@@ -458,7 +462,7 @@ export async function editableIds(viewer: Viewer, artifacts: Artifact[]): Promis
     )
   for (const s of shares) ids.add(s.artifactId)
 
-  const orgIds = [...new Set(rest.map((a) => a.organizationId).filter((id): id is string => id !== null))]
+  const orgIds = [...new Set(rest.map((a) => a.organizationId).filter((id): id is string => id !== null && !viewer.blockedOrgs?.includes(id)))]
   if (orgIds.length) {
     const admin = await db
       .select({ organizationId: schema.memberships.organizationId })
