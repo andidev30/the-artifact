@@ -57,7 +57,7 @@ A connection publishes to one workspace: your personal workspace or one of your 
 
 ## Disconnecting
 
-**Account settings → Connected agents** lists every agent with access, the workspace it publishes to, and when it was last used. **Disconnect** revokes its access at once; the agent has to sign in again to publish.
+**Account settings → Connected agents** lists every agent with access, the workspace it publishes to, and when it was last used. **Disconnect** revokes its access at once; the agent has to sign in again to publish. The [command line](/docs/publishing#command-line) shows there as **The Artifact CLI**, and `the-artifact logout` disconnects it too.
 
 ## Publishing from CI
 
@@ -101,6 +101,17 @@ jobs:
 ```
 
 Each file of the folder goes up as a form part named by its path, with `index.html` as the page itself. Only [the file types pages allow](/docs/publishing#publish_artifact) are accepted. The answer is JSON with the page's `id` and `url`.
+
+The [command line](/docs/publishing#command-line) does the same in one step. It leaves out hidden files and types pages can't hold, and prints only the link:
+
+```yaml
+      - name: Publish the report
+        if: always()
+        env:
+          THE_ARTIFACT_URL: {{APP_URL}}
+          THE_ARTIFACT_TOKEN: ${{ secrets.ARTIFACT_TOKEN }}
+        run: npx @the-artifact/cli publish report --title "Test report for ${GITHUB_SHA::7}" --id "${{ vars.REPORT_PAGE_ID }}"
+```
 
 For a single HTML file, send JSON:
 

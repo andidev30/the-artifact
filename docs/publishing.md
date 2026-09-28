@@ -69,7 +69,7 @@ It answers with an `upload_id` and a link for each file that isn't stored yet. T
 
 ### list_artifacts
 
-Lists the pages in the connected workspace, most recently updated first, with their ids, links and folders. It answers 25 at a time; when there are more, the answer ends with a `cursor` the agent passes back for the next ones.
+Lists the pages in the connected workspace, most recently updated first, with their ids, links and folders. It answers 25 at a time; when there are more, the answer ends with a `cursor` the agent passes back for the next ones. The same list also comes as structured content, for scripts: `{ pages: [{ id, title, url, version, visibility, folder, updated_at }], total, cursor }`, where `total` is only counted on the first batch and `cursor` is `null` when there are no more.
 
 | Argument | Required | Meaning |
 | --- | --- | --- |
@@ -195,6 +195,85 @@ Files whose content is already stored, like the images of a page you publish a n
 
 Agents that can't make requests of their own keep using `publish_artifact`.
 
+## Command line
+
+The `the-artifact` command publishes a folder or an HTML file from a terminal or a CI job, without an agent. It needs Node.js 20 or later:
+
+```sh
+npx @the-artifact/cli publish ./dist --server {{APP_URL}}
+```
+
+or installed once with `npm install -g @the-artifact/cli`, then run as `the-artifact`.
+
+### Signing in
+
+```sh
+the-artifact login --server {{APP_URL}}
+```
+
+opens your browser at the same sign-in and workspace choice as [connecting an agent](/docs/connect-your-agent#choosing-a-workspace). The CLI then shows under **Account settings → Connected agents** as **The Artifact CLI**, and pages it publishes are marked with that name in the [history](/docs/version-history). The server you sign in to becomes the default, so later commands don't need `--server`.
+
+| Command | What it does |
+| --- | --- |
+| `the-artifact login` | Signs in with the browser. `--no-browser` prints the link instead of opening it. |
+| `the-artifact login --with-token < token.txt` | Saves an [access token](/docs/connect-your-agent#publishing-from-ci) read from standard input instead, for a machine with no browser. |
+| `the-artifact whoami` | Shows the account and workspace the CLI publishes to, and checks the sign-in still works |
+| `the-artifact logout` | Removes the saved sign-in and disconnects it on the server |
+
+Sign-ins are saved per server in `~/.config/the-artifact/credentials.json` (`%APPDATA%\the-artifact` on Windows, `$XDG_CONFIG_HOME/the-artifact` when that is set), readable only by you. Signing in over SSH needs a browser on the same machine; on a server, use `--with-token` or `THE_ARTIFACT_TOKEN`.
+
+### Publishing
+
+```sh
+the-artifact publish ./dist
+```
+
+publishes `dist/index.html` as the page and every other file in the folder next to it, then prints the link. Hidden files and folders, `node_modules`, and files of types pages can't hold are left out, with a note for each. A single file works too: `the-artifact publish report.html`. The [size limits](#what-makes-a-good-page) are checked before anything is sent.
+
+| Option | Meaning |
+| --- | --- |
+| `--title <title>` | The page's title. By default the HTML's `<title>`, or the folder's name. |
+| `--id <page>` | Publish a new version of this page, by its id or link. Empty, it publishes a new page. |
+| `--entry <path>` | The HTML file in the folder that is the page, instead of `index.html` |
+| `--visibility <who>` | `restricted`, `organization` or `link` |
+| `--folder <name>` | File the page into this [folder](#folders); `""` takes it out |
+| `--ignore <glob>` | Leave out matching files, like `'*.map'` or `drafts/`; repeat for more. A pattern without a `/` matches names at any depth. |
+| `--save` | Remember the page in `.the-artifact.json` in the current folder, so publishing the same path again publishes a new version of it. Commit the file to share it. |
+| `--new` | Publish a new page even when `.the-artifact.json` has one for this path |
+| `--dry-run` | List what would be sent, and send nothing |
+
+The link is the only thing printed on standard output, so `url=$(the-artifact publish dist)` captures it. Progress and notes go to standard error.
+
+### Listing and sharing
+
+| Command | What it does |
+| --- | --- |
+| `the-artifact list` | Lists the pages in the workspace, newest first: id, version, who can open it, folder and title. `--query <words>` searches titles, `--folder <name>` narrows to a folder, `--limit <n>` (1 to 100) and `--cursor` page through. |
+| `the-artifact share <page> --visibility link` | Changes who can open a page: `restricted`, `organization` or `link` |
+| `the-artifact share <page> --email ana@example.com` | Shares a page with people by email; repeat `--email` for more. `--role editor` lets them publish new versions too, and `--message` adds a note to the email. |
+
+### In CI
+
+Set `THE_ARTIFACT_TOKEN` to an [access token](/docs/connect-your-agent#publishing-from-ci) and `THE_ARTIFACT_URL` to `{{APP_URL}}`, and every command uses them instead of a saved sign-in:
+
+```yaml
+- name: Publish the report
+  env:
+    THE_ARTIFACT_URL: {{APP_URL}}
+    THE_ARTIFACT_TOKEN: ${{ secrets.ARTIFACT_TOKEN }}
+  run: npx @the-artifact/cli publish report --title "Test report" --id "${{ vars.REPORT_PAGE_ID }}"
+```
+
+`--token <token>` works too, but a token on the command line can end up in shell history and process lists.
+
+| Setting | Meaning |
+| --- | --- |
+| `THE_ARTIFACT_URL` | The server, like `--server` |
+| `THE_ARTIFACT_TOKEN` | An access token, like `--token`. It takes precedence over a saved sign-in. |
+| `THE_ARTIFACT_CONFIG_DIR` | Where sign-ins are saved, instead of the folder above |
+
+Every command takes `--json` to print JSON for scripts: `publish` prints the same answer as [`POST /api/publish`](#publishing-without-an-agent), and `list` prints `{ "pages": [...], "total", "cursor" }`. A command that fails prints the server's message and exits with `1`, or `2` when the command line itself is wrong.
+
 ## Publishing without an agent
 
 CI jobs and scripts publish with a plain HTTP request to `POST {{APP_URL}}/api/publish`, authorized by an [access token](/docs/connect-your-agent#publishing-from-ci) as `Authorization: Bearer art_…`. It takes the same things as `publish_artifact`, publishes to the token's workspace with the same rules, limits and quotas, and answers with the link. The endpoint is stable: scripts and tools can rely on it.
@@ -238,7 +317,15 @@ A new page answers `201`, a new version (with `artifact_id`) `200`, both with:
 }
 ```
 
-Errors are JSON `{ "error": "…" }` with a message to show as is, sometimes with the `field` it is about: `400` for a page that can't be published (a bad file, a full workspace, an `artifact_id` you can't edit), `401` for a missing, expired or revoked token, `413` for a request over the size limit, `415` for another content type, and `429` with `Retry-After` past the `publish` [rate limit](/docs/configuration#rate-limits). Hosts like Vercel refuse requests over about 4.5 MB before they reach the server; for larger pages, run an agent with the token and use [direct upload](#publishing-by-direct-upload).
+Errors are JSON `{ "error": "…" }` with a message to show as is, sometimes with the `field` it is about: `400` for a page that can't be published (a bad file, a full workspace, an `artifact_id` you can't edit), `401` for a missing, expired or revoked token, `413` for a request over the size limit, `415` for another content type, and `429` with `Retry-After` past the `publish` [rate limit](/docs/configuration#rate-limits). Hosts like Vercel refuse requests over about 4.5 MB before they reach the server; for larger pages, run an agent with the token and use [direct upload](#publishing-by-direct-upload). The [command line](#command-line) sends pages the same way, so the same limit applies to it.
+
+To check a token before relying on it, `GET {{APP_URL}}/api/whoami` with it as the bearer token answers with whom it acts for and where it publishes, or `401` like above:
+
+```json
+{ "email": "ana@example.com", "name": "Ana", "workspace": { "id": null, "name": "Personal" }, "client": "GitHub Actions" }
+```
+
+`workspace.id` is the organization's id, or `null` for a personal workspace, and `client` is the token's name (or the agent's, for an agent's sign-in).
 
 ## Limits
 
