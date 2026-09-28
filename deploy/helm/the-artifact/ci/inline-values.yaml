@@ -1,0 +1,19 @@
+# Your own Postgres by URL and a bucket with keys, all given as values
+postgresql:
+  enabled: false
+externalDatabase:
+  url: postgres://artifact:secret@db.example.com:6543/artifact
+  prepare: false
+minio:
+  enabled: false
+externalS3:
+  bucket: artifact
+  accessKeyId: AKIAEXAMPLE
+  secretAccessKey: example-secret
+  publicEndpoint: https://s3.us-east-1.amazonaws.com
+metrics:
+  token: example-token
+google:
+  clientId: example.apps.googleusercontent.com
+  clientSecret: example-secret
+trustProxy: 2

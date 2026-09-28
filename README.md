@@ -140,7 +140,7 @@ pnpm dev             # API on :3000, web on :5173
 | `apps/api` | Hono API, MCP server, OAuth server and thumbnail renderer |
 | `apps/web` | React app, including the docs at `/docs` |
 | `docs/` | The documentation, in Markdown |
-| `deploy/` | Docker Compose and Kubernetes manifests |
+| `deploy/` | Docker Compose, Kubernetes manifests and the Helm chart |
 | `e2e/` | Playwright end-to-end tests |
 
 `pnpm lint` runs Biome and the type checks, `pnpm format` formats, `pnpm test` runs the unit and integration tests, and `pnpm test:e2e` the browser tests; see [TESTING.md](TESTING.md). `CLAUDE.md` files describe the conventions for people and coding agents alike, and `.claude/` holds shared Claude Code settings and project skills.

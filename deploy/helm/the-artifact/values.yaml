@@ -1,0 +1,283 @@
+# Values for The Artifact. Every app setting is described in docs/configuration.md; the Kubernetes
+# install, including this chart, in docs/kubernetes.md.
+#
+# The defaults run the app with its own Postgres and MinIO in the release's namespace, which is
+# enough to try it out. For a server people rely on, use a managed Postgres and bucket instead
+# (postgresql.enabled=false with externalDatabase, minio.enabled=false with externalS3).
+
+image:
+  repository: ghcr.io/andidev30/the-artifact
+  # Empty runs the chart's appVersion, the release this chart was published with
+  tag: ''
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ''
+fullnameOverride: ''
+
+# The address people use, without a trailing slash. Sign-in links, page links and the MCP URL are
+# built from it. Empty means https://<ingress.host> (http:// without TLS) when the ingress is on,
+# and http://localhost:8080 otherwise, for trying it through kubectl port-forward.
+appUrl: ''
+
+# Skips the marketing pages and makes the first account the instance admin. Only the hosted
+# service turns it off.
+selfHosted: true
+
+# How many proxies in front of the app add the visitor's address to X-Forwarded-For: true, false
+# or a number. Empty means true when ingress.enabled (the ingress controller is one proxy) and
+# false otherwise. Rate limits count visitors by that address.
+trustProxy: ''
+
+# "off", or changes to single rate limits, e.g. mcp=2000/10m,publish=500/1h. Empty keeps the defaults.
+rateLimits: ''
+
+# What one workspace may hold. Empty means no limit.
+workspaceQuota:
+  maxPages: ''
+  maxVersions: ''
+  # e.g. 10GB or 500MB
+  maxStorage: ''
+
+# Optional email. Without a host nothing is emailed: people sign in with a password and admins
+# pass sign-up and invitation links on themselves.
+smtp:
+  host: ''
+  port: 587
+  secure: false
+  user: ''
+  # Or SMTP_PASS in existingSecret
+  password: ''
+  from: 'The Artifact <artifact@example.com>'
+
+# Optional Google sign-in. Redirect URI to register: <appUrl>/api/auth/google/callback
+google:
+  clientId: ''
+  # Or GOOGLE_CLIENT_SECRET in existingSecret
+  clientSecret: ''
+
+# Gallery thumbnails, rendered by Chromium inside the app with its sandbox on. The sandbox needs
+# the seccomp profile from deploy/seccomp-chromium.json on every node that can run the app, at
+# /var/lib/kubelet/seccomp/<seccompProfile>; without it the pod doesn't start. When you can't put
+# files on the nodes, turn thumbnails off: the gallery shows sketches and the pod runs under the
+# runtime's default profile.
+thumbnails:
+  enabled: true
+  seccompProfile: profiles/the-artifact-chromium.json
+  # Hosts pages may load scripts, styles and fonts from while they render. Empty keeps the
+  # built-in list, "none" blocks every host.
+  cdnHosts: ''
+
+metrics:
+  # Turns on Prometheus metrics at /metrics for requests with this bearer token. Or METRICS_TOKEN
+  # in existingSecret. With the ServiceMonitor on and no token, the chart generates one.
+  token: ''
+  serviceMonitor:
+    # Needs the Prometheus Operator's CRDs
+    enabled: false
+    interval: 30s
+    scrapeTimeout: 10s
+    labels: {}
+
+# A Secret of your own whose keys are added to the app's environment, named as the settings,
+# e.g. SMTP_PASS, GOOGLE_CLIENT_SECRET, METRICS_TOKEN. Its keys win over the same settings given
+# here as secrets. The database and bucket have their own existingSecret below.
+existingSecret: ''
+
+# More environment variables for the app, e.g. [{ name: DATABASE_PREPARE, value: 'false' }]
+extraEnv: []
+
+# The bundled Postgres, for trying the chart out: one pod with a volume, no backups or failover.
+postgresql:
+  enabled: true
+  image:
+    repository: postgres
+    tag: '17'
+    pullPolicy: IfNotPresent
+  auth:
+    username: artifact
+    database: artifact
+    # Letters and digits only, since it goes into the database URL. Empty generates one on
+    # install and keeps it on upgrades. Postgres keeps the password it was created with.
+    password: ''
+    # A Secret of your own with the password, under existingSecretPasswordKey
+    existingSecret: ''
+    existingSecretPasswordKey: password
+  persistence:
+    enabled: true
+    size: 10Gi
+    # Empty uses the cluster's default storage class
+    storageClass: ''
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+  podSecurityContext:
+    runAsNonRoot: true
+    # The image's postgres user
+    runAsUser: 999
+    runAsGroup: 999
+    fsGroup: 999
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ALL]
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# Your own Postgres, used when postgresql.enabled is false. Give a URL, or the parts of one.
+externalDatabase:
+  # e.g. postgres://artifact:secret@db.example.com:5432/artifact?sslmode=require
+  url: ''
+  host: ''
+  port: 5432
+  user: artifact
+  database: artifact
+  password: ''
+  # Added to the URL after ?, e.g. sslmode=require
+  params: ''
+  # A Secret of your own with the whole URL (existingSecretUrlKey) or the password
+  # (existingSecretPasswordKey, letters and digits only, or percent-encoded)
+  existingSecret: ''
+  existingSecretUrlKey: ''
+  existingSecretPasswordKey: password
+  # false behind a transaction-mode pooler (PgBouncer in transaction mode, Supabase on port 6543)
+  prepare: true
+
+# The bundled MinIO for page content and thumbnails, for trying the chart out. Only the app reaches it.
+minio:
+  enabled: true
+  image:
+    # Community build of MinIO (the minio/minio image is no longer published)
+    repository: pgsty/minio
+    tag: RELEASE.2026-08-04T00-00-00Z
+    pullPolicy: IfNotPresent
+  # The app's access key is MinIO's root account
+  rootUser: artifact
+  # Empty generates one on install and keeps it on upgrades
+  rootPassword: ''
+  # A Secret of your own with root-user and root-password
+  existingSecret: ''
+  bucket: artifact
+  persistence:
+    enabled: true
+    size: 20Gi
+    storageClass: ''
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ALL]
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# Your own object storage with the S3 API (AWS S3, R2, MinIO...), used when minio.enabled is false.
+externalS3:
+  # Empty for AWS S3; e.g. https://<account-id>.r2.cloudflarestorage.com for R2
+  endpoint: ''
+  # auto for R2
+  region: us-east-1
+  bucket: artifact
+  # Without keys, the AWS SDK's credential chain applies (e.g. an IAM role through serviceAccount.annotations)
+  accessKeyId: ''
+  secretAccessKey: ''
+  # A Secret of your own with the keys
+  existingSecret: ''
+  existingSecretAccessKeyIdKey: S3_ACCESS_KEY_ID
+  existingSecretSecretAccessKeyKey: S3_SECRET_ACCESS_KEY
+  # Where agents can reach the bucket themselves; turns on publishing by direct upload
+  publicEndpoint: ''
+
+service:
+  type: ClusterIP
+  port: 80
+  annotations: {}
+
+ingress:
+  enabled: false
+  className: ''
+  # Set it to the host in appUrl
+  host: artifact.example.com
+  annotations:
+    # A page with its files can be 10 MB, more once encoded for an agent's request
+    nginx.ingress.kubernetes.io/proxy-body-size: 20m
+    # With cert-manager, name your issuer to get a certificate for the host
+    # cert-manager.io/cluster-issuer: letsencrypt
+  tls:
+    enabled: true
+    # Empty means <release name>-the-artifact-tls
+    secretName: ''
+
+serviceAccount:
+  create: true
+  # e.g. eks.amazonaws.com/role-arn for S3 access through an IAM role
+  annotations: {}
+  name: ''
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  # The image's node user
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  # seccompProfile comes from thumbnails; set it here to override
+
+securityContext:
+  allowPrivilegeEscalation: false
+  # /tmp (Chromium's profile and temp files) and /dev/shm are writable volumes
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ALL]
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 384Mi
+  limits:
+    # Headroom for Chromium while it renders thumbnails
+    memory: 1536Mi
+
+# The server listens once migrations are done, so the first start gets time before the other
+# probes count. /healthz only says the process answers; /readyz also checks Postgres and object
+# storage, so an outage takes the pod out of the Service without restarting it.
+startupProbe:
+  httpGet:
+    path: /healthz
+    port: http
+  periodSeconds: 5
+  failureThreshold: 60
+readinessProbe:
+  httpGet:
+    path: /readyz
+    port: http
+  periodSeconds: 10
+  timeoutSeconds: 5
+livenessProbe:
+  httpGet:
+    path: /healthz
+    port: http
+  periodSeconds: 30
+  failureThreshold: 5
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

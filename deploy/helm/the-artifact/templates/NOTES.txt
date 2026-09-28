@@ -1,0 +1,39 @@
+The Artifact {{ .Chart.AppVersion }} is starting in the namespace {{ .Release.Namespace }}. It waits for its database
+and object storage, applies database migrations, then starts serving:
+
+  kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "the-artifact.fullname" . }}
+
+{{- if .Values.ingress.enabled }}
+
+Open {{ include "the-artifact.appUrl" . }} once DNS for {{ .Values.ingress.host }} points at your ingress controller.
+{{- else }}
+
+There is no ingress (ingress.enabled=false). To try it from your machine:
+
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "the-artifact.fullname" . }} 8080:{{ .Values.service.port }}
+
+and open {{ include "the-artifact.appUrl" . }}{{ if ne (include "the-artifact.appUrl" .) "http://localhost:8080" }} (appUrl; sign-in links are built from it, so set appUrl=http://localhost:8080 for a port-forward){{ end }}.
+{{- end }}
+{{- if .Values.selfHosted }}
+
+Create the first account right away: on a self-hosted server it becomes the instance admin.
+Do this before you share the address.
+{{- end }}
+
+Agents connect to {{ include "the-artifact.appUrl" . }}/mcp.
+{{- if not .Values.smtp.host }}
+
+Email is off (no smtp.host): people sign in with a password, and admins pass sign-up and
+invitation links on themselves.
+{{- end }}
+{{- if .Values.thumbnails.enabled }}
+
+Thumbnails are on, so the pod needs the seccomp profile {{ .Values.thumbnails.seccompProfile }} on its node.
+If the pod doesn't start and `kubectl describe pod` says it can't load it, install the profile
+(see docs/kubernetes.md) or set thumbnails.enabled=false.
+{{- end }}
+{{- if or .Values.postgresql.enabled .Values.minio.enabled }}
+
+The bundled {{ if and .Values.postgresql.enabled .Values.minio.enabled }}Postgres and MinIO are{{ else if .Values.postgresql.enabled }}Postgres is{{ else }}MinIO is{{ end }} for trying it out. For a server people rely on,
+use your own database and bucket (externalDatabase, externalS3) and back them up.
+{{- end }}
