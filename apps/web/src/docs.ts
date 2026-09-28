@@ -28,6 +28,7 @@ const RUNNING: DocPage[] = [
 
 const REFERENCE: DocPage[] = [
   { slug: 'security', title: 'Security' },
+  { slug: 'accessibility', title: 'Accessibility' },
   { slug: 'troubleshooting', title: 'Troubleshooting' },
 ]
 

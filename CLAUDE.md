@@ -63,4 +63,5 @@ Everything is AGPL-3.0 (`LICENSE`) except folders named `ee/`, which are under `
 - MCP tools or their arguments → `apps/api/src/mcp.ts` and the tool tables in `docs/publishing.md`.
 - Schema → `pnpm db:generate` and commit the SQL and the snapshot together (see `apps/api/CLAUDE.md`).
 - Anything an operator must do on upgrade (a setting to add, a command to run, a deploy file to edit, a migration the previous version can't run on) → a `## Upgrading to x.y.z` section at the end of `docs/upgrading.md`; the Release workflow copies it into the GitHub release.
+- New screen, dialog or menu → cover it with `expectAccessible` in `e2e/accessibility.spec.ts` (axe, WCAG 2.1 AA) and keep it usable with the keyboard alone (see `TESTING.md`).
 - Finish with `pnpm lint` and the relevant tests; UI flows that cross the API also have e2e specs.

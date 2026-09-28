@@ -46,6 +46,10 @@ The hosted database is never emptied, so its first account is long taken; specs 
 
 Playwright uses the installed Google Chrome (`channel: 'chrome'`). Without Chrome, run `npx playwright install chromium` and set `PW_CHROMIUM=1`.
 
+### Accessibility
+
+`e2e/accessibility.spec.ts` runs axe (`expectAccessible` from `e2e/axe.ts`) with the WCAG 2.1 A and AA rules on every main screen, once with the light and once with the dark colour-scheme preference; any violation fails the test. Published pages inside the viewer's frame are left out, because their content isn't ours. `e2e/keyboard.spec.ts` drives the main flows with the keyboard alone. A new screen, dialog or menu needs an `expectAccessible` call in one of the specs, and a new flow a keyboard test when it adds focus handling of its own.
+
 On failure, traces are kept in `test-results/`; open one with `npx playwright show-trace <file>`.
 
 ## Load tests

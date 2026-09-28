@@ -21,3 +21,4 @@ The Artifact hosts the HTML pages your coding agent builds: reports, prototypes,
 - [Publishing pages](/docs/publishing)
 - [Sharing and permissions](/docs/sharing)
 - [Self-hosting](/docs/self-hosting)
+- [Accessibility](/docs/accessibility)
