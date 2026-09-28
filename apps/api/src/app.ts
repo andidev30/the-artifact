@@ -1,5 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
+import { contextStorage } from 'hono/context-storage'
+import { setAuditStore } from './audit.js'
 import { email } from './auth/email.js'
 import { google } from './auth/google.js'
 import { password, passwordSignUpOpen } from './auth/password.js'
@@ -7,6 +9,7 @@ import { hasSecondFactor } from './auth/factors.js'
 import { endSession, loadUser, requireUser, type AuthEnv } from './auth/session.js'
 import { clearPending, passkeySignIn, twoFactor } from './auth/twofactor.js'
 import { db, schema } from './db/index.js'
+import { auditLog, auditStore, pruneAuditEvents } from './ee/audit.js'
 import { contact } from './ee/contact.js'
 import { issuedLicenses } from './ee/licenses.js'
 import { historyCron, organizationPlan, personalPlan } from './ee/plans.js'
@@ -38,6 +41,8 @@ export const app = new Hono<AuthEnv>()
 
 // First, so every request gets an id, a log line and its timing
 app.use(observeRequests)
+// Lets audit() read the request (address, user agent) wherever it is called from
+app.use(contextStorage())
 app.route('/', health)
 
 // The hosted service's plan limits. They check SELF_HOSTED themselves, so a self-hosted install gets
@@ -46,6 +51,9 @@ setPlanQuota(personalPlan)
 setOrganizationPolicy(organizationPlan)
 // Version retention for organizations with an Enterprise license; checks the license itself
 addPruner(pruneRetention)
+// Organizations' audit log, kept only while the install has an Enterprise license
+setAuditStore(auditStore)
+addPruner(pruneAuditEvents)
 // Every limit is defined by now, ee/ ones included; a mistake in RATE_LIMITS stops the start here
 checkRateLimits()
 
@@ -101,6 +109,7 @@ api.route('/artifacts', artifacts)
 api.route('/folders', folders)
 api.route('/contact-sales', contact)
 
+api.route('/organizations/:orgId/audit-log', auditLog)
 api.route('/organizations/:orgId', members)
 api.route('/organizations/:orgId/retention', retention)
 api.route('/invitations', invitations)
