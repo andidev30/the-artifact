@@ -1,8 +1,20 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { expect, type Page, test } from '@playwright/test'
-import { createHostedOrganization, grantInstanceAdmin } from '../apps/api/test/e2e-db.ts'
+import { addHostedMember, createHostedOrganization, grantInstanceAdmin, requireHostedTwoFactor } from '../apps/api/test/e2e-db.ts'
 import { expectAccessible } from './axe'
-import { fromApp, connectAgent, latestMail, licensedSso, mockAuditLog, mockRetention, publishViaMcp, signInLink, signUpPersonal, uniqueEmail } from './helpers'
+import {
+  fromApp,
+  connectAgent,
+  latestMail,
+  licensedSso,
+  mockAuditLog,
+  mockRetention,
+  publishViaMcp,
+  signInLink,
+  signUp,
+  signUpPersonal,
+  uniqueEmail,
+} from './helpers'
 
 const HTML = '<!doctype html><title>Plan</title><h1>Plan</h1>'
 
@@ -62,6 +74,19 @@ test('signed-out screens', async ({ page }) => {
   await page.goto('/invite/not-a-real-token')
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
   await expectAccessible(page, 'invalid invitation')
+})
+
+test('the server not answering, and an account that could not be loaded', async ({ page }) => {
+  await page.route('**/api/config', (route) => route.abort())
+  await page.goto('/')
+  await expect(page.getByRole('heading', { level: 1, name: 'Can’t reach the server' })).toBeVisible()
+  await expectAccessible(page, 'server unreachable')
+  await page.unrouteAll()
+
+  await page.route('**/api/me', (route) => route.fulfill({ status: 500, json: { error: 'Something went wrong' } }))
+  await page.goto('/settings')
+  await expect(page.getByRole('heading', { level: 1, name: 'Your account could not be loaded' })).toBeVisible()
+  await expectAccessible(page, 'account could not be loaded')
 })
 
 // The e2e servers send email, so the screens of a server without it are shown by answering
@@ -161,6 +186,7 @@ test('gallery with pages and folders, its menus and dialogs', async ({ page }) =
   await expect(page.locator('.page-card')).toHaveCount(1)
   await expect(page.locator('.gallery[data-stale]')).toHaveCount(0)
   await expectAccessible(page, 'gallery, one folder')
+
   await folders.getByRole('button', { name: /All pages/ }).click()
 
   await page.getByRole('searchbox', { name: 'Search pages by title' }).fill('nothing like this')
@@ -197,6 +223,53 @@ test('gallery with pages and folders, its menus and dialogs', async ({ page }) =
   await expect(page.getByRole('dialog', { name: 'New folder' })).toBeVisible()
   await expectAccessible(page, 'new folder dialog')
   await page.keyboard.press('Escape')
+})
+
+// Its own test, to stay inside the per-test time limit on CI
+test('folder rename and delete dialogs, and search results', async ({ page }) => {
+  await signUpPersonal(page, uniqueEmail('a11y-folders'))
+  const token = await connectAgent(page)
+  await publishViaMcp(page.request, token, { title: 'Roadmap draft', html: HTML })
+  await publishViaMcp(page.request, token, { title: 'Roadmap Q3', html: HTML, folder: 'Plans' })
+  await publishViaMcp(page.request, token, { title: 'Launch notes', html: HTML })
+  await page.reload()
+  const gallery = page.locator('ul.gallery')
+  await expect(gallery.locator('.page-card')).toHaveCount(3)
+
+  const folders = page.getByRole('navigation', { name: 'Folders' })
+  await folders.getByRole('button', { name: /Plans/ }).click()
+  await expect(page.getByRole('heading', { level: 2, name: 'Plans' })).toBeVisible()
+  await expect(page.locator('.page-card')).toHaveCount(1)
+
+  // By keyboard: each dialog opens on its first control and gives focus back to the button that opened it
+  const renameFolder = page.locator('.folder-head').getByRole('button', { name: 'Rename' })
+  await renameFolder.press('Enter')
+  const rename = page.getByRole('dialog', { name: 'Rename folder' })
+  await expect(rename.getByLabel('Name')).toBeFocused()
+  await expect(rename.getByLabel('Name')).toHaveValue('Plans')
+  await expectAccessible(page, 'rename folder dialog')
+  await page.keyboard.type('x'.repeat(81))
+  await expect(rename.getByText('characters over the 80 limit')).toBeVisible()
+  await expectAccessible(page, 'rename folder dialog, a name too long')
+  await page.keyboard.press('Escape')
+  await expect(renameFolder).toBeFocused()
+
+  const deleteFolder = page.locator('.folder-head').getByRole('button', { name: 'Delete folder' })
+  await deleteFolder.press('Enter')
+  const remove = page.getByRole('dialog', { name: 'Delete the folder “Plans”?' })
+  await expect(remove.getByRole('button', { name: 'Cancel' })).toBeFocused()
+  await expectAccessible(page, 'delete folder dialog')
+  await page.keyboard.press('Enter')
+  await expect(remove).toHaveCount(0)
+  await expect(deleteFolder).toBeFocused()
+  await folders.getByRole('button', { name: /All pages/ }).click()
+  await expect(page.locator('.page-card')).toHaveCount(3)
+
+  const search = page.getByRole('searchbox', { name: 'Search pages by title' })
+  await search.fill('roadmap')
+  await expect(gallery.locator('.page-card')).toHaveCount(2)
+  await expect(page.locator('.gallery[data-stale]')).toHaveCount(0)
+  await expectAccessible(page, 'gallery, search results')
 })
 
 // Its own test, to stay inside the per-test time limit on CI
@@ -284,6 +357,11 @@ test('tags: the tag bar, tags on cards and the tags dialog', async ({ page }) =>
   await page.getByLabel('Add tags').fill('x'.repeat(40))
   await expect(page.getByText('over the 32 character limit')).toBeVisible()
   await expectAccessible(page, 'tags dialog, a tag too long')
+  await page.keyboard.press('Escape')
+
+  await page.goto(`/a/${slug}`)
+  await expect(page.getByRole('list', { name: 'Tags' }).getByRole('listitem')).toHaveText(['launch', 'q4'])
+  await expectAccessible(page, 'viewer with tags')
 })
 
 test('viewer with its history, views and comments panels, and the share dialog', async ({ page, browser }) => {
@@ -388,6 +466,70 @@ test('pinning a comment to an element, and its pin', async ({ page }) => {
   await expectAccessible(page, 'thread with a pin on the page')
 })
 
+test('comments: a reply, editing, deleting, a resolved thread and an element that changed', async ({ page }) => {
+  await signUpPersonal(page, uniqueEmail('a11y-threads'))
+  const token = await connectAgent(page)
+  const slug = await publishViaMcp(page.request, token, { title: 'Launch plan', html: '<!doctype html><title>Plan</title><h1>Plan</h1><p>Revenue</p>' })
+
+  await page.goto(`/a/${slug}`)
+  await expect(page.frameLocator('iframe.viewer-frame').getByRole('heading', { name: 'Plan' })).toBeVisible()
+  await page.getByRole('button', { name: 'Comments' }).click()
+  const comments = page.getByRole('complementary', { name: 'Comments' })
+  await comments.getByRole('button', { name: 'Pin to an element' }).click()
+  await expect(page.locator('iframe.viewer-frame')).toBeFocused()
+  await page.keyboard.press('ArrowDown')
+  await page.keyboard.press('Enter')
+  await expect(comments.getByText('Pinned to “Plan”')).toBeVisible()
+  await comments.getByLabel('New comment').fill('Bigger heading')
+  await comments.getByRole('button', { name: 'Comment', exact: true }).click()
+  await expect(comments.getByText('About “Plan”')).toBeVisible()
+  await comments.getByLabel('New comment').fill('Needs a legend')
+  await comments.getByRole('button', { name: 'Comment', exact: true }).click()
+  const thread = comments.locator('[data-thread]').filter({ hasText: 'Needs a legend' })
+  await expect(thread).toBeVisible()
+
+  // With the keyboard: Reply opens a field with focus, Ctrl+Enter sends it
+  await thread.getByRole('button', { name: 'Reply' }).press('Enter')
+  await expect(thread.getByLabel('Reply')).toBeFocused()
+  await page.keyboard.type('Added in version 2')
+  await expectAccessible(page, 'comments panel, writing a reply')
+  await page.keyboard.press('Control+Enter')
+  const reply = thread.locator('.comment-replies .comment')
+  await expect(reply.locator('.comment-body')).toHaveText('Added in version 2')
+
+  await reply.getByRole('button', { name: 'Edit' }).press('Enter')
+  await expect(reply.getByLabel('Edit comment')).toBeFocused()
+  await expectAccessible(page, 'comments panel, editing a comment')
+  // Escape leaves the edit, not the panel
+  await page.keyboard.press('Escape')
+  await expect(reply.locator('.comment-body')).toHaveText('Added in version 2')
+  await expect(comments).toBeVisible()
+
+  await thread.locator('.comment').first().getByRole('button', { name: 'Delete' }).press('Enter')
+  const confirm = thread.getByRole('group', { name: 'Delete comment' })
+  await expect(confirm).toContainText('Delete this comment and its reply?')
+  await expect(confirm.getByRole('button', { name: 'Delete' })).toBeFocused()
+  await expectAccessible(page, 'comments panel, delete confirmation')
+  await confirm.getByRole('button', { name: 'Cancel' }).press('Enter')
+  await expect(confirm).toHaveCount(0)
+  await expect(thread.locator('.comment').first().getByRole('button', { name: 'Delete' })).toBeFocused()
+
+  await thread.getByRole('button', { name: 'Resolve' }).click()
+  const resolved = comments.locator('.comment-thread[data-resolved]')
+  await expect(resolved.getByText(/^Resolved by/)).toBeVisible()
+  await expectAccessible(page, 'comments panel, a resolved thread')
+  await resolved.getByRole('button', { name: 'Show' }).press('Enter')
+  await expect(resolved.getByRole('button', { name: 'Hide' })).toBeVisible()
+  await expectAccessible(page, 'comments panel, a resolved thread shown')
+
+  // A version without the heading: the pinned thread says its element changed
+  await publishViaMcp(page.request, token, { title: 'Launch plan', html: '<!doctype html><title>Plan</title><p>Revenue</p>', artifact_id: slug })
+  await page.reload()
+  await page.getByRole('button', { name: 'Comments' }).click()
+  await expect(comments.getByText('The element this comment is about has changed. It was “Plan”.')).toBeVisible()
+  await expectAccessible(page, 'comments panel, an element that changed')
+})
+
 test('account and organization settings', async ({ page, browser }) => {
   const email = uniqueEmail('a11y-settings')
   await signUpPersonal(page, email)
@@ -429,6 +571,108 @@ test('account and organization settings', async ({ page, browser }) => {
   await expect(them.getByRole('heading', { level: 1, name: 'Join Settings Co' })).toBeVisible()
   await expectAccessible(them, 'invitation, signed out')
   await other.close()
+})
+
+test('account settings: disconnecting an agent, revoking a token and deleting the account', async ({ page }) => {
+  const email = uniqueEmail('a11y-confirms')
+  await signUpPersonal(page, email)
+  // A page in an organization with another owner, which stays there when the account goes
+  const org = await createOrganization(email, 'Stay Co')
+  await addHostedMember(org.id, uniqueEmail('a11y-co-owner'), 'owner')
+  await publishViaMcp(page.request, await connectAgent(page, org.id), { title: 'Budget', html: HTML })
+
+  await page.goto('/settings')
+  const tokens = page.locator('section#tokens')
+  await tokens.getByLabel('Name').fill('Nightly report')
+  await tokens.getByRole('button', { name: 'Create token' }).click()
+  await tokens.getByRole('button', { name: 'Done' }).click()
+  const revoke = tokens.getByRole('button', { name: 'Revoke Nightly report' })
+  await revoke.press('Enter')
+  await expect(tokens.getByRole('button', { name: 'Revoke', exact: true })).toBeFocused()
+  await expectAccessible(page, 'account settings, revoke confirmation')
+  await tokens.getByRole('button', { name: 'Cancel' }).press('Enter')
+  await expect(revoke).toBeFocused()
+
+  const agents = page.locator('section#agents')
+  const disconnect = agents.getByRole('button', { name: 'Disconnect' })
+  await disconnect.press('Enter')
+  await expect(agents.getByRole('button', { name: 'Cancel' })).toBeVisible()
+  await expect(disconnect).toBeFocused()
+  await expectAccessible(page, 'account settings, disconnect confirmation')
+  await agents.getByRole('button', { name: 'Cancel' }).press('Enter')
+  await expect(disconnect).toBeFocused()
+
+  const remove = page.locator('section#delete')
+  await expect(remove.getByText('1 page in Stay Co stays.')).toBeVisible()
+  await remove.getByLabel(/to confirm/).fill(email)
+  await expect(remove.getByRole('button', { name: 'Delete account' })).toBeEnabled()
+  await expectAccessible(page, 'account settings, delete account confirmation')
+
+  // The only owner of an organization other people are in can't delete the account yet
+  const blocking = await createOrganization(email, 'Blocking Co')
+  await addHostedMember(blocking.id, uniqueEmail('a11y-member'))
+  await page.reload()
+  await expect(remove.getByRole('alert')).toContainText('You are the only owner of Blocking Co')
+  await expectAccessible(page, 'account settings, delete account blocked')
+})
+
+test('organization settings: removing a member, and an organization that requires two-factor sign-in', async ({ page }) => {
+  const email = uniqueEmail('a11y-members')
+  await signUpPersonal(page, email)
+  const org = await createOrganization(email, 'Members Co')
+  const member = uniqueEmail('a11y-removed')
+  await addHostedMember(org.id, member)
+
+  await page.goto(`/organizations/${org.slug}/settings#members`)
+  const row = page.getByRole('listitem').filter({ hasText: member })
+  const remove = row.getByRole('button', { name: 'Remove' })
+  await remove.press('Enter')
+  await expect(row.getByRole('button', { name: 'Cancel' })).toBeVisible()
+  await expect(remove).toBeFocused()
+  await expectAccessible(page, 'organization settings, remove member confirmation')
+  await row.getByRole('button', { name: 'Cancel' }).press('Enter')
+  await expect(remove).toBeFocused()
+
+  // Its owner turns on two-factor sign-in without having a second factor: this account is shut out
+  const strict = await createOrganization(email, 'Strict Co')
+  await requireHostedTwoFactor(strict.id)
+  await page.goto('/app')
+  await expect(page.getByText('Strict Co requires two-factor sign-in.')).toBeVisible()
+  await expectAccessible(page, 'gallery, an organization requires two-factor sign-in')
+  await page.goto(`/organizations/${strict.slug}/settings`)
+  await expect(page.getByRole('heading', { name: 'Two-factor sign-in required' })).toBeVisible()
+  await expectAccessible(page, 'organization settings, two-factor sign-in required')
+})
+
+test('invitations: in onboarding, on your pages, and opened signed in, then declined', async ({ page, browser }) => {
+  const owner = uniqueEmail('a11y-inviter')
+  await signUpPersonal(page, owner)
+  const org = await createOrganization(owner, 'Invite Co')
+  const guest = uniqueEmail('a11y-guest')
+  expect(
+    (await page.request.post(`/api/organizations/${org.id}/invitations`, { headers: fromApp(page), data: { email: guest, role: 'member' } })).status(),
+  ).toBe(201)
+  const link = (await latestMail(page.request, guest, /invit/i)).match(/https?:\/\/\S+\/invite\/\S+/)?.[0]
+  expect(link, 'invitation link in email').toBeTruthy()
+
+  const context = await browser.newContext()
+  const them = await context.newPage()
+  await signUp(them, guest)
+  await expect(them.getByRole('heading', { name: 'You have an invitation' })).toBeVisible()
+  await expectAccessible(them, 'onboarding, with an invitation')
+  await them.getByRole('button', { name: 'Continue' }).click()
+  await them.getByRole('link', { name: 'Go to your pages' }).click()
+  await expect(them.getByRole('region', { name: 'Invitations' })).toBeVisible()
+  await expectAccessible(them, 'gallery, with an invitation')
+
+  await them.goto(new URL(link!).pathname)
+  await expect(them.getByRole('heading', { level: 1, name: 'Join Invite Co' })).toBeVisible()
+  await expect(them.getByRole('button', { name: 'Join Invite Co' })).toBeVisible()
+  await expectAccessible(them, 'invitation, signed in')
+  await them.getByRole('button', { name: 'Decline' }).press('Enter')
+  await expect(them.getByRole('heading', { level: 1, name: 'Invitation declined' })).toBeVisible()
+  await expectAccessible(them, 'invitation declined')
+  await context.close()
 })
 
 test('data export in account and organization settings', async ({ page }) => {
@@ -481,6 +725,16 @@ test('webhooks in account settings', async ({ page }) => {
   await section.getByRole('button', { name: 'Recent deliveries' }).press('Enter')
   await expect(section.getByRole('table', { name: 'Recent deliveries to hooks.example.invalid' })).toBeVisible()
   await expectAccessible(page, 'account settings, webhook deliveries')
+
+  // Delete asks first, with focus on the answer; cancelling puts focus back on Delete
+  const remove = section.getByRole('button', { name: 'Delete webhook to hooks.example.invalid' })
+  await remove.press('Enter')
+  await expect(section.getByRole('button', { name: 'Delete', exact: true })).toBeFocused()
+  await expectAccessible(page, 'account settings, webhook delete confirmation')
+  await page.keyboard.press('Tab')
+  await expect(section.getByRole('button', { name: 'Cancel' })).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(remove).toBeFocused()
 
   await section.getByRole('button', { name: 'Edit webhook to hooks.example.invalid' }).press('Enter')
   await expect(section.getByRole('button', { name: 'Save' })).toBeVisible()
@@ -569,6 +823,95 @@ test('server admin', async ({ page }) => {
   await page.goto('/admin#license-keys')
   await expect(page.locator('#license-keys').getByRole('note')).toBeVisible()
   await expectAccessible(page, 'server admin, license keys', { include: '#license-keys' })
+})
+
+test('server admin: confirmations and deleting an organization', async ({ page }) => {
+  const email = uniqueEmail('a11y-admin-confirms')
+  await signUpPersonal(page, email)
+  await grantInstanceAdmin(email)
+  const org = await createOrganization(email, 'Doomed Co')
+  const someone = uniqueEmail('a11y-managed')
+  await addHostedMember(org.id, someone)
+  await page.goto('/admin')
+
+  const people = page.locator('#people')
+  await page.getByLabel('Search people').fill(someone)
+  await expect(people.getByText('Showing 1 of 1 person')).toBeVisible()
+  await people.getByRole('button', { name: 'Manage' }).click()
+  await people.getByRole('button', { name: 'Suspend', exact: true }).press('Enter')
+  const suspend = people.getByRole('group', { name: 'Confirm: Suspend' })
+  await expect(suspend.getByRole('button', { name: 'Suspend' })).toBeFocused()
+  await expectAccessible(page, 'server admin, suspend confirmation', { include: '#people' })
+  await suspend.getByRole('button', { name: 'Cancel' }).press('Enter')
+  await expect(people.getByRole('button', { name: 'Suspend', exact: true })).toBeFocused()
+
+  const deleteAccount = people.getByRole('button', { name: 'Delete account' })
+  await deleteAccount.press('Enter')
+  await expect(people.getByLabel(/to confirm/)).toBeFocused()
+  await expect(people.getByText(`This deletes ${someone}`)).toBeVisible()
+  await expectAccessible(page, 'server admin, delete account confirmation', { include: '#people' })
+  await people.locator('form.admin-confirm').getByRole('button', { name: 'Cancel' }).press('Enter')
+  await expect(deleteAccount).toBeFocused()
+
+  // Delete opens the confirmation below it and becomes Cancel, keeping focus; the field is next
+  const organizations = page.locator('#organizations')
+  await page.getByLabel('Search organizations').fill(org.slug)
+  const row = organizations.getByRole('listitem').filter({ hasText: org.slug })
+  const toggle = row.locator('.settings-actions button')
+  await expect(toggle).toHaveText('Delete')
+  await toggle.press('Enter')
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+  await expect(toggle).toBeFocused()
+  await page.keyboard.press('Tab')
+  await expect(row.getByLabel(/to confirm/)).toBeFocused()
+  await expectAccessible(page, 'server admin, delete organization confirmation', { include: '#organizations' })
+  await row.locator('form').getByRole('button', { name: 'Cancel' }).press('Enter')
+  await expect(toggle).toHaveText('Delete')
+  await expect(toggle).toBeFocused()
+})
+
+// The e2e servers send email and have no signing key, so these are shown by answering the API the way a
+// server without email, and the hosted service with its signing key, would
+test('server admin: a sign-up link and a newly issued license key', async ({ page }) => {
+  const email = uniqueEmail('a11y-admin-links')
+  await signUpPersonal(page, email)
+  await grantInstanceAdmin(email)
+  await page.route('**/api/config', async (route) => route.fulfill({ json: { ...(await (await route.fetch()).json()), emailSignIn: false } }))
+  await page.route('**/api/admin/sign-up-links', (route) =>
+    route.fulfill({
+      status: 201,
+      json: { email: 'new@example.com', link: 'http://localhost:5177/auth/set-password?token=e2e', newAccount: true, expiresAt: '2099-01-08T00:00:00.000Z' },
+    }),
+  )
+  const license = {
+    id: '3c2b1a00-0000-4000-8000-000000000001',
+    customerName: 'Acme Inc',
+    customerEmail: 'it@acme.example',
+    seats: 50,
+    issuedAt: '2026-09-29T00:00:00.000Z',
+    expiresAt: '2027-09-29T23:59:59.000Z',
+    issuedBy: email,
+  }
+  await page.route('**/api/admin/issued-licenses', (route) =>
+    route.request().method() === 'POST'
+      ? route.fulfill({ status: 201, json: { key: 'e2e-license-key-shown-once', license } })
+      : route.fulfill({ json: { available: true, reason: null, licenses: [] } }),
+  )
+  await page.goto('/admin')
+
+  await page.getByLabel('Add someone').fill('new@example.com')
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('button', { name: 'Copy link' })).toBeVisible()
+  await expectAccessible(page, 'server admin, a new sign-up link', { include: '#people' })
+
+  const keys = page.locator('#license-keys')
+  await keys.getByLabel('Customer', { exact: true }).fill('Acme Inc')
+  await keys.getByLabel('Customer email').fill('it@acme.example')
+  await keys.getByLabel('Seats').fill('50')
+  await keys.getByRole('button', { name: 'Issue key' }).press('Enter')
+  await expect(keys.locator('.issue-result')).toBeFocused()
+  await expect(keys.getByRole('button', { name: 'Copy license key' })).toBeVisible()
+  await expectAccessible(page, 'server admin, a newly issued license key', { include: '#license-keys' })
 })
 
 // Hosted only: the sign-up funnel has no controls of its own, so reaching it from the rail is the keyboard path

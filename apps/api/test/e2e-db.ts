@@ -40,6 +40,25 @@ export async function createHostedOrganization(ownerEmail: string, name: string,
   })
 }
 
+// Someone in an organization on the hosted server, with an account made here when they have none, so
+// specs can show members without signing each one up in a browser
+export async function addHostedMember(organizationId: string, email: string, role: 'owner' | 'admin' | 'member' = 'member') {
+  await withDatabase(HOSTED_DATABASE_URL, async (sql) => {
+    const [user] = await sql<{ id: string }[]>`
+      insert into users (email, onboarded_at) values (${email.toLowerCase()}, now())
+      on conflict (email) do update set email = excluded.email
+      returning id`
+    await sql`insert into memberships (user_id, organization_id, role) values (${user.id}, ${organizationId}, ${role})`
+  })
+}
+
+// Turns on "Require two-factor sign-in" without the second factor the settings page asks its owner to have first
+export async function requireHostedTwoFactor(organizationId: string) {
+  await withDatabase(HOSTED_DATABASE_URL, async (sql) => {
+    await sql`update organizations set require_two_factor = true where id = ${organizationId}`
+  })
+}
+
 // Creates the self-hosted database on first use, migrates it and deletes everything in it
 export async function resetSelfHostedDatabase() {
   if (SELF_HOSTED_DATABASE_URL === HOSTED_DATABASE_URL) throw new Error('TEST_SELF_HOSTED_DATABASE_URL must differ from TEST_DATABASE_URL')
