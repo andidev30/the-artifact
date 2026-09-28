@@ -112,11 +112,15 @@ export const requireUser = createMiddleware<AuthEnv>(async (c, next) => {
 })
 
 // For changes to how someone signs in: the session must have started within RECENT_SIGN_IN
-export const requireRecentSignIn = createMiddleware<AuthEnv>(async (c, next) => {
-  const session = c.get('session')
-  if (!session) return c.json({ error: 'Sign in to continue.' }, 401)
-  if (Date.now() - session.createdAt.getTime() > RECENT_SIGN_IN) {
-    return c.json({ error: 'For your security, sign in again to change how you sign in. It needs a sign-in from the last hour.', code: 'reauth_required' }, 403)
-  }
-  await next()
-})
+export const requireRecentSignIn = recentSignInOnly('change how you sign in')
+
+export function recentSignInOnly(action: string) {
+  return createMiddleware<AuthEnv>(async (c, next) => {
+    const session = c.get('session')
+    if (!session) return c.json({ error: 'Sign in to continue.' }, 401)
+    if (Date.now() - session.createdAt.getTime() > RECENT_SIGN_IN) {
+      return c.json({ error: `For your security, sign in again to ${action}. It needs a sign-in from the last hour.`, code: 'reauth_required' }, 403)
+    }
+    await next()
+  })
+}

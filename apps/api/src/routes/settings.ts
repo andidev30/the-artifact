@@ -3,7 +3,7 @@ import { Hono, type MiddlewareHandler } from 'hono'
 import { deleteCookie } from 'hono/cookie'
 import { hashPassword, passwordProblem, verifyPassword } from '../auth/password.js'
 import { twoFactorRequiredError } from '../auth/factors.js'
-import { requireRecentSignIn, requireUser, startSession, type AuthEnv } from '../auth/session.js'
+import { recentSignInOnly, requireRecentSignIn, requireUser, startSession, type AuthEnv } from '../auth/session.js'
 import { track } from '../analytics.js'
 import { securityLog } from '../audit.js'
 import { db, schema } from '../db/index.js'
@@ -28,16 +28,17 @@ settings.patch('/', async (c) => {
   return c.json({ name })
 })
 
-// { currentPassword, password }. Changing a password needs the current one. Adding the first one
+// { currentPassword, password, signOutAgents? }. Changing a password needs the current one. Adding the first one
 // needs a recent sign-in instead, through the way the account signs in now (an email link, Google,
 // single sign-on or a passkey): otherwise a session cookie someone else got hold of could add a
 // password, sign in with it for a fresh session, and add a second factor of their own.
-// Other devices are signed out; this one gets a fresh session.
+// Other devices are signed out; this one gets a fresh session. Agents and access tokens keep working
+// unless signOutAgents is true: they are set up on purpose, and CI would break with them.
 const firstPasswordNeedsRecentSignIn: MiddlewareHandler<AuthEnv> = (c, next) => (c.get('user')!.passwordHash ? next() : requireRecentSignIn(c, next))
 
 settings.put('/password', firstPasswordNeedsRecentSignIn, async (c) => {
   const user = c.get('user')!
-  const body = (await c.req.json().catch(() => null)) as { currentPassword?: unknown; password?: unknown } | null
+  const body = (await c.req.json().catch(() => null)) as { currentPassword?: unknown; password?: unknown; signOutAgents?: unknown } | null
   if (user.passwordHash) {
     const current = typeof body?.currentPassword === 'string' ? body.currentPassword : ''
     // Counted with wrong passwords at sign-in, and before the check, so it can't be used to guess faster
@@ -55,6 +56,11 @@ settings.put('/password', firstPasswordNeedsRecentSignIn, async (c) => {
     await tx.update(schema.users).set({ passwordHash }).where(eq(schema.users.id, user.id))
     await tx.delete(schema.sessions).where(eq(schema.sessions.userId, user.id))
     await tx.delete(schema.pendingSignIns).where(eq(schema.pendingSignIns.userId, user.id))
+    if (body?.signOutAgents === true) {
+      await tx.delete(schema.oauthTokens).where(eq(schema.oauthTokens.userId, user.id))
+      await tx.delete(schema.oauthGrants).where(eq(schema.oauthGrants.userId, user.id))
+      await tx.delete(schema.accessTokens).where(eq(schema.accessTokens.userId, user.id))
+    }
   })
   securityLog(user.passwordHash ? 'account.password_changed' : 'account.password_added', { actorId: user.id, targetId: user.id })
   // Without a current password to check, setting one proves nothing new, so it doesn't count as a fresh sign-in
@@ -125,8 +131,9 @@ settings.delete('/agents/:clientId', async (c) => {
 settings.get('/access-tokens', async (c) => c.json(await tokensOf(c.get('user')!.id)))
 
 // { name, organizationId (null for the personal workspace), expiresInDays (7, 30, 90, 365 or null for none; 90 if left out) }.
-// The token is in this response only.
-settings.post('/access-tokens', async (c) => {
+// The token is in this response only. Needs a recent sign-in, so a session cookie someone else got hold of
+// can't be turned into a token that outlives the session.
+settings.post('/access-tokens', recentSignInOnly('create an access token'), async (c) => {
   const user = c.get('user')!
   const body = (await c.req.json().catch(() => null)) as { name?: unknown; organizationId?: unknown; expiresInDays?: unknown } | null
   const name = checkTokenName(body?.name)
@@ -289,9 +296,16 @@ export async function deleteAccount(userId: string, adminId?: string) {
     }
     // Organizations with nobody else in them go too
     if (plan.empty.length) await tx.delete(schema.organizations).where(inArray(schema.organizations.id, plan.empty))
-    await tx.delete(schema.artifactShares).where(eq(schema.artifactShares.email, user.email))
-    await tx.delete(schema.invitations).where(eq(schema.invitations.email, user.email))
-    await tx.delete(schema.emailTokens).where(eq(schema.emailTokens.email, user.email))
+    // An account whose address nobody checked may not be that address's owner: what waits for the address
+    // stays for them, except the shares this account opened with their link
+    const [row] = await tx.select({ unverified: schema.users.emailUnverified }).from(schema.users).where(eq(schema.users.id, user.id))
+    if (row?.unverified) {
+      await tx.delete(schema.artifactShares).where(eq(schema.artifactShares.acceptedBy, user.id))
+    } else {
+      await tx.delete(schema.artifactShares).where(eq(schema.artifactShares.email, user.email))
+      await tx.delete(schema.invitations).where(eq(schema.invitations.email, user.email))
+      await tx.delete(schema.emailTokens).where(eq(schema.emailTokens.email, user.email))
+    }
     // Sessions, memberships, agent and access tokens and the remaining (personal) pages cascade from the user.
     // Invitations and shares they sent, and versions they published, keep working without them.
     await tx.delete(schema.users).where(eq(schema.users.id, user.id))
