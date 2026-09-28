@@ -34,6 +34,8 @@ export class TransferError extends Error {
     readonly status: 400 | 403 | 404,
     // An organization that requires a second factor this person hasn't set up
     readonly blockedOrg?: string,
+    // The form field the web app marks; null when the error isn't about the workspace chosen
+    readonly field: 'workspace' | null = 'workspace',
   ) {
     super(message)
   }
@@ -133,7 +135,7 @@ export async function duplicatePage(source: Artifact, actor: Actor, workspace: u
       returning artifact_id`)
     return { created, versionId: version.id, hasThumbnail: [...copied].length > 0, indexed: [...words].length > 0 }
   })
-  if (!result) throw new TransferError('Not found', 404)
+  if (!result) throw new TransferError('Not found', 404, undefined, null)
   if (!result.hasThumbnail) queueThumbnail(result.versionId)
   // A copy is a new page in its workspace, so its webhooks hear about it as a publish
   await emitWebhookEvent({ event: 'page.published', artifact: result.created, version: 1, actorId: actor.id })
@@ -154,7 +156,7 @@ export async function movePage(artifact: Artifact, actor: Actor, workspace: unkn
     // Lock the page, so a publish or another move can't change it between the quota check and the move
     const [locked] = await tx.select().from(schema.artifacts).where(eq(schema.artifacts.id, artifact.id)).for('update')
     if (!locked) return null
-    if (locked.organizationId !== artifact.organizationId) throw new TransferError('The page was moved meanwhile. Reload and try again.', 400)
+    if (locked.organizationId !== artifact.organizationId) throw new TransferError('The page was moved meanwhile. Reload and try again.', 400, undefined, null)
     const [size] = await tx.execute<{ versions: number; bytes: number }>(sql`
       select
         (select count(*) from artifact_versions where artifact_id = ${artifact.id})::int as versions,
@@ -170,7 +172,7 @@ export async function movePage(artifact: Artifact, actor: Actor, workspace: unkn
       .returning()
     return { before: locked, updated }
   })
-  if (!moved) throw new TransferError('Not found', 404)
+  if (!moved) throw new TransferError('Not found', 404, undefined, null)
   const { before, updated } = moved
   const [from, to] = await Promise.all([organizationName(before.organizationId), organizationName(updated.organizationId)])
   const who = { id: actor.id, email: actor.email }
