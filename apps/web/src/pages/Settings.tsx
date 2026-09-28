@@ -207,11 +207,15 @@ function PasswordSection({ me, onSaved }: { me: Me; onSaved: () => void }) {
     setSaving(true)
     setStatus(null)
     try {
-      await changePassword(String(data.get('current') ?? ''), password)
+      const signOutAgents = data.get('signOutAgents') === 'on'
+      await changePassword(String(data.get('current') ?? ''), password, signOutAgents)
       form.reset()
       setReauth(false)
       onSaved()
-      setStatus({ tone: 'ok', text: 'Saved. Other devices were logged out.' })
+      setStatus({
+        tone: 'ok',
+        text: signOutAgents ? 'Saved. Other devices were logged out, and agents and access tokens stopped working.' : 'Saved. Other devices were logged out.',
+      })
     } catch (err) {
       setReauth(err instanceof ApiError && err.code === 'reauth_required')
       setStatus({ tone: 'bad', text: errorText(err, 'Your password could not be changed. Try again.') })
@@ -240,6 +244,15 @@ function PasswordSection({ me, onSaved }: { me: Me; onSaved: () => void }) {
         <div className="field">
           <label htmlFor="password-confirm">Confirm new password</label>
           <input id="password-confirm" name="confirm" type="password" autoComplete="new-password" required />
+        </div>
+        <div className="field">
+          <label className="settings-check">
+            <input type="checkbox" name="signOutAgents" aria-describedby="password-agents-hint" />
+            <span>Also disconnect agents and revoke access tokens</span>
+          </label>
+          <p id="password-agents-hint" className="field-hint">
+            Choose this if someone else may have used your account. Agents need to connect again, and scripts need new tokens.
+          </p>
         </div>
         <div className="settings-buttons">
           <button type="submit" className="button button-small" disabled={saving}>
@@ -486,11 +499,14 @@ function TokenForm({
   const [expiry, setExpiry] = useState('90')
   const [saving, setSaving] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
+  // Creating a token needs a sign-in from the last hour
+  const [reauth, setReauth] = useState(false)
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     setSaving(true)
     setStatus(null)
+    setReauth(false)
     try {
       const { token, accessToken } = await createAccessToken({
         name,
@@ -500,6 +516,7 @@ function TokenForm({
       setName('')
       onCreated(token, accessToken)
     } catch (err) {
+      setReauth(err instanceof ApiError && err.code === 'reauth_required')
       setStatus(errorText(err, 'The token could not be created. Try again.'))
       if (err instanceof FieldError && err.field === 'name') document.getElementById('token-name')?.focus()
     }
@@ -548,6 +565,13 @@ function TokenForm({
       <p className="field-hint settings-token-hint" data-tone={status ? 'bad' : undefined} aria-live="polite">
         {status ?? 'You see the token once, right after you create it.'}
       </p>
+      {reauth && (
+        <div className="settings-token-hint">
+          <button type="button" className="button button-small button-quiet" onClick={() => signInAgain('tokens')}>
+            Sign in again
+          </button>
+        </div>
+      )}
     </form>
   )
 }
