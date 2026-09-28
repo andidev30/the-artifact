@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How an agent signs in with OAuth and PKCE</title>
+<style>
+  :root { --bg: #fdfcfb; --fg: #1b1a19; --muted: #6a655f; --line: #e6e1da; --card: #fff; --a: #2b6cb0; --b: #9b4dca; --c: #2f855a; --hi: #fff4d6; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #131312; --fg: #eeece8; --muted: #a39e96; --line: #2c2a27; --card: #1b1a19; --a: #7fb3f0; --b: #c99af0; --c: #7fd3a4; --hi: #3a3222; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 48px 20px 64px; }
+  .eyebrow { color: var(--muted); font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+  h1 { font-size: 32px; line-height: 1.2; margin: 6px 0 10px; }
+  .lede { color: var(--muted); max-width: 62ch; margin: 0 0 28px; }
+  .diagram { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  svg { width: 100%; height: auto; display: block; }
+  svg .actor rect { fill: var(--bg); stroke: var(--line); }
+  svg .actor text { fill: var(--fg); font-size: 14px; font-weight: 600; text-anchor: middle; }
+  svg .life { stroke: var(--line); stroke-dasharray: 4 5; }
+  svg .msg line { stroke: var(--muted); stroke-width: 1.5; opacity: .25; transition: opacity .2s; }
+  svg .msg text { fill: var(--muted); font-size: 13px; opacity: .35; transition: opacity .2s; }
+  svg .msg.on line { opacity: 1; stroke: var(--fg); }
+  svg .msg.on text { opacity: 1; fill: var(--fg); }
+  svg .msg.now text { font-weight: 600; }
+  .controls { display: flex; gap: 8px; align-items: center; margin: 16px 0; }
+  button { font: inherit; font-size: 14px; border: 1px solid var(--line); background: var(--card); color: var(--fg); padding: 7px 14px; border-radius: 8px; cursor: pointer; }
+  button:focus-visible { outline: 2px solid var(--a); outline-offset: 2px; }
+  button:disabled { opacity: .45; cursor: default; }
+  .step-count { color: var(--muted); font-size: 14px; margin-left: auto; font-variant-numeric: tabular-nums; }
+  .explain { background: var(--hi); border-radius: 10px; padding: 16px 18px; min-height: 96px; }
+  .explain h2 { font-size: 17px; margin: 0 0 6px; }
+  .explain p { margin: 0; }
+  code { font: 14px ui-monospace, SFMono-Regular, Menlo, monospace; }
+  footer { color: var(--muted); font-size: 13px; margin-top: 40px; }
+  footer a { color: inherit; }
+</style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">Sample page · made by an agent</div>
+  <h1>How an agent signs in with OAuth and PKCE</h1>
+  <p class="lede">When you connect a coding agent to an MCP server, it signs in the same way a phone app does: through your browser, without ever seeing your password. Step through it.</p>
+
+  <div class="diagram">
+    <svg viewBox="0 0 800 420" role="img" aria-labelledby="d-title">
+      <title id="d-title">Sequence of the OAuth authorization code flow with PKCE between the agent, your browser and the server</title>
+      <g class="actor"><rect x="40" y="10" width="140" height="40" rx="8"/><text x="110" y="36">Agent</text></g>
+      <g class="actor"><rect x="330" y="10" width="140" height="40" rx="8"/><text x="400" y="36">Your browser</text></g>
+      <g class="actor"><rect x="620" y="10" width="140" height="40" rx="8"/><text x="690" y="36">Server</text></g>
+      <line class="life" x1="110" y1="50" x2="110" y2="410"/>
+      <line class="life" x1="400" y1="50" x2="400" y2="410"/>
+      <line class="life" x1="690" y1="50" x2="690" y2="410"/>
+      <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+      <g id="msgs"></g>
+    </svg>
+  </div>
+
+  <div class="controls">
+    <button type="button" id="prev">Back</button>
+    <button type="button" id="next">Next step</button>
+    <span class="step-count" id="count"></span>
+  </div>
+  <div class="explain" aria-live="polite"><h2 id="e-title">1. Make a secret</h2><p id="e-text">The agent makes a random code_verifier and keeps it.</p></div>
+
+  <footer>An agent wrote this page. Published with <a href="https://github.com/andidev30/the-artifact">The Artifact</a>.</footer>
+</main>
+<script>
+  const X = { agent: 110, browser: 400, server: 690 }
+  const steps = [
+    ['agent', 'agent', 'Make a secret', 'The agent makes a random <code>code_verifier</code> and keeps it. It sends only its hash, the <code>code_challenge</code>, from here on.'],
+    ['agent', 'browser', 'Open the sign-in page', 'The agent opens your browser at the server’s authorize address, with the challenge and where to send you back.'],
+    ['browser', 'server', 'You sign in and allow', 'You sign in as usual and see which agent is asking. The agent never sees your password.'],
+    ['server', 'browser', 'A one-time code', 'The server sends your browser back to the agent’s address with a short-lived authorization code.'],
+    ['browser', 'agent', 'The code reaches the agent', 'The agent receives the code on its local address. On its own the code is useless to anyone who intercepts it.'],
+    ['agent', 'server', 'Code + verifier', 'The agent trades the code for a token and proves it started the flow by sending the original verifier.'],
+    ['server', 'agent', 'Access token', 'The server hashes the verifier, checks it matches the challenge from step 1, and issues a token scoped to this agent.'],
+  ]
+  const g = document.getElementById('msgs')
+  const rows = steps.map(([from, to, label], i) => {
+    const y = 90 + i * 45
+    const el = document.createElementNS('http://www.w3.org/2000/svg', 'g')
+    el.setAttribute('class', 'msg')
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line')
+    const self = from === to
+    line.setAttribute('x1', X[from]); line.setAttribute('y1', y)
+    line.setAttribute('x2', self ? X[from] + 60 : X[to] + (X[to] > X[from] ? -4 : 4)); line.setAttribute('y2', y)
+    line.setAttribute('marker-end', 'url(#arrow)')
+    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text')
+    text.setAttribute('x', self ? X[from] + 70 : (X[from] + X[to]) / 2)
+    text.setAttribute('y', y - 7)
+    text.setAttribute('text-anchor', self ? 'start' : 'middle')
+    text.textContent = `${i + 1}. ${label}`
+    el.append(line, text)
+    g.append(el)
+    return el
+  })
+  let at = 0
+  const prev = document.getElementById('prev'), next = document.getElementById('next')
+  function show() {
+    rows.forEach((r, i) => { r.classList.toggle('on', i <= at); r.classList.toggle('now', i === at) })
+    const [, , title, text] = steps[at]
+    document.getElementById('e-title').textContent = `${at + 1}. ${title}`
+    document.getElementById('e-text').innerHTML = text
+    document.getElementById('count').textContent = `Step ${at + 1} of ${steps.length}`
+    prev.disabled = at === 0
+    next.disabled = at === steps.length - 1
+  }
+  prev.addEventListener('click', () => { at = Math.max(0, at - 1); show() })
+  next.addEventListener('click', () => { at = Math.min(steps.length - 1, at + 1); show() })
+  show()
+</script>
+</body>
+</html>

@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Release checklist</title>
+<style>
+  :root { --bg: #f6f7f9; --fg: #16181d; --muted: #5f6673; --line: #dfe3ea; --card: #fff; --accent: #3a5bd9; --done: #2f8f5b; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111317; --fg: #e8eaee; --muted: #9aa1ad; --line: #262a32; --card: #181b21; --accent: #8aa2ff; --done: #6fd39c; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 720px; margin: 0 auto; padding: 48px 20px 64px; }
+  .eyebrow { color: var(--muted); font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+  h1 { font-size: 32px; margin: 6px 0 8px; }
+  .lede { color: var(--muted); margin: 0 0 24px; }
+  .progress { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+  .bar { flex: 1; height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; background: var(--done); transition: width .25s; }
+  .count { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 14px; min-width: 7ch; text-align: right; }
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+  .filters button { font: inherit; font-size: 14px; border: 1px solid var(--line); background: var(--card); color: var(--fg); padding: 6px 12px; border-radius: 99px; cursor: pointer; }
+  .filters button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  section { margin-bottom: 22px; }
+  h2 { font-size: 15px; color: var(--muted); font-weight: 600; margin: 0 0 8px; }
+  ul { list-style: none; margin: 0; padding: 0; background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
+  li { border-bottom: 1px solid var(--line); }
+  li:last-child { border-bottom: 0; }
+  label { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; cursor: pointer; }
+  input { margin-top: 4px; width: 17px; height: 17px; accent-color: var(--done); }
+  label small { display: block; color: var(--muted); font-size: 13px; }
+  li.done strong { text-decoration: line-through; color: var(--muted); }
+  li[hidden] { display: none; }
+  footer { color: var(--muted); font-size: 13px; margin-top: 40px; }
+  footer a { color: inherit; }
+</style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">Sample page · made by an agent</div>
+  <h1>Release checklist</h1>
+  <p class="lede">What to check before and after shipping a web app. Tick items as you go; the list resets when you reload.</p>
+
+  <div class="progress">
+    <div class="bar" role="progressbar" aria-label="Checklist progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div>
+    <span class="count" aria-live="polite">0 of 0</span>
+  </div>
+
+  <div class="filters" role="group" aria-label="Show">
+    <button type="button" data-filter="all" aria-pressed="true">All</button>
+    <button type="button" data-filter="open" aria-pressed="false">Still to do</button>
+    <button type="button" data-filter="done" aria-pressed="false">Done</button>
+  </div>
+
+  <div id="list"></div>
+
+  <footer>An agent wrote this page. Published with <a href="https://github.com/andidev30/the-artifact">The Artifact</a>.</footer>
+</main>
+<script>
+  const groups = {
+    'Before': [
+      ['Tests pass on the release branch', 'Unit, integration and end-to-end, on CI and not just locally.'],
+      ['Migrations are backwards compatible', 'The previous release must still run on the new schema, so a rollback is safe.'],
+      ['Take a database backup', 'And check it restores; an untested backup is a hope.'],
+      ['Write the upgrade notes', 'Anything an operator has to do: settings, commands, deploy files.'],
+    ],
+    'Ship': [
+      ['Tag the release', 'The changelog comes from the commits since the last tag.'],
+      ['Deploy after the migrations', 'Code that expects a new table must not go live before the table exists.'],
+    ],
+    'After': [
+      ['Watch errors and latency for an hour', 'Compare with the same hour yesterday.'],
+      ['Check the status page is green', 'And that someone would be told if it weren’t.'],
+      ['Tell people what changed', 'A short note, with a link to the release.'],
+    ],
+  }
+  const list = document.getElementById('list')
+  let id = 0
+  for (const [name, items] of Object.entries(groups)) {
+    const section = document.createElement('section')
+    const h = document.createElement('h2')
+    h.textContent = name
+    const ul = document.createElement('ul')
+    for (const [title, detail] of items) {
+      const li = document.createElement('li')
+      const label = document.createElement('label')
+      const box = document.createElement('input')
+      box.type = 'checkbox'
+      box.id = `item-${id++}`
+      const text = document.createElement('span')
+      const strong = document.createElement('strong')
+      strong.textContent = title
+      const small = document.createElement('small')
+      small.textContent = detail
+      text.append(strong, small)
+      label.append(box, text)
+      li.append(label)
+      ul.append(li)
+      box.addEventListener('change', () => { li.classList.toggle('done', box.checked); update() })
+    }
+    section.append(h, ul)
+    list.append(section)
+  }
+
+  let filter = 'all'
+  function update() {
+    const items = [...list.querySelectorAll('li')]
+    const done = items.filter((li) => li.classList.contains('done')).length
+    const pct = Math.round((done / items.length) * 100)
+    document.querySelector('.bar i').style.width = `${pct}%`
+    document.querySelector('.bar').setAttribute('aria-valuenow', pct)
+    document.querySelector('.count').textContent = `${done} of ${items.length}`
+    for (const li of items) {
+      const isDone = li.classList.contains('done')
+      li.hidden = (filter === 'open' && isDone) || (filter === 'done' && !isDone)
+    }
+  }
+  for (const b of document.querySelectorAll('.filters button')) {
+    b.addEventListener('click', () => {
+      filter = b.dataset.filter
+      for (const o of document.querySelectorAll('.filters button')) o.setAttribute('aria-pressed', String(o === b))
+      update()
+    })
+  }
+  update()
+</script>
+</body>
+</html>
