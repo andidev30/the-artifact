@@ -134,7 +134,7 @@ Each limit counts something for one key (an email address, an account, or a netw
 | `invite` | People one account invites to an organization or shares a page with by email, in the app or through an agent | 200 per hour |
 | `invite-ip` | The same, from one network | 500 per hour |
 | `mcp` | MCP tool calls by one account, all agents together | 600 per 10 minutes |
-| `publish` | New pages and versions one account publishes through agents (`publish_artifact`, `publish_upload`, `restore_version`, also counted in `mcp`) or with an access token (`POST /api/publish`) | 200 per hour |
+| `publish` | New pages and versions one account publishes through agents (`publish_artifact`, `update_files`, `publish_upload`, `restore_version`, also counted in `mcp`) or with an access token (`POST /api/publish`) | 200 per hour |
 | `access-token` | [Access tokens](/docs/connect-your-agent#publishing-from-ci) one account creates in **Account settings** | 20 per hour |
 | `comment` | Comments and replies one account writes, in the app or through agents (`add_comment`, `reply_comment`) | 120 per hour |
 | `link-password` | Wrong passwords for one page's link, from anyone; right ones don't count. Past it, nobody can try until the window ends. | 30 per 15 minutes |

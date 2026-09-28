@@ -72,19 +72,32 @@ async function authorized(auth: Auth, path: string, request: () => RequestInit):
 
 export type Published = { id: string; url: string; title: string; version: number; visibility: string; folder: string | null }
 
+export type PageUpload = {
+  title?: string
+  // Left out only by an update that keeps the page's current entry
+  html?: Uint8Array
+  files: { path: string; content: Uint8Array }[]
+  id?: string
+  visibility?: string
+  folder?: string
+  // An update: only these files change, and the paths in remove are left out; the rest are kept
+  update?: { remove: string[] }
+}
+
 // POST /api/publish as multipart: the fields, index.html as the page, and one part per file, named
 // by its path (docs/publishing.md, "Publishing without an agent")
-export async function publishPage(
-  auth: Auth,
-  page: { title: string; html: Uint8Array; files: { path: string; content: Uint8Array }[]; id?: string; visibility?: string; folder?: string },
-): Promise<Published> {
+export async function publishPage(auth: Auth, page: PageUpload): Promise<Published> {
   const build = () => {
     const form = new FormData()
-    form.append('title', page.title)
+    if (page.update) {
+      form.append('mode', 'update')
+      for (const path of page.update.remove) form.append('remove', path)
+    }
+    if (page.title !== undefined) form.append('title', page.title)
     if (page.id) form.append('artifact_id', page.id)
     if (page.visibility) form.append('visibility', page.visibility)
     if (page.folder !== undefined) form.append('folder', page.folder)
-    form.append('index.html', new Blob([page.html as Uint8Array<ArrayBuffer>], { type: 'text/html' }), 'index.html')
+    if (page.html) form.append('index.html', new Blob([page.html as Uint8Array<ArrayBuffer>], { type: 'text/html' }), 'index.html')
     for (const f of page.files) form.append(f.path, new Blob([f.content as Uint8Array<ArrayBuffer>]), f.path.slice(f.path.lastIndexOf('/') + 1))
     return form
   }

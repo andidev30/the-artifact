@@ -51,11 +51,12 @@ async function reusable(userId: string, files: FileMeta[]): Promise<Set<string>>
   return new Set(found.filter((h) => h !== null))
 }
 
-export async function prepareUpload(entries: ManifestEntry[], userId: string): Promise<PreparedUpload> {
-  const { html, files } = checkManifest(entries)
+// partial: only some files of a page, for an update of it (index.html optional)
+export async function prepareUpload(entries: ManifestEntry[], userId: string, opts: { partial?: boolean } = {}): Promise<PreparedUpload> {
+  const { html, files } = opts.partial ? checkManifest(entries, { partial: true }) : checkManifest(entries)
   const uploadId = randomBytes(16).toString('hex')
   const byHash = new Map<string, FileMeta[]>()
-  for (const f of [html, ...files]) byHash.set(f.sha256, [...(byHash.get(f.sha256) ?? []), f])
+  for (const f of html ? [html, ...files] : files) byHash.set(f.sha256, [...(byHash.get(f.sha256) ?? []), f])
   const skip = await reusable(
     userId,
     [...byHash.values()].map((same) => same[0]),

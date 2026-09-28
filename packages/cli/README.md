@@ -50,9 +50,31 @@ prints the page's link. Hidden files and folders, `node_modules`, and file types
 | `--visibility <who>` | `restricted`, `organization` or `link` |
 | `--folder <name>` | File the page into this folder of the workspace |
 | `--ignore <glob>` | Leave out matching files, like `'*.map'`; repeat for more |
+| `--only <path>` | Send only this file (or glob) and keep the page's other files as they are; repeat for more |
+| `--remove <path>` | Remove this file from the page and keep the others; repeat for more |
 | `--save` | Remember the page in `.the-artifact.json`, so publishing the same path again publishes a new version |
 | `--new` | Publish a new page even when `.the-artifact.json` has one for this path |
 | `--dry-run` | List what would be sent, and send nothing |
+
+### Updating some files
+
+A dashboard whose data a job refreshes doesn't need to send the whole page again. With `--only`, `publish` sends just the files you name and keeps every other file of the page's current version:
+
+```sh
+the-artifact publish ./dashboard --id k3v9x2m8pq --only data.json
+```
+
+`--only` takes paths relative to the folder or globs like `'data/*.json'`, and the folder needn't hold the rest of the page. `--remove old.css` removes a file. Both need the page, with `--id` or a page saved with `--save`, and the title stays as it is unless you pass `--title`. Each run is a new version in the page's history, with the same limits.
+
+A cron job refreshing a dashboard every hour:
+
+```sh
+# crontab: 0 * * * * /opt/dashboard/refresh.sh
+set -e
+cd /opt/dashboard
+./export-metrics > site/data.json
+THE_ARTIFACT_TOKEN=$(cat token.txt) npx @the-artifact/cli publish site --id k3v9x2m8pq --only data.json
+```
 
 ## List and share
 

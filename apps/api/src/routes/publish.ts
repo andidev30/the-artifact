@@ -1,26 +1,42 @@
 import { eq } from 'drizzle-orm'
 import { Hono, type Context } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
-import { artifactUrl, parseArtifactRef, publish, PublishError } from '../artifacts.js'
+import { artifactUrl, parseArtifactRef, publish, PublishError, updateFiles, VersionConflictError } from '../artifacts.js'
 import { db, schema } from '../db/index.js'
 import type { Visibility } from '../db/schema.js'
 import { ENTRY_PATH, MAX_TOTAL_BYTES, type FileInput } from '../files.js'
 import { hit, rule, tooManyRequests, waitText, windowText } from '../limits.js'
 import { authenticateBearer, type McpAuth } from '../oauth/server.js'
-import { hasControlChars } from '../validation.js'
+import { hasControlChars, MAX_VERSION } from '../validation.js'
 
 // POST /api/publish: publishing without an MCP client, for CI jobs and scripts (and the CLI that
 // builds on it), with an access token from settings as the bearer token. Takes what publish_artifact
 // takes, as JSON or as multipart form data, goes through the same publish, quotas and "publish" limit,
-// and answers with the link. docs/publishing.md documents it; keep it stable.
+// and answers with the link. With mode=update it takes only the files to add or replace and the paths
+// to remove, as update_files does. docs/publishing.md documents it; keep it stable.
 
 const VISIBILITIES = new Set<Visibility>(['private', 'organization', 'link'])
-const FIELDS = new Set(['title', 'artifact_id', 'visibility', 'folder'])
+const FIELDS = new Set(['title', 'artifact_id', 'visibility', 'folder', 'mode', 'base_version'])
 
 // Base64 in JSON makes files a third larger, plus room for the rest of the body
 const MAX_BODY = Math.ceil((MAX_TOTAL_BYTES * 4) / 3) + 1024 * 1024
 
-type Input = { title: string; html: string; files: FileInput[]; artifact_id?: string; visibility?: Visibility; folder?: string }
+type Common = { files: FileInput[]; artifact_id?: string; visibility?: Visibility; folder?: string }
+type Input =
+  | (Common & { mode: 'publish'; title: string; html: string })
+  | (Common & { mode: 'update'; artifact_id: string; title?: string; remove: string[]; base_version?: number })
+
+type Raw = {
+  title?: unknown
+  html?: unknown
+  files: FileInput[]
+  artifact_id?: unknown
+  visibility?: unknown
+  folder?: unknown
+  mode?: unknown
+  remove?: unknown
+  base_version?: unknown
+}
 
 class InputError extends Error {
   field?: string
@@ -36,25 +52,55 @@ function optionalString(value: unknown, field: string): string | undefined {
   return value
 }
 
-function checkInput(raw: { title?: unknown; html?: unknown; files: FileInput[]; artifact_id?: unknown; visibility?: unknown; folder?: unknown }): Input {
+// A whole number from JSON, or from the text of a form field
+function baseVersion(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === '') return undefined
+  const n = typeof value === 'string' && /^\d+$/.test(value.trim()) ? Number(value) : value
+  if (typeof n !== 'number' || !Number.isInteger(n) || n < 1 || n > MAX_VERSION) {
+    throw new InputError('base_version is the number of the version your changes start from, like 3.', 'base_version')
+  }
+  return n
+}
+
+function removals(value: unknown): string[] {
+  if (value === undefined || value === null) return []
+  const list = Array.isArray(value) ? value : [value]
+  if (list.some((p) => typeof p !== 'string')) throw new InputError('remove is a list of paths, like ["old.css"].', 'remove')
+  return list as string[]
+}
+
+function checkInput(raw: Raw): Input {
+  const mode = optionalString(raw.mode, 'mode') ?? 'publish'
+  if (mode !== 'publish' && mode !== 'update') throw new InputError('mode is publish (the default) or update.', 'mode')
   const title = optionalString(raw.title, 'title')
-  if (!title?.trim()) throw new InputError('Give the page a title.', 'title')
-  if (hasControlChars(title)) throw new InputError("The title can't contain control characters.", 'title')
-  if (typeof raw.html !== 'string' || !raw.html.trim()) throw new InputError('Send the page itself as html, or as a file part named index.html.', 'html')
+  if (title !== undefined && hasControlChars(title)) throw new InputError("The title can't contain control characters.", 'title')
   const visibility = optionalString(raw.visibility, 'visibility')
   if (visibility !== undefined && !VISIBILITIES.has(visibility as Visibility))
     throw new InputError('visibility is one of private, organization or link.', 'visibility')
-  return {
-    title,
-    html: raw.html,
+  const common = {
     files: raw.files,
     artifact_id: optionalString(raw.artifact_id, 'artifact_id') || undefined,
     visibility: visibility as Visibility | undefined,
     folder: optionalString(raw.folder, 'folder'),
   }
+  const remove = removals(raw.remove)
+  const base = baseVersion(raw.base_version)
+
+  if (mode === 'update') {
+    if (!common.artifact_id) throw new InputError('Say which page to update with artifact_id.', 'artifact_id')
+    const html = optionalString(raw.html, 'html')
+    // The page itself, when sent, is one of the files it replaces
+    const files = html === undefined ? common.files : [{ path: ENTRY_PATH, content: html }, ...common.files]
+    return { ...common, mode, artifact_id: common.artifact_id, files, title: title?.trim() ? title : undefined, remove, base_version: base }
+  }
+  if (remove.length || base !== undefined) throw new InputError('remove and base_version go with mode update.', remove.length ? 'remove' : 'base_version')
+  if (!title?.trim()) throw new InputError('Give the page a title.', 'title')
+  if (typeof raw.html !== 'string' || !raw.html.trim()) throw new InputError('Send the page itself as html, or as a file part named index.html.', 'html')
+  return { ...common, mode, title, html: raw.html }
 }
 
-// { title, html, files: [{ path, content, encoding }], artifact_id, visibility, folder }, as in publish_artifact
+// { title, html, files: [{ path, content, encoding }], artifact_id, visibility, folder }, as in publish_artifact,
+// or with mode "update" { artifact_id, files, remove, base_version } and optionally the rest, as in update_files
 async function fromJson(c: Context): Promise<Input> {
   const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw new InputError('Send a JSON object.')
@@ -67,14 +113,23 @@ async function fromJson(c: Context): Promise<Input> {
 
 // Fields title, artifact_id, visibility and folder, and one file part per file of the page, named by
 // its path: index.html for the page itself, css/site.css, img/logo.png... That is what curl sends for
-// -F 'index.html=@report/index.html' -F 'img/logo.png=@report/img/logo.png'.
+// -F 'index.html=@report/index.html' -F 'img/logo.png=@report/img/logo.png'. For an update, also mode,
+// base_version and a remove field per path to remove.
 async function fromForm(c: Context): Promise<Input> {
   const form = await c.req.parseBody({ all: true }).catch(() => null)
   if (!form) throw new InputError('The form data could not be read.')
   const fields: Record<string, string> = {}
   let html: string | undefined
   const files: FileInput[] = []
+  const remove: string[] = []
   for (const [name, value] of Object.entries(form)) {
+    if (name === 'remove') {
+      for (const item of Array.isArray(value) ? value : [value]) {
+        if (typeof item !== 'string') throw new InputError('remove is a text field with a path, once per file to remove.', 'remove')
+        remove.push(item)
+      }
+      continue
+    }
     if (Array.isArray(value)) throw new InputError(`"${name}" is in the form more than once.`, name)
     if (name === ENTRY_PATH || name === 'html') {
       if (html !== undefined) throw new InputError('Send the page itself once, as index.html.', 'html')
@@ -86,7 +141,7 @@ async function fromForm(c: Context): Promise<Input> {
       files.push({ path: name, content: new Uint8Array(await value.arrayBuffer()) })
     }
   }
-  return checkInput({ ...fields, html, files })
+  return checkInput({ ...fields, html, files, remove })
 }
 
 function unauthorized(c: Context, sent: boolean) {
@@ -138,19 +193,21 @@ publishApi.post(
     }
 
     try {
-      const artifact = await publish({
+      const target = {
         userId: auth.userId,
         email: auth.email,
         blockedOrgs: auth.blockedOrgs,
         organizationId: auth.organizationId,
         clientName: auth.clientName,
         title: input.title,
-        html: input.html,
         files: input.files,
-        slug: input.artifact_id ? parseArtifactRef(input.artifact_id) : undefined,
         visibility: input.visibility,
         folder: input.folder,
-      })
+      }
+      const artifact =
+        input.mode === 'update'
+          ? await updateFiles({ ...target, slug: parseArtifactRef(input.artifact_id), remove: input.remove, baseVersion: input.base_version })
+          : await publish({ ...target, title: input.title, html: input.html, slug: input.artifact_id ? parseArtifactRef(input.artifact_id) : undefined })
       return c.json(
         {
           id: artifact.slug,
@@ -163,6 +220,7 @@ publishApi.post(
         input.artifact_id ? 200 : 201,
       )
     } catch (err) {
+      if (err instanceof VersionConflictError) return c.json({ error: err.message, field: 'base_version' }, 409)
       if (err instanceof PublishError) return c.json({ error: err.message }, 400)
       throw err
     }

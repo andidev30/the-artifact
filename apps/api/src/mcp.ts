@@ -37,6 +37,8 @@ import {
   publishUpload,
   rename,
   restoreVersion,
+  updateFiles,
+  updateUpload,
   VISIBILITY_LABEL,
 } from './artifacts.js'
 import {
@@ -113,6 +115,33 @@ const folderArg = z
       'Folders only group pages in the gallery; they never change who can open a page.',
   )
 
+const fileArg = z.object({
+  path: z.string().describe('Relative path the HTML uses for it, e.g. "style.css" or "img/logo.png"'),
+  content: z.string().describe('The file content: text as is, or base64 for binary files'),
+  encoding: z.enum(['utf8', 'base64']).optional().describe('utf8 (default) for text files, base64 for images, fonts, audio and other binary files'),
+})
+
+const removeArg = z.array(z.string()).optional().describe("Paths of files of the current version to leave out of the new one. index.html can't be removed.")
+
+const baseVersionArg = z
+  .number()
+  .int()
+  .positive()
+  .max(MAX_VERSION)
+  .optional()
+  .describe(
+    'The version you read (get_artifact tells it). If someone published since, nothing is changed and you are told to start again from the current version. ' +
+      'Left out, the changes apply to whatever version is current.',
+  )
+
+// What an update changed, after the usual answer for a new version
+async function updated(artifact: Artifact, sent: string[], removed: string[]) {
+  const answer = await published(artifact, 0)
+  const lines = [sent.length ? `Added or replaced: ${sent.join(', ')}` : '', removed.length ? `Removed: ${removed.join(', ')}` : ''].filter(Boolean)
+  answer.content[0].text += `\n${lines.join('\n')}\nThe other files are as they were in version ${artifact.currentVersion - 1}.`
+  return answer
+}
+
 const manifest = z
   .array(
     z.object({
@@ -175,6 +204,7 @@ function buildServer(auth: McpAuth) {
         'or a small site: html is the entry (index.html) and files holds the CSS, JS, images, fonts and data it loads by relative paths. ' +
         `Limits: html up to ${MAX_HTML_BYTES / 1024 / 1024} MB, each file up to ${MAX_FILE_BYTES / 1024 / 1024} MB, ${MAX_TOTAL_BYTES / 1024 / 1024} MB and ${MAX_FILES} files in total. ` +
         'To update a page you published before, pass its artifact_id (or its link) and the link stays the same; send every file again, since each version has its own full set. ' +
+        'To change only some files of a page (new data for a dashboard, one fixed script), use update_files instead. ' +
         'Before publishing a new version, call list_comments to read the feedback people left on the page.' +
         (directUploads()
           ? ' If you can run shell commands or make HTTP requests, prefer prepare_upload and publish_upload for pages with images, fonts or media, or over 1 MB: the files go straight to storage instead of through this call.'
@@ -183,13 +213,7 @@ function buildServer(auth: McpAuth) {
         title: z.string().min(1).describe('Short title shown in the gallery and browser tab'),
         html: z.string().min(1).describe('The complete HTML document; for a multi-file page, the entry (index.html)'),
         files: z
-          .array(
-            z.object({
-              path: z.string().describe('Relative path the HTML uses for it, e.g. "style.css" or "img/logo.png"'),
-              content: z.string().describe('The file content: text as is, or base64 for binary files'),
-              encoding: z.enum(['utf8', 'base64']).optional().describe('utf8 (default) for text files, base64 for images, fonts, audio and other binary files'),
-            }),
-          )
+          .array(fileArg)
           .optional()
           .describe(`Files next to the HTML. Allowed types: ${ALLOWED_EXTENSIONS.join(', ')}.`),
         artifact_id: z.string().optional().describe('Id or link of an existing page to publish a new version of'),
@@ -220,6 +244,51 @@ function buildServer(auth: McpAuth) {
     }, true),
   )
 
+  server.registerTool(
+    'update_files',
+    {
+      title: 'Update some files of a page',
+      description:
+        'Publish a new version of a page that changes only some of its files and keeps the rest of the current version: ' +
+        'add or replace files (index.html replaces the page itself) and remove others. For example, new data for a dashboard: send only data.json. ' +
+        'It is a new version in the history, with the same limits as publish_artifact for the page as a whole. ' +
+        'Pass base_version, the version you read, so a version someone else published in the meantime is not overwritten without you knowing.' +
+        (directUploads() ? ' For large or binary files, prepare_upload and publish_upload with update: true do the same with files you upload yourself.' : ''),
+      inputSchema: z.object({
+        artifact_id: z.string().describe('Id or link of the page'),
+        files: z
+          .array(fileArg)
+          .optional()
+          .describe(`Files to add or replace, by path. Allowed types: ${ALLOWED_EXTENSIONS.join(', ')}.`),
+        remove: removeArg,
+        base_version: baseVersionArg,
+      }),
+    },
+    limited(async ({ artifact_id, files, remove, base_version }) => {
+      try {
+        const artifact = await updateFiles({
+          userId: auth.userId,
+          email: auth.email,
+          blockedOrgs: auth.blockedOrgs,
+          organizationId: auth.organizationId,
+          clientName: auth.clientName,
+          slug: parseArtifactRef(artifact_id),
+          files,
+          remove,
+          baseVersion: base_version,
+        })
+        return await updated(
+          artifact,
+          (files ?? []).map((f) => f.path),
+          remove ?? [],
+        )
+      } catch (err) {
+        if (err instanceof PublishError) return text(err.message, true)
+        throw err
+      }
+    }, true),
+  )
+
   if (directUploads()) {
     server.registerTool(
       'prepare_upload',
@@ -230,12 +299,16 @@ function buildServer(auth: McpAuth) {
           'List every file of the page with its size and sha256, including index.html (the page itself). Returns an upload_id and a link per file: ' +
           "PUT each file's exact bytes to its link, then call publish_upload with the upload_id and the same files. " +
           `Files already stored in your own pages need no upload. The same limits as publish_artifact apply: html up to ${MAX_HTML_BYTES / 1024 / 1024} MB, ` +
-          `each file up to ${MAX_FILE_BYTES / 1024 / 1024} MB, ${MAX_TOTAL_BYTES / 1024 / 1024} MB and ${MAX_FILES} files in total. Allowed types: ${ALLOWED_EXTENSIONS.join(', ')}.`,
-        inputSchema: z.object({ files: manifest.describe('Every file of the page, index.html included') }),
+          `each file up to ${MAX_FILE_BYTES / 1024 / 1024} MB, ${MAX_TOTAL_BYTES / 1024 / 1024} MB and ${MAX_FILES} files in total. Allowed types: ${ALLOWED_EXTENSIONS.join(', ')}. ` +
+          'To change only some files of an existing page, pass update: true and list just those; then call publish_upload with update: true.',
+        inputSchema: z.object({
+          files: manifest.describe('Every file of the page, index.html included; with update, only the files to add or replace'),
+          update: z.boolean().optional().describe('true to upload only some files of an existing page, for publish_upload with update: true'),
+        }),
       },
-      limited(async ({ files }) => {
+      limited(async ({ files, update }) => {
         try {
-          const { uploadId, uploads, stored } = await prepareUpload(files, auth.userId)
+          const { uploadId, uploads, stored } = await prepareUpload(files, auth.userId, { partial: update === true })
           const commands = uploads.map((u) => `curl -fsS -T '${u.paths[0]}' '${u.url}'${u.paths.length > 1 ? `  # also ${u.paths.slice(1).join(', ')}` : ''}`)
           return text(
             `upload_id: ${uploadId}\n` +
@@ -243,7 +316,9 @@ function buildServer(auth: McpAuth) {
                 ? `PUT each file's exact bytes to its link within ${UPLOAD_TTL_SECONDS / 60} minutes, for example with curl from the page's folder:\n${commands.join('\n')}\n`
                 : '') +
               (stored.length ? `Already stored, no upload needed: ${stored.join(', ')}\n` : '') +
-              'Then call publish_upload with this upload_id, the title and the same files.',
+              (update
+                ? 'Then call publish_upload with this upload_id, the same files, the artifact_id and update: true.'
+                : 'Then call publish_upload with this upload_id, the title and the same files.'),
           )
         } catch (err) {
           if (err instanceof PublishError) return text(err.message, true)
@@ -258,18 +333,47 @@ function buildServer(auth: McpAuth) {
         title: 'Publish uploaded files',
         description:
           'Second step after prepare_upload: checks that every file arrived with the size and sha256 you listed, then publishes the page and returns its link. ' +
-          'Pass artifact_id to publish a new version of an existing page; the link stays the same.',
+          'Pass artifact_id to publish a new version of an existing page; the link stays the same. ' +
+          'With update: true, the files replace or add to those of the current version and the rest are kept, as with update_files.',
         inputSchema: z.object({
-          title: z.string().min(1).describe('Short title shown in the gallery and browser tab'),
+          title: z.string().min(1).optional().describe('Short title shown in the gallery and browser tab. Required unless update is true.'),
           upload_id: z.string().describe('The upload_id prepare_upload returned'),
           files: manifest.describe('The same files you passed to prepare_upload'),
           artifact_id: z.string().optional().describe('Id or link of an existing page to publish a new version of'),
           visibility: visibility.optional(),
           folder: folderArg,
+          update: z.boolean().optional().describe('true to keep the files of the current version you leave out, as with update_files; needs artifact_id'),
+          remove: removeArg.describe("With update: paths of files of the current version to leave out. index.html can't be removed."),
+          base_version: baseVersionArg.describe('With update: the version you read, as for update_files'),
         }),
       },
-      limited(async ({ title, upload_id, files, artifact_id, visibility, folder }) => {
+      limited(async ({ title, upload_id, files, artifact_id, visibility, folder, update, remove, base_version }) => {
         try {
+          if (update) {
+            if (!artifact_id) return text('Say which page to update with artifact_id.', true)
+            const artifact = await updateUpload({
+              userId: auth.userId,
+              email: auth.email,
+              blockedOrgs: auth.blockedOrgs,
+              organizationId: auth.organizationId,
+              clientName: auth.clientName,
+              title,
+              uploadId: upload_id,
+              files,
+              slug: parseArtifactRef(artifact_id),
+              visibility,
+              folder,
+              remove,
+              baseVersion: base_version,
+            })
+            return await updated(
+              artifact,
+              files.map((f) => f.path),
+              remove ?? [],
+            )
+          }
+          if (remove?.length || base_version !== undefined) return text('remove and base_version go with update: true.', true)
+          if (!title) return text('Give the page a title.', true)
           const artifact = await publishUpload({
             userId: auth.userId,
             email: auth.email,

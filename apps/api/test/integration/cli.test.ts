@@ -141,6 +141,55 @@ describe('the-artifact publish', () => {
     expect((await pageBySlug(pageId(fresh.stdout))).title).toBe('site')
   })
 
+  it('updates only the files named with --only, and removes files with --remove', async () => {
+    const user = await createUser()
+    const { token } = await tokenFor(user)
+    const env = { THE_ARTIFACT_TOKEN: token }
+    const dir = await site({
+      'index.html': '<!doctype html><title>Dashboard</title><script src="app.js"></script>',
+      'app.js': 'fetch("data.json")',
+      'data.json': '{"visitors":1}',
+      'old.css': 'h1 {}',
+    })
+    const first = await run(['publish', 'site', '--save'], { env })
+    expect(first.code).toBe(0)
+    const page = await pageBySlug(pageId(first.stdout))
+
+    await writeFile(join(dir, 'data.json'), '{"visitors":2}')
+    // Changed too, but not named: stays as it was on the server
+    await writeFile(join(dir, 'app.js'), 'broken(')
+    const second = await run(['publish', 'site', '--only', 'data.json'], { env })
+    expect(second.code).toBe(0)
+    expect(second.stderr).toContain(`Updating ${page.slug}: data.json (14 B).`)
+    expect(second.stderr).toContain('Published version 2 of "Dashboard"')
+    expect(pageId(second.stdout)).toBe(page.slug)
+
+    const files = async (version: number) => {
+      const [v] = await db.select().from(schema.artifactVersions).where(eq(schema.artifactVersions.version, version))
+      const rows = await db.select().from(schema.artifactFiles).where(eq(schema.artifactFiles.versionId, v.id))
+      return { version: v, paths: rows.map((r) => r.path).sort() }
+    }
+    const v2 = await files(2)
+    expect(v2.paths).toEqual(['app.js', 'data.json', 'old.css'])
+    expect(v2.version.publishedWith).toBe('GitHub Actions')
+    const served = async (path: string) => (await app.request(`/api/artifacts/${page.slug}/v/2/${path}`, { headers: { cookie: user.cookie } })).text()
+    expect(await served('data.json')).toBe('{"visitors":2}')
+    expect(await served('app.js')).toBe('fetch("data.json")')
+
+    // A job's folder can hold only the data, and the page is named by --id
+    const job = join(tmp, 'job')
+    await mkdir(job)
+    await writeFile(join(job, 'data.json'), '{"visitors":3}')
+    const third = await run(['publish', 'job', '--id', page.slug, '--only', 'data.json', '--remove', 'old.css', '--json'], { env })
+    expect(third.code).toBe(0)
+    expect(JSON.parse(third.stdout)).toMatchObject({ id: page.slug, version: 3, title: 'Dashboard' })
+    expect((await files(3)).paths).toEqual(['app.js', 'data.json'])
+
+    const entry = await run(['publish', 'job', '--id', page.slug, '--remove', 'index.html'], { env })
+    expect(entry.code).toBe(1)
+    expect(lastLine(entry.stderr)).toBe("index.html is the page itself, so it can't be removed. Send a new index.html instead.")
+  })
+
   it("shows the server's message when it refuses the page", async () => {
     const user = await createUser()
     const { token } = await tokenFor(user)

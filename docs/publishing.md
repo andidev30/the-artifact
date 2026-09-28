@@ -38,11 +38,28 @@ Each file in `files` has:
 
 Allowed types, by extension: `html`, `htm`, `css`, `js`, `mjs`, `json`, `map`, `txt`, `md`, `csv`, `xml`, `svg`, `png`, `jpg`, `jpeg`, `gif`, `webp`, `avif`, `ico`, `woff`, `woff2`, `ttf`, `otf`, `mp3`, `wav`, `ogg`, `mp4`, `webm`, `wasm`. Each is served with its own content type, never guessed from the content.
 
-A version is always a complete set: when the agent publishes a new version, it sends every file again. Files it leaves out are not carried over (older versions keep theirs).
+A version is always a complete set: when the agent publishes a new version with `publish_artifact`, it sends every file again. Files it leaves out are not carried over (older versions keep theirs). To change only some files and keep the rest, the agent uses [`update_files`](#update_files).
 
 Invalid files are rejected with a message the agent can act on, and nothing is published.
 
 New pages are restricted in a personal workspace and visible to the organization in an organization workspace.
+
+### update_files
+
+Publishes a new version of a page that changes only some of its files and keeps the rest of the current version as they are. A dashboard whose data is refreshed sends only `data.json`, not the HTML, scripts and images again. For people who can edit the page.
+
+| Argument | Required | Meaning |
+| --- | --- | --- |
+| `artifact_id` | yes | Id or link of the page |
+| `files` | no | Files to add or replace, as `{ path, content, encoding }` like for `publish_artifact`. A file with the path `index.html` replaces the page itself. |
+| `remove` | no | Paths of files of the current version to leave out of the new one. `index.html` can't be removed. |
+| `base_version` | no | The version the changes start from, which `get_artifact` tells. If someone published another version since, nothing changes and the agent is told to start again from the current one, so two agents don't overwrite each other without knowing. Left out, the changes apply to whatever version is current. |
+
+Pass at least one file or one path to remove. The title, who can open the page and its folder stay as they are.
+
+It is a new version like any other: it shows in the [history](/docs/version-history) with who published it and with which agent, counts toward the `publish` [rate limit](#limits) and the workspace's quota, and the page as a whole must stay within the [size limits](#what-makes-a-good-page). Removing a path the current version doesn't have, or sending and removing the same path, is refused with a message.
+
+The files travel inside the call, as with `publish_artifact`, so `update_files` is for small changes. For large or binary files, agents that can make HTTP requests use [`prepare_upload` and `publish_upload`](#prepare_upload-and-publish_upload) with `update: true`.
 
 ### prepare_upload and publish_upload
 
@@ -56,16 +73,21 @@ Publish a page in two steps, with the files going straight to storage. Available
 | `size` | Size in bytes |
 | `sha256` | SHA-256 of the file's bytes, as 64 hex characters |
 
+With `update: true`, `files` lists only the files to add or replace, and `index.html` only if it changes too.
+
 It answers with an `upload_id` and a link for each file that isn't stored yet. The agent sends each file's bytes to its link with an HTTP `PUT` within 15 minutes, then calls `publish_upload`:
 
 | Argument | Required | Meaning |
 | --- | --- | --- |
-| `title` | yes | Title for the gallery and tab |
+| `title` | yes, unless `update` | Title for the gallery and tab |
 | `upload_id` | yes | From `prepare_upload` |
 | `files` | yes | The same list as for `prepare_upload` |
 | `artifact_id` | no | Id or link of an existing page. Publishes a new version at the same link. |
 | `visibility` | no | As for `publish_artifact` |
 | `folder` | no | As for `publish_artifact` |
+| `update` | no | `true` keeps the files of the current version that `files` leaves out, as [`update_files`](#update_files) does. Needs `artifact_id`. |
+| `remove` | no | With `update`: paths to leave out of the new version |
+| `base_version` | no | With `update`: the version the changes start from, as for `update_files` |
 
 ### list_artifacts
 
@@ -258,11 +280,35 @@ publishes `dist/index.html` as the page and every other file in the folder next 
 | `--visibility <who>` | `restricted`, `organization` or `link` |
 | `--folder <name>` | File the page into this [folder](#folders); `""` takes it out |
 | `--ignore <glob>` | Leave out matching files, like `'*.map'` or `drafts/`; repeat for more. A pattern without a `/` matches names at any depth. |
+| `--only <path>` | Send only this file, or the files matching this glob, and keep the page's other files as they are; repeat for more. See [Updating some files](#updating-some-files). |
+| `--remove <path>` | Remove this file from the page and keep the others; repeat for more |
 | `--save` | Remember the page in `.the-artifact.json` in the current folder, so publishing the same path again publishes a new version of it. Commit the file to share it. |
 | `--new` | Publish a new page even when `.the-artifact.json` has one for this path |
 | `--dry-run` | List what would be sent, and send nothing |
 
 The link is the only thing printed on standard output, so `url=$(the-artifact publish dist)` captures it. Progress and notes go to standard error.
+
+### Updating some files
+
+A dashboard published once and refreshed by a job needs only its data sent again. With `--only`, `publish` sends just the files you name and keeps every other file of the page's current version, like [`update_files`](#update_files):
+
+```sh
+the-artifact publish ./dashboard --id k3v9x2m8pq --only data.json
+```
+
+`--only` takes paths relative to the folder, or globs like `'data/*.json'`, and can be repeated. The folder needn't hold the rest of the page, so the job only has to write the files it changes. `--only index.html` replaces the page itself. `--remove old.css` removes a file, and works with or without `--only`. It needs the page: `--id`, or a page saved with `--save`. The title stays as it is unless you pass `--title`.
+
+For example, a cron job that refreshes a dashboard every hour:
+
+```sh
+# crontab: 0 * * * * /opt/dashboard/refresh.sh
+set -e
+cd /opt/dashboard
+./export-metrics > site/data.json
+THE_ARTIFACT_TOKEN=$(cat token.txt) npx @the-artifact/cli publish site --id k3v9x2m8pq --only data.json
+```
+
+Each run is a new version in the [history](/docs/version-history), with the same limits and quota as any other, and the page's link stays the same. Storage counts every version in full, so a job that runs often reaches a workspace's storage or version [quota](#limits) sooner, where the server sets one; [version retention](/docs/retention) keeps the history short.
 
 ### Listing and sharing
 
@@ -326,6 +372,29 @@ curl -fsS {{APP_URL}}/api/publish -H "Authorization: Bearer $ARTIFACT_TOKEN" \
   -F 'title=Test report' -F 'index.html=@report/index.html' -F 'css/site.css=@report/css/site.css'
 ```
 
+#### Updating some files
+
+With `mode` set to `update`, the request changes only some files of a page and keeps the rest of its current version, as [`update_files`](#update_files) does. `artifact_id` is required, `title` is optional (the page keeps its own), and the page itself is only sent to replace it:
+
+```json
+{
+  "mode": "update",
+  "artifact_id": "k3v9x2m8pq",
+  "files": [{ "path": "data.json", "content": "{\"visitors\": 1204}" }],
+  "remove": ["old.css"],
+  "base_version": 7
+}
+```
+
+As a form, `mode=update` is a text field, each path to remove is a `remove` field of its own, and the files are file parts as above:
+
+```sh
+curl -fsS {{APP_URL}}/api/publish -H "Authorization: Bearer $ARTIFACT_TOKEN" \
+  -F mode=update -F artifact_id=k3v9x2m8pq -F 'data.json=@dashboard/data.json'
+```
+
+`base_version` is optional; when it isn't the page's current version, the request answers `409` and nothing is published.
+
 A new page answers `201`, a new version (with `artifact_id`) `200`, both with:
 
 ```json
@@ -339,7 +408,7 @@ A new page answers `201`, a new version (with `artifact_id`) `200`, both with:
 }
 ```
 
-Errors are JSON `{ "error": "…" }` with a message to show as is, sometimes with the `field` it is about: `400` for a page that can't be published (a bad file, a full workspace, an `artifact_id` you can't edit), `401` for a missing, expired or revoked token, `413` for a request over the size limit, `415` for another content type, and `429` with `Retry-After` past the `publish` [rate limit](/docs/configuration#rate-limits). Hosts like Vercel refuse requests over about 4.5 MB before they reach the server; for larger pages, run an agent with the token and use [direct upload](#publishing-by-direct-upload). The [command line](#command-line) sends pages the same way, so the same limit applies to it.
+Errors are JSON `{ "error": "…" }` with a message to show as is, sometimes with the `field` it is about: `400` for a page that can't be published (a bad file, a full workspace, an `artifact_id` you can't edit), `409` for an update whose `base_version` is no longer current, `401` for a missing, expired or revoked token, `413` for a request over the size limit, `415` for another content type, and `429` with `Retry-After` past the `publish` [rate limit](/docs/configuration#rate-limits). Hosts like Vercel refuse requests over about 4.5 MB before they reach the server; for larger pages, run an agent with the token and use [direct upload](#publishing-by-direct-upload). The [command line](#command-line) sends pages the same way, so the same limit applies to it.
 
 To check a token before relying on it, `GET {{APP_URL}}/api/whoami` with it as the bearer token answers with whom it acts for and where it publishes, or `401` like above:
 
@@ -356,7 +425,7 @@ Besides the size of each page, a server limits how fast an account uses these to
 | Limit | Default |
 | --- | --- |
 | Tool calls, by every agent of one account together | 600 per 10 minutes |
-| New pages and versions (`publish_artifact`, `publish_upload`, `restore_version`, `POST /api/publish`) | 200 per hour |
+| New pages and versions (`publish_artifact`, `update_files`, `publish_upload`, `restore_version`, `POST /api/publish`) | 200 per hour |
 | People shared with by email (`share_artifact`, counted with invitations in the app) | 200 per hour |
 | Comments and replies (`add_comment`, `reply_comment`, counted with comments in the app) | 120 per hour |
 | Pages, versions and storage in a self-hosted workspace | None, unless the server sets them |
@@ -366,7 +435,7 @@ A rate limit ends on its own: the message says how long to wait. For a full work
 
 ## Updating a page
 
-Ask for the change in the same conversation ("make the chart a line chart"), or point the agent at the page's comments ("deal with the open comments on the launch plan"). The agent reads the page with `get_artifact` (and any file it needs with `path`) and the feedback with `list_comments`, edits it and publishes with the same `artifact_id` and the full set of files. The link stays the same, the version number goes up, and the old version stays in the [history](/docs/version-history).
+Ask for the change in the same conversation ("make the chart a line chart"), or point the agent at the page's comments ("deal with the open comments on the launch plan"). The agent reads the page with `get_artifact` (and any file it needs with `path`) and the feedback with `list_comments`, edits it and publishes with the same `artifact_id` and the full set of files, or with `update_files` and only the files it changed. The link stays the same, the version number goes up, and the old version stays in the [history](/docs/version-history).
 
 ## Managing pages in the app
 

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   checkLimits,
   collectPage,
+  collectSome,
   fallbackTitle,
   globToRegExp,
   ignoreMatcher,
@@ -135,21 +136,50 @@ describe('collectPage', () => {
   })
 })
 
+describe('collectSome', () => {
+  it('takes only the files matching --only, by path or glob, without needing the rest of the page', async () => {
+    await tree({ 'data.json': '{}', 'data/a.json': '1', 'data/b.json': '22', 'data/c.csv': 'x', 'app.js': 'x', 'data/run.sh': 'x', '.hidden.json': 'x' })
+    const some = await collectSome(dir, ['./data.json', 'data/*.json', 'data/run.sh'])
+    expect(some.entry).toBeNull()
+    expect(some.files.map((f) => f.path)).toEqual(['data/a.json', 'data/b.json', 'data.json'])
+    expect(some.skipped).toEqual([{ path: 'data/run.sh', reason: 'not a type pages can hold' }])
+    expect(some.total).toBe(2 + 1 + 2)
+  })
+
+  it('sends the entry HTML as index.html, by its own name or as index.html', async () => {
+    await tree({ 'report.html': '<h1>r</h1>', 'index.html': 'old', 'style.css': 'x' })
+    expect((await collectSome(dir, ['index.html'])).entry?.path).toBe('index.html')
+    const other = await collectSome(dir, ['index.html', 'report.html'], { entry: 'report.html' })
+    expect(other.entry?.path).toBe('report.html')
+    expect(other.skipped).toEqual([{ path: 'index.html', reason: 'the page itself is report.html' }])
+    expect((await collectSome(join(dir, 'report.html'), ['index.html'])).entry?.path).toBe('report.html')
+  })
+
+  it('says which --only matched nothing', async () => {
+    await tree({ 'data.json': '{}' })
+    await expect(collectSome(dir, ['data.json', 'data.csv'], { label: 'dash' })).rejects.toThrow('Nothing in dash matches --only data.csv.')
+    await expect(collectSome(join(dir, 'missing'), ['x'], { label: 'missing' })).rejects.toThrow('There is no file or folder at missing.')
+  })
+})
+
 describe('checkLimits', () => {
   const entry = { path: 'index.html', abs: '', size: 10 }
   const file = (path: string, size: number) => ({ path, abs: '', size })
 
   it('passes a page within the limits', () => {
-    expect(() => checkLimits({ entry, files: [file('a.css', 10)], skipped: [], total: 20 })).not.toThrow()
+    expect(() => checkLimits({ entry, files: [file('a.css', 10)], total: 20 })).not.toThrow()
+  })
+
+  it('checks an update without the entry', () => {
+    expect(() => checkLimits({ entry: null, files: [file('data.json', 10)], total: 10 })).not.toThrow()
+    expect(() => checkLimits({ entry: null, files: [file('v.mp4', MAX_FILE_BYTES + 1)], total: MAX_FILE_BYTES + 1 })).toThrow('v.mp4 is larger')
   })
 
   it('refuses what the server would refuse, before sending it', () => {
-    expect(() => checkLimits({ entry: { ...entry, size: 0 }, files: [], skipped: [], total: 0 })).toThrow('index.html is empty.')
+    expect(() => checkLimits({ entry: { ...entry, size: 0 }, files: [], total: 0 })).toThrow('index.html is empty.')
     const many = Array.from({ length: MAX_FILES + 1 }, (_, i) => file(`${i}.css`, 1))
-    expect(() => checkLimits({ entry, files: many, skipped: [], total: 200 })).toThrow('at most 100 files')
-    expect(() => checkLimits({ entry, files: [file('v.mp4', MAX_FILE_BYTES + 1)], skipped: [], total: MAX_FILE_BYTES + 11 })).toThrow(
-      'v.mp4 is larger than 5 MB',
-    )
-    expect(() => checkLimits({ entry, files: [], skipped: [], total: MAX_TOTAL_BYTES + 1 })).toThrow('more than 10 MB')
+    expect(() => checkLimits({ entry, files: many, total: 200 })).toThrow('at most 100 files')
+    expect(() => checkLimits({ entry, files: [file('v.mp4', MAX_FILE_BYTES + 1)], total: MAX_FILE_BYTES + 11 })).toThrow('v.mp4 is larger than 5 MB')
+    expect(() => checkLimits({ entry, files: [], total: MAX_TOTAL_BYTES + 1 })).toThrow('more than 10 MB')
   })
 })
