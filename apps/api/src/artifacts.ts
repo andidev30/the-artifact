@@ -554,8 +554,9 @@ function matches(query: string | undefined, readable?: SQL): SQL | undefined {
 // An organization's gallery lists its link-shared pages to every member, but a member opens one only
 // through its link (accessLevel): one with a password, a reset link (a key) or an expired link stays
 // closed to them. Its text mustn't answer searches for them either, or searching could read it word
-// by word. These are the listed pages whose content the person can open, as accessLevel decides.
-function readableIn(viewer: Viewer, organizationId: string | null): SQL | undefined {
+// by word, and its tags and comment counts aren't shown to them. These are the listed pages whose
+// content the person can open, as accessLevel decides; undefined means all of them.
+export function readableIn(viewer: Viewer, organizationId: string | null): SQL | undefined {
   if (!organizationId) return undefined
   const a = schema.artifacts
   return or(
@@ -567,11 +568,13 @@ function readableIn(viewer: Viewer, organizationId: string | null): SQL | undefi
   )
 }
 
-// A tag as checkTag leaves it (src/tags.ts)
-function taggedWith(tag: string | undefined): SQL | undefined {
+// A tag as checkTag leaves it (src/tags.ts). readable as for matches: a page's tags count only where
+// the person could see them
+function taggedWith(tag: string | undefined, readable?: SQL): SQL | undefined {
   if (tag === undefined) return undefined
   const t = schema.artifactTags
-  return sql`${schema.artifacts.id} in (select ${t.artifactId} from ${t} where ${t.tag} = ${tag})`
+  const tagged = sql`${schema.artifacts.id} in (select ${t.artifactId} from ${t} where ${t.tag} = ${tag})`
+  return readable ? and(readable, tagged) : tagged
 }
 
 // Pages shown in a workspace: in an organization, shared pages plus your own private ones
@@ -633,14 +636,18 @@ function inFolder(folder: string | null | undefined): SQL | undefined {
 const NEWEST_FIRST = [desc(schema.artifacts.updatedAt), desc(schema.artifacts.id)]
 
 function inWorkspace(viewer: Viewer, organizationId: string | null, opts: Pick<ListOptions, 'query' | 'folder' | 'tag'>) {
-  return and(pagesInWorkspace(viewer.id, organizationId), matches(opts.query, readableIn(viewer, organizationId)), inFolder(opts.folder), taggedWith(opts.tag))
+  const readable = readableIn(viewer, organizationId)
+  return and(pagesInWorkspace(viewer.id, organizationId), matches(opts.query, readable), inFolder(opts.folder), taggedWith(opts.tag, readable))
 }
 
+// readable: whether the person can open the page's content, and so see its tags and comment counts
 export async function listForWorkspace(viewer: Viewer, organizationId: string | null, opts: ListOptions = {}) {
   const limit = pageLimit(opts.limit)
+  const readable = readableIn(viewer, organizationId)
   const rows = await db
     .select({
       artifact: schema.artifacts,
+      readable: readable ? sql<boolean>`(${readable})` : sql<boolean>`true`,
       ownerName: schema.users.name,
       ownerEmail: schema.users.email,
       folderName: schema.folders.name,

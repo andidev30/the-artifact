@@ -552,7 +552,7 @@ Search only looks at the pages the list shows you, and at the text of the ones y
 Tags are short labels on a page, like `q3`, `draft` or `design review`. They work across folders: a page is in one folder but can have several tags.
 
 - **Editors add and remove them**: choose **Tags** in the page's **…** menu, in the gallery or the viewer, type one or several separated by commas and press **Enter**. Or ask your agent (it uses `tag_artifact`). Changing tags doesn't change when the page was last updated.
-- **Everyone who can open the page sees its tags**, on its card and in the viewer.
+- **Everyone who can open the page sees its tags**, on its card and in the viewer. A link-shared page in an organization that is closed to you, with a password, a reset link or an expired link, is still listed, but without its tags or comment count, and filtering by a tag leaves it out.
 - **Tags are lowercase**, 1 to 32 characters, without commas, and a page has up to 10.
 - **Filter by a tag** by picking it above the gallery, or on a card. The tags above the gallery are those of the pages you see in the workspace, with how many pages have each. Tags belong to the page's workspace; pages shared with you show their tags too, and filtering by one works in **Shared with you** as well.
 
