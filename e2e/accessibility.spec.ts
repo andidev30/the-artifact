@@ -440,4 +440,21 @@ test('single sign-on: sign-in buttons and the admin section', async ({ page, bro
   await sso.getByRole('button', { name: 'Remove Okta' }).click()
   await expect(sso.getByRole('group', { name: 'Confirm: remove Okta' })).toBeVisible()
   await expectAccessible(page, 'server admin, removing a single sign-on connection')
+  await sso.getByRole('button', { name: 'Cancel', exact: true }).click()
+
+  // Adding a SAML provider, by keyboard: the protocol choice, then the metadata fields
+  await sso.getByRole('button', { name: 'Add a provider' }).click()
+  await sso.getByRole('radio', { name: /OpenID Connect/ }).focus()
+  await page.keyboard.press('ArrowDown')
+  await expect(sso.getByRole('radio', { name: /SAML/ })).toBeChecked()
+  await expect(sso.getByLabel('Metadata URL')).toBeVisible()
+  await expectAccessible(page, 'server admin, adding a SAML connection')
+
+  const scim = page.locator('section#scim')
+  await expect(scim.getByRole('heading', { name: /Provisioning \(SCIM\)/ })).toBeVisible()
+  await scim.getByLabel('Token name').focus()
+  await page.keyboard.type('Entra ID')
+  await page.keyboard.press('Enter')
+  await expect(scim.getByText('It is not shown again.')).toBeVisible()
+  await expectAccessible(page, 'server admin, a new SCIM token')
 })

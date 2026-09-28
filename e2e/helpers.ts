@@ -181,6 +181,7 @@ export const SSO_CONNECTION = {
   clientId: 'the-artifact',
   hasClientSecret: true,
   trustEmail: false,
+  saml: null,
   allowedDomains: ['acme.example'],
   required: true,
   organizationId: null,
@@ -190,7 +191,8 @@ export const SSO_CONNECTION = {
 
 // Single sign-on needs an Enterprise license on a self-hosted install, which the e2e servers don't
 // have (license keys are only signed by the hosted service), so its screens are shown by answering
-// the API the way a licensed install would. What the API does is in apps/api/test/integration/sso.test.ts.
+// the API the way a licensed install would. What the API does is in apps/api/test/integration/sso.test.ts,
+// saml.test.ts and scim.test.ts.
 export async function licensedSso(page: Page) {
   await page.route('**/api/config', async (route) => {
     const response = await route.fetch()
@@ -199,8 +201,31 @@ export async function licensedSso(page: Page) {
   await page.route('**/api/admin/sso', (route) =>
     route.request().method() === 'POST'
       ? route.fulfill({ status: 201, json: { ...SSO_CONNECTION, id: '7d0c1f4e-2b8a-4c3d-9e6f-1a2b3c4d5e6f', name: 'Keycloak', required: false } })
-      : route.fulfill({ json: { redirectUri: 'http://localhost:5177/api/auth/sso/oidc/callback', connections: [SSO_CONNECTION], organizations: [] } }),
+      : route.fulfill({
+          json: {
+            redirectUri: 'http://localhost:5177/api/auth/sso/oidc/callback',
+            saml: { entityId: 'http://localhost:5177/api/auth/sso/saml/metadata', acsUrl: 'http://localhost:5177/api/auth/sso/saml/acs' },
+            connections: [SSO_CONNECTION],
+            organizations: [],
+          },
+        }),
   )
+  const scim = {
+    baseUrl: 'http://localhost:5177/scim/v2',
+    organizations: [],
+    tokens: [
+      {
+        id: '1d6c3b0e-2a3f-4e5d-9c1b-7a8e9f0a1b2c',
+        name: 'Okta',
+        organizationId: null,
+        organizationName: null,
+        createdAt: '2026-09-01T00:00:00.000Z',
+        lastUsedAt: null,
+      },
+    ],
+  }
+  await page.route('**/api/admin/scim', (route) => route.fulfill({ json: scim }))
+  await page.route('**/api/admin/scim/tokens', (route) => route.fulfill({ status: 201, json: { ...scim, token: 'scim_e2e-token-shown-once' } }))
   await page.route('**/api/admin/license', (route) =>
     route.fulfill({
       json: {
