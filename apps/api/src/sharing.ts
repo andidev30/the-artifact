@@ -3,6 +3,7 @@ import { artifactUrl } from './artifacts.js'
 import { db, schema } from './db/index.js'
 import type { Artifact, ShareRole } from './db/schema.js'
 import { mailEnabled } from './env.js'
+import { linkSettings } from './links.js'
 import { log } from './log.js'
 import { sendShareNotice } from './mail.js'
 import { EMAIL_RE } from './validation.js'
@@ -46,6 +47,7 @@ export async function getSharing(artifact: Artifact) {
       pending: !byEmail.has(s.email),
     })),
     visibility: artifact.visibility,
+    link: linkSettings(artifact),
     organizationName: org?.name ?? null,
   }
 }

@@ -300,6 +300,13 @@ export const artifacts = pgTable(
     publishedWith: text('published_with'),
     // Always a folder of the page's own workspace; null for no folder
     folderId: uuid('folder_id').references((): AnyPgColumn => folders.id, { onDelete: 'set null' }),
+    // Link sharing only: after this, the link opens nothing for people without other access
+    linkExpiresAt: timestamp('link_expires_at', { withTimezone: true }),
+    // Link sharing only: scrypt hash (see src/auth/password.ts) of the password visitors enter
+    linkPasswordHash: text('link_password_hash'),
+    // Link sharing only: the key a public link carries (/a/<slug>?k=<key>), set when the link is first
+    // reset. Until then the plain page address is the public link, as it was for links shared before keys.
+    linkToken: text('link_token'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

@@ -1,13 +1,14 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import type { Context } from 'hono'
-import { accessLevel, findBySlug, getFile, getVersion, loadVersionTree, versionHtml, type Viewer } from './artifacts.js'
+import { accessLevel, findBySlug, getFile, getVersion, linkLetsIn, linkOpen, loadVersionTree, versionHtml, type LinkPass, type Viewer } from './artifacts.js'
 import type { AuthEnv } from './auth/session.js'
 import { db, schema } from './db/index.js'
 import type { Artifact } from './db/schema.js'
 import { env } from './env.js'
 import { checkPath, ENTRY_PATH } from './files.js'
 import { clientIp } from './limits.js'
+import { isGrant, linkPassFor, signGrant, verifyGrant } from './links.js'
 import { serverSecret } from './secrets.js'
 import { recordView } from './views.js'
 import { zip } from './zip.js'
@@ -112,18 +113,35 @@ export async function serveVersion(c: Context<AuthEnv>) {
   const isCurrent = version === artifact.currentVersion
 
   let viewer: Viewer | null = c.get('user')
-  if (token) {
+  let link: LinkPass = {}
+  if (token && isGrant(token)) {
+    // Someone who passed the link's key and password, whoever they are
+    if (!(await verifyGrant(token, artifact))) return notFound(c)
+    viewer = null
+    link = { granted: true }
+  } else if (token) {
     const userId = await verifyContentLink(token, artifact, version)
     viewer = userId ? await userById(userId) : null
     if (!viewer) return notFound(c)
+  } else {
+    link = await linkPassFor(c, artifact)
   }
-  if (!allowed(await accessLevel(artifact, viewer), isCurrent)) return notFound(c)
+  const access = await accessLevel(artifact, viewer, link)
+  if (!allowed(access, isCurrent)) return notFound(c)
 
-  // A browser opening a page that needs to know who is looking: continue under a link token
-  const needsIdentity = !(isCurrent && artifact.visibility === 'link')
-  if (!token && needsIdentity && viewer && NAVIGATIONS.has(c.req.header('sec-fetch-dest') ?? '')) {
-    const signed = await signContentLink(viewer.id, artifact, version)
-    return c.body(null, 302, { Location: `${base}~${signed}/${rest}${new URL(c.req.url).search}`, 'Cache-Control': 'no-store', Vary: 'Cookie' })
+  // A browser opening a page that needs to know who is looking, or that the link's key and password
+  // were given: continue under a token. People with access of their own get theirs, which outlives
+  // a reset or a new password.
+  const plainLink = linkOpen(artifact) && artifact.linkToken === null && artifact.linkPasswordHash === null
+  if (!token && !(isCurrent && plainLink) && NAVIGATIONS.has(c.req.header('sec-fetch-dest') ?? '')) {
+    const own = viewer ? await accessLevel(artifact, viewer) : null
+    const signed = viewer && own ? await signContentLink(viewer.id, artifact, version) : linkLetsIn(artifact, link) ? (await signGrant(artifact)).token : null
+    if (signed) {
+      const query = new URL(c.req.url).searchParams
+      query.delete('k')
+      const search = query.size ? `?${query}` : ''
+      return c.body(null, 302, { Location: `${base}~${signed}/${rest}${search}`, 'Cache-Control': 'no-store', Vary: 'Cookie' })
+    }
   }
 
   const v = await getVersion(artifact, version)
@@ -137,7 +155,8 @@ export async function serveVersion(c: Context<AuthEnv>) {
           version,
           versionId: v.id,
           viewerId: viewer?.id ?? null,
-          identified: needsIdentity,
+          // Opened as a link-shared page (plain, with a key or a grant): recorded without anyone's identity
+          identified: !(isCurrent && artifact.visibility === 'link'),
           visitor: `${clientIp(c) ?? ''}|${c.req.header('user-agent') ?? ''}`,
         })
       : null
@@ -210,7 +229,8 @@ export async function downloadVersion(c: Context<AuthEnv>) {
     viewer = userId ? await userById(userId) : null
     if (!viewer) return notFound(c)
   }
-  if (!allowed(await accessLevel(artifact, viewer), version === artifact.currentVersion)) return notFound(c)
+  const link = token ? {} : await linkPassFor(c, artifact)
+  if (!allowed(await accessLevel(artifact, viewer, link), version === artifact.currentVersion)) return notFound(c)
   const v = await getVersion(artifact, version)
   const tree = v ? await loadVersionTree(v.id) : null
   if (!v || !tree) return notFound(c)

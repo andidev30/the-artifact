@@ -1,6 +1,17 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { getSharing, removePerson, setPersonRole, setVisibility, sharePeople, type ShareRole, type Sharing, type Visibility } from '../api'
-import { APP_URL } from '../config'
+import {
+  FieldError,
+  getSharing,
+  removePerson,
+  setPersonRole,
+  setVisibility,
+  sharePeople,
+  updateLink,
+  type LinkSettings,
+  type ShareRole,
+  type Sharing,
+  type Visibility,
+} from '../api'
 import { useReturnFocus } from '../focus'
 import { useConfig } from '../useConfig'
 import { CopyCommand } from './CopyCommand'
@@ -27,8 +38,8 @@ function attr(value: string) {
 }
 
 // The frame the oEmbed endpoint describes, at the full width of wherever it is pasted
-function embedCode(slug: string, title: string) {
-  return `<iframe src="${APP_URL}/e/${slug}" width="100%" height="600" style="border:0" title="${attr(title)}" loading="lazy" allowfullscreen></iframe>`
+function embedCode(embedUrl: string, title: string) {
+  return `<iframe src="${attr(embedUrl)}" width="100%" height="600" style="border:0" title="${attr(title)}" loading="lazy" allowfullscreen></iframe>`
 }
 
 function Avatar({ name, email, src }: { name: string | null; email: string; src: string | null }) {
@@ -52,6 +63,161 @@ function AccessIcon({ v }: { v: Visibility }) {
   )
 }
 
+const pad = (n: number) => String(n).padStart(2, '0')
+const localDate = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+const endOfDay = (date: string) => new Date(`${date}T23:59:59.999`).toISOString()
+const longDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })
+
+function linkStatus(link: LinkSettings) {
+  const until = link.expiresAt ? (link.expired ? `The link expired on ${longDate(link.expiresAt)}.` : `The link works until ${longDate(link.expiresAt)}.`) : ''
+  const password = link.password ? 'People who open it enter a password.' : ''
+  return [until, password].filter(Boolean).join(' ')
+}
+
+// Anyone-with-the-link options: when the link stops working, a password, and a reset
+function LinkOptions({
+  slug,
+  link,
+  onChange,
+  announce,
+}: {
+  slug: string
+  link: LinkSettings
+  onChange: (link: LinkSettings) => void
+  // The dialog has one status line, so each change is announced once
+  announce: (message: string | null) => void
+}) {
+  const saved = link.expiresAt ? localDate(new Date(link.expiresAt)) : ''
+  const [expires, setExpires] = useState(saved)
+  const [password, setPassword] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<{ message: string; field: 'expires' | 'password' | null } | null>(null)
+  const [confirmNew, setConfirmNew] = useState(false)
+  const newLinkButton = useRef<HTMLButtonElement>(null)
+  const changed = expires !== saved || password !== ''
+  const status = linkStatus(link)
+
+  async function apply(change: Parameters<typeof updateLink>[1], done: string) {
+    setBusy(true)
+    setError(null)
+    announce(null)
+    try {
+      const result = await updateLink(slug, change)
+      onChange(result.link)
+      setPassword('')
+      announce(done)
+    } catch (err) {
+      const field = err instanceof FieldError ? err.field : undefined
+      setError({
+        message: err instanceof Error ? err.message : 'The link could not be changed. Try again.',
+        field: field === 'linkExpiresAt' ? 'expires' : field === 'linkPassword' ? 'password' : null,
+      })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function onSave(e: FormEvent) {
+    e.preventDefault()
+    const change: Parameters<typeof updateLink>[1] = {}
+    if (expires !== saved) change.linkExpiresAt = expires ? endOfDay(expires) : null
+    if (password) change.linkPassword = password
+    apply(change, 'Link settings saved.')
+  }
+
+  const describe = (field: 'expires' | 'password', hint: string) => (error?.field === field ? `share-link-error ${hint}` : hint)
+
+  return (
+    <div className="share-link">
+      {status && <p className="share-link-status">{status}</p>}
+      <form className="share-link-form" onSubmit={onSave} noValidate>
+        <div className="share-link-field">
+          <label htmlFor="share-expires">Link expires</label>
+          <input
+            id="share-expires"
+            type="date"
+            value={expires}
+            min={localDate(new Date())}
+            onChange={(e) => setExpires(e.target.value)}
+            aria-invalid={error?.field === 'expires' || undefined}
+            aria-describedby={describe('expires', 'share-expires-hint')}
+          />
+          <p id="share-expires-hint">At the end of this day. Leave empty to keep it working.</p>
+        </div>
+        <div className="share-link-field">
+          <label htmlFor="share-link-password">{link.password ? 'New link password' : 'Link password'}</label>
+          <input
+            id="share-link-password"
+            type="password"
+            autoComplete="new-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            aria-invalid={error?.field === 'password' || undefined}
+            aria-describedby={describe('password', 'share-password-hint')}
+          />
+          <p id="share-password-hint">{link.password ? 'Type one to replace the current password.' : 'Optional, at least 8 characters.'}</p>
+        </div>
+        {error && (
+          <p id="share-link-error" className="share-message share-error" role="alert">
+            {error.message}
+          </p>
+        )}
+        <div className="share-link-actions">
+          <button type="submit" className="button button-quiet" disabled={!changed || busy}>
+            Save link settings
+          </button>
+          {link.password && (
+            <button type="button" className="button button-quiet" disabled={busy} onClick={() => apply({ linkPassword: null }, 'Password removed.')}>
+              Remove password
+            </button>
+          )}
+          <button
+            type="button"
+            className="button button-quiet"
+            ref={newLinkButton}
+            aria-expanded={confirmNew}
+            aria-controls="share-new-link"
+            onClick={() => setConfirmNew((v) => !v)}
+          >
+            Reset link
+          </button>
+        </div>
+      </form>
+      {confirmNew && (
+        <div id="share-new-link" className="share-link-confirm" role="group" aria-labelledby="share-new-link-title">
+          <p id="share-new-link-title">
+            The page gets a new public link, and links shared before stop working. You, the people you added and your organization keep opening it as before.
+          </p>
+          <div className="share-link-actions">
+            <button
+              type="button"
+              className="button"
+              disabled={busy}
+              onClick={() => {
+                setConfirmNew(false)
+                newLinkButton.current?.focus()
+                apply({ rotateLink: true }, 'The link was reset. Copy link to share the new one.')
+              }}
+            >
+              Make a new link
+            </button>
+            <button
+              type="button"
+              className="button button-quiet"
+              onClick={() => {
+                setConfirmNew(false)
+                newLinkButton.current?.focus()
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // Share settings in the shape of Google Drive: add people, people with access, general access
 export function ShareDialog({ slug, title, currentUserEmail, onClose, onVisibilityChange }: Props) {
   const dialog = useRef<HTMLDialogElement>(null)
@@ -72,6 +238,9 @@ export function ShareDialog({ slug, title, currentUserEmail, onClose, onVisibili
 
   useEffect(() => {
     dialog.current?.showModal()
+  }, [])
+
+  useEffect(() => {
     getSharing(slug)
       .then(setSharing)
       .catch(() => setLoadError(true))
@@ -125,7 +294,9 @@ export function ShareDialog({ slug, title, currentUserEmail, onClose, onVisibili
 
   async function copyLink() {
     try {
-      await navigator.clipboard.writeText(`${window.location.origin}/a/${slug}`)
+      // Shared by link, people without access of their own need the link's key
+      const link = sharing?.visibility === 'link' ? sharing.link.url : `${window.location.origin}/a/${slug}`
+      await navigator.clipboard.writeText(link)
       setCopied(true)
       setTimeout(() => setCopied(false), 1800)
     } catch {
@@ -254,12 +425,25 @@ export function ShareDialog({ slug, title, currentUserEmail, onClose, onVisibili
               <p>{access.detail}</p>
             </div>
           </div>
+          {sharing.visibility === 'link' && (
+            <LinkOptions
+              slug={slug}
+              link={sharing.link}
+              onChange={(link) => setSharing((s) => (s ? { ...s, link } : s))}
+              announce={(message) => {
+                setNotice(message)
+                setError(null)
+              }}
+            />
+          )}
 
           <h3>Embed</h3>
-          {sharing.visibility === 'link' ? (
+          {sharing.visibility === 'link' && sharing.link.password ? (
+            <p className="share-embed-note">Embeds show a sign-in card while the link has a password.</p>
+          ) : sharing.visibility === 'link' ? (
             <div className="share-embed">
               <p>Paste the link into Notion or Confluence and choose Embed, or add this code to any site.</p>
-              <CopyCommand command={embedCode(slug, title)} label="Copy embed code" plain />
+              <CopyCommand command={embedCode(sharing.link.embedUrl, title)} label="Copy embed code" plain />
             </div>
           ) : (
             <p className="share-embed-note">Embedding needs Anyone with the link. Until then, an embed shows a sign-in card instead of the page.</p>

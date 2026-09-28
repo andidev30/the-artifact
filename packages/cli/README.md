@@ -56,6 +56,8 @@ prints the page's link. Hidden files and folders, `node_modules`, and file types
 ```sh
 the-artifact list --query report
 the-artifact share k3v9x2m8pq --visibility link
+the-artifact share k3v9x2m8pq --expires 2026-12-31 --password "open sesame"
+the-artifact share k3v9x2m8pq --new-link
 the-artifact share k3v9x2m8pq --email ana@example.com --role editor --message "Have a look"
 ```
 

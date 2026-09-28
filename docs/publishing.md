@@ -101,7 +101,17 @@ Changes a page's title without publishing a new version. The same rules as renam
 
 ### set_artifact_visibility
 
-Changes who can open a page without publishing a new version.
+Changes who can open a page without publishing a new version, and sets up its public link: when it expires, a password, or a reset that replaces it. For people who can edit the page. Pass at least one argument besides `artifact_id`.
+
+| Argument | Required | Meaning |
+| --- | --- | --- |
+| `artifact_id` | yes | Id or link of the page |
+| `visibility` | no | `private` (restricted), `organization` or `link` |
+| `link_expires` | no | When the link stops working for people with no access of their own: a date (`2026-12-31`, the end of that day in UTC) or an ISO 8601 date and time. An empty string or `never` removes it. |
+| `link_password` | no | A password people enter to open the page by its link, at least 8 characters. An empty string removes it. |
+| `rotate_link` | no | `true` resets the public link: public links shared before then work like a page that doesn't exist. The page keeps its id and its own link, which people with access keep using. |
+
+When the page is shared by link, the answer ends with its `Public link`, to hand to people without access of their own; `Link` is the page's own address. The expiry, the password and the key only apply while `visibility` is `link`. See [Link expiry, password and reset](/docs/sharing#link-expiry-password-and-reset).
 
 ### share_artifact
 
@@ -258,6 +268,8 @@ The link is the only thing printed on standard output, so `url=$(the-artifact pu
 | --- | --- |
 | `the-artifact list` | Lists the pages in the workspace, newest first: id, version, who can open it, folder and title. `--query <words>` searches titles, `--folder <name>` narrows to a folder, `--limit <n>` (1 to 100) and `--cursor` page through. |
 | `the-artifact share <page> --visibility link` | Changes who can open a page: `restricted`, `organization` or `link` |
+| `the-artifact share <page> --expires 2026-12-31 --password <text>` | The link stops working after that day (UTC), and asks for the password. `--expires never` and `--password ""` remove them. |
+| `the-artifact share <page> --new-link` | Resets the public link and prints the new one; public links shared before stop working. The page keeps its id. |
 | `the-artifact share <page> --email ana@example.com` | Shares a page with people by email; repeat `--email` for more. `--role editor` lets them publish new versions too, and `--message` adds a note to the email. |
 
 ### In CI

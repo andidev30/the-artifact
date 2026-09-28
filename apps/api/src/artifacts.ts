@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto'
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { and, asc, count, desc, eq, ilike, inArray, isNull, ne, or, sql, type SQL } from 'drizzle-orm'
 import { db, schema } from './db/index.js'
 import type { Artifact, Visibility } from './db/schema.js'
@@ -24,9 +24,9 @@ export function artifactUrl(slug: string): string {
   return `${env.appUrl}/a/${slug}`
 }
 
-// Accepts a bare slug or a full /a/<slug> link
+// Accepts a bare slug or a full /a/<slug> link, with or without its ?k= key
 export function parseArtifactRef(ref: string): string {
-  const match = ref.trim().match(/\/a\/([a-z0-9]+)\/?$/)
+  const match = ref.trim().match(/\/a\/([a-z0-9]+)\/?(?:[?#].*)?$/)
   return match ? match[1] : ref.trim()
 }
 
@@ -47,10 +47,34 @@ export type Viewer = { id: string; email: string; blockedOrgs?: readonly string[
 
 export type Access = 'edit' | 'view' | null
 
+// Shared with anyone who has the link, and the link hasn't expired. Its key and password are checked apart.
+export function linkOpen(artifact: Artifact, now = new Date()): boolean {
+  return artifact.visibility === 'link' && (artifact.linkExpiresAt === null || artifact.linkExpiresAt > now)
+}
+
+// The link's key the request carries, or a server-signed grant saying it already passed the link's
+// key and password (src/links.ts)
+export type LinkPass = { key?: string | null; granted?: boolean }
+
+// A page whose link was never reset has no key: its plain address is the public link, as links shared
+// before keys existed are. Compared in constant time.
+export function keyMatches(artifact: Artifact, key: string | null | undefined): boolean {
+  if (artifact.linkToken === null) return true
+  if (!key) return false
+  const digest = (v: string) => createHash('sha256').update(v).digest()
+  return timingSafeEqual(digest(key), digest(artifact.linkToken))
+}
+
+// Whether the link lets this request in: shared by link, not expired, with its key and password
+export function linkLetsIn(artifact: Artifact, link: LinkPass = {}): boolean {
+  if (!linkOpen(artifact)) return false
+  return link.granted === true || (keyMatches(artifact, link.key) && artifact.linkPasswordHash === null)
+}
+
 // Like Google Drive: owners and invited editors can edit, invited viewers can view,
 // organization admins can edit every page in it, and general access opens a page wider.
-export async function accessLevel(artifact: Artifact, viewer: Viewer | null): Promise<Access> {
-  let level: Access = artifact.visibility === 'link' ? 'view' : null
+export async function accessLevel(artifact: Artifact, viewer: Viewer | null, link: LinkPass = {}): Promise<Access> {
+  let level: Access = linkLetsIn(artifact, link) ? 'view' : null
   if (!viewer) return level
   if (artifact.ownerId === viewer.id) return 'edit'
 
@@ -69,8 +93,8 @@ export async function accessLevel(artifact: Artifact, viewer: Viewer | null): Pr
   return level
 }
 
-export async function canView(artifact: Artifact, viewer: Viewer | null): Promise<boolean> {
-  return (await accessLevel(artifact, viewer)) !== null
+export async function canView(artifact: Artifact, viewer: Viewer | null, link: LinkPass = {}): Promise<boolean> {
+  return (await accessLevel(artifact, viewer, link)) !== null
 }
 
 export async function canEdit(artifact: Artifact, viewer: Viewer): Promise<boolean> {

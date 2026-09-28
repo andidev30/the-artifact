@@ -255,6 +255,34 @@ describe('the-artifact list and share', () => {
     const nothing = await run(['share', pageId(url)], { env })
     expect(nothing.code).toBe(2)
   })
+
+  it('sets an expiry and a password on the link, and makes a new link', async () => {
+    const user = await createUser()
+    const { token } = await tokenFor(user)
+    const env = { THE_ARTIFACT_TOKEN: token }
+    await site({ 'index.html': '<!doctype html><h1>x</h1>' })
+    const url = (await run(['publish', 'site', '--title', 'Plan', '--visibility', 'link'], { env })).stdout.trim()
+
+    const locked = await run(['share', url, '--expires', '2999-12-31', '--password', 'open sesame'], { env })
+    expect(locked.code).toBe(0)
+    expect(locked.stdout).toContain('(until 2999-12-31 23:59 UTC, with a password)')
+    const page = await pageBySlug(pageId(url))
+    expect(page.linkExpiresAt?.toISOString()).toBe('2999-12-31T23:59:59.999Z')
+    expect(page.linkPasswordHash).toMatch(/^scrypt\$/)
+
+    // The page keeps its id; only the public link changes
+    const slug = pageId(url)
+    const rotated = await run(['share', slug, '--new-link', '--email', 'ana@example.com', '--json'], { env })
+    expect(rotated.code).toBe(0)
+    const [linkMessage, shareMessage] = JSON.parse(rotated.stdout).messages
+    const { linkToken } = await pageBySlug(slug)
+    expect(linkMessage).toContain(`Public link: ${url}?k=${linkToken}`)
+    expect(shareMessage).toContain(`/a/${slug}`)
+
+    const cleared = await run(['share', slug, '--expires', 'never', '--password', ''], { env })
+    expect(cleared.code).toBe(0)
+    expect((await pageBySlug(slug)).linkPasswordHash).toBeNull()
+  })
 })
 
 describe('the-artifact login', () => {

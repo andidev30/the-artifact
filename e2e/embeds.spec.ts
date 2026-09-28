@@ -61,3 +61,35 @@ test('another site embeds a link-shared page, and a restricted one shows only a 
     site.close()
   }
 })
+
+test('after the link is reset, embeds need the new key and the old embed shows the sign-in card', async ({ page, baseURL }) => {
+  await signUpPersonal(page, uniqueEmail('embed-reset'))
+  const token = await connectAgent(page)
+  const slug = await publishViaMcp(page.request, token, { title: 'Reset signups', html: HTML, visibility: 'link' })
+
+  await page.goto(`/a/${slug}`)
+  await page.getByRole('button', { name: 'Share' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Share “Reset signups”' })
+  await dialog.getByRole('button', { name: 'Reset link' }).click()
+  await dialog.getByRole('button', { name: 'Make a new link' }).click()
+  await expect(dialog.getByText('The link was reset. Copy link to share the new one.')).toBeVisible()
+  const code = (await dialog.locator('.share-embed code').textContent()) ?? ''
+  const key = code.match(/\/e\/[a-z0-9]+\?k=([A-Za-z0-9_-]+)"/)?.[1]
+  expect(key, code).toBeTruthy()
+  await dialog.getByRole('button', { name: 'Done' }).click()
+
+  const site = await thirdPartySite(`<!doctype html><h1>Team wiki</h1>
+<iframe id="fresh" src="${baseURL}/e/${slug}?k=${key}" width="800" height="400"></iframe>
+<iframe id="old" src="${baseURL}/e/${slug}" width="800" height="400"></iframe>`)
+  try {
+    await page.goto(site.url)
+    const fresh = page.frameLocator('#fresh')
+    await expect(fresh.frameLocator('iframe.page').getByRole('heading', { name: 'Signups by week' })).toBeVisible()
+    await expect(fresh.getByRole('link', { name: 'Open in The Artifact' })).toHaveAttribute('href', `${baseURL}/a/${slug}?k=${key}`)
+    const old = page.frameLocator('#old')
+    await expect(old.getByRole('heading', { name: 'Sign in to view this page' })).toBeVisible()
+    await expect(old.locator('body')).not.toContainText('Reset signups')
+  } finally {
+    site.close()
+  }
+})

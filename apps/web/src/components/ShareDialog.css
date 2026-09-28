@@ -267,6 +267,86 @@
   color: var(--ink-soft);
 }
 
+/* Link options sit under general access, lined up with its text */
+
+.share-link {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0 0 48px;
+  font-size: var(--step--1);
+}
+
+.share-link-status {
+  margin: 0;
+  font-weight: 600;
+}
+
+.share-link-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.share-link-field {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+}
+
+.share-link-field label {
+  font-weight: 700;
+}
+
+.share-link-field input {
+  height: 38px;
+  min-width: 0;
+  padding: 0 10px;
+  font: inherit;
+  color: var(--ink);
+  background: var(--white);
+  border: 1.5px solid var(--ink);
+  border-radius: 3px;
+}
+
+.share-link-field p,
+.share-link-confirm p {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.share-link-form > .share-message,
+.share-link-form > .share-link-actions {
+  grid-column: 1 / -1;
+  margin-top: 0;
+}
+
+.share-link-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.share-link-actions .button {
+  height: 36px;
+  padding: 0 14px;
+  font: 700 var(--step--1) var(--sans);
+  cursor: pointer;
+}
+
+.share-link-actions .button:disabled {
+  color: var(--ink-soft);
+  cursor: not-allowed;
+}
+
+.share-link-confirm {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--paper);
+  border: 1.5px dashed var(--ink);
+  border-radius: 3px;
+}
+
 /* Embed */
 
 .share-embed {
@@ -318,5 +398,13 @@
 
   .share-invite select {
     flex: 1;
+  }
+
+  .share-link {
+    margin-left: 0;
+  }
+
+  .share-link-form {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

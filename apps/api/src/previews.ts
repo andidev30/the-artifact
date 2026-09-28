@@ -2,13 +2,15 @@ import type { Env, Hono } from 'hono'
 import { canView, findBySlug } from './artifacts.js'
 import type { Artifact } from './db/schema.js'
 import { env } from './env.js'
+import { keyQuery, publicLink } from './links.js'
 import { log } from './log.js'
 import { currentThumbnails } from './thumbnails.js'
 
 // Link previews: chat apps and mail clients don't run the app's JavaScript, so the Open Graph tags
 // for /a/<slug> go into the HTML shell the server returns.
 //
-// Only a page anyone with the link can open gets its own title and screenshot. Access is checked
+// Only a page anyone with the link can open, asked for with the link's current key, gets its own title
+// and screenshot; a link with a password or past its expiry doesn't. Access is checked
 // as a signed-out visitor, never with the request's session: a crawler has none, and the shell
 // must not differ for the owner either. Restricted, organization and missing pages all get the
 // same generic tags, so a preview doesn't reveal that a page exists or what it is called.
@@ -28,16 +30,17 @@ export function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`)
 }
 
-// A page a signed-out visitor can open, or null for restricted, organization and missing ones alike
-export async function linkSharedPage(slug: string): Promise<Artifact | null> {
+// A page a signed-out visitor with this key (?k=) can open, or null for restricted, organization,
+// protected, expired and missing ones alike
+export async function linkSharedPage(slug: string, key: string | null | undefined): Promise<Artifact | null> {
   if (!SLUG_RE.test(slug)) return null
   const artifact = await findBySlug(slug)
-  return artifact && (await canView(artifact, null)) ? artifact : null
+  return artifact && (await canView(artifact, null, { key })) ? artifact : null
 }
 
 // The preview of a page, or null when it gets the generic one
-export async function pagePreview(slug: string): Promise<Preview | null> {
-  const artifact = await linkSharedPage(slug)
+export async function pagePreview(slug: string, key: string | null | undefined): Promise<Preview | null> {
+  const artifact = await linkSharedPage(slug, key)
   if (!artifact) return null
   // The thumbnail route serves link-shared pages without a session, so a crawler can fetch it.
   // With thumbnails off, or before the first render, there is no image rather than a placeholder
@@ -45,8 +48,8 @@ export async function pagePreview(slug: string): Promise<Preview | null> {
   const state = (await currentThumbnails([artifact])).get(artifact.id)
   return {
     title: artifact.title,
-    url: `${env.appUrl}/a/${artifact.slug}`,
-    image: state === 'ready' ? `${env.appUrl}/api/artifacts/${artifact.slug}/thumbnails/${artifact.currentVersion}` : null,
+    url: publicLink(artifact),
+    image: state === 'ready' ? `${env.appUrl}/api/artifacts/${artifact.slug}/thumbnails/${artifact.currentVersion}${keyQuery(artifact)}` : null,
   }
 }
 
@@ -85,7 +88,7 @@ export function servePagePreviews<E extends Env>(app: Hono<E>, index: string) {
   app.get('/a/:slug', async (c) => {
     let preview: Preview | null = null
     try {
-      preview = await pagePreview(c.req.param('slug'))
+      preview = await pagePreview(c.req.param('slug'), c.req.query('k'))
     } catch (err) {
       // The app still has to load when the lookup fails; it only loses the preview
       log.error('Link preview failed', { path: c.req.path, error: err instanceof Error ? err.message : String(err) })

@@ -117,6 +117,8 @@ Each limit counts something for one key (an email address, an account, or a netw
 | `publish` | New pages and versions one account publishes through agents (`publish_artifact`, `publish_upload`, `restore_version`, also counted in `mcp`) or with an access token (`POST /api/publish`) | 200 per hour |
 | `access-token` | [Access tokens](/docs/connect-your-agent#publishing-from-ci) one account creates in **Account settings** | 20 per hour |
 | `comment` | Comments and replies one account writes, in the app or through agents (`add_comment`, `reply_comment`) | 120 per hour |
+| `link-password` | Wrong passwords for one page's link, from anyone. Past it, nobody can try until the window ends. | 30 per 15 minutes |
+| `link-password-ip` | Link password attempts from one network, right or wrong | 100 per 15 minutes |
 | `comment-email` | Emails to one person about new comments on one page. Comments past it send nothing and show as new in the app, so a burst of comments is one email. | 1 per 15 minutes |
 
 A network is one IPv4 address, or one IPv6 `/64`. The app knows a visitor's address from the connection, or from `X-Forwarded-For` when `TRUST_PROXY` says a proxy sets it. The counters are kept in Postgres, so every replica of the app shares them; the storage sweep clears the ones that ran out.

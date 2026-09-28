@@ -48,6 +48,7 @@ import {
   type ListedComment,
 } from './comments.js'
 import { allowed, downloadLink, TOKEN_HOURS } from './content.js'
+import { checkLinkPassword, describeLink, LinkError, parseLinkExpiry, publicLink, updateLink, type LinkChange } from './links.js'
 import { db, schema } from './db/index.js'
 import type { Artifact } from './db/schema.js'
 import { hit, rule, waitText, windowText } from './limits.js'
@@ -85,10 +86,11 @@ async function published(artifact: Artifact, otherFiles: number) {
   return text(
     `${verb} "${artifact.title}".\n` +
       `Link: ${artifactUrl(artifact.slug)}\n` +
+      (artifact.visibility === 'link' && artifact.linkToken ? `Public link: ${publicLink(artifact)}\n` : '') +
       `artifact_id: ${artifact.slug}\n` +
       (otherFiles ? `Files: index.html and ${otherFiles} more.\n` : '') +
       (folder ? `Folder: ${folder}\n` : '') +
-      `Visibility: ${describeVisibility(artifact.visibility)}.`,
+      `Visibility: ${describeVisibility(artifact.visibility)}${describeLink(artifact)}.`,
   )
 }
 
@@ -477,17 +479,59 @@ function buildServer(auth: McpAuth) {
     'set_artifact_visibility',
     {
       title: 'Change who can open a page',
-      description: 'Change who can open a page without publishing a new version.',
-      inputSchema: z.object({ artifact_id: z.string().describe('Id or link of the page'), visibility }),
-      annotations: { idempotentHint: true },
+      description:
+        'Change who can open a page without publishing a new version, and set up its public link: when it expires, a password, or a reset ' +
+        'that replaces it. Pass at least one of visibility, link_expires, link_password or rotate_link. People who open the page by its link ' +
+        "need the public link from the answer; people with access of their own keep using the page's own link.",
+      inputSchema: z.object({
+        artifact_id: z.string().describe('Id or link of the page'),
+        visibility: visibility.optional(),
+        link_expires: z
+          .string()
+          .optional()
+          .describe(
+            'When the link stops working for people without other access: a date (YYYY-MM-DD, the end of that day in UTC) or an ISO 8601 date and time. ' +
+              'An empty string or "never" removes the expiry. Only applies while visibility is link.',
+          ),
+        link_password: z
+          .string()
+          .optional()
+          .describe(
+            'A password people must enter to open the page by its link, at least 8 characters. An empty string removes it. Only applies while visibility is link.',
+          ),
+        rotate_link: z
+          .boolean()
+          .optional()
+          .describe(
+            'true resets the public link: earlier public links stop working, like a deleted page. The page keeps its id, and people with access of their own are not affected.',
+          ),
+      }),
+      annotations: { idempotentHint: false },
     },
-    limited(async ({ artifact_id, visibility }) => {
+    limited(async ({ artifact_id, visibility, link_expires, link_password, rotate_link }) => {
       const artifact = await findBySlug(parseArtifactRef(artifact_id))
       if (!artifact || !(await canEdit(artifact, viewer))) return text(`No page you can edit has the id "${artifact_id}".`, true)
+      if (!visibility && link_expires === undefined && link_password === undefined && !rotate_link)
+        return text('Say what to change: visibility, link_expires, link_password or rotate_link.', true)
       if (visibility === 'organization' && !artifact.organizationId)
         return text('This page is in a personal workspace. Use private (restricted) or link.', true)
-      await db.update(schema.artifacts).set({ visibility }).where(eq(schema.artifacts.id, artifact.id))
-      return text(`"${artifact.title}" is now ${describeVisibility(visibility)}.\nLink: ${artifactUrl(artifact.slug)}`)
+      const change: LinkChange = { reset: rotate_link === true }
+      try {
+        if (link_expires !== undefined) change.expiresAt = parseLinkExpiry(link_expires)
+        if (link_password !== undefined) change.password = checkLinkPassword(link_password)
+      } catch (err) {
+        if (err instanceof LinkError) return text(err.message, true)
+        throw err
+      }
+      if (visibility) await db.update(schema.artifacts).set({ visibility }).where(eq(schema.artifacts.id, artifact.id))
+      const updated = await updateLink({ ...artifact, visibility: visibility ?? artifact.visibility }, change)
+      const lines = [`"${updated.title}" is now ${describeVisibility(updated.visibility)}${describeLink(updated)}.`]
+      if (change.reset) lines.push('The public link was reset; earlier public links no longer work.')
+      if (updated.visibility !== 'link' && (updated.linkExpiresAt || updated.linkPasswordHash || change.reset))
+        lines.push('The public link, its expiry and its password apply once visibility is link.')
+      lines.push(`Link: ${artifactUrl(updated.slug)}`)
+      if (updated.visibility === 'link') lines.push(`Public link: ${publicLink(updated)}`)
+      return text(lines.join('\n'))
     }),
   )
 

@@ -1,6 +1,6 @@
 import { and, asc, count, eq, inArray, isNotNull, isNull, sql, type SQL } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/pg-core'
-import { accessLevel, artifactUrl, canView, type Viewer } from './artifacts.js'
+import { accessLevel, artifactUrl, canView, type LinkPass, type Viewer } from './artifacts.js'
 import { db, schema } from './db/index.js'
 import type { Artifact, Comment } from './db/schema.js'
 import { mailEnabled } from './env.js'
@@ -33,8 +33,8 @@ export function checkBody(value: unknown): { body: string } | { error: string } 
 
 // Comments need a signed-in person who can open the page; editors of the page also moderate them.
 // null means the same as a missing page.
-export async function commentAccess(artifact: Artifact, viewer: Viewer): Promise<{ moderator: boolean } | null> {
-  const level = await accessLevel(artifact, viewer)
+export async function commentAccess(artifact: Artifact, viewer: Viewer, link: LinkPass = {}): Promise<{ moderator: boolean } | null> {
+  const level = await accessLevel(artifact, viewer, link)
   return level ? { moderator: level === 'edit' } : null
 }
 
