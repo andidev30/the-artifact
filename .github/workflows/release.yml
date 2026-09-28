@@ -112,17 +112,33 @@ jobs:
           helm package deploy/helm/the-artifact --version "$VERSION" --app-version "$VERSION"
           helm push "the-artifact-$VERSION.tgz" "oci://ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/charts"
 
-  # The CLI versions on its own (tags cli-vX.Y.Z, packages/cli/CHANGELOG.md). npm trusts this
-  # workflow as the package's trusted publisher (OIDC), so there is no npm token to keep or rotate.
-  # Production runs releases, not every merge
+  # Production runs releases, not every merge. Hosted migrate lives in the private
+  # andidev30/the-artifact-backups, so the database URL and deploy hook aren't in this repository; the
+  # token can only start workflows there. Forks and self-hosted copies have no token and skip this.
   hosted:
     needs: release-please
     if: needs.release-please.outputs.release_created == 'true'
-    permissions:
-      contents: read
-    uses: ./.github/workflows/hosted-migrate.yml
-    secrets: inherit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Start Hosted migrate
+        env:
+          GH_TOKEN: ${{ secrets.HOSTED_DISPATCH_TOKEN }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::notice::HOSTED_DISPATCH_TOKEN is not set, so the hosted service isn't deployed (see ee/ops/runbook.md)"
+            exit 0
+          fi
+          # REST, not `gh workflow run`: that looks up the default branch over GraphQL, which the
+          # fine-grained token can't
+          gh api -X POST repos/andidev30/the-artifact-backups/actions/workflows/hosted-migrate.yml/dispatches \
+            -f ref=main -f "inputs[ref]=$TAG"
+          echo "Hosted migrate started for $TAG in andidev30/the-artifact-backups" >> "$GITHUB_STEP_SUMMARY"
 
+  # The CLI versions on its own (tags cli-vX.Y.Z, packages/cli/CHANGELOG.md). npm trusts this
+  # workflow as the package's trusted publisher (OIDC), so there is no npm token to keep or rotate.
   cli:
     needs: release-please
     if: needs.release-please.outputs.cli_release_created == 'true'

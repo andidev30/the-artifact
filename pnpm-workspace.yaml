@@ -7,6 +7,10 @@ onlyBuiltDependencies:
 allowBuilds:
   esbuild: true
 
+# Versions published in the last 3 days are refused, so an update can't pull in a hijacked release
+# before npm takes it down. Hosted migrate runs these packages with the production database URL.
+minimumReleaseAge: 4320
+
 # drizzle-kit still pulls esbuild 0.18 through @esbuild-kit (GHSA-67mh-4wv8-2f99)
 overrides:
   '@esbuild-kit/core-utils>esbuild': ^0.25.0
