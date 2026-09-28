@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0](https://github.com/andidev30/the-artifact/compare/cli-v0.2.0...cli-v0.3.0) (2026-09-28)
+
+
+### Features
+
+* link sharing that expires, needs a password, or is reset with a new key ([8d73823](https://github.com/andidev30/the-artifact/commit/8d738234cb07ac47beed40dd68d645b3d079ed91))
+* link sharing that expires, needs a password, or is reset with a new key ([819e3d9](https://github.com/andidev30/the-artifact/commit/819e3d9a0acb99c21af59fdc8f689a91039b31eb))
+
 ## [0.2.0](https://github.com/andidev30/the-artifact/compare/cli-v0.1.0...cli-v0.2.0) (2026-09-28)
 
 
