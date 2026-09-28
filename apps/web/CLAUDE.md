@@ -41,4 +41,4 @@ pnpm --filter @the-artifact/web build   # tsc -b + vite build
 pnpm --filter @the-artifact/web test    # vitest, for pure modules next to their *.test.ts
 ```
 
-In dev, Vite proxies `/api`, `/mcp`, `/oauth`, `/.well-known` and `/e/` to `API_URL` (default `http://localhost:3000`).
+In dev, Vite proxies `/api`, `/mcp`, `/oauth`, `/.well-known`, `/scim` and `/e/` to `API_URL` (default `http://localhost:3000`).

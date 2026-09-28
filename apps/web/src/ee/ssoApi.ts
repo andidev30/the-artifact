@@ -11,6 +11,8 @@ export type SsoConnection = {
   clientId: string
   hasClientSecret: boolean
   trustEmail: boolean
+  // SAML connections only
+  saml: SamlSettings | null
   allowedDomains: string[]
   required: boolean
   organizationId: string | null
@@ -18,13 +20,26 @@ export type SsoConnection = {
   updatedAt: string
 }
 
+export type SamlSettings = {
+  metadataUrl: string | null
+  idpEntityId: string
+  ssoUrl: string
+  certificates: number
+  emailAttribute: string | null
+  nameAttribute: string | null
+  allowIdpInitiated: boolean
+}
+
 export type SsoListing = {
   redirectUri: string
+  // What a SAML IdP needs from this server
+  saml: { entityId: string; acsUrl: string }
   connections: SsoConnection[]
   organizations: { id: string; name: string }[]
 }
 
 export type SsoInput = {
+  protocol: 'oidc' | 'saml'
   name: string
   issuer: string
   clientId: string
@@ -35,6 +50,12 @@ export type SsoInput = {
   required: boolean
   enabled: boolean
   organizationId: string | null
+  // SAML: the IdP's metadata by URL or pasted (both empty keeps it when editing), and attribute names
+  metadataUrl?: string
+  metadataXml?: string
+  emailAttribute?: string
+  nameAttribute?: string
+  allowIdpInitiated?: boolean
 }
 
 export type SsoTestResult = {

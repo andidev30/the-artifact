@@ -38,6 +38,8 @@ const ACTION_LABEL: Record<string, string> = {
   'member.role_changed': 'Changed a role',
   'member.removed': 'Removed a member',
   'member.left': 'Left',
+  'member.suspended': 'Suspended',
+  'member.reactivated': 'Reactivated',
   'organization.settings_changed': 'Changed settings',
   'access_token.created': 'Created an access token',
   'access_token.revoked': 'Revoked an access token',
@@ -81,7 +83,10 @@ function summary(e: AuditEvent): string {
     case 'member.joined':
     case 'member.removed':
     case 'member.left':
-      return d.role ? `As ${label(ROLE_LABEL, d.role).toLowerCase()}` : ''
+      return [d.role ? `As ${label(ROLE_LABEL, d.role).toLowerCase()}` : '', d.via ? `Through ${d.via}` : ''].filter(Boolean).join(', ')
+    case 'member.suspended':
+    case 'member.reactivated':
+      return d.via ? `Through ${d.via}` : ''
     case 'organization.settings_changed':
       return Object.entries(d)
         .map(([k, v]) => {

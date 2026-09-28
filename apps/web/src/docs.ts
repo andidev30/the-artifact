@@ -26,6 +26,8 @@ const RUNNING: DocPage[] = [
   { slug: 'configuration', title: 'Configuration reference' },
   { slug: 'licenses', title: 'Licenses' },
   { slug: 'sso', title: 'Single sign-on' },
+  { slug: 'saml', title: 'SAML single sign-on' },
+  { slug: 'scim', title: 'SCIM provisioning' },
   { slug: 'backups', title: 'Backup and restore' },
   { slug: 'upgrading', title: 'Upgrading' },
 ]
