@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { logout, type Me } from '../api'
 import { organizationSettingsPath, useWorkspace } from '../workspace'
+import { moveFocusWithArrows } from '../focus'
 import './AccountMenu.css'
 
 // The person's name in the header; opens their account settings, the current organization's
@@ -24,13 +25,22 @@ export function AccountMenu({ me }: { me: Me }) {
       if (e.key === 'Escape') {
         setOpen(false)
         button.current?.focus()
+      } else if (root.current?.contains(document.activeElement) && moveFocusWithArrows(root.current.querySelector('.account-menu'), e.key)) {
+        e.preventDefault()
       }
     }
+    // Tabbing out of the list closes it, like clicking elsewhere
+    function onFocusOut(e: FocusEvent) {
+      if (e.relatedTarget instanceof Node && !root.current?.contains(e.relatedTarget)) setOpen(false)
+    }
+    const el = root.current
     document.addEventListener('pointerdown', onPointer)
     document.addEventListener('keydown', onKey)
+    el?.addEventListener('focusout', onFocusOut)
     return () => {
       document.removeEventListener('pointerdown', onPointer)
       document.removeEventListener('keydown', onKey)
+      el?.removeEventListener('focusout', onFocusOut)
     }
   }, [open])
 

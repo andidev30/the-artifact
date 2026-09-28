@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useScrollFocus } from '../focus'
 
 type Props = {
   command: string
@@ -11,6 +12,8 @@ type Props = {
 
 export function CopyCommand({ command, label = 'Copy command', file, plain }: Props) {
   const [copied, setCopied] = useState(false)
+  const scroll = useScrollFocus<HTMLElement>(command)
+  const fileScroll = useScrollFocus<HTMLPreElement>(command)
 
   async function copy() {
     try {
@@ -41,7 +44,7 @@ export function CopyCommand({ command, label = 'Copy command', file, plain }: Pr
           <span>{file}</span>
           {button}
         </div>
-        <pre>
+        <pre {...fileScroll}>
           <code>{command}</code>
         </pre>
         {status}
@@ -51,7 +54,7 @@ export function CopyCommand({ command, label = 'Copy command', file, plain }: Pr
 
   return (
     <div className="command">
-      <code>
+      <code {...scroll}>
         {!plain && (
           <span className="command-prompt" aria-hidden="true">
             $

@@ -62,6 +62,12 @@
   box-shadow: inset 3px 0 0 var(--marker);
 }
 
+/* The yellow bar alone is too faint to find the focused item by */
+.page-menu-list [role='menuitem']:focus-visible {
+  outline: 2px solid var(--line);
+  outline-offset: -2px;
+}
+
 .page-menu-list [data-danger] {
   color: #9b1c14;
 }

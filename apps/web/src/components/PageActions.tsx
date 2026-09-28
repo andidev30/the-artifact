@@ -1,22 +1,28 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { deleteArtifact, renameArtifact } from '../api'
+import { useReturnFocus } from '../focus'
 import './PageActions.css'
 
 const MAX_TITLE = 200
 
 export type MenuItem = { label: string; onSelect: () => void; danger?: boolean } | { label: string; to: string } | { label: string; download: string }
 
-// A small "more" menu: opens on click, arrow keys move between items, Escape closes
+// A small "more" menu in the WAI-ARIA menu button pattern: Enter, Space or the arrow keys open it,
+// arrow keys, Home and End move between items, Escape closes it and puts focus back on the button
 export function PageMenu({ label, items, className }: { label: string; items: MenuItem[]; className?: string }) {
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLDivElement>(null)
   const button = useRef<HTMLButtonElement>(null)
   const id = useId()
+  // Arrow Up on the closed button opens the menu on its last item
+  const startAtEnd = useRef(false)
 
   useEffect(() => {
     if (!open) return
-    root.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus()
+    const all = root.current?.querySelectorAll<HTMLElement>('[role="menuitem"]')
+    all?.[startAtEnd.current ? all.length - 1 : 0]?.focus()
+    startAtEnd.current = false
     const onDown = (e: PointerEvent) => {
       if (!root.current?.contains(e.target as Node)) setOpen(false)
     }
@@ -24,12 +30,20 @@ export function PageMenu({ label, items, className }: { label: string; items: Me
     return () => document.removeEventListener('pointerdown', onDown)
   }, [open])
 
-  function close(refocus = true) {
+  function close() {
     setOpen(false)
-    if (refocus) button.current?.focus()
+    button.current?.focus()
   }
 
   function onKeyDown(e: KeyboardEvent) {
+    if (!open) {
+      if (e.target === button.current && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+        e.preventDefault()
+        startAtEnd.current = e.key === 'ArrowUp'
+        setOpen(true)
+      }
+      return
+    }
     if (e.key === 'Escape') {
       e.preventDefault()
       close()
@@ -76,7 +90,7 @@ export function PageMenu({ label, items, className }: { label: string; items: Me
                 {item.label}
               </Link>
             ) : 'download' in item ? (
-              <a key={item.label} role="menuitem" href={item.download} download tabIndex={-1} onClick={() => close(false)}>
+              <a key={item.label} role="menuitem" href={item.download} download tabIndex={-1} onClick={() => close()}>
                 {item.label}
               </a>
             ) : (
@@ -87,7 +101,8 @@ export function PageMenu({ label, items, className }: { label: string; items: Me
                 tabIndex={-1}
                 data-danger={item.danger || undefined}
                 onClick={() => {
-                  close(false)
+                  // Back on the menu button first, so a dialog this opens returns focus there
+                  close()
                   item.onSelect()
                 }}
               >
@@ -103,6 +118,7 @@ export function PageMenu({ label, items, className }: { label: string; items: Me
 
 export function PageDialog({ labelledBy, onClose, children }: { labelledBy: string; onClose: () => void; children: ReactNode }) {
   const dialog = useRef<HTMLDialogElement>(null)
+  useReturnFocus()
   useEffect(() => {
     dialog.current?.showModal()
   }, [])
