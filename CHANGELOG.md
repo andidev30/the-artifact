@@ -2,6 +2,52 @@
 
 Every release of The Artifact, newest first. Entries are generated from the commit messages when a release is made; what you have to do when you upgrade is in [Upgrading](docs/upgrading.md), and the versioning policy is there too.
 
+## [0.3.0](https://github.com/andidev30/the-artifact/compare/v0.2.0...v0.3.0) (2026-09-28)
+
+
+### Features
+
+* **api:** count page views and record who opened a page ([47f007f](https://github.com/andidev30/the-artifact/commit/47f007fb8097b18288a9858fc94d1e5d431f12cf))
+* **api:** SAML connections for single sign-on, and SCIM provisioning ([b92e228](https://github.com/andidev30/the-artifact/commit/b92e228abbcc99f84a77b382e36342b5a21615b5))
+* **api:** trust the hosted service's first license signing key ([3f7781f](https://github.com/andidev30/the-artifact/commit/3f7781fd5c570a15103fe9711436ca6daf548082))
+* **api:** trust the hosted service's first license signing key ([d416d15](https://github.com/andidev30/the-artifact/commit/d416d1544afc130b295e2ba0d2edce87f7fd4677))
+* **api:** verify license keys offline and gate enterprise features on them ([c91cea0](https://github.com/andidev30/the-artifact/commit/c91cea0403cc61c75ee3110cd57e89eb399e9cab))
+* **ee:** audit log for organizations ([061bbff](https://github.com/andidev30/the-artifact/commit/061bbffb831a5c56b514da55b9cafb3ad1ad805d))
+* **ee:** audit log for organizations ([1374f07](https://github.com/andidev30/the-artifact/commit/1374f07afa0cd086089f53eebe75017912060733))
+* **ee:** record the hosted service's sign-up funnel and show it in Server admin ([d509a8d](https://github.com/andidev30/the-artifact/commit/d509a8d35358755098db2ab2e4b53dd8f5201f36)), closes [#50](https://github.com/andidev30/the-artifact/issues/50)
+* **ee:** sign-up funnel for the hosted service ([fcd8d55](https://github.com/andidev30/the-artifact/commit/fcd8d55062b3975f1353be2f12bb4c4f7a040ca0))
+* **ee:** stop offering new organizations on the hosted service until billing ([8b36c28](https://github.com/andidev30/the-artifact/commit/8b36c28cb281713111b4d986d0719f25d613f425))
+* **ee:** stop offering new organizations on the hosted service until billing ([0762ba9](https://github.com/andidev30/the-artifact/commit/0762ba9942eef9da223a2bcf4bda80bfd33b1e3a))
+* **ee:** terms of service, privacy policy, sub-processors and a DPA ([e48887c](https://github.com/andidev30/the-artifact/commit/e48887c3923bfc5490726394d05b350b9559d940))
+* **ee:** terms of service, privacy policy, sub-processors and a DPA ([d95cfa9](https://github.com/andidev30/the-artifact/commit/d95cfa9a14fd3583b07e68887b0a4486d69ed055))
+* **ee:** Vercel analytics on the hosted service only, without secrets in addresses ([b56db21](https://github.com/andidev30/the-artifact/commit/b56db21b919aa1e730c06a0a96ce96c38cf79612))
+* license keys for self-hosted installs ([1a3e60d](https://github.com/andidev30/the-artifact/commit/1a3e60d390c66f04de53cc999c81a731eca6199a))
+* link sharing that expires, needs a password, or is reset with a new key ([8d73823](https://github.com/andidev30/the-artifact/commit/8d738234cb07ac47beed40dd68d645b3d079ed91))
+* link sharing that expires, needs a password, or is reset with a new key ([819e3d9](https://github.com/andidev30/the-artifact/commit/819e3d9a0acb99c21af59fdc8f689a91039b31eb))
+* SAML single sign-on and SCIM provisioning (Enterprise) ([36634cb](https://github.com/andidev30/the-artifact/commit/36634cb529d05f8eaa08d2bc157abea8c380af14))
+* serve pages from a separate content domain with CONTENT_ORIGIN ([d769db1](https://github.com/andidev30/the-artifact/commit/d769db1ce92581035f94010b22bf15503a3c5d58))
+* serve pages from a separate content domain with CONTENT_ORIGIN ([06811c8](https://github.com/andidev30/the-artifact/commit/06811c8e73a849739d70bc948ca8cd9e2d60ff3f)), closes [#40](https://github.com/andidev30/the-artifact/issues/40)
+* single sign-on with OpenID Connect (Enterprise) ([35ddeab](https://github.com/andidev30/the-artifact/commit/35ddeabc1c55429edd15addf0666894b5b0c6708))
+* single sign-on with OpenID Connect for licensed self-hosted installs ([b276e1c](https://github.com/andidev30/the-artifact/commit/b276e1c5ee4e8138d4e6d42e558f3cbfab97fe8e))
+* tell self-hosted admins about new releases ([a2b2fb9](https://github.com/andidev30/the-artifact/commit/a2b2fb9f5355aee5a11256b45f2be3d1b307fe61))
+* tell self-hosted admins about new releases ([27cbb85](https://github.com/andidev30/the-artifact/commit/27cbb85d8455a0ea8215b83a8c4e92f399b567bd)), closes [#39](https://github.com/andidev30/the-artifact/issues/39)
+* version retention per organization (Enterprise) ([d741f7b](https://github.com/andidev30/the-artifact/commit/d741f7b6261e2f04c1226749daac0566c0bb5187))
+* version retention per organization as an enterprise feature ([d786fc4](https://github.com/andidev30/the-artifact/commit/d786fc40bcb5938ab591ca5840dc1b3367749a1a))
+* view counts and who opened a page ([fc092a1](https://github.com/andidev30/the-artifact/commit/fc092a140003e4b707a870e29e701b6728953c27))
+* **web:** enter a license key in Server admin, and issue keys on the hosted service ([e4f8a19](https://github.com/andidev30/the-artifact/commit/e4f8a191e8a7ecbe97e71eccaada6b97599ed81c))
+* **web:** SAML providers in Single sign-on, and SCIM tokens in Server admin ([94aa347](https://github.com/andidev30/the-artifact/commit/94aa347c62484d21bdb9f3eeceb1a85715427d07))
+* **web:** show a page's views and who opened it in the viewer ([a7d6232](https://github.com/andidev30/the-artifact/commit/a7d62326b45e7d4a3d67f69f48a4d819f37fd240))
+
+
+### Bug fixes
+
+* **api:** sign upload links without a checksum of the empty body ([80364ff](https://github.com/andidev30/the-artifact/commit/80364ff9c835eae14dd5d314593c0352b4abb490))
+* **api:** sign upload links without a checksum of the empty body ([9f1a9bd](https://github.com/andidev30/the-artifact/commit/9f1a9bdcbd4ba230caa635a0df4d2d6385a5920d))
+* refuse vbscript: OAuth redirects and strip nested tags from heading ids ([3042bca](https://github.com/andidev30/the-artifact/commit/3042bca20991bb08e3096412c570974230137ec8))
+* refuse vbscript: OAuth redirects and strip nested tags from heading ids ([c668667](https://github.com/andidev30/the-artifact/commit/c6686673482a9fc43b761668b11710742f3100c0))
+* **web:** give the views count its own class and label versions on their own ([9811041](https://github.com/andidev30/the-artifact/commit/9811041c87539a01485380f82b1ae3bf6451f6e3))
+* **web:** keep the SSO test result through a remounted effect, and open e2e pages in their own context ([a85d0e2](https://github.com/andidev30/the-artifact/commit/a85d0e2fd42b3975e6e50801cfb96cf47b83c71f))
+
 ## [0.2.0](https://github.com/andidev30/the-artifact/compare/v0.1.0...v0.2.0) (2026-09-28)
 
 
