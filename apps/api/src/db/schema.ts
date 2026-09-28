@@ -503,6 +503,27 @@ export const issuedLicenses = pgTable(
   (t) => [index('issued_licenses_issued_at_idx').on(t.issuedAt)],
 )
 
+// How long an organization keeps older versions of its pages, an enterprise feature (src/ee/retention.ts).
+// Null means no limit of that kind; the row is kept when the license lapses, but it is only applied
+// while the install has an Enterprise license.
+export const retentionPolicies = pgTable(
+  'retention_policies',
+  {
+    organizationId: uuid('organization_id')
+      .primaryKey()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    keepDays: integer('keep_days'),
+    // Versions per page, the current one included
+    keepVersions: integer('keep_versions'),
+    updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check('retention_policies_keep_days', sql`${t.keepDays} is null or ${t.keepDays} > 0`),
+    check('retention_policies_keep_versions', sql`${t.keepVersions} is null or ${t.keepVersions} > 0`),
+  ],
+)
+
 // Counters for rate limits (see src/limits.ts): how often something happened for one key in the
 // current window, which starts at the first hit and ends at resets_at. Kept in Postgres so every
 // server process, or serverless instance, counts the same thing.

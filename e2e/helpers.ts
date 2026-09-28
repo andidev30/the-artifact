@@ -103,3 +103,26 @@ export async function publishViaMcp(request: APIRequestContext, token: string, a
   expect(slug, text).toBeTruthy()
   return slug!
 }
+
+type RetentionState = { keepDays: number | null; keepVersions: number | null; license: 'none' | 'active' | 'grace' | 'expired' }
+
+// Version retention needs an Enterprise license, which the e2e servers can't have (their code knows
+// no signing key), so its settings are shown by answering /api/config as a self-hosted install and
+// the retention API the way a licensed or unlicensed server would. The server's own rules are
+// covered by apps/api/test/integration/retention.test.ts. Returns the policies saved.
+export async function mockRetention(page: Page, initial: RetentionState, preview = { versions: 12, pages: 3 }) {
+  const state = { ...initial, updatedAt: null as string | null }
+  const body = () => ({ ...state, applied: (state.keepDays !== null || state.keepVersions !== null) && ['active', 'grace'].includes(state.license) })
+  const saves: unknown[] = []
+  await page.route('**/api/config', async (route) => route.fulfill({ json: { ...(await (await route.fetch()).json()), selfHosted: true } }))
+  await page.route(/\/api\/organizations\/[^/]+\/retention(\/preview)?(\?.*)?$/, async (route) => {
+    if (new URL(route.request().url()).pathname.endsWith('/preview')) return route.fulfill({ json: preview })
+    if (route.request().method() === 'PUT') {
+      const json = route.request().postDataJSON() as { keepDays: number | null; keepVersions: number | null }
+      saves.push(json)
+      Object.assign(state, json, { updatedAt: new Date().toISOString() })
+    }
+    return route.fulfill({ json: body() })
+  })
+  return saves
+}

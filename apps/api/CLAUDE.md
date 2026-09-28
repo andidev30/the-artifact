@@ -14,7 +14,7 @@ Hono on Node 26, Drizzle ORM over `postgres`, S3 via `@aws-sdk/client-s3`, MCP v
 | `src/content.ts` | Serves a version as a document tree at `/api/artifacts/<slug>/v/<n>/…` and as a zip at `/api/artifacts/<slug>/download`, link tokens for sandboxed frames and agents' download links |
 | `src/zip.ts` | Writes zip archives (no dependency) |
 | `src/files.ts` | Multi-file page validation and size limits |
-| `src/storage.ts`, `src/gc.ts` | Content-addressed blobs in S3 and the sweep that deletes unreferenced ones |
+| `src/storage.ts`, `src/gc.ts` | Content-addressed blobs in S3 and the sweep that deletes unreferenced ones; `addPruner` jobs run before each sweep |
 | `src/thumbnails.ts` | Gallery screenshots of untrusted HTML with no network of its own |
 | `src/previews.ts` | Link preview (Open Graph) tags in the HTML shell of `/a/<slug>`, for link-shared pages only; mounted by `src/web.ts` and by `api/index.js` on Vercel. `SHELL_FRAMING` keeps the app itself out of other sites' frames |
 | `src/embeds.ts` | Embeds: `/e/<slug>` (a link-shared page without the app, framable by other sites, or a sign-in card) and `GET /api/oembed` |
@@ -37,7 +37,7 @@ Hono on Node 26, Drizzle ORM over `postgres`, S3 via `@aws-sdk/client-s3`, MCP v
 | `src/log.ts` | JSON logs, one object per line, tagged with the request id. Use `log.info/warn/error` rather than `console` |
 | `src/metrics.ts`, `src/routes/health.ts` | Prometheus metrics and the per-request middleware (request id, log line, timing by route pattern); `/healthz`, `/readyz` and `/metrics` (only with `METRICS_TOKEN`) |
 | `src/mail.ts` | Outgoing email. Throws `MailDisabledError` without SMTP |
-| `src/ee/` | Hosted-service-only code (contact sales, the Personal plan's limits, no new organizations until billing, issuing license keys) and enterprise features behind `hasEnterprise()`; see `src/ee/CLAUDE.md` |
+| `src/ee/` | Hosted-service-only code (contact sales, the Personal plan's limits, no new organizations until billing, issuing license keys) and enterprise features behind `hasEnterprise()` (version retention); see `src/ee/CLAUDE.md` |
 | `src/scripts/` | Operator CLIs (`admin:grant`, `storage:sweep`, `thumbnails:backfill`, and `license:keygen` for the hosted service's signing key), also run as `node dist/scripts/*.js` in the image |
 
 ## Rules that aren't obvious from one file
