@@ -166,15 +166,15 @@ You need `age`, the Postgres 17 client tools (`pg_restore`, `psql`), the AWS CLI
 
 8. Update the secrets in [Setting the secrets](#setting-the-secrets) to the new project, or the next backup copies the old one.
 
-## Uptime monitoring and status page (planned)
+## Uptime monitoring and status page
 
-Not set up yet. The plan is [Upptime](https://upptime.js.org) in a separate public repository, which costs nothing and needs no new account:
+[Upptime](https://upptime.js.org) in the public repository [andidev30/the-artifact-status](https://github.com/andidev30/the-artifact-status). It costs nothing and needs no new account:
 
-- Checks every 5 minutes from GitHub Actions: `https://the-artifact-pi.vercel.app/readyz` (the app, Postgres and the bucket), `/healthz` (the function alone, to tell a code or platform outage from a database one) and `/` (the static web app).
-- On a failure it opens an issue in that repository, assigned to the owner, so GitHub notifies them; it closes the issue when the check passes again.
-- A status page on GitHub Pages with uptime and response times, linked from the app's footer later.
-
-When it is set up, add the repository's address here.
+- Every 5 minutes, GitHub Actions checks `https://the-artifact-pi.vercel.app/readyz` (the app, Postgres and the bucket), `/healthz` (the function alone, to tell a code or platform outage from a database one) and `/` (the static web app). The list is in that repository's `.upptimerc.yml`.
+- On a failure it opens an issue in that repository, assigned to the owner, so GitHub notifies them. It closes the issue when the check passes again.
+- The status page, with uptime and response times, is https://andidev30.github.io/the-artifact-status/.
+- The workflows push with the secret `GH_PAT`: a fine-grained token limited to that repository, with Actions, Contents, Issues and Workflows set to read and write. When it expires, checks stop and the Actions runs fail. Make a new token and run `gh secret set GH_PAT -R andidev30/the-artifact-status`.
+- GitHub turns off scheduled workflows in a public repository after 60 days without commits. Upptime commits its results, so this doesn't happen while it runs.
 
 ## Who to contact
 
