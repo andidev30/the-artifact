@@ -44,7 +44,9 @@ import { invitations, members, myInvitations } from './routes/members.js'
 import { newOrganizationsOpen, onboarding, organizations, setOrganizationPolicy } from './routes/organizations.js'
 import { security, sessions } from './routes/security.js'
 import { settings } from './routes/settings.js'
+import { organizationWebhooks, personalWebhooks } from './routes/webhooks.js'
 import { mountWeb } from './web.js'
+import { pruneWebhookDeliveries } from './webhooks.js'
 
 export const app = new Hono<AuthEnv>()
 
@@ -78,6 +80,8 @@ addPruner(pruneAuditEvents)
 // The hosted service's sign-up funnel; records nothing on a self-hosted install
 setProductEventStore(productEventStore)
 addPruner(pruneProductEvents)
+// Webhook delivery logs older than two weeks
+addPruner(pruneWebhookDeliveries)
 // Every limit is defined by now, ee/ ones included; a mistake in RATE_LIMITS stops the start here
 checkRateLimits()
 
@@ -146,10 +150,12 @@ api.route('/contact-sales', contact)
 api.route('/organizations/:orgId/audit-log', auditLog)
 api.route('/organizations/:orgId', members)
 api.route('/organizations/:orgId/retention', retention)
+api.route('/organizations/:orgId/webhooks', organizationWebhooks)
 api.route('/invitations', invitations)
 api.route('/me/invitations', myInvitations)
 api.route('/me/security', security)
 api.route('/me/sessions', sessions)
+api.route('/me/webhooks', personalWebhooks)
 api.route('/me', settings)
 api.route('/admin/issued-licenses', issuedLicenses)
 api.route('/admin/analytics', productAnalytics)

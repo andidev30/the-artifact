@@ -13,6 +13,7 @@ import { log } from './log.js'
 import { collectProcessMetrics, reportClusterMetrics } from './metrics.js'
 import { closeThumbnailBrowser, queueThumbnail, renderThumbnailsElsewhere, rendererQueueFull, reportQueueFull } from './thumbnails.js'
 import { batchViewCounts, stopViewCounts } from './views.js'
+import { startWebhookQueue, stopWebhookQueue, useWebhookQueue } from './webhooks.js'
 import type { FromWorker, ToWorker } from './workers.js'
 
 // How long a stopping server waits for requests in flight. Docker stops a container 10 s after
@@ -21,8 +22,8 @@ const DRAIN_MS = 8_000
 const EXIT_MS = 9_500
 
 // One process that serves requests: the only one, or a worker of a cluster (src/primary.ts). The
-// background jobs run in exactly one process per server: the storage sweep with its pruners, and
-// the thumbnail queue with Chromium, which also runs every inspection (src/inspect.ts).
+// background jobs run in exactly one process per server: the storage sweep with its pruners, the
+// thumbnail queue with Chromium, which also runs every inspection (src/inspect.ts), and sending webhooks.
 export function startServer({ background }: { background: boolean }) {
   const worker = cluster.isWorker
   const send = (message: FromWorker) => process.send?.(message)
@@ -70,9 +71,12 @@ export function startServer({ background }: { background: boolean }) {
   // Every serving process builds the exports it is asked for; the background one also picks up any
   // left behind by a process that stopped
   buildExportsInProcess()
+  // Requests only queue webhook deliveries; the background process sends them (src/webhooks.ts)
+  useWebhookQueue()
   if (background) {
     scheduleSweeps()
     scheduleExportResumes()
+    startWebhookQueue()
     if (worker) log.info('Background jobs run in this worker', { worker: cluster.worker?.id })
   }
 
@@ -102,7 +106,7 @@ export function startServer({ background }: { background: boolean }) {
     clearInterval(idle)
     clearTimeout(cut)
     // The view counts the requests added, and whatever else is still being written
-    await Promise.allSettled([stopViewCounts(), auditSettled(), trackingSettled(), closeThumbnailBrowser()])
+    await Promise.allSettled([stopViewCounts(), auditSettled(), trackingSettled(), closeThumbnailBrowser(), stopWebhookQueue()])
     await closeDatabase().catch(() => {})
     log.info('Stopped', worker ? { worker: cluster.worker?.id } : {})
     // Once the log line is out: a pipe's writes are asynchronous on macOS

@@ -776,6 +776,63 @@ export const releaseCheck = pgTable('release_check', {
   releaseUrl: text('release_url'),
 })
 
+// Where a workspace sends events (src/webhooks.ts): an organization's (organization_id set, managed
+// by its owners and admins) or a person's personal workspace (user_id set). The signing secret is
+// sealed with a server secret, like an SSO client secret, and shown only when it is created.
+export const webhooks = pgTable(
+  'webhooks',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id').references(() => organizations.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    url: text('url').notNull(),
+    // "json", "slack" or "discord": the shape of the body
+    format: text('format').notNull(),
+    // WEBHOOK_EVENTS in src/webhooks.ts
+    events: jsonb('events').$type<string[]>().notNull(),
+    enabled: boolean('enabled').notNull().default(true),
+    secret: text('secret').notNull(),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check('webhooks_one_workspace', sql`(${t.organizationId} is null) <> (${t.userId} is null)`),
+    index('webhooks_org_idx').on(t.organizationId),
+    index('webhooks_user_idx').on(t.userId),
+  ],
+)
+
+// One event for one webhook: queued here so any process can add it and one sends it, and retries
+// survive a restart. Also the delivery log people see; rows are deleted after 14 days.
+export const webhookDeliveries = pgTable(
+  'webhook_deliveries',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    webhookId: uuid('webhook_id')
+      .notNull()
+      .references(() => webhooks.id, { onDelete: 'cascade' }),
+    event: text('event').notNull(),
+    // The JSON payload; Slack and Discord bodies are made from it when sending
+    payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
+    // "pending", "delivered" or "failed" (no attempts left)
+    status: text('status').notNull().default('pending'),
+    attempts: integer('attempts').notNull().default(0),
+    // When a pending delivery is next due; while an attempt is running, when it may be taken over
+    nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true }).notNull().defaultNow(),
+    // The HTTP status of the last answer, and why the last attempt failed
+    responseStatus: integer('response_status'),
+    lastError: text('last_error'),
+    lastAttemptAt: timestamp('last_attempt_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('webhook_deliveries_due_idx').on(t.nextAttemptAt).where(sql`${t.status} = 'pending'`),
+    index('webhook_deliveries_webhook_idx').on(t.webhookId, t.createdAt),
+    index('webhook_deliveries_created_at_idx').on(t.createdAt),
+  ],
+)
+
 export type User = typeof users.$inferSelect
 export type Passkey = typeof passkeys.$inferSelect
 export type SignupPolicy = (typeof signupPolicyEnum.enumValues)[number]
@@ -788,3 +845,5 @@ export type Role = (typeof roleEnum.enumValues)[number]
 export type InviteRole = (typeof inviteRoleEnum.enumValues)[number]
 export type SsoConnection = typeof ssoConnections.$inferSelect
 export type DataExport = typeof dataExports.$inferSelect
+export type Webhook = typeof webhooks.$inferSelect
+export type WebhookDelivery = typeof webhookDeliveries.$inferSelect

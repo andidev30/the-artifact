@@ -898,3 +898,65 @@ export function passkeySignInOptions() {
 export function signInWithPasskey(response: unknown, plan: string | null, next: string | null) {
   return request<{ redirect: string }>('/auth/passkey', { method: 'POST', json: { response, plan, next } })
 }
+
+// Webhooks of one workspace: 'personal' (your own) or an organization id (its owners and admins)
+export type WebhookEvent = 'page.published' | 'comment.created' | 'page.opened'
+export type WebhookFormat = 'json' | 'slack' | 'discord'
+export type WebhookDeliveryStatus = 'pending' | 'delivered' | 'failed'
+export type Webhook = {
+  id: string
+  url: string
+  format: WebhookFormat
+  events: WebhookEvent[]
+  enabled: boolean
+  createdAt: string
+  updatedAt: string
+  lastDelivery: { status: WebhookDeliveryStatus; createdAt: string } | null
+}
+export type WebhookDelivery = {
+  id: string
+  event: WebhookEvent | 'webhook.test'
+  status: WebhookDeliveryStatus
+  attempts: number
+  responseStatus: number | null
+  lastError: string | null
+  nextAttemptAt: string
+  lastAttemptAt: string | null
+  createdAt: string
+}
+export type WebhookInput = { url: string; format: WebhookFormat; events: WebhookEvent[]; enabled?: boolean }
+
+const webhooksPath = (workspace: string) => (workspace === 'personal' ? '/me/webhooks' : `${orgPath(workspace)}/webhooks`)
+const webhookPath = (workspace: string, id: string) => `${webhooksPath(workspace)}/${encodeURIComponent(id)}`
+
+export function listWebhooks(workspace: string) {
+  return request<{ webhooks: Webhook[]; max: number }>(webhooksPath(workspace))
+}
+
+export async function createWebhook(workspace: string, input: WebhookInput) {
+  try {
+    return await request<{ webhook: Webhook; secret: string }>(webhooksPath(workspace), { method: 'POST', json: input })
+  } catch (err) {
+    throw err instanceof ApiError ? new FieldError(err.message, err.field) : err
+  }
+}
+
+export async function updateWebhook(workspace: string, id: string, input: Partial<WebhookInput>) {
+  try {
+    return (await request<{ webhook: Webhook }>(webhookPath(workspace, id), { method: 'PATCH', json: input })).webhook
+  } catch (err) {
+    throw err instanceof ApiError ? new FieldError(err.message, err.field) : err
+  }
+}
+
+export function deleteWebhook(workspace: string, id: string) {
+  return request<null>(webhookPath(workspace, id), { method: 'DELETE' })
+}
+
+export async function testWebhook(workspace: string, id: string) {
+  return (await request<{ delivery: WebhookDelivery }>(`${webhookPath(workspace, id)}/test`, { method: 'POST', json: {} })).delivery
+}
+
+export async function listWebhookDeliveries(workspace: string, id: string) {
+  return (await request<{ deliveries: WebhookDelivery[] }>(`${webhookPath(workspace, id)}/deliveries`)).deliveries
+}

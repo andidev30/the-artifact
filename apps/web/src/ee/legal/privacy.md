@@ -74,6 +74,10 @@ The text of each comment, who wrote it, which agent posted it if any, when it wa
 
 For each version of a page, we count how many times it was opened. When someone opens a page as themselves, for example an organization page or a page shared with them by email, we can record who opened it and when, and show it to the page's editors. We keep these records for 90 days. Visits through a shared link are only counted: we don't record who the visitor is.
 
+### Webhooks
+
+An organization's owners and admins, and anyone for their personal workspace, can add webhooks: addresses the service tells when a page is published, commented on or opened. We store each webhook's address, the events chosen and a signing secret, and a log of what was sent for 14 days. Each message holds the workspace's name, the page's title and address, the version, the name of the person who acted, and for comments the first 200 characters. It never holds email addresses or page content. The destination, such as Slack, Discord or your own server, receives what the workspace admin configured, and its own terms apply there; it isn't one of our sub-processors.
+
 ### Product events
 
 To see where people get stuck, we record a few steps in our own database, the first time your account reaches each one: when the account is created (and whether with an email link, a password or Google), when you finish the first setup screen, when an agent or access token first connects, when you first publish a page, and when you first share a page (by link, with your organization, or with a person). Each event holds your account id, the step, that one detail, and when it happened. It never holds page content, page titles, email addresses or IP addresses. We also count how many pages are published each day, without saying by whom.
@@ -114,6 +118,7 @@ Under UU PDP, we rely on:
 ## Who else sees your data
 
 - **The people you choose.** People you share pages with, and members of your organizations, see your name or email next to what you publish, share and comment. Organization owners and admins can see members' email addresses and manage their pages.
+- **Webhook destinations** that an organization's owners and admins, or you for your personal workspace, choose. They receive what is described under [Webhooks](#webhooks).
 - **Service providers** that host and run the service for us. They are listed on the [Sub-processors](/legal/subprocessors) page, with what they do and where.
 - **Google,** only if you choose to sign in with Google. Google's own privacy policy applies to that.
 - **Authorities,** when the law requires it. We only disclose what is required.
@@ -144,6 +149,7 @@ We use no advertising cookies and no tracking cookies. Website analytics use no 
 - Pages, versions, comments and organizations: until they are deleted. On the free Personal plan, older versions go after 7 days.
 - Sessions, sign-in links, invitations and tokens: they stop working when they expire, and are deleted when they are used, when you sign out or end them, or with your account.
 - Records of who opened a page: 90 days.
+- Webhook delivery logs: 14 days.
 - Product events: 13 months, or until you delete your account.
 - Rate limit counters: about a day after their window ends.
 - Data exports: the zip can be downloaded for 24 hours, and the daily cleanup deletes it after that. The record that you asked for one goes with it; one that failed goes after a day.

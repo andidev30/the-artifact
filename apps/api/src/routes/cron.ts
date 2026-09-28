@@ -5,6 +5,7 @@ import { resumeExports, sweepExports } from '../exports.js'
 import { runPruners, sweepStorage } from '../gc.js'
 import { deleteExpiredLimits } from '../limits.js'
 import { deleteOldViews } from '../views.js'
+import { runWebhookQueue } from '../webhooks.js'
 
 // Scheduled jobs for hosts without a long-running process, such as Vercel, where the timers in
 // index.ts never run. A scheduler calls these with CRON_SECRET as a bearer token (Vercel Cron
@@ -38,5 +39,10 @@ cron.get('/sweep', async (c) => {
     views: await deleteOldViews(),
     exports: await sweepExports(),
     exportSteps: await resumeExports({ budgetMs: EXPORT_BUDGET_MS }),
+    webhooks: await runWebhookQueue(),
   })
 })
+
+// Webhook retries that are due (src/webhooks.ts). Without a long-running process, first attempts are
+// made as events happen and retries wait for this, so call it every few minutes where the host allows.
+cron.get('/webhooks', async (c) => c.json({ webhooks: await runWebhookQueue() }))

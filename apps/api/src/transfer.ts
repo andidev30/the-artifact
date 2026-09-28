@@ -8,6 +8,7 @@ import { holdStorageLock } from './gc.js'
 import { checkQuota, type Workspace } from './quota.js'
 import { queueThumbnail } from './thumbnails.js'
 import { UUID_RE } from './validation.js'
+import { emitWebhookEvent } from './webhooks.js'
 
 // Duplicating and moving pages between workspaces (a person's Personal workspace and organizations).
 //
@@ -128,6 +129,8 @@ export async function duplicatePage(source: Artifact, actor: Actor, workspace: u
   })
   if (!result) throw new TransferError('Not found', 404)
   if (!result.hasThumbnail) queueThumbnail(result.versionId)
+  // A copy is a new page in its workspace, so its webhooks hear about it as a publish
+  await emitWebhookEvent({ event: 'page.published', artifact: result.created, version: 1, actorId: actor.id })
   return result.created
 }
 

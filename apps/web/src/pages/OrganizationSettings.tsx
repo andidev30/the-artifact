@@ -21,6 +21,7 @@ import {
 } from '../api'
 import { AccountHeader } from '../components/AccountHeader'
 import { ExportSection } from '../components/ExportSection'
+import { WebhooksSection } from '../components/Webhooks'
 import '../components/SignInSecurity.css'
 import { APP_HOST } from '../config'
 import { RetentionSection } from '../ee/Retention'
@@ -156,6 +157,7 @@ function Page({ initial, org }: { initial: Me; org: Organization }) {
     { id: 'general', label: 'General' },
     { id: 'members', label: 'Members' },
     ...(current.role === 'member' ? [] : [{ id: 'tokens', label: 'Access tokens' }]),
+    ...(current.role === 'member' || current.blocked ? [] : [{ id: 'webhooks', label: 'Webhooks' }]),
     ...(retention ? [{ id: 'retention', label: 'Version history' }] : []),
     ...(current.role === 'owner' && !current.blocked ? [{ id: 'export', label: 'Export data' }] : []),
     ...(auditOn && current.role !== 'member' ? [{ id: 'audit', label: 'Audit log' }] : []),
@@ -250,6 +252,7 @@ function Page({ initial, org }: { initial: Me; org: Organization }) {
               />
             )}
             {current.role !== 'member' && !current.blocked && <TokensSection org={current} me={me} />}
+            {current.role !== 'member' && !current.blocked && <WebhooksSection workspace={current.id} name={current.name} />}
             {retention && <RetentionSection orgId={current.id} orgName={current.name} />}
             {current.role === 'owner' && !current.blocked && <ExportSection organization={{ id: current.id, name: current.name }} />}
             {current.role !== 'member' && !current.blocked && selfHosted && (

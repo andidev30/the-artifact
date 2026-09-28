@@ -429,6 +429,37 @@ test('data export in account and organization settings', async ({ page }) => {
   await expectAccessible(page, 'organization settings, data export')
 })
 
+test('webhooks in account settings', async ({ page }) => {
+  await signUpPersonal(page, uniqueEmail('a11y-webhooks'))
+  await page.goto('/settings#webhooks')
+  const section = page.locator('section#webhooks')
+  await expect(section.getByText('No webhooks yet.')).toBeVisible()
+
+  // With the keyboard alone: open the form, fill it and add
+  await section.getByRole('button', { name: 'Add webhook' }).focus()
+  await page.keyboard.press('Enter')
+  await expect(section.getByLabel('Address')).toBeFocused()
+  // .invalid never resolves, so the test message fails at once without leaving the machine
+  await page.keyboard.type('https://hooks.example.invalid/services/T000')
+  await expect(section.getByLabel('New comment')).toBeChecked()
+  await expectAccessible(page, 'account settings, new webhook form')
+  await section.getByRole('button', { name: 'Add webhook' }).press('Enter')
+  await expect(section.locator('.settings-token-new')).toBeVisible()
+  await expect(section.getByRole('button', { name: 'Copy signing secret' })).toBeVisible()
+  await expectAccessible(page, 'account settings, new webhook secret')
+  await section.getByRole('button', { name: 'Done' }).click()
+
+  await section.getByRole('button', { name: 'Send a test to hooks.example.invalid' }).press('Enter')
+  await expect(section.getByText('hooks.example.invalid could not be found.')).toBeVisible()
+  await section.getByRole('button', { name: 'Recent deliveries' }).press('Enter')
+  await expect(section.getByRole('table', { name: 'Recent deliveries to hooks.example.invalid' })).toBeVisible()
+  await expectAccessible(page, 'account settings, webhook deliveries')
+
+  await section.getByRole('button', { name: 'Edit webhook to hooks.example.invalid' }).press('Enter')
+  await expect(section.getByRole('button', { name: 'Save' })).toBeVisible()
+  await expectAccessible(page, 'account settings, edit webhook')
+})
+
 test('version retention in organization settings, with and without a license', async ({ page }) => {
   const email = uniqueEmail('a11y-retention')
   await signUpPersonal(page, email)
