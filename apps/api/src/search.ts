@@ -112,10 +112,13 @@ export async function staleIds(limit?: number): Promise<string[]> {
   return rows.map((r) => r.id)
 }
 
-// For the scheduled sweep: a few hundred at a time keeps each run short; the backfill script does all
-export async function indexStale(limit = 500): Promise<number> {
+// For the scheduled sweep: a few hundred at a time keeps each run short, and none started once
+// `deadline` (epoch ms) has passed; the backfill script does all
+export async function indexStale(limit = 500, deadline = Number.POSITIVE_INFINITY): Promise<number> {
   let indexed = 0
+  if (Date.now() >= deadline) return indexed
   for (const id of await staleIds(limit)) {
+    if (Date.now() >= deadline) break
     const result = await indexPage(id).catch((err) => log.error('Indexing a page for search failed', { artifactId: id, err }))
     if (result === 'indexed') indexed += 1
   }

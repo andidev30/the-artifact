@@ -28,23 +28,37 @@ export const requireCronSecret: MiddlewareHandler = async (c, next) => {
 
 cron.use(requireCronSecret)
 
-// Also moves on data exports whose settings page was closed while they were built, for a bounded
-// time so the whole run stays within a serverless function's limit
+// Vercel stops the function at maxDuration (60 s in vercel.json). Each run gets one deadline, well
+// before that: every step stops starting new work once it passes and leaves the rest for the next run.
+// Work already under way then still has to finish in what is left: a batch of webhooks (up to their
+// 5 s timeout), a page being indexed, deleting what the storage sweep found.
+const RUN_MS = 40_000
+// Data exports get at most this much of it, so a big export doesn't leave nothing for search
 const EXPORT_BUDGET_MS = 20_000
 
+let runMs = RUN_MS
+
+// For tests: a shorter run; null goes back to the default
+export function configureCron(next: { runMs?: number } | null) {
+  runMs = next?.runMs ?? RUN_MS
+}
+
+// Quick deletes first, then what people wait for (webhook retries, exports), and the storage sweep,
+// which can take longest and can wait a day, last. Pruners still run before it: the rows they delete
+// are what frees blobs.
 cron.get('/sweep', async (c) => {
+  const deadline = Date.now() + runMs
   await runPruners()
-  return c.json({
-    ...(await sweepStorage()),
-    rateLimits: await deleteExpiredLimits(),
-    views: await deleteOldViews(),
-    exports: await sweepExports(),
-    exportSteps: await resumeExports({ budgetMs: EXPORT_BUDGET_MS }),
-    webhooks: await runWebhookQueue(),
-    indexed: await indexStale(),
-  })
+  const rateLimits = await deleteExpiredLimits()
+  const views = await deleteOldViews()
+  const exports = await sweepExports()
+  const webhooks = await runWebhookQueue({ deadline })
+  const exportSteps = await resumeExports({ budgetMs: Math.min(EXPORT_BUDGET_MS, deadline - Date.now()) })
+  const indexed = await indexStale(500, deadline)
+  const storage = await sweepStorage({ deadline })
+  return c.json({ ...storage, rateLimits, views, exports, exportSteps, webhooks, indexed })
 })
 
 // Webhook retries that are due (src/webhooks.ts). Without a long-running process, first attempts are
 // made as events happen and retries wait for this, so call it every few minutes where the host allows.
-cron.get('/webhooks', async (c) => c.json({ webhooks: await runWebhookQueue() }))
+cron.get('/webhooks', async (c) => c.json({ webhooks: await runWebhookQueue({ deadline: Date.now() + runMs }) }))

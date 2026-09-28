@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto'
 import { sql } from 'drizzle-orm'
 import { db } from './db/index.js'
 import { sweepExports } from './exports.js'
@@ -25,12 +26,33 @@ export async function holdStorageLock(tx: Tx) {
 const GRACE_MS = 60 * 60 * 1000
 const EVERY_MS = 6 * 60 * 60 * 1000
 
-export async function sweepStorage({ graceMs = GRACE_MS, now = Date.now() } = {}): Promise<{ checked: number; deleted: number; uploads: number }> {
+// Blobs in order of hash starting just after `start` and wrapping round to it, so each blob comes
+// once whatever the start
+async function* blobsFrom(start: string): AsyncGenerator<{ hash: string; lastModified: Date }> {
+  yield* listBlobs({ startAfter: start })
+  for await (const blob of listBlobs()) {
+    if (blob.hash > start) return
+    yield blob
+  }
+}
+
+// With a `deadline` (epoch ms, for a run that the host stops after a while, like /api/cron/sweep)
+// listing stops once it passes, and only the blobs listed by then are decided on. Such a run starts
+// listing at a random hash, so runs that stop early still reach every blob between them rather than
+// the same first ones each time.
+export async function sweepStorage({ graceMs = GRACE_MS, now = Date.now(), deadline = Number.POSITIVE_INFINITY } = {}): Promise<{
+  checked: number
+  deleted: number
+  uploads: number
+}> {
+  if (Date.now() >= deadline) return { checked: 0, deleted: 0, uploads: 0 }
   // Direct uploads nobody committed; their links expired long before the grace period is up
-  const uploads = await deleteStaleUploads(graceMs, now)
+  const uploads = await deleteStaleUploads(graceMs, now, deadline)
   const candidates: string[] = []
   let checked = 0
-  for await (const blob of listBlobs()) {
+  const blobs = Number.isFinite(deadline) ? blobsFrom(randomBytes(32).toString('hex')) : listBlobs()
+  for await (const blob of blobs) {
+    if (Date.now() >= deadline) break
     checked += 1
     if (now - blob.lastModified.getTime() >= graceMs) candidates.push(blob.hash)
   }

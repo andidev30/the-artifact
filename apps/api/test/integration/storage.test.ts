@@ -83,6 +83,22 @@ describe('object storage', () => {
     expect((await getBlob(sha256(shared)))?.toString()).toBe(shared)
   })
 
+  it('reaches every blob when a sweep with a deadline starts listing at a random hash', async () => {
+    const owner = await createUser()
+    const kept = unique()
+    await createPage(owner, { html: kept })
+    const loose = await Promise.all(Array.from({ length: 6 }, () => putBlob(unique())))
+
+    expect(await sweepStorage({ graceMs: 0, deadline: Date.now() - 1 })).toEqual({ checked: 0, deleted: 0, uploads: 0 })
+    for (const hash of loose) expect(await getBlob(hash)).not.toBeNull()
+
+    const { checked, deleted } = await sweepStorage({ graceMs: 0, deadline: Date.now() + 60_000 })
+    expect(checked).toBeGreaterThanOrEqual(loose.length + 1)
+    expect(deleted).toBeGreaterThanOrEqual(loose.length)
+    for (const hash of loose) expect(await getBlob(hash)).toBeNull()
+    expect((await getBlob(sha256(kept)))?.toString()).toBe(kept)
+  })
+
   it('writes the same content to the same key', async () => {
     const content = crypto.randomUUID()
     expect(await putBlob(content)).toBe(sha256(content))

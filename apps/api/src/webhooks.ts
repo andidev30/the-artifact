@@ -299,14 +299,24 @@ async function claim(at: SQL, ids?: string[]): Promise<Claimed[]> {
     )
 }
 
-// Sends what is due (or the deliveries named, when due) and returns how many were attempted. `now`
-// is for tests that move the clock.
-export async function runWebhookQueue({ now, ids }: { now?: Date; ids?: string[] } = {}): Promise<number> {
+// Sends what is due (or the deliveries named, when due) and returns how many were attempted. No new
+// batch starts once `deadline` (epoch ms) has passed; a batch under way still takes up to TIMEOUT_MS.
+// `now` is for tests that move the clock.
+export async function runWebhookQueue({
+  now,
+  ids,
+  deadline = Number.POSITIVE_INFINITY,
+}: {
+  now?: Date
+  ids?: string[]
+  deadline?: number
+} = {}): Promise<number> {
   // The database's clock unless a test moves it, so every process agrees on what is due
   const at = now ? sql`${now.toISOString()}::timestamptz` : sql`now()`
   let total = 0
   // Bounded, so one call fits in a serverless function's time; what is left waits for the next
   for (let i = 0; i < MAX_BATCHES; i++) {
+    if (Date.now() >= deadline) return total
     const batch = await claim(at, ids)
     if (!batch.length) return total
     const hooks = await db
