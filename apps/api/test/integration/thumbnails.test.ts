@@ -91,6 +91,10 @@ describe('address checks for CDN requests', () => {
       '::ffff:127.0.0.1',
       '::ffff:169.254.169.254',
       '64:ff9b::a9fe:a9fe',
+      '::127.0.0.1',
+      '::a9fe:a9fe',
+      '3fff::1',
+      '5f00::1',
       'not an ip',
     ]) {
       expect(isPublicAddress(ip), ip).toBe(false)
