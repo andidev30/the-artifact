@@ -11,16 +11,8 @@ function createOrganization(ownerEmail: string, name: string) {
   return createHostedOrganization(ownerEmail, name, `e2e-${randomBytes(4).toString('hex')}`)
 }
 
-test('signed-out screens', async ({ page }) => {
-  await page.goto('/')
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Pricing' })).toBeVisible()
-  await expectAccessible(page, 'landing and pricing')
-
-  await page.goto('/contact-sales')
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
-  await expectAccessible(page, 'contact sales')
-
+// Its own test: with the other signed-out screens it ran past the time limit on CI runners
+test('legal pages', async ({ page }) => {
   for (const [doc, title] of [
     ['terms', 'Terms of Service'],
     ['privacy', 'Privacy Policy'],
@@ -31,6 +23,17 @@ test('signed-out screens', async ({ page }) => {
     await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible()
     await expectAccessible(page, title)
   }
+})
+
+test('signed-out screens', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Pricing' })).toBeVisible()
+  await expectAccessible(page, 'landing and pricing')
+
+  await page.goto('/contact-sales')
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+  await expectAccessible(page, 'contact sales')
 
   await page.goto('/docs/introduction')
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
