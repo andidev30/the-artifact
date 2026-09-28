@@ -23,7 +23,7 @@ Hono on Node 26, Drizzle ORM over `postgres`, S3 via `@aws-sdk/client-s3`, MCP v
 | `src/storage.ts`, `src/gc.ts` | Content-addressed blobs in S3 and the sweep that deletes unreferenced ones; `addPruner` jobs run before each sweep |
 | `src/thumbnails.ts` | Gallery screenshots of untrusted HTML with no network of its own; `inPage` opens a page under those rules for every render |
 | `src/inspect.ts` | `inspect_artifact`: opens a version through `inPage` and reads back screenshots, console errors, missing files, broken links and axe-core findings (axe runs in an isolated world, loaded from `node_modules`). Runs where Chromium is; other cluster workers ask over IPC |
-| `src/previews.ts` | Link preview (Open Graph) tags in the HTML shell of `/a/<slug>`, for link-shared pages only; mounted by `src/web.ts` and by `api/index.js` on Vercel. `SHELL_FRAMING` keeps the app itself out of other sites' frames |
+| `src/previews.ts` | Link preview (Open Graph) tags in the HTML shell of `/a/<slug>`, for link-shared pages only; mounted by `src/web.ts` and by `api/index.js` on Vercel. `SHELL_HEADERS` keeps the app itself out of other sites' frames and sets the shell's CSP |
 | `src/embeds.ts` | Embeds: `/e/<slug>` (a link-shared page without the app, framable by other sites, or a sign-in card) and `GET /api/oembed` |
 | `src/transfer.ts` | Duplicating a page and moving it to another workspace: who may (`publishTarget`, `canMove`), what a copy starts with and what a move keeps or clears |
 | `src/folders.ts` | Folders of a workspace: who organizes them (`belongsTo`, `canFile`), names, filing pages. They never change access |

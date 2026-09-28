@@ -21,8 +21,13 @@ export const SITE = 'The Artifact'
 export const IMAGE = { type: 'image/webp', width: 640, height: 360 }
 
 // The app itself is never framed by other sites (clickjacking); only /e/<slug> and page content are
-// (see embeds.ts). Both headers, for browsers that predate frame-ancestors.
-export const SHELL_FRAMING = { 'Content-Security-Policy': "frame-ancestors 'self'", 'X-Frame-Options': 'SAMEORIGIN' }
+// (see embeds.ts). Both headers, for browsers that predate frame-ancestors. The shell also loads no
+// plugins, and no injected <base> can send its relative URLs elsewhere. Page content has its own
+// policy (contentCsp in content.ts), never this one.
+export const SHELL_HEADERS = {
+  'Content-Security-Policy': "frame-ancestors 'self'; object-src 'none'; base-uri 'self'",
+  'X-Frame-Options': 'SAMEORIGIN',
+}
 
 export type Preview = { title: string; url: string; image: string | null }
 
@@ -93,6 +98,6 @@ export function servePagePreviews<E extends Env>(app: Hono<E>, index: string) {
       // The app still has to load when the lookup fails; it only loses the preview
       log.error('Link preview failed', { path: c.req.path, error: err instanceof Error ? err.message : String(err) })
     }
-    return c.html(withPreview(index, preview), 200, { 'Cache-Control': 'no-cache', ...SHELL_FRAMING })
+    return c.html(withPreview(index, preview), 200, { 'Cache-Control': 'no-cache', ...SHELL_HEADERS })
   })
 }

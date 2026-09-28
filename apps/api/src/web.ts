@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { serveStatic } from '@hono/node-server/serve-static'
 import type { Env, Hono, MiddlewareHandler } from 'hono'
 import { env } from './env.js'
-import { SHELL_FRAMING, servePagePreviews } from './previews.js'
+import { SHELL_HEADERS, servePagePreviews } from './previews.js'
 
 // Paths the API owns; everything else is the single-page app
 const API_PREFIXES = ['/api/', '/mcp', '/oauth/', '/.well-known/']
@@ -27,6 +27,13 @@ Allow: /api/artifacts/*/thumbnails/
 Allow: /api/oembed
 `
 
+// With an https APP_URL, browsers that have been here once never try plain HTTP again for a year, so
+// someone on the network can't strip TLS from a later visit. Not includeSubDomains: other hosts on the
+// domain aren't the app's to decide for. Vercel sends a stronger one of its own, which this would replace.
+export function strictTransportSecurity(): string | null {
+  return env.appUrl.startsWith('https://') && !process.env.VERCEL ? 'max-age=31536000' : null
+}
+
 // Serves the built web app next to the API, so a self-hosted install is one process on one port
 export function mountWeb<E extends Env>(app: Hono<E>, dir: string) {
   const index = readFileSync(join(dir, 'index.html'), 'utf8')
@@ -36,9 +43,11 @@ export function mountWeb<E extends Env>(app: Hono<E>, dir: string) {
   // Everything from here on is the app itself; the API, page content and embeds are mounted before it
   app.use('*', async (c, next) => {
     await next()
-    for (const [name, value] of Object.entries(SHELL_FRAMING)) c.header(name, value)
+    for (const [name, value] of Object.entries(SHELL_HEADERS)) c.header(name, value)
     // Also set for every response by app.ts; here too for a web app mounted on its own
     c.header('X-Content-Type-Options', 'nosniff')
+    const hsts = strictTransportSecurity()
+    if (hsts) c.header('Strict-Transport-Security', hsts)
   })
 
   app.get('/robots.txt', (c) => c.text(env.selfHosted ? SELF_HOSTED_ROBOTS : hostedRobots, 200, { 'Cache-Control': 'public, max-age=3600' }))

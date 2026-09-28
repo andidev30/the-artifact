@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Hono } from 'hono'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
-import { contentHost } from '../../src/content.js'
+import { contentCsp, contentHost } from '../../src/content.js'
 import { env } from '../../src/env.js'
 import { mountWeb, SELF_HOSTED_ROBOTS } from '../../src/web.js'
 import { call, createPage, createUser } from './helpers.js'
@@ -22,9 +22,11 @@ beforeAll(() => {
   mountWeb(site, dir)
 })
 
-const selfHosted = env.selfHosted
+const original = { selfHosted: env.selfHosted, appUrl: env.appUrl }
 afterEach(() => {
-  env.selfHosted = selfHosted
+  env.selfHosted = original.selfHosted
+  env.appUrl = original.appUrl
+  delete process.env.VERCEL
 })
 
 describe('X-Content-Type-Options', () => {
@@ -61,6 +63,42 @@ describe('X-Content-Type-Options', () => {
     }
     expect((await site.request('/assets/index-abc123.js')).headers.get('content-type')).toContain('javascript')
     expect((await site.request('/assets/font-abc123.woff2')).headers.get('content-type')).toBe('font/woff2')
+  })
+})
+
+describe('Strict-Transport-Security', () => {
+  it('is sent with an https APP_URL, on the API, page content and the app shell', async () => {
+    const owner = await createUser()
+    const page = await createPage(owner, { visibility: 'link' })
+    env.appUrl = 'https://artifact.example.com'
+    for (const path of ['/api/config', '/api/me', '/healthz', `/e/${page.slug}`, `/api/artifacts/${page.slug}/v/1/`]) {
+      expect((await call(path)).headers.get('strict-transport-security'), path).toBe('max-age=31536000')
+    }
+    for (const path of ['/', '/assets/index-abc123.js', '/robots.txt']) {
+      expect((await site.request(path)).headers.get('strict-transport-security'), path).toBe('max-age=31536000')
+    }
+  })
+
+  it('is not sent over plain http, or on Vercel, which sends its own', async () => {
+    expect((await call('/api/config')).headers.get('strict-transport-security')).toBeNull()
+    expect((await site.request('/')).headers.get('strict-transport-security')).toBeNull()
+    env.appUrl = 'https://artifact.example.com'
+    process.env.VERCEL = '1'
+    expect((await call('/api/config')).headers.get('strict-transport-security')).toBeNull()
+  })
+})
+
+describe('Content-Security-Policy', () => {
+  it('keeps plugins and <base> out of the app shell, and leaves page content its own policy', async () => {
+    for (const path of ['/', '/app', '/docs/introduction']) {
+      expect((await site.request(path)).headers.get('content-security-policy'), path).toBe("frame-ancestors 'self'; object-src 'none'; base-uri 'self'")
+    }
+    const owner = await createUser()
+    const page = await createPage(owner, { visibility: 'link' })
+    const content = await call(`/api/artifacts/${page.slug}/v/1/`, { headers: { 'sec-fetch-dest': 'iframe' } })
+    expect(content.status).toBe(200)
+    expect(content.headers.get('content-security-policy')).toBe(contentCsp())
+    expect(content.headers.get('content-security-policy')).not.toContain('object-src')
   })
 })
 

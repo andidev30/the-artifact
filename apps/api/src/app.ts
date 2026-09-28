@@ -48,7 +48,7 @@ import { security, sessions } from './routes/security.js'
 import { settings } from './routes/settings.js'
 import { organizationWebhooks, personalWebhooks } from './routes/webhooks.js'
 import { tags } from './routes/tags.js'
-import { mountWeb } from './web.js'
+import { mountWeb, strictTransportSecurity } from './web.js'
 import { pruneWebhookDeliveries } from './webhooks.js'
 
 export const app = new Hono<AuthEnv>()
@@ -57,10 +57,12 @@ export const app = new Hono<AuthEnv>()
 app.use(observeRequests)
 app.onError(onUnhandledError)
 // Browsers take every response as the type it declares and never guess one from the body: API errors,
-// the app shell and its assets, health checks and redirects included
+// the app shell and its assets, health checks and redirects included. HSTS on all of them too.
 app.use(async (c, next) => {
   await next()
   c.header('X-Content-Type-Options', 'nosniff')
+  const hsts = strictTransportSecurity()
+  if (hsts) c.header('Strict-Transport-Security', hsts)
 })
 
 // Bodies are read whole into memory, most of them before anyone is signed in, so a request carries at

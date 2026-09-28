@@ -106,7 +106,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "frame-ancestors 'self'"
+          "value": "frame-ancestors 'self'; object-src 'none'; base-uri 'self'"
         },
         {
           "key": "X-Frame-Options",
