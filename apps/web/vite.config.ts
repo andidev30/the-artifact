@@ -13,6 +13,7 @@ export default defineConfig({
       '/api': api,
       '/oauth': api,
       '/.well-known': api,
+      '/scim': api,
       // A pattern, so app paths that merely start with /e stay with Vite
       '^/e/': api,
     },

@@ -196,14 +196,18 @@ export async function limitInvites(c: Context, userId: string, people: number): 
   )
 }
 
-// IPv4-mapped addresses as plain IPv4, and IPv6 by its /64, which usually belongs to one household or server
-export function normalizeIp(raw: string): string {
+// Without brackets or a zone id, and IPv4-mapped addresses as plain IPv4
+export function plainIp(raw: string): string {
   const ip = raw
     .trim()
     .replace(/^\[(.*)\]$/, '$1')
     .split('%')[0]
-  const v4 = /^(?:::ffff:)?(\d{1,3}(?:\.\d{1,3}){3})$/i.exec(ip)
-  if (v4) return v4[1]
+  return /^(?:::ffff:)?(\d{1,3}(?:\.\d{1,3}){3})$/i.exec(ip)?.[1] ?? ip
+}
+
+// IPv4-mapped addresses as plain IPv4, and IPv6 by its /64, which usually belongs to one household or server
+export function normalizeIp(raw: string): string {
+  const ip = plainIp(raw)
   if (isIP(ip) !== 6) return ip
   const [head, tail] = ip.split('::')
   const h = head ? head.split(':') : []
@@ -218,15 +222,21 @@ export function normalizeIp(raw: string): string {
 // The client's address. Behind TRUST_PROXY proxies, the entry the outermost of them added to
 // X-Forwarded-For; entries further left come from the client and could say anything. Otherwise the
 // connection's own address, which Node gives and in-process requests (tests) don't have.
-export function clientIp(c: Context): string | null {
+export function clientAddress(c: Context): string | null {
   if (env.trustProxy > 0) {
     const hops = (c.req.header('x-forwarded-for') ?? '')
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean)
     const ip = hops[Math.max(0, hops.length - env.trustProxy)]
-    if (ip) return normalizeIp(ip)
+    if (ip) return plainIp(ip)
   }
   const socket = (c.env as { incoming?: { socket?: { remoteAddress?: string } } } | undefined)?.incoming?.socket?.remoteAddress
-  return socket ? normalizeIp(socket) : null
+  return socket ? plainIp(socket) : null
+}
+
+// The client's address as rate limits count it: IPv6 by its /64
+export function clientIp(c: Context): string | null {
+  const ip = clientAddress(c)
+  return ip ? normalizeIp(ip) : null
 }

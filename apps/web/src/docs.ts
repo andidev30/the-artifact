@@ -14,7 +14,9 @@ const USING: DocPage[] = [
   { slug: 'sharing', title: 'Sharing and permissions' },
   { slug: 'organizations', title: 'Organizations and members' },
   { slug: 'version-history', title: 'Version history' },
+  { slug: 'retention', title: 'Version retention' },
   { slug: 'comments', title: 'Comments' },
+  { slug: 'audit-log', title: 'Audit log' },
   { slug: 'signing-in', title: 'Signing in' },
 ]
 
@@ -23,6 +25,9 @@ const RUNNING: DocPage[] = [
   { slug: 'kubernetes', title: 'Kubernetes' },
   { slug: 'configuration', title: 'Configuration reference' },
   { slug: 'licenses', title: 'Licenses' },
+  { slug: 'sso', title: 'Single sign-on' },
+  { slug: 'saml', title: 'SAML single sign-on' },
+  { slug: 'scim', title: 'SCIM provisioning' },
   { slug: 'backups', title: 'Backup and restore' },
   { slug: 'upgrading', title: 'Upgrading' },
 ]
@@ -63,11 +68,13 @@ function escapeHtml(s: string) {
 }
 
 export function headingId(text: string) {
-  return text
-    .toLowerCase()
-    .replace(/<[^>]+>/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
+  // Tags are dropped until none are left, so a nested one like <a<b>> can't leave a tag behind
+  let plain = text.toLowerCase()
+  for (let prev = ''; prev !== plain; ) {
+    prev = plain
+    plain = plain.replace(/<[^<>]*>/g, '')
+  }
+  return plain.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
 }
 
 const LANG_LABEL: Record<string, string> = { sh: 'Terminal', html: 'HTML', json: 'JSON', toml: 'TOML', yaml: 'YAML' }

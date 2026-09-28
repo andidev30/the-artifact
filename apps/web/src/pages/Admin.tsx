@@ -25,6 +25,8 @@ import {
 import { AccountHeader } from '../components/AccountHeader'
 import { CopyCommand } from '../components/CopyCommand'
 import { ReleaseNotice } from '../components/ReleaseNotice'
+import { ScimSection } from '../ee/ScimSection'
+import { SsoSection } from '../ee/SsoSection'
 import { useConfig } from '../useConfig'
 import { timeAgo } from '../time'
 import { useMe } from '../useMe'
@@ -37,6 +39,7 @@ import './Admin.css'
 
 // Hosted service only, so its code never loads on a self-hosted install
 const IssuedLicensesSection = lazy(() => import('../ee/IssueLicenses').then((m) => ({ default: m.IssuedLicensesSection })))
+const FunnelSection = lazy(() => import('../ee/Funnel').then((m) => ({ default: m.FunnelSection })))
 
 const errorText = (err: unknown, fallback: string) => (err instanceof Error ? err.message : fallback)
 const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString('en')} ${n === 1 ? one : many}`
@@ -96,6 +99,9 @@ function AdminPage({ me }: { me: Me }) {
     { id: 'organizations', label: 'Organizations' },
     { id: 'signup', label: 'Sign-up' },
     ...(config?.selfHosted === true ? [{ id: 'license', label: 'License' }] : []),
+    ...(config?.selfHosted === true ? [{ id: 'sso', label: 'Single sign-on' }] : []),
+    ...(config?.selfHosted === true ? [{ id: 'scim', label: 'Provisioning' }] : []),
+    ...(config?.selfHosted === false ? [{ id: 'funnel', label: 'Sign-up funnel' }] : []),
     ...(config?.selfHosted === false ? [{ id: 'license-keys', label: 'License keys' }] : []),
   ]
 
@@ -133,8 +139,11 @@ function AdminPage({ me }: { me: Me }) {
             <OrganizationsSection onChanged={changed} />
             <SignupSection onChanged={changed} />
             {config?.selfHosted === true && <LicenseSection />}
+            {config?.selfHosted === true && <SsoSection />}
+            {config?.selfHosted === true && <ScimSection />}
             {config?.selfHosted === false && (
               <Suspense fallback={null}>
+                <FunnelSection />
                 <IssuedLicensesSection />
               </Suspense>
             )}

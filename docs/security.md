@@ -17,16 +17,28 @@ Each version is served as its own document tree, so a page's files resolve by re
 - **Download** (`/api/artifacts/<id>/download`) serves a version's files as one zip with the same rules, as an attachment that the browser saves rather than opens. The link an agent gets from `download_artifact` carries the same kind of token, for the person the agent is connected as and one version, so it works without a session and is checked again each time it is used.
 - Files are sent with `Access-Control-Allow-Origin: *` so the sandboxed page can `fetch()` its own data and load its fonts. Browsers never combine `*` with credentials, so this exposes nothing a signed-out visitor couldn't already open.
 - Versions never change, so files are cached privately in your browser for an hour and revalidated by hash.
-- **Link keys and passwords.** After a reset, a public link carries a random key (`?k=`), compared in constant time; the page's own address only opens it for people with access of their own. Link passwords are stored as scrypt hashes, like account passwords, and compared in constant time. Passing the key and the password sets an `HttpOnly` cookie that only goes to that page's addresses under `/api/artifacts/<id>` and lasts 12 hours. It holds a signature over the page, its key and its password, so a reset or a new password makes every earlier one useless. Wrong passwords are limited per page and per network (see [Rate limits](/docs/configuration#rate-limits)).
+- **Link keys and passwords.** After a reset, a public link carries a random key (`?k=`), compared in constant time; the page's own address only opens it for people with access of their own. Link passwords are stored as scrypt hashes, like account passwords, and compared in constant time. Passing the key and the password sets an `HttpOnly` cookie that only goes to that page's addresses under `/api/artifacts/<id>` and lasts 12 hours. It holds a signature over the page, its key and its password, so a reset or a new password makes every earlier one useless. The frame's first request carries it and is redirected to `/v/<version>/~<grant>/`, the same signature in the path, like a link token. Wrong passwords are limited per page and per network (see [Rate limits](/docs/configuration#rate-limits)).
+
+## A separate domain for pages
+
+The sandbox is the first line. With `CONTENT_ORIGIN` set (see [A separate domain for pages](/docs/self-hosting#a-separate-domain-for-pages)), page files are served only from that second origin, so a page that got out of its sandbox through a browser bug still wouldn't be on the app's site:
+
+- **The app's cookies never go there.** Every cookie the app sets (the session, pending sign-ins, the link password grant, sign-in flows) is host-only, with no `Domain`, so the browser sends it only to `APP_URL`'s host. With the content origin on another registrable domain, `SameSite` keeps them out of its requests too, and a page there can't set cookies for the app's domain.
+- **The content host never reads or sets a cookie.** It gets in only by what the address carries: a link token naming a signed-in viewer, a grant for a link's key and password, or the link's key. The same tokens as above, checked again on every request.
+- **It can't act as the app.** It answers only `/api/artifacts/<id>/v/<version>/…`. Sign-in, the API, MCP, OAuth, embeds, link previews and the web app answer 404 there, so a page can't send people to a sign-in form on it, and a request to it can't do anything the app would do.
+- **The app's host serves no page content.** A request for a page's files on the app's host is checked with the session, key and grant as before, then redirected to the content origin under a token, or answered 404.
+- **Framing.** When `EMBED_FRAME_ANCESTORS` narrows framing, page content lists the app's origin as well, since the app's viewer and embeds frame it from there. Embeds frame the content origin directly, and their `frame-src` names it.
+
+Without `CONTENT_ORIGIN`, pages are served from `APP_URL`, isolated by the sandbox alone.
 
 ## Framing and embeds
 
 - **The app can't be framed by other sites.** Every page of the app, `/a/<id>` included, is sent with `Content-Security-Policy: frame-ancestors 'self'` and `X-Frame-Options: SAMEORIGIN`, so another site can't lay it out under its own buttons (clickjacking).
-- **Embeds can.** `/e/<id>` is a small document of its own, without the app: no app scripts, no session, only a sandboxed frame of the page's current version and a link to open it. Its policy is `default-src 'none'; style-src 'unsafe-inline'; frame-src 'self'; base-uri 'none'; form-action 'none'`. Page content (`/api/artifacts/<id>/v/<version>/`) is framed by the app and by embeds, so the same sites may frame both.
+- **Embeds can.** `/e/<id>` is a small document of its own, without the app: no app scripts, no session, only a sandboxed frame of the page's current version and a link to open it. Its policy is `default-src 'none'; style-src 'unsafe-inline'; frame-src 'self'; base-uri 'none'; form-action 'none'`, with the content origin added to `frame-src` when there is one. Page content (`/api/artifacts/<id>/v/<version>/`) is framed by the app and by embeds, so the same sites may frame both.
 - **Who may embed.** By default any site; `EMBED_FRAME_ANCESTORS` narrows that to a list of origins, sent as `frame-ancestors 'self' <origins>` on embeds and page content (see the [configuration reference](/docs/configuration)). With the default, no `frame-ancestors` is sent at all, since `*` wouldn't match sites that frame embeds from a sandboxed frame of their own.
 - **Embeds are never signed in.** Access is checked as a visitor who isn't signed in, ignoring any session cookie, so an embed shows the same thing to everyone. Only pages shared with **Anyone with the link**, with no password and not expired, are embedded. Every other page, and every page that doesn't exist, gets the same "Sign in to view this page" card with no title, content or screenshot, and `GET /api/oembed` answers 404 for them. This also means a site can't use your session to show you a restricted page inside its own frame.
 
-For the strongest isolation on a public install, serve The Artifact on a domain of its own rather than a subdomain of sites that share cookies.
+For the strongest isolation on a public install, serve The Artifact on a domain of its own rather than a subdomain of sites that share cookies, and its pages from a [separate domain](#a-separate-domain-for-pages).
 
 ## Thumbnails are rendered without network access
 
@@ -50,10 +62,11 @@ A page in a personal workspace is restricted until you share it. A page that som
 - Passwords (on servers without email, or once someone sets one) are hashed with scrypt. Wrong ones are [rate limited](/docs/configuration#rate-limits) per address and per network.
 - Sessions are `HttpOnly`, `SameSite=Lax` cookies (`Secure` over HTTPS); the database stores only a hash of the session token.
 - Google sign-in uses the authorization code flow with state and PKCE, and only accepts verified Google email addresses.
+- [Single sign-on](/docs/sso) (Enterprise) uses OpenID Connect with PKCE, state and nonce, checks the ID token's signature against the provider's keys, and links to an existing account only by an address the provider verified (or one you chose to trust). Client secrets are encrypted at rest. An instance admin can always sign in without it.
 
 ## Two-factor sign-in
 
-An account with a passkey or an authenticator app has two-factor sign-in on (how to set it up: [Signing in](/docs/signing-in)). Every first factor ends the same way: a password, an email link (including one an instance admin made), and Google each only make a pending sign-in, and the session starts once the second factor checks out.
+An account with a passkey or an authenticator app has two-factor sign-in on (how to set it up: [Signing in](/docs/signing-in)). Every first factor ends the same way: a password, an email link (including one an instance admin made), Google and single sign-on each only make a pending sign-in, and the session starts once the second factor checks out.
 
 - **Pending sign-ins** live in their own `HttpOnly`, `SameSite=Lax` cookie, scoped to `/api/auth` and stored as a hash, for at most 10 minutes. It isn't a session: with it you can only finish or abandon the sign-in. It is used up when the session starts, and deleted when the password changes, the account is suspended, or an admin resets its second factor.
 - **An email link is one factor.** It proves you can read the mailbox, which is also what an attacker who got into it can do, so it never skips the second factor. The same goes for an admin's sign-in link on a server without email: it sets a new password, and the second factor is still asked for.

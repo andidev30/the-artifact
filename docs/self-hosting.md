@@ -82,6 +82,25 @@ artifact.example.com {
 
 Then set `APP_URL=https://artifact.example.com` and `TRUST_PROXY=true` in `app.env`, and restart with `docker compose up -d`. `TRUST_PROXY` tells the app to take each visitor's address from the `X-Forwarded-For` header the proxy adds; without it, every visitor has the proxy's address, and the [per-network rate limits](/docs/configuration#rate-limits) count them all together. Only set it when the app can't be reached except through the proxy, or anyone could claim any address.
 
+### A separate domain for pages
+
+Pages are untrusted HTML. They already run in a sandbox with no origin of their own, so they can't read the app's cookies or call its API as you (see [Pages are sandboxed](/docs/security#pages-are-sandboxed)). On a public install, or one where people publish pages they didn't write, serve them from a second domain as well: then even a browser bug that let a page out of its sandbox would find itself on a site the app's cookies are never sent to. This is what `githubusercontent.com` does for GitHub.
+
+1. Pick a host on another registrable domain than the app, e.g. `artifact-content.example.net` for an app at `artifact.example.com`. A subdomain of the app's domain (`content.example.com`) keeps cookies apart too, but a page there could still set cookies for all of `example.com`, so a domain of its own is better.
+2. Point its DNS at the same server as `APP_URL` (an `A`, `AAAA` or `CNAME` record).
+3. Give it a certificate and send it to the same app. With Caddy, add it to the site block, and Caddy gets the certificate itself:
+
+   ```
+   artifact.example.com, artifact-content.example.net {
+     reverse_proxy localhost:8080
+   }
+   ```
+
+   With nginx, add the name to `server_name` and the certificate, and pass the host on with `proxy_set_header Host $host;`. On Kubernetes, add the host and its TLS secret to the ingress.
+4. Set `CONTENT_ORIGIN=https://artifact-content.example.net` in `app.env` and restart with `docker compose up -d`.
+
+The app tells the two apart by the `Host` header, or by `X-Forwarded-Host` when `TRUST_PROXY` is set, so the proxy must pass the host the browser asked for. The content host answers only page files under `/api/artifacts/<page id>/v/<version>/`; sign-in, the API, MCP, OAuth and the web app answer 404 there. People keep using the app's address for everything: when the viewer or an embed opens a page, the app checks access with your session, the link's key or its password, and sends the frame on to the content host with a short-lived link token in the address. Nothing else changes: page links, embeds, downloads, screenshots and link previews stay on `APP_URL`.
+
 ## 4. Connect agents
 
 Each person adds the MCP server once, using `APP_URL` followed by `/mcp`:

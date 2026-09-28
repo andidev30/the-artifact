@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { requireUser, type AuthEnv } from '../auth/session.js'
+import { track } from '../analytics.js'
 import { db, schema } from '../db/index.js'
 
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$/
@@ -82,6 +83,7 @@ organizations.post('/', async (c) => {
       await tx.update(schema.users).set({ onboardedAt: new Date() }).where(eq(schema.users.id, user.id))
       return created
     })
+    if (!user.onboardedAt) track({ event: 'onboarded', userId: user.id, detail: 'organization' })
     return c.json({ id: org.id, name: org.name, slug: org.slug, role: 'owner' }, 201)
   } catch (err) {
     // Unique violation on slug: someone took it between the check and the insert
@@ -99,5 +101,6 @@ onboarding.use(requireUser)
 onboarding.post('/personal', async (c) => {
   const user = c.get('user')!
   await db.update(schema.users).set({ onboardedAt: new Date() }).where(eq(schema.users.id, user.id))
+  if (!user.onboardedAt) track({ event: 'onboarded', userId: user.id, detail: 'personal' })
   return c.body(null, 204)
 })

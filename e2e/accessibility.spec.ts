@@ -1,8 +1,8 @@
 import { createHash, randomBytes } from 'node:crypto'
-import { expect, test } from '@playwright/test'
+import { expect, type Page, test } from '@playwright/test'
 import { createHostedOrganization, grantInstanceAdmin } from '../apps/api/test/e2e-db.ts'
 import { expectAccessible } from './axe'
-import { connectAgent, latestMail, publishViaMcp, signInLink, signUpPersonal, uniqueEmail } from './helpers'
+import { connectAgent, latestMail, licensedSso, mockAuditLog, mockRetention, publishViaMcp, signInLink, signUpPersonal, uniqueEmail } from './helpers'
 
 const HTML = '<!doctype html><title>Plan</title><h1>Plan</h1>'
 
@@ -11,16 +11,8 @@ function createOrganization(ownerEmail: string, name: string) {
   return createHostedOrganization(ownerEmail, name, `e2e-${randomBytes(4).toString('hex')}`)
 }
 
-test('signed-out screens', async ({ page }) => {
-  await page.goto('/')
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Pricing' })).toBeVisible()
-  await expectAccessible(page, 'landing and pricing')
-
-  await page.goto('/contact-sales')
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
-  await expectAccessible(page, 'contact sales')
-
+// Its own test: with the other signed-out screens it ran past the time limit on CI runners
+test('legal pages', async ({ page }) => {
   for (const [doc, title] of [
     ['terms', 'Terms of Service'],
     ['privacy', 'Privacy Policy'],
@@ -31,6 +23,17 @@ test('signed-out screens', async ({ page }) => {
     await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible()
     await expectAccessible(page, title)
   }
+})
+
+test('signed-out screens', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Pricing' })).toBeVisible()
+  await expectAccessible(page, 'landing and pricing')
+
+  await page.goto('/contact-sales')
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+  await expectAccessible(page, 'contact sales')
 
   await page.goto('/docs/introduction')
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
@@ -154,6 +157,9 @@ test('gallery with pages and folders, its menus and dialogs', async ({ page }) =
   const folders = page.getByRole('navigation', { name: 'Folders' })
   await folders.getByRole('button', { name: /Plans/ }).click()
   await expect(page.getByRole('heading', { level: 2, name: 'Plans' })).toBeVisible()
+  // The old list stays dimmed until the folder's pages arrive; axe would measure the dimmed colours
+  await expect(page.locator('.page-card')).toHaveCount(1)
+  await expect(page.locator('.gallery[data-stale]')).toHaveCount(0)
   await expectAccessible(page, 'gallery, one folder')
   await folders.getByRole('button', { name: /All pages/ }).click()
 
@@ -306,6 +312,69 @@ test('account and organization settings', async ({ page, browser }) => {
   await other.close()
 })
 
+test('version retention in organization settings, with and without a license', async ({ page }) => {
+  const email = uniqueEmail('a11y-retention')
+  await signUpPersonal(page, email)
+  const org = await createOrganization(email, 'Retention Co')
+  await mockRetention(page, { keepDays: null, keepVersions: null, license: 'active' })
+  await page.goto(`/organizations/${org.slug}/settings#retention`)
+  const section = page.locator('section#retention')
+  await expect(section.getByLabel('Keep older versions for')).toBeEnabled()
+  await section.getByLabel('Keep older versions for').selectOption({ label: '90 days' })
+  await section.getByLabel('Also keep at most a number of versions per page').check()
+  await expect(section.getByText('About 12 versions on 3 pages would be removed.')).toBeVisible()
+  await expect(section.getByText('Removed versions can’t be restored.')).toBeVisible()
+  await expectAccessible(page, 'organization settings, version retention')
+  await section.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(section.getByRole('button', { name: 'Save and remove 12 versions' })).toBeFocused()
+  await expectAccessible(page, 'organization settings, version retention confirm')
+
+  await page.unrouteAll()
+  await mockRetention(page, { keepDays: 90, keepVersions: null, license: 'expired' })
+  await page.reload()
+  await expect(section.getByText(/kept but not applied/)).toBeVisible()
+  await expect(section.getByLabel('Keep older versions for')).toBeDisabled()
+  await expectAccessible(page, 'organization settings, version retention without a license')
+})
+
+test('organization audit log', async ({ page }) => {
+  const email = uniqueEmail('a11y-audit')
+  await signUpPersonal(page, email)
+  const org = await createOrganization(email, 'Audit Co')
+  await mockAuditLog(page)
+
+  await page.goto(`/organizations/${org.slug}/settings#audit`)
+  const audit = page.locator('section#audit')
+  await expect(audit.getByRole('heading', { name: 'Audit log' })).toBeVisible()
+  await expect(audit.getByRole('list', { name: 'Audit log events' }).getByRole('listitem')).toHaveCount(50)
+  await expectAccessible(page, 'organization audit log', { include: 'section#audit' })
+
+  await audit.getByLabel('Action').selectOption('member.role_changed')
+  await audit.getByLabel('From').fill('2026-09-30')
+  await audit.getByLabel('To').fill('2026-09-01')
+  await audit.getByRole('button', { name: 'Filter' }).click()
+  await expect(audit.getByText('Choose an end date on or after the start date.')).toBeVisible()
+  await expectAccessible(page, 'organization audit log, date error', { include: 'section#audit' })
+
+  await audit.getByLabel('To').fill('')
+  await audit.getByLabel('Action').selectOption('member.invited')
+  await audit.getByRole('button', { name: 'Filter' }).click()
+  await expect(audit.getByText('No events match these filters.')).toBeVisible()
+  await expectAccessible(page, 'organization audit log, no matches', { include: 'section#audit' })
+})
+
+test('organization settings without an Enterprise license leave the audit log out', async ({ page }) => {
+  const email = uniqueEmail('a11y-audit-unlicensed')
+  await signUpPersonal(page, email)
+  const org = await createOrganization(email, 'Unlicensed Co')
+  const asked = await mockAuditLog(page, { licensed: false })
+  await page.goto(`/organizations/${org.slug}/settings`)
+  await expect(page.getByRole('heading', { level: 1, name: 'Unlicensed Co settings' })).toBeVisible()
+  await expect.poll(() => asked.length).toBeGreaterThan(0)
+  await expect(page.locator('section#audit')).toHaveCount(0)
+  await expect(page.getByRole('link', { name: 'Audit log' })).toHaveCount(0)
+})
+
 test('server admin', async ({ page }) => {
   const email = uniqueEmail('a11y-admin')
   await signUpPersonal(page, email)
@@ -327,6 +396,21 @@ test('server admin', async ({ page }) => {
   await expectAccessible(page, 'server admin, license keys', { include: '#license-keys' })
 })
 
+// Hosted only: the sign-up funnel has no controls of its own, so reaching it from the rail is the keyboard path
+test('server admin, sign-up funnel', async ({ page }) => {
+  const email = uniqueEmail('a11y-funnel')
+  await signUpPersonal(page, email)
+  await grantInstanceAdmin(email)
+  await page.goto('/admin')
+  const rail = page.getByRole('navigation', { name: 'Admin sections' }).getByRole('link', { name: 'Sign-up funnel' })
+  await rail.focus()
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(/#funnel$/)
+  const funnel = page.locator('#funnel')
+  await expect(funnel.getByRole('table', { name: 'Steps' }).getByRole('row', { name: /Signed up/ })).toBeVisible()
+  await expectAccessible(page, 'server admin, sign-up funnel', { include: '#funnel' })
+})
+
 test('agent consent page', async ({ page }) => {
   await signUpPersonal(page, uniqueEmail('a11y-consent'))
   const redirectUri = 'http://127.0.0.1:43999/callback'
@@ -339,4 +423,66 @@ test('agent consent page', async ({ page }) => {
   await page.goto(new URL(authorize.headers().location).pathname + new URL(authorize.headers().location).search)
   await expect(page.getByRole('heading', { level: 1, name: 'Connect e2e-agent' })).toBeVisible()
   await expectAccessible(page, 'consent')
+})
+
+// An instance admin of a licensed install, as licensedSso answers for one, on Server admin
+async function ssoAdmin(page: Page, name: string, path = '/admin#sso') {
+  const email = uniqueEmail(name)
+  await signUpPersonal(page, email)
+  await grantInstanceAdmin(email)
+  await licensedSso(page)
+  await page.goto(path)
+}
+
+test('single sign-on: sign-in buttons', async ({ browser }) => {
+  const signedOutContext = await browser.newContext()
+  const signedOut = await signedOutContext.newPage()
+  await licensedSso(signedOut)
+  await signedOut.goto('/login')
+  await expect(signedOut.getByRole('link', { name: 'Continue with Okta' })).toBeVisible()
+  await expectAccessible(signedOut, 'log in with single sign-on')
+  await signedOut.goto('/login?error=sso_required')
+  await expect(signedOut.getByRole('alert')).toContainText('single sign-on')
+  await expectAccessible(signedOut, 'log in, single sign-on required')
+  await signedOutContext.close()
+})
+
+test('single sign-on: OIDC provider in Server admin', async ({ page }) => {
+  await ssoAdmin(page, 'a11y-sso-oidc', '/admin?sso-test=1#sso')
+  const sso = page.locator('section#sso')
+  await expect(sso.getByRole('heading', { name: /Single sign-on/ })).toBeVisible()
+  await expect(sso.getByText('Okta signed in ada@acme.example')).toBeVisible()
+  await expectAccessible(page, 'server admin, single sign-on with a test result')
+
+  await sso.getByRole('button', { name: 'Edit Okta' }).click()
+  await expect(sso.getByLabel('Issuer URL')).toHaveValue('https://acme.okta.com')
+  await expectAccessible(page, 'server admin, editing a single sign-on connection')
+  await sso.getByRole('button', { name: 'Close Okta' }).click()
+
+  await sso.getByRole('button', { name: 'Remove Okta' }).click()
+  await expect(sso.getByRole('group', { name: 'Confirm: remove Okta' })).toBeVisible()
+  await expectAccessible(page, 'server admin, removing a single sign-on connection')
+})
+
+test('single sign-on: SAML provider', async ({ page }) => {
+  await ssoAdmin(page, 'a11y-sso-saml')
+  const sso = page.locator('section#sso')
+  // By keyboard: the protocol choice, then the metadata fields
+  await sso.getByRole('button', { name: 'Add a provider' }).click()
+  await sso.getByRole('radio', { name: /OpenID Connect/ }).focus()
+  await page.keyboard.press('ArrowDown')
+  await expect(sso.getByRole('radio', { name: /SAML/ })).toBeChecked()
+  await expect(sso.getByLabel('Metadata URL')).toBeVisible()
+  await expectAccessible(page, 'server admin, adding a SAML connection')
+})
+
+test('SCIM provisioning', async ({ page }) => {
+  await ssoAdmin(page, 'a11y-scim', '/admin#scim')
+  const scim = page.locator('section#scim')
+  await expect(scim.getByRole('heading', { name: /Provisioning \(SCIM\)/ })).toBeVisible()
+  await scim.getByLabel('Token name').focus()
+  await page.keyboard.type('Entra ID')
+  await page.keyboard.press('Enter')
+  await expect(scim.getByText('It is not shown again.')).toBeVisible()
+  await expectAccessible(page, 'server admin, a new SCIM token')
 })

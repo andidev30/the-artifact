@@ -13,6 +13,8 @@ export type AppConfig = {
   instanceName?: string | null
   // Off on the hosted service until the Organization plan has billing: the app hides the ways to create one
   newOrganizations?: boolean
+  // Enterprise single sign-on buttons (self-hosted with a license); empty otherwise
+  sso?: { id: string; name: string }[]
   // The API didn't answer (restarting, or down); the other fields are guesses
   unreachable?: boolean
 }

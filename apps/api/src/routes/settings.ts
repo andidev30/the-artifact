@@ -4,10 +4,11 @@ import { deleteCookie } from 'hono/cookie'
 import { hashPassword, passwordProblem, verifyPassword } from '../auth/password.js'
 import { twoFactorRequiredError } from '../auth/factors.js'
 import { requireUser, startSession, type AuthEnv } from '../auth/session.js'
+import { track } from '../analytics.js'
 import { db, schema } from '../db/index.js'
 import { isLastAdmin, lastAdminError } from '../instance.js'
 import { limitRequest } from '../limits.js'
-import { checkExpiry, checkTokenName, createToken, describeToken, revokeToken, tokensOf } from '../tokens.js'
+import { auditToken, checkExpiry, checkTokenName, createToken, describeToken, revokeToken, tokensOf } from '../tokens.js'
 import { UUID_RE } from '../validation.js'
 
 // Account settings, mounted at /api/me next to GET /api/me
@@ -121,12 +122,15 @@ settings.post('/access-tokens', async (c) => {
   const busy = await limitRequest(c, 'access-token', user.id, 'You have created a lot of access tokens in a short time.')
   if (busy) return busy
   const { token, row } = await createToken({ userId: user.id, organizationId: organizationId as string | null, name: name.name, expiresAt: expiry.expiresAt })
+  auditToken('access_token.created', row, user)
+  track({ event: 'agent_connected', userId: user.id, detail: 'access_token' })
   return c.json({ token, accessToken: await describeToken(row.id) }, 201)
 })
 
 settings.delete('/access-tokens/:id', async (c) => {
   const id = c.req.param('id')
-  if (!UUID_RE.test(id) || !(await revokeToken(id, { userId: c.get('user')!.id }))) return c.json({ error: 'That access token was already revoked.' }, 404)
+  if (!UUID_RE.test(id) || !(await revokeToken(id, { userId: c.get('user')!.id }, c.get('user')!)))
+    return c.json({ error: 'That access token was already revoked.' }, 404)
   return c.body(null, 204)
 })
 

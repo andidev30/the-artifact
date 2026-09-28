@@ -66,7 +66,7 @@ export async function instanceSettings(): Promise<EffectiveSettings> {
   return { signupPolicy: 'open', allowedDomains: [], instanceName: null, updatedAt: null }
 }
 
-const DOMAIN_RE = /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/
+export const DOMAIN_RE = /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/
 const POLICIES: SignupPolicy[] = ['open', 'domains', 'invite-only']
 
 export type SettingsInput = { signupPolicy: SignupPolicy; allowedDomains: string[]; instanceName: string | null }

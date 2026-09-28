@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import {
   fetchMe,
@@ -22,6 +22,7 @@ import {
 import { AccountHeader } from '../components/AccountHeader'
 import '../components/SignInSecurity.css'
 import { APP_HOST } from '../config'
+import { RetentionSection } from '../ee/Retention'
 import { expiryText, timeAgo } from '../time'
 import { useConfig } from '../useConfig'
 import { useMe } from '../useMe'
@@ -29,6 +30,9 @@ import { chooseWorkspace } from '../workspace'
 import { LoadError, Loading } from './Status'
 import './Workspace.css'
 import './Settings.css'
+
+// Enterprise, self-hosted only: its code stays out of the bundle everywhere else
+const AuditLogSection = lazy(() => import('../ee/AuditLog.tsx').then((m) => ({ default: m.AuditLogSection })))
 
 const ROLE_LABEL: Record<Role, string> = { owner: 'Owner', admin: 'Admin', member: 'Member' }
 
@@ -82,11 +86,16 @@ function NotAMember({ me }: { me: Me }) {
 
 function Page({ initial, org }: { initial: Me; org: Organization }) {
   const navigate = useNavigate()
+  const selfHosted = useConfig()?.selfHosted === true
+  // Whether the audit log answered that it is on (an Enterprise license); its rail link waits for that
+  const [auditOn, setAuditOn] = useState(false)
   const [me, setMe] = useState(initial)
   const [details, setDetails] = useState<Loadable<OrganizationDetails>>({ kind: 'loading' })
   const [problem, setProblem] = useState<string | null>(null)
   const [confirming, setConfirming] = useState<string | null>(null)
   const current = me.organizations.find((o) => o.id === org.id) ?? org
+  // Version retention is an enterprise feature for self-hosted installs (ee/Retention.tsx)
+  const retention = useConfig()?.selfHosted === true && current.role !== 'member' && !current.blocked
   const refreshMe = () =>
     fetchMe()
       .then((m) => m && setMe(m))
@@ -146,6 +155,8 @@ function Page({ initial, org }: { initial: Me; org: Organization }) {
     { id: 'general', label: 'General' },
     { id: 'members', label: 'Members' },
     ...(current.role === 'member' ? [] : [{ id: 'tokens', label: 'Access tokens' }]),
+    ...(retention ? [{ id: 'retention', label: 'Version history' }] : []),
+    ...(auditOn && current.role !== 'member' ? [{ id: 'audit', label: 'Audit log' }] : []),
   ]
 
   return (
@@ -237,6 +248,12 @@ function Page({ initial, org }: { initial: Me; org: Organization }) {
               />
             )}
             {current.role !== 'member' && !current.blocked && <TokensSection org={current} me={me} />}
+            {retention && <RetentionSection orgId={current.id} orgName={current.name} />}
+            {current.role !== 'member' && !current.blocked && selfHosted && (
+              <Suspense fallback={null}>
+                <AuditLogSection org={current} onAvailable={setAuditOn} />
+              </Suspense>
+            )}
           </div>
         </div>
       </main>

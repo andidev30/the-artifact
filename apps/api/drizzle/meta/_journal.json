@@ -141,6 +141,41 @@
       "when": 1790595356712,
       "tag": "0019_link_sharing_options",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1790595819561,
+      "tag": "0020_retention_policies",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1790597785038,
+      "tag": "0021_audit_log",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1790598763918,
+      "tag": "0022_sso_connections",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1790599389092,
+      "tag": "0023_saml_scim",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1790604110613,
+      "tag": "0024_product_analytics",
+      "breakpoints": true
     }
   ]
 }

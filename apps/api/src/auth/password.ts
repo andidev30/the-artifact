@@ -1,12 +1,14 @@
 import { randomBytes, scrypt, timingSafeEqual, type ScryptOptions } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
+import { track } from '../analytics.js'
 import { db, schema } from '../db/index.js'
 import { mailEnabled } from '../env.js'
 import { hasAccounts, instanceSettings, lockAdmins, newAccountFields } from '../instance.js'
 import { atLimit, clearHits, clientIp, hit, limitRequest, tooManyRequests, waitText } from '../limits.js'
+import { ssoRequiredError, ssoRequiredFor } from '../ee/sso/connections.js'
 import { startSession } from './session.js'
-import { continueSignIn } from './twofactor.js'
+import { continueSignIn, signInFailed } from './twofactor.js'
 import { EMAIL_RE } from '../validation.js'
 import { afterSignInUrl, createPasswordAccount, waitingForAccess } from './users.js'
 
@@ -78,15 +80,17 @@ password.post('/login', async (c) => {
   const [user] = await db.select().from(schema.users).where(eq(schema.users.email, email))
   if (!(await verifyPassword(given, user?.passwordHash ?? null)) || !user) {
     await hit('password', email)
+    if (user) signInFailed(user, 'wrong password')
     const hint = user && !user.passwordHash ? ' This account has no password yet; use Google, or ask an admin for a sign-in link.' : ''
     return c.json({ error: `The email or password is wrong.${hint}`, code: 'wrong_password' }, 401)
   }
   if (user.suspendedAt) {
+    signInFailed(user, 'account suspended')
     return c.json({ error: 'This account is suspended. Ask an admin of this server to restore it.', code: 'account_suspended' }, 403)
   }
   await clearHits('password', email)
   const redirect = afterSignInUrl(typeof body?.plan === 'string' ? body.plan : null, typeof body?.next === 'string' ? body.next : null)
-  return c.json({ redirect: await continueSignIn(c, user, redirect) })
+  return c.json({ redirect: await continueSignIn(c, user, redirect, 'password') })
 })
 
 // The first account on a server without email. It becomes the instance admin on a self-hosted install.
@@ -112,6 +116,7 @@ password.post('/setup', async (c) => {
     return user
   })
   if (!created) return c.json({ error: 'This server is already set up. Log in instead.', code: 'already_set_up' }, 409)
+  track({ event: 'signed_up', userId: created.id, detail: 'password' })
   await startSession(c, created.id)
   return c.json({ redirect: afterSignInUrl(null, null) }, 201)
 })
@@ -157,6 +162,7 @@ password.post('/sign-up', async (c) => {
       409,
     )
   }
+  if (await ssoRequiredFor({ email, isAdmin: false, suspendedAt: null })) return c.json({ ...ssoRequiredError, field: 'email' }, 403)
   const problem = passwordProblem(body?.password)
   if (problem) return c.json({ error: problem, field: 'password' }, 400)
 

@@ -3,6 +3,7 @@ import {
   bigint,
   boolean,
   check,
+  date,
   index,
   integer,
   jsonb,
@@ -503,6 +504,191 @@ export const issuedLicenses = pgTable(
   (t) => [index('issued_licenses_issued_at_idx').on(t.issuedAt)],
 )
 
+// How long an organization keeps older versions of its pages, an enterprise feature (src/ee/retention.ts).
+// Null means no limit of that kind; the row is kept when the license lapses, but it is only applied
+// while the install has an Enterprise license.
+export const retentionPolicies = pgTable(
+  'retention_policies',
+  {
+    organizationId: uuid('organization_id')
+      .primaryKey()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    keepDays: integer('keep_days'),
+    // Versions per page, the current one included
+    keepVersions: integer('keep_versions'),
+    updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check('retention_policies_keep_days', sql`${t.keepDays} is null or ${t.keepDays} > 0`),
+    check('retention_policies_keep_versions', sql`${t.keepVersions} is null or ${t.keepVersions} > 0`),
+  ],
+)
+
+// What happened in an organization, for its audit log (src/audit.ts, src/ee/audit.ts). Recorded only
+// while the install has an Enterprise license; kept for AUDIT_LOG_RETENTION_DAYS. Emails and labels
+// are copied in, so an event still says who and what after the account or page is gone.
+export const auditEvents = pgTable(
+  'audit_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    // e.g. "sign_in.succeeded", "page.visibility_changed" (AUDIT_ACTIONS in src/audit.ts)
+    action: text('action').notNull(),
+    actorId: uuid('actor_id').references(() => users.id, { onDelete: 'set null' }),
+    actorEmail: text('actor_email'),
+    // "page", "member", "invitation", "access_token" or "organization"
+    targetType: text('target_type'),
+    targetId: text('target_id'),
+    targetLabel: text('target_label'),
+    details: jsonb('details').$type<Record<string, unknown>>().notNull().default({}),
+    ip: text('ip'),
+    userAgent: text('user_agent'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  // The log pages through one organization newest first by (created_at, id); retention deletes by created_at
+  (t) => [index('audit_events_org_idx').on(t.organizationId, t.createdAt, t.id), index('audit_events_created_at_idx').on(t.createdAt)],
+)
+
+export const ssoProtocolEnum = pgEnum('sso_protocol', ['oidc', 'saml'])
+
+// Single sign-on through an identity provider the instance admin sets up (src/ee/sso/), an
+// Enterprise feature. Each row is one sign-in button; the protocol decides the shape of `config`
+// (SsoConfig in src/ee/sso/connections.ts). Secrets such as an OIDC client secret go in `secret`,
+// sealed with a server secret, never in `config`.
+export const ssoConnections = pgTable('sso_connections', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  protocol: ssoProtocolEnum('protocol').notNull(),
+  // Shown on the button: "Continue with <name>"
+  name: text('name').notNull(),
+  // Off until the admin turns it on, so it can be tested first
+  enabled: boolean('enabled').notNull().default(false),
+  // Protocol-specific settings that aren't secret, e.g. the OIDC issuer and client id
+  config: jsonb('config').$type<Record<string, unknown>>().notNull(),
+  secret: text('secret'),
+  // Email domains the provider may sign people in for; empty accepts any
+  allowedDomains: jsonb('allowed_domains').$type<string[]>().notNull().default([]),
+  // People at those domains (everyone, when there are none) must sign in through this connection;
+  // instance admins never are, so they can't be locked out
+  required: boolean('required').notNull().default(false),
+  // The organization people join as members the first time they sign in through the connection
+  organizationId: uuid('organization_id').references(() => organizations.id, { onDelete: 'set null' }),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+// Which account a person at an identity provider signs in to: the provider's stable id for them
+// (the OIDC `sub`, a SAML NameID), so a later change of address at the provider keeps the account
+export const ssoIdentities = pgTable(
+  'sso_identities',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    connectionId: uuid('connection_id')
+      .notNull()
+      .references(() => ssoConnections.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    subject: text('subject').notNull(),
+    // The address the provider gave at the last sign-in
+    email: text('email').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('sso_identities_subject_unique').on(t.connectionId, t.subject), index('sso_identities_user_idx').on(t.userId)],
+)
+
+// IDs of SAML AuthnRequests this server sent (src/ee/sso/saml.ts), so a response must answer one of
+// them (InResponseTo) and is checked against the connection that sent it
+export const samlRequests = pgTable(
+  'saml_requests',
+  {
+    id: text('id').primaryKey(),
+    connectionId: uuid('connection_id')
+      .notNull()
+      .references(() => ssoConnections.id, { onDelete: 'cascade' }),
+    // The request's IssueInstant, which node-saml compares against
+    issuedAt: text('issued_at').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [index('saml_requests_expires_at_idx').on(t.expiresAt)],
+)
+
+// SAML assertions already used to sign in, kept until they would be too old to accept anyway, so
+// none signs anyone in twice. id is the SHA-256 of the connection and the assertion's ID.
+export const samlAssertions = pgTable(
+  'saml_assertions',
+  {
+    id: text('id').primaryKey(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [index('saml_assertions_expires_at_idx').on(t.expiresAt)],
+)
+
+// Bearer tokens an IdP provisions accounts with over SCIM (src/ee/scim.ts); only the SHA-256 is
+// stored. New accounts join organization_id, when set.
+export const scimTokens = pgTable('scim_tokens', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  tokenHash: text('token_hash').notNull().unique(),
+  organizationId: uuid('organization_id').references(() => organizations.id, { onDelete: 'set null' }),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  // Updated at most once a minute while the token is used
+  lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+// What an IdP calls an account it provisioned over SCIM: its userName and name parts as sent, and its
+// own id for the person, so they read back the way the IdP wrote them
+export const scimUsers = pgTable(
+  'scim_users',
+  {
+    userId: uuid('user_id')
+      .primaryKey()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    userName: text('user_name').notNull(),
+    externalId: text('external_id'),
+    givenName: text('given_name'),
+    familyName: text('family_name'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('scim_users_user_name_unique').on(sql`lower(${t.userName})`)],
+)
+
+// The hosted service's sign-up funnel (src/ee/analytics.ts): when each account first reached a step,
+// once per account and step. Only the account, the step, a small enum and the time: never page
+// content, titles, email addresses or IP addresses. Rows go with the account and after 13 months.
+export const productEvents = pgTable(
+  'product_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    // PRODUCT_EVENTS in src/analytics.ts, e.g. "signed_up"
+    event: text('event').notNull(),
+    // How, from a fixed list per event (a sign-up method, a kind of share), or null
+    detail: text('detail'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('product_events_user_event_unique').on(t.userId, t.event), index('product_events_event_created_at_idx').on(t.event, t.createdAt)],
+)
+
+// How often something happened each day on the hosted service (publishes), counted without saying who
+export const productDailyCounts = pgTable(
+  'product_daily_counts',
+  {
+    day: date('day', { mode: 'string' }).notNull(),
+    event: text('event').notNull(),
+    count: integer('count').notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.day, t.event] })],
+)
+
 // Counters for rate limits (see src/limits.ts): how often something happened for one key in the
 // current window, which starts at the first hit and ends at resets_at. Kept in Postgres so every
 // server process, or serverless instance, counts the same thing.
@@ -541,3 +727,4 @@ export type Comment = typeof artifactComments.$inferSelect
 export type Visibility = (typeof visibilityEnum.enumValues)[number]
 export type Role = (typeof roleEnum.enumValues)[number]
 export type InviteRole = (typeof inviteRoleEnum.enumValues)[number]
+export type SsoConnection = typeof ssoConnections.$inferSelect

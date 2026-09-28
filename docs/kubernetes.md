@@ -46,6 +46,7 @@ Put your values in a file and pass it with `-f`. `helm show values oci://ghcr.io
 | `appUrl` | `https://<ingress.host>`, or `http://localhost:8080` without an ingress | The address people use (`APP_URL`) |
 | `ingress.enabled`, `ingress.host`, `ingress.className` | off | An Ingress for the host. `ingress.annotations` already raises nginx's body size limit to 20 MB for large pages. |
 | `ingress.tls.enabled`, `ingress.tls.secretName` | on, `<release>-the-artifact-tls` | TLS for the host, from that secret. With cert-manager, add its issuer annotation and it fills the secret. |
+| `contentOrigin` | none | `CONTENT_ORIGIN`: a [separate domain for pages](/docs/self-hosting#a-separate-domain-for-pages). With the ingress on, its host is added to the Ingress and its TLS hosts, so the certificate has to cover it too (cert-manager does that on its own). |
 | `trustProxy` | `true` with the ingress, `false` without | `TRUST_PROXY`, so [rate limits](/docs/configuration#rate-limits) see each visitor's address instead of the ingress controller's |
 | `smtp.host`, `smtp.port`, `smtp.user`, `smtp.password`, `smtp.from` | no email | Email, as in the [configuration reference](/docs/configuration). Without `smtp.host` the server [runs without email](/docs/self-hosting#running-without-email). |
 | `google.clientId`, `google.clientSecret` | off | **Continue with Google** |
@@ -187,7 +188,7 @@ cp deploy/kubernetes/app.env.example deploy/kubernetes/app.env
 
 The database and MinIO keep the passwords they were created with, so changing them later means changing them inside Postgres and MinIO too. `app.env` is ignored by git.
 
-In `deploy/kubernetes/ingress.yaml`, set the host to the one in `APP_URL`. With cert-manager, uncomment the issuer annotation to get a certificate; otherwise put your certificate in the `the-artifact-tls` secret.
+In `deploy/kubernetes/ingress.yaml`, set the host to the one in `APP_URL`. With cert-manager, uncomment the issuer annotation to get a certificate; otherwise put your certificate in the `the-artifact-tls` secret. To serve pages from a [separate domain](/docs/self-hosting#a-separate-domain-for-pages), set `CONTENT_ORIGIN` in `app.env` and uncomment the second host in `ingress.yaml`, under both `rules` and `tls`.
 
 ### 3. The seccomp profile
 

@@ -11,7 +11,7 @@ Hosts the HTML pages coding agents build. An agent publishes through the MCP ser
 | `packages/cli` | `@the-artifact/cli` on npm: `publish`, `list`, `share`, `login` over `POST /api/publish`, `/mcp` and the OAuth server. No dependencies | versions on its own (`cli-vX.Y.Z`); its tests against a real server are in `apps/api/test/integration/cli.test.ts` |
 | `docs/` | User and operator docs, rendered at `/docs` and read on GitHub | see `docs/CLAUDE.md` |
 | `deploy/` | Docker Compose, Kubernetes manifests and the Helm chart for self-hosting | see `deploy/CLAUDE.md` |
-| `apps/*/src/ee/` | Hosted-service-only code (marketing, contact sales, legal pages, onboarding welcome, Vercel analytics, plan limits, issuing license keys) and enterprise features a license key unlocks on a self-hosted install, under `LICENSE-EE` | see `apps/*/src/ee/CLAUDE.md` |
+| `apps/*/src/ee/` | Hosted-service-only code (marketing, contact sales, legal pages, onboarding welcome, Vercel analytics, the sign-up funnel, plan limits, issuing license keys) and enterprise features a license key unlocks on a self-hosted install, under `LICENSE-EE` | see `apps/*/src/ee/CLAUDE.md` |
 | `ee/ops/` | Hosted-service operations: on-call runbook, backup and restore scripts run by `.github/workflows/hosted-*.yml` | see `ee/ops/runbook.md`; not in `docs/`, so it never ships in the app |
 | `e2e/` | Playwright specs | setup in `TESTING.md` |
 | `load/` | k6 load tests, a Compose file for a production-like server, metrics sampling | see `load/README.md`; seeding in `apps/api/test/load/seed.ts` |
@@ -26,7 +26,7 @@ pnpm install
 pnpm services                  # Postgres :5432, MinIO :9000/:9001, Mailpit :1025/:8025
 cp apps/api/.env.example apps/api/.env
 pnpm db:migrate
-pnpm dev                       # API :3000, web :5173 (proxies /api, /mcp, /oauth, /.well-known, /e/)
+pnpm dev                       # API :3000, web :5173 (proxies /api, /mcp, /oauth, /.well-known, /scim, /e/)
 
 pnpm lint                      # Biome (lint + format check) + tsc over the API, its tests and the web app
 pnpm format                    # Biome: format and apply safe fixes

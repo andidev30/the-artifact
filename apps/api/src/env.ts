@@ -57,9 +57,29 @@ export function embedFrameAncestors(value: string | undefined): string | null {
   return ["'self'", ...origins].join(' ')
 }
 
+// The origin that serves page files and nothing else, or null to serve them from APP_URL (src/content.ts).
+// It has to be another host: cookies ignore the port, so another port of the app's host would get its cookies.
+export function contentOrigin(value: string | undefined, appUrl: string): string | null {
+  const v = value?.trim().replace(/\/$/, '')
+  if (!v) return null
+  let url: URL | null = null
+  try {
+    url = new URL(v)
+  } catch {}
+  // Checked strictly, since it goes into CSP headers
+  const origin = url?.origin ?? ''
+  if (!url || !/^https?:\/\/[a-z0-9-]+(\.[a-z0-9-]+)*(:\d{1,5})?$/.test(origin) || url.pathname !== '/' || url.username || url.password || /[?#]/.test(v))
+    throw new Error(`CONTENT_ORIGIN must be an origin like https://content.example.com, with no path; got "${v}".`)
+  if (url.hostname === new URL(appUrl).hostname) throw new Error('CONTENT_ORIGIN must be on another host than APP_URL, e.g. https://content.example.com.')
+  return url.origin
+}
+
+const appUrl = required('APP_URL').replace(/\/$/, '')
+
 export const env = {
   port: Number(process.env.PORT ?? 3000),
-  appUrl: required('APP_URL').replace(/\/$/, ''),
+  appUrl,
+  contentOrigin: contentOrigin(process.env.CONTENT_ORIGIN, appUrl),
   databaseUrl: required('DATABASE_URL'),
   // Transaction-mode poolers (PgBouncer, Supabase on port 6543) hand each query to any server
   // connection, so prepared statements made on one aren't there on the next
@@ -102,6 +122,8 @@ export const env = {
   // Hosted service only: the Ed25519 private key that signs license keys for self-hosted installs
   // (src/ee/licenses.ts). Without it, Server admin can't issue keys. Self-hosted installs never need it.
   licenseSigningKey: process.env.LICENSE_SIGNING_KEY ?? '',
+  // Days organizations' audit log events are kept (an Enterprise feature); the daily sweep deletes older ones
+  auditLogRetentionDays: count('AUDIT_LOG_RETENTION_DAYS') ?? 365,
   // Bearer token Prometheus scrapes GET /metrics with; without it, /metrics doesn't exist
   metricsToken: process.env.METRICS_TOKEN ?? '',
   // Object storage (S3 API: MinIO, AWS S3, Cloudflare R2...) for page content and thumbnails.

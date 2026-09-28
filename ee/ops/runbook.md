@@ -11,6 +11,7 @@ On-call notes for the hosted service at https://the-artifact-pi.vercel.app. Self
 | Scheduled jobs | Vercel crons: `/api/cron/history` 18:30 UTC, `/api/cron/sweep` 19:00 UTC | Need `CRON_SECRET` in Vercel |
 | Postgres | Supabase, reached through the transaction pooler (port 6543, `DATABASE_PREPARE=false`) | Data API is off |
 | Page content | Supabase Storage, private bucket, S3 protocol | Objects under `blobs/<sha256>` |
+| Page files in the browser | The same Vercel project on a second alias, `https://the-artifact-content.vercel.app`, set as `CONTENT_ORIGIN` (Production) | `vercel.app` is on the Public Suffix List, so the alias is another site and the app's cookies never reach it. `vercel.json` redirects everything but `/api/` on that host to the app; change the host there if the alias changes |
 | Email | Brevo SMTP (`smtp-relay.brevo.com:587`) | |
 | Backups | GitHub Actions in this repository: **Hosted backup** nightly, **Hosted restore test** weekly | See [Backups](#backups) |
 
@@ -42,13 +43,15 @@ A rollback only changes code. If the bad release ran a migration, read the next 
 
 ## Rolling back a migration
 
-Migrations only go forward (Drizzle has no down migrations), and the Vercel function never runs them: someone runs them by hand from a checkout of the release, with Supabase's **session** pooler URL (port 5432):
+Migrations only go forward (Drizzle has no down migrations), and the Vercel function never runs them. **Hosted migrate** (`.github/workflows/hosted-migrate.yml`) does, on every push to `main`: it counts the migrations the database hasn't applied, and when there are any it backs up the database (kept as the `database-before-migrate` artifact for 90 days) and runs `pnpm db:migrate` with `HOSTED_DATABASE_URL`. Pushes without a new migration finish in about a minute.
+
+Vercel doesn't deploy `main` by itself: `vercel.json` turns git deployments off (pull request previews too: they used up the Hobby plan's 100 deployments a day), and the workflow's last step starts the production deployment through a Vercel deploy hook (`VERCEL_DEPLOY_HOOK`, made with `vercel deploy-hooks create after-migrate --ref main`), only after the migrations are in. A failed migration leaves the previous deployment live. Pull requests get no Vercel preview; CI tests them. To preview a branch by hand, run `vercel deploy` from a checkout of it. To redeploy production without a push, run the workflow by hand: `gh workflow run hosted-migrate.yml`. If the hook URL leaks, anyone can start deployments of `main`: remove it with `vercel deploy-hooks remove <id>`, make a new one and set the secret again.
+
+To run migrations by hand (a failed run, or before the workflow existed), use a checkout of the release and Supabase's **session** pooler URL (port 5432). Back up first with `gh workflow run hosted-backup.yml`, then `gh run watch`:
 
 ```sh
 DATABASE_URL='postgresql://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres' pnpm db:migrate
 ```
-
-Before a release with a migration, start a backup and wait for it: `gh workflow run hosted-backup.yml`, then `gh run watch`.
 
 When a migration causes trouble:
 
@@ -166,15 +169,15 @@ You need `age`, the Postgres 17 client tools (`pg_restore`, `psql`), the AWS CLI
 
 8. Update the secrets in [Setting the secrets](#setting-the-secrets) to the new project, or the next backup copies the old one.
 
-## Uptime monitoring and status page (planned)
+## Uptime monitoring and status page
 
-Not set up yet. The plan is [Upptime](https://upptime.js.org) in a separate public repository, which costs nothing and needs no new account:
+[Upptime](https://upptime.js.org) in the public repository [andidev30/the-artifact-status](https://github.com/andidev30/the-artifact-status). It costs nothing and needs no new account:
 
-- Checks every 5 minutes from GitHub Actions: `https://the-artifact-pi.vercel.app/readyz` (the app, Postgres and the bucket), `/healthz` (the function alone, to tell a code or platform outage from a database one) and `/` (the static web app).
-- On a failure it opens an issue in that repository, assigned to the owner, so GitHub notifies them; it closes the issue when the check passes again.
-- A status page on GitHub Pages with uptime and response times, linked from the app's footer later.
-
-When it is set up, add the repository's address here.
+- Every 5 minutes, GitHub Actions checks `https://the-artifact-pi.vercel.app/readyz` (the app, Postgres and the bucket), `/healthz` (the function alone, to tell a code or platform outage from a database one) and `/` (the static web app). The list is in that repository's `.upptimerc.yml`.
+- On a failure it opens an issue in that repository, assigned to the owner, so GitHub notifies them. It closes the issue when the check passes again.
+- The status page, with uptime and response times, is https://andidev30.github.io/the-artifact-status/.
+- The workflows push with the secret `GH_PAT`: a fine-grained token limited to that repository, with Actions, Contents, Issues and Workflows set to read and write. When it expires, checks stop and the Actions runs fail. Make a new token and run `gh secret set GH_PAT -R andidev30/the-artifact-status`.
+- GitHub turns off scheduled workflows in a public repository after 60 days without commits. Upptime commits its results, so this doesn't happen while it runs.
 
 ## Who to contact
 

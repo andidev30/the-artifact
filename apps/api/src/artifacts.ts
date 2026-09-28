@@ -1,5 +1,7 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { and, asc, count, desc, eq, ilike, inArray, isNull, ne, or, sql, type SQL } from 'drizzle-orm'
+import { track } from './analytics.js'
+import { audit } from './audit.js'
 import { db, schema } from './db/index.js'
 import type { Artifact, Visibility } from './db/schema.js'
 import { env } from './env.js'
@@ -254,6 +256,8 @@ async function publishContent(input: PublishTarget, content: Content): Promise<A
       return { updated, versionId }
     })
     queueThumbnail(versionId)
+    track({ event: 'page_published', userId: input.userId })
+    if (input.visibility) auditVisibility(existing, input.visibility, { id: input.userId, email: input.email })
     return updated
   }
 
@@ -280,6 +284,9 @@ async function publishContent(input: PublishTarget, content: Content): Promise<A
     return { created, versionId }
   })
   queueThumbnail(versionId)
+  track({ event: 'page_published', userId: input.userId })
+  // A new page in an organization is open to it by default, which nobody chose, so only a link counts
+  if (visibility === 'link') track({ event: 'page_shared', userId: input.userId, detail: 'link' })
   return created
 }
 
@@ -440,6 +447,22 @@ export async function countSharedWith(viewer: Viewer, query?: string) {
     .innerJoin(schema.artifacts, eq(schema.artifactShares.artifactId, schema.artifacts.id))
     .where(sharedWith(viewer, query))
   return row.n
+}
+
+// For the audit log of the page's organization
+export const pageTarget = (a: Pick<Artifact, 'slug' | 'title'>) => ({ type: 'page' as const, id: a.slug, label: a.title })
+
+// Also the hosted service's funnel step of a first share, when the page opens wider than restricted
+export function auditVisibility(artifact: Artifact, to: Visibility, actor: { id: string; email: string }) {
+  if (to === artifact.visibility) return
+  if (to !== 'private') track({ event: 'page_shared', userId: actor.id, detail: to })
+  audit({
+    action: 'page.visibility_changed',
+    organizationId: artifact.organizationId,
+    actor,
+    target: pageTarget(artifact),
+    details: { from: artifact.visibility, to },
+  })
 }
 
 export function describeVisibility(v: Visibility): string {

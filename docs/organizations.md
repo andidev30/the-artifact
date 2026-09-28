@@ -14,8 +14,8 @@ On a self-hosted server, whoever sets it up names the organization everyone ther
 
 | Role | Can |
 | --- | --- |
-| Owner | Everything: rename the organization, invite and remove anyone, change any role, make other owners, [require two-factor sign-in](#requiring-two-factor-sign-in) |
-| Admin | Invite people, remove and change members and admins, rename the organization, require two-factor sign-in, edit every page, see and revoke every member's [access tokens](#access-tokens) for it |
+| Owner | Everything: rename the organization, invite and remove anyone, change any role, make other owners, [require two-factor sign-in](#requiring-two-factor-sign-in), set [version retention](#version-retention) |
+| Admin | Invite people, remove and change members and admins, rename the organization, require two-factor sign-in, edit every page, see and revoke every member's [access tokens](#access-tokens) for it, set version retention |
 | Member | Publish and see the organization's pages; create, rename and delete its [folders](/docs/publishing#folders); leave the organization |
 
 An organization always keeps at least one owner. The last owner can't leave, be removed or change their own role until someone else is an owner.
@@ -43,6 +43,14 @@ Members without it are sent to **Sign-in security** the next time they sign in. 
 Agents they already connected and access tokens they already made keep publishing, so turning it on doesn't break anyone's CI. To stop access tokens too, revoke them under [Access tokens](#access-tokens); removing someone from the organization also stops their agents there. Turning the requirement off lets everyone back in at once.
 
 Only an instance admin can reset someone's second factor if they lose it; owners and admins of an organization can't.
+
+## Version retention
+
+On a self-hosted server with an Enterprise license, owners and admins can choose under **Version history** in the organization's settings how long older versions of its pages are kept. See [Version retention](/docs/retention).
+
+## Audit log
+
+On a self-hosted server with an Enterprise license, owners and admins see who signed in, shared pages, changed members or settings, and made or revoked access tokens under **Audit log** in the organization's settings. See [Audit log](/docs/audit-log).
 
 ## Leaving or deleting
 

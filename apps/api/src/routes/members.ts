@@ -1,11 +1,14 @@
 import { and, asc, count, eq, gt, notExists, sql } from 'drizzle-orm'
 import { Hono, type Context } from 'hono'
+import { track } from '../analytics.js'
+import { audit } from '../audit.js'
 import { hasSecondFactor, twoFactorRequiredError } from '../auth/factors.js'
 import { hashPassword, passwordProblem } from '../auth/password.js'
 import { hashToken, randomToken, requireUser, startSession, type AuthEnv } from '../auth/session.js'
 import { createPasswordAccount, userExists } from '../auth/users.js'
 import { db, schema } from '../db/index.js'
 import type { InviteRole, Role, User } from '../db/schema.js'
+import { ssoRequiredError, ssoRequiredFor } from '../ee/sso/connections.js'
 import { env, mailEnabled } from '../env.js'
 import { limitInvites } from '../limits.js'
 import { log } from '../log.js'
@@ -166,6 +169,18 @@ members.patch('/', async (c) => {
   }
   if (!Object.keys(set).length) return c.json({ error: 'Send a name or requireTwoFactor.' }, 400)
   await db.update(schema.organizations).set(set).where(eq(schema.organizations.id, me.org.id))
+  const changes = Object.fromEntries(
+    (Object.keys(set) as (keyof typeof set)[]).filter((k) => set[k] !== me.org[k]).map((k) => [k, { from: me.org[k], to: set[k] }]),
+  )
+  if (Object.keys(changes).length) {
+    audit({
+      action: 'organization.settings_changed',
+      organizationId: me.org.id,
+      actor: c.get('user')!,
+      target: { type: 'organization', id: me.org.id, label: set.name ?? me.org.name },
+      details: changes,
+    })
+  }
   if (set.requireTwoFactor !== undefined && set.requireTwoFactor !== me.org.requireTwoFactor) {
     log.info('Organization two-factor requirement changed', { organizationId: me.org.id, userId: c.get('user')!.id, requireTwoFactor: set.requireTwoFactor })
   }
@@ -204,6 +219,7 @@ members.post('/invitations', async (c) => {
       set: { role, tokenHash: hashToken(token), invitedBy: user.id, expiresAt, createdAt: new Date() },
     })
 
+  audit({ action: 'member.invited', organizationId: me.org.id, actor: user, target: { type: 'invitation', id: email, label: email }, details: { role } })
   const link = inviteUrl(token)
   // Without email, the person who invited passes the link on
   let emailed = mailEnabled()
@@ -228,8 +244,16 @@ members.delete('/invitations/:id', async (c) => {
   const deleted = await db
     .delete(schema.invitations)
     .where(and(eq(schema.invitations.id, id), eq(schema.invitations.organizationId, me.org.id)))
-    .returning({ id: schema.invitations.id })
+    .returning({ id: schema.invitations.id, email: schema.invitations.email, role: schema.invitations.role })
   if (!deleted.length) return c.json({ error: 'That invitation was already accepted or revoked.' }, 404)
+  const [gone] = deleted
+  audit({
+    action: 'member.invitation_revoked',
+    organizationId: me.org.id,
+    actor: c.get('user')!,
+    target: { type: 'invitation', id: gone.email, label: gone.email },
+    details: { role: gone.role },
+  })
   return c.json(await details(me.org.id, me.role))
 })
 
@@ -243,16 +267,17 @@ members.patch('/members/:userId', async (c) => {
   if (!ROLES.has(role)) return c.json({ error: 'Choose owner, admin or member.' }, 400)
 
   try {
-    await db.transaction(async (tx) => {
+    const changed = await db.transaction(async (tx) => {
       const owners = await ownerCount(tx, me.org.id)
       const [target] = UUID_RE.test(targetId)
         ? await tx
-            .select({ role: schema.memberships.role })
+            .select({ role: schema.memberships.role, email: schema.users.email })
             .from(schema.memberships)
+            .innerJoin(schema.users, eq(schema.memberships.userId, schema.users.id))
             .where(and(eq(schema.memberships.organizationId, me.org.id), eq(schema.memberships.userId, targetId)))
         : []
       if (!target) throw new RuleError('That person is not in this organization.', 404)
-      if (target.role === role) return
+      if (target.role === role) return null
       if (!canManage(me.role, target.role) || !canManage(me.role, role)) {
         throw new RuleError(me.role === 'member' ? 'Only owners and admins can change roles.' : 'Only owners can change an owner or make someone an owner.')
       }
@@ -266,7 +291,17 @@ members.patch('/members/:userId', async (c) => {
         .update(schema.memberships)
         .set({ role })
         .where(and(eq(schema.memberships.organizationId, me.org.id), eq(schema.memberships.userId, targetId)))
+      return target
     })
+    if (changed) {
+      audit({
+        action: 'member.role_changed',
+        organizationId: me.org.id,
+        actor: user,
+        target: { type: 'member', id: targetId, label: changed.email },
+        details: { from: changed.role, to: role },
+      })
+    }
   } catch (err) {
     return fail(c, err)
   }
@@ -288,7 +323,9 @@ members.delete('/access-tokens/:id', async (c) => {
   if (!me) return c.json({ error: 'Not found' }, 404)
   if (me.role === 'member') return c.json({ error: 'Only owners and admins can revoke access tokens of other people.' }, 403)
   const id = c.req.param('id')
-  if (!UUID_RE.test(id) || !(await revokeToken(id, { organizationId: me.org.id }))) return c.json({ error: 'That access token was already revoked.' }, 404)
+  if (!UUID_RE.test(id) || !(await revokeToken(id, { organizationId: me.org.id }, c.get('user')!))) {
+    return c.json({ error: 'That access token was already revoked.' }, 404)
+  }
   return c.body(null, 204)
 })
 
@@ -301,12 +338,13 @@ members.delete('/members/:userId', async (c) => {
   const leaving = targetId === user.id
 
   try {
-    await db.transaction(async (tx) => {
+    const removed = await db.transaction(async (tx) => {
       const owners = await ownerCount(tx, me.org.id)
       const [target] = UUID_RE.test(targetId)
         ? await tx
-            .select({ role: schema.memberships.role })
+            .select({ role: schema.memberships.role, email: schema.users.email })
             .from(schema.memberships)
+            .innerJoin(schema.users, eq(schema.memberships.userId, schema.users.id))
             .where(and(eq(schema.memberships.organizationId, me.org.id), eq(schema.memberships.userId, targetId)))
         : []
       if (!target) throw new RuleError('That person is not in this organization.', 404)
@@ -320,6 +358,14 @@ members.delete('/members/:userId', async (c) => {
       // Agents connected to this organization, and access tokens for it, stop publishing there
       await tx.delete(schema.oauthTokens).where(and(eq(schema.oauthTokens.organizationId, me.org.id), eq(schema.oauthTokens.userId, targetId)))
       await tx.delete(schema.accessTokens).where(and(eq(schema.accessTokens.organizationId, me.org.id), eq(schema.accessTokens.userId, targetId)))
+      return target
+    })
+    audit({
+      action: leaving ? 'member.left' : 'member.removed',
+      organizationId: me.org.id,
+      actor: user,
+      target: { type: 'member', id: targetId, label: removed.email },
+      details: { role: removed.role },
     })
   } catch (err) {
     return fail(c, err)
@@ -376,6 +422,7 @@ invitations.post('/:token/sign-up', async (c) => {
   if (await userExists(row.invitation.email)) {
     return c.json({ error: `${row.invitation.email} already has an account. Log in to accept.`, code: 'account_exists' }, 409)
   }
+  if (await ssoRequiredFor({ email: row.invitation.email, isAdmin: false, suspendedAt: null })) return c.json(ssoRequiredError, 403)
   const body = (await c.req.json().catch(() => null)) as { password?: unknown; name?: unknown } | null
   const problem = passwordProblem(body?.password)
   if (problem) return c.json({ error: problem, field: 'password' }, 400)
@@ -406,14 +453,29 @@ type OrganizationRow = typeof schema.organizations.$inferSelect
 
 // Accepting an invitation, from the email link or from inside the app
 async function join(user: User, invitation: InvitationRow, org: OrganizationRow) {
-  await db.transaction(async (tx) => {
+  const inserted = await db.transaction(async (tx) => {
     // Already a member (joined another way): keep the role they have
-    await tx.insert(schema.memberships).values({ userId: user.id, organizationId: org.id, role: invitation.role }).onConflictDoNothing()
+    const rows = await tx
+      .insert(schema.memberships)
+      .values({ userId: user.id, organizationId: org.id, role: invitation.role })
+      .onConflictDoNothing()
+      .returning({ role: schema.memberships.role })
     await tx.delete(schema.invitations).where(eq(schema.invitations.id, invitation.id))
     // Joining a team counts as setting up a workspace
     if (!user.onboardedAt) await tx.update(schema.users).set({ onboardedAt: new Date() }).where(eq(schema.users.id, user.id))
+    return rows.length > 0
   })
   const joined = await membershipOf(org.id, user.id)
+  if (!user.onboardedAt) track({ event: 'onboarded', userId: user.id, detail: 'invitation' })
+  if (inserted) {
+    audit({
+      action: 'member.joined',
+      organizationId: org.id,
+      actor: user,
+      target: { type: 'member', id: user.id, label: user.email },
+      details: { role: joined!.role },
+    })
+  }
   return { id: org.id, name: org.name, slug: org.slug, role: joined!.role }
 }
 

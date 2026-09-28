@@ -1,4 +1,8 @@
 {{- if .Values.ingress.enabled }}
+{{- $hosts := list (required "Set ingress.host when ingress.enabled is true." .Values.ingress.host) }}
+{{- with .Values.contentOrigin }}
+{{- $hosts = append $hosts (urlParse .).hostname }}
+{{- end }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -15,20 +19,24 @@ spec:
   ingressClassName: {{ . }}
   {{- end }}
   rules:
-    - host: {{ required "Set ingress.host when ingress.enabled is true." .Values.ingress.host | quote }}
+    {{- range $hosts }}
+    - host: {{ . | quote }}
       http:
         paths:
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: {{ include "the-artifact.fullname" . }}
+                name: {{ include "the-artifact.fullname" $ }}
                 port:
                   name: http
+    {{- end }}
   {{- if .Values.ingress.tls.enabled }}
   tls:
     - hosts:
-        - {{ .Values.ingress.host | quote }}
+        {{- range $hosts }}
+        - {{ . | quote }}
+        {{- end }}
       secretName: {{ default (printf "%s-tls" (include "the-artifact.fullname" .)) .Values.ingress.tls.secretName }}
   {{- end }}
 {{- end }}

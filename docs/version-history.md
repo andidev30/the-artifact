@@ -18,7 +18,7 @@ Agents see the same history with `list_versions`, restore with `restore_version`
 
 ## How long versions are kept
 
-On your own server, for as long as the page exists. On the hosted service's free Personal plan, a personal page keeps the versions from the last 7 days; older ones are deleted once a day. The current version is always kept, however old it is. Pages in an organization keep their full history.
+On your own server, for as long as the page exists, unless the organization has a [retention policy](/docs/retention) (an Enterprise feature). On the hosted service's free Personal plan, a personal page keeps the versions from the last 7 days; older ones are deleted once a day. The current version is always kept, however old it is. Pages in an organization keep their full history.
 
 ## Views of each version
 

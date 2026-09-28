@@ -97,8 +97,9 @@ google.get('/callback', async (c) => {
       name: profile.name,
       avatarUrl: profile.picture,
       googleSub: profile.sub,
+      method: 'google',
     })
-    return c.redirect(await continueSignIn(c, user, afterSignInUrl(plan, next)))
+    return c.redirect(await continueSignIn(c, user, afterSignInUrl(plan, next), 'google'))
   } catch (err) {
     if (err instanceof SignupClosedError) return c.redirect(signInErrorUrl(err.code))
     log.error('Google sign-in failed', { err })

@@ -4,6 +4,9 @@
   "installCommand": "npm install -g pnpm@11.6.0 && pnpm install --frozen-lockfile",
   "buildCommand": "pnpm --filter @the-artifact/web build && pnpm --filter @the-artifact/api build",
   "outputDirectory": "apps/web/dist",
+  "git": {
+    "deploymentEnabled": false
+  },
   "regions": ["hnd1"],
   "functions": {
     "api/index.js": {
@@ -11,6 +14,19 @@
       "includeFiles": "apps/web/dist/index.html"
     }
   },
+  "redirects": [
+    {
+      "source": "/:path((?!api/).*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "the-artifact-content.vercel.app"
+        }
+      ],
+      "destination": "https://the-artifact-pi.vercel.app/:path",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/:path*",

@@ -161,7 +161,7 @@ email.post('/confirm', async (c) => {
 
   let user: User
   try {
-    user = await findOrCreateUser({ email: row.email, passwordHash, approved: Boolean(row.createdBy) })
+    user = await findOrCreateUser({ email: row.email, passwordHash, approved: Boolean(row.createdBy), method: 'email_link' })
   } catch (err) {
     if (err instanceof SignupClosedError) {
       const error =
@@ -175,5 +175,5 @@ email.post('/confirm', async (c) => {
   const plan = typeof body?.plan === 'string' ? body.plan : null
   const next = typeof body?.next === 'string' ? body.next : null
   // An email link is one factor: an account with a second factor still needs it, even when the link came from an admin
-  return c.json({ redirect: await continueSignIn(c, user, afterSignInUrl(plan, next)) })
+  return c.json({ redirect: await continueSignIn(c, user, afterSignInUrl(plan, next), 'email link') })
 })

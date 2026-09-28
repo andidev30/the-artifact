@@ -102,6 +102,7 @@ describe('isAllowedRedirect', () => {
     ['http to a lookalike host', 'http://localhost.evil.com/cb'],
     ['a fragment', 'https://client.example.com/cb#frag'],
     ['javascript', 'javascript:alert(1)'],
+    ['vbscript', 'vbscript:msgbox(1)'],
     ['data', 'data:text/html,hi'],
     ['file', 'file:///etc/passwd'],
     ['not a URL', 'not a url'],

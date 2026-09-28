@@ -17,7 +17,7 @@ Run `git config blame.ignoreRevsFile .git-blame-ignore-revs` once, so `git blame
 - Add or update tests: integration tests in `apps/api/test/integration` for API behaviour, Playwright specs in `e2e/` for flows in the browser.
 - Update `docs/` when behaviour changes. The docs ship inside the app.
 - Schema changes go through `pnpm db:generate`; commit the migration with the snapshot.
-- Before you push: `pnpm lint` and `pnpm test` (and `pnpm test:e2e` for UI flows). CI runs all of them.
+- Before you push: `pnpm lint` and `pnpm test` (and `pnpm test:e2e` for UI flows). CI runs all of them, with the tests and the e2e shards in parallel. A pull request that only changes `docs/`, Markdown files or `ee/ops/` runs lint and the web build only.
 
 Commit messages follow the style in the log: `feat: …`, `fix(web): …`, `refactor(api): …`, `docs: …`. They become the release notes, so write the subject for someone running a server.
 

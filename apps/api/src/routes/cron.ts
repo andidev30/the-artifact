@@ -1,7 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { Hono, type MiddlewareHandler } from 'hono'
 import { env } from '../env.js'
-import { sweepStorage } from '../gc.js'
+import { runPruners, sweepStorage } from '../gc.js'
 import { deleteExpiredLimits } from '../limits.js'
 import { deleteOldViews } from '../views.js'
 
@@ -25,4 +25,7 @@ export const requireCronSecret: MiddlewareHandler = async (c, next) => {
 
 cron.use(requireCronSecret)
 
-cron.get('/sweep', async (c) => c.json({ ...(await sweepStorage()), rateLimits: await deleteExpiredLimits(), views: await deleteOldViews() }))
+cron.get('/sweep', async (c) => {
+  await runPruners()
+  return c.json({ ...(await sweepStorage()), rateLimits: await deleteExpiredLimits(), views: await deleteOldViews() })
+})

@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router'
 import { ApiError, fetchMe, logInWithPassword, passkeySignInOptions, setUpServer, signInWithPasskey, signUpWithPassword } from '../api'
 import { askForPasskey, passkeyErrorText, passkeysSupported } from '../passkeys'
 import { useConfig } from '../useConfig'
+import { SSO_ERRORS, SsoButtons } from '../ee/SsoSignIn'
 import { ServerUnreachable } from './Status'
 import { Wordmark } from '../components/Wordmark'
 import { APP_HOST, AUTH_EMAIL_URL, AUTH_GOOGLE_URL, LOGIN_URL, SIGNUP_URL } from '../config'
@@ -40,6 +41,7 @@ const SIGN_IN_ERRORS: Record<string, string> = {
   link_expired: 'That sign-in link has expired. Request a new one below.',
   account_suspended: 'This account is suspended. Ask an admin of this server if you think that is a mistake.',
   signup_closed: 'This server only accepts accounts from invited people and certain email domains. Ask an admin to invite you.',
+  ...SSO_ERRORS,
 }
 
 export function Auth({ mode }: { mode: Mode }) {
@@ -145,6 +147,8 @@ function AuthForm({ mode, plan, next, lede, notice }: { mode: Mode; plan: string
   const withPassword = config?.emailSignIn === false
   // Only when logging in: a passkey belongs to an account that already exists
   const passkey = mode === 'login' && passkeysSupported()
+  // Enterprise single sign-on, first: where it is set up, it is how most people here sign in
+  const sso = config?.sso?.length ? <SsoButtons connections={config.sso} query={query} /> : null
 
   async function onPasswordSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -236,9 +240,10 @@ function AuthForm({ mode, plan, next, lede, notice }: { mode: Mode; plan: string
             {notice}
           </p>
         )}
-        {google && (
+        {(google || sso) && (
           <>
-            {googleButton}
+            {sso}
+            {google && googleButton}
             <div className="auth-divider">
               <span>or choose a password</span>
             </div>
@@ -287,10 +292,11 @@ function AuthForm({ mode, plan, next, lede, notice }: { mode: Mode; plan: string
             {notice}
           </p>
         )}
+        {sso}
         {google && googleButton}
         <p className="auth-lede">
-          {google ? 'Or ask' : 'Ask'} an admin of this server for a sign-up link. This server doesn’t send email, so they pass it on to you themselves. If you
-          were invited to an organization, open the invitation link instead.
+          {google || sso ? 'Or ask' : 'Ask'} an admin of this server for a sign-up link. This server doesn’t send email, so they pass it on to you themselves.
+          If you were invited to an organization, open the invitation link instead.
         </p>
       </section>
     )
@@ -306,8 +312,9 @@ function AuthForm({ mode, plan, next, lede, notice }: { mode: Mode; plan: string
             {notice}
           </p>
         )}
-        {(google || passkey) && (
+        {(google || passkey || sso) && (
           <>
+            {sso}
             {google && googleButton}
             {passkey && <PasskeyButton plan={plan} next={next} />}
             <div className="auth-divider">
@@ -354,8 +361,9 @@ function AuthForm({ mode, plan, next, lede, notice }: { mode: Mode; plan: string
         </p>
       )}
 
-      {(google || passkey) && (
+      {(google || passkey || sso) && (
         <>
+          {sso}
           {google && googleButton}
           {passkey && <PasskeyButton plan={plan} next={next} />}
           <div className="auth-divider">

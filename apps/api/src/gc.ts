@@ -48,11 +48,25 @@ export async function sweepStorage({ graceMs = GRACE_MS, now = Date.now() } = {}
   return { checked, deleted, uploads }
 }
 
+// Jobs that delete rows whose content the sweep then removes, such as version retention in
+// ee/retention.ts. They run before every scheduled sweep and /api/cron/sweep.
+const pruners: Array<() => Promise<unknown>> = []
+
+export function addPruner(job: () => Promise<unknown>) {
+  pruners.push(job)
+}
+
+// One failing job doesn't stop the others or the sweep after them
+export async function runPruners() {
+  for (const job of pruners) await job().catch((err) => log.error('Pruning failed', { err }))
+}
+
 // Runs in the background every few hours while the server is up, and on the way clears rate limit
 // counters whose window is over and records of who opened a page that are past their retention
 export function scheduleSweeps() {
   const run = () =>
-    sweepStorage()
+    runPruners()
+      .then(() => sweepStorage())
       .then(({ deleted, uploads }) => (deleted || uploads) && log.info('Storage sweep', { deleted, uploads }))
       .catch((err) => log.error('Storage sweep failed', { err }))
       .then(deleteExpiredLimits)

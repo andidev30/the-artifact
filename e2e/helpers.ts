@@ -103,3 +103,150 @@ export async function publishViaMcp(request: APIRequestContext, token: string, a
   expect(slug, text).toBeTruthy()
   return slug!
 }
+
+type RetentionState = { keepDays: number | null; keepVersions: number | null; license: 'none' | 'active' | 'grace' | 'expired' }
+
+// Version retention needs an Enterprise license, which the e2e servers can't have (their code knows
+// no signing key), so its settings are shown by answering /api/config as a self-hosted install and
+// the retention API the way a licensed or unlicensed server would. The server's own rules are
+// covered by apps/api/test/integration/retention.test.ts. Returns the policies saved.
+export async function mockRetention(page: Page, initial: RetentionState, preview = { versions: 12, pages: 3 }) {
+  const state = { ...initial, updatedAt: null as string | null }
+  const body = () => ({ ...state, applied: (state.keepDays !== null || state.keepVersions !== null) && ['active', 'grace'].includes(state.license) })
+  const saves: unknown[] = []
+  await page.route('**/api/config', async (route) => route.fulfill({ json: { ...(await (await route.fetch()).json()), selfHosted: true } }))
+  await page.route(/\/api\/organizations\/[^/]+\/retention(\/preview)?(\?.*)?$/, async (route) => {
+    if (new URL(route.request().url()).pathname.endsWith('/preview')) return route.fulfill({ json: preview })
+    if (route.request().method() === 'PUT') {
+      const json = route.request().postDataJSON() as { keepDays: number | null; keepVersions: number | null }
+      saves.push(json)
+      Object.assign(state, json, { updatedAt: new Date().toISOString() })
+    }
+    return route.fulfill({ json: body() })
+  })
+  return saves
+}
+
+// The audit log is an Enterprise feature of self-hosted installs, which the e2e servers can't turn on
+// (license keys only verify against keys in the code), so its screen is shown by answering /api/config
+// and the audit log API the way a licensed self-hosted server would. `licensed: false` answers like a
+// server without a license. Returns the audit log requests the page made.
+export async function mockAuditLog(page: Page, { licensed = true, events = 60 } = {}) {
+  await page.route('**/api/config', async (route) => {
+    const res = await route.fetch()
+    await route.fulfill({ json: { ...(await res.json()), selfHosted: true } })
+  })
+  const kinds = [
+    { action: 'sign_in.succeeded', target: null, details: { method: 'password' } },
+    { action: 'page.visibility_changed', target: { type: 'page', id: 'abc', label: 'Launch plan' }, details: { from: 'private', to: 'link' } },
+    { action: 'member.role_changed', target: { type: 'member', id: 'm1', label: 'bo@example.com' }, details: { from: 'member', to: 'admin' } },
+    { action: 'sign_in.failed', target: null, details: { reason: 'wrong password' } },
+  ]
+  const all = Array.from({ length: events }, (_, i) => ({
+    id: `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
+    at: new Date(Date.UTC(2026, 8, 28, 12) - i * 3_600_000).toISOString(),
+    actor: { id: null, email: i % 2 ? 'ana@example.com' : 'owner@example.com' },
+    ip: '203.0.113.7',
+    userAgent: 'Mozilla/5.0',
+    ...kinds[i % kinds.length],
+  }))
+  const asked: URL[] = []
+  await page.route(
+    (url) => /\/api\/organizations\/[^/]+\/audit-log$/.test(url.pathname),
+    async (route) => {
+      const url = new URL(route.request().url())
+      asked.push(url)
+      if (!licensed) {
+        return route.fulfill({
+          status: 403,
+          json: { error: 'This needs an Enterprise license. An instance admin can add one under Server admin.', code: 'enterprise_required' },
+        })
+      }
+      const action = url.searchParams.get('action')
+      const matching = all.filter((e) => !action || e.action === action)
+      const start = Number(url.searchParams.get('cursor') ?? 0)
+      const next = start + 50 < matching.length ? String(start + 50) : null
+      await route.fulfill({ json: { events: matching.slice(start, start + 50), next, actions: [], retentionDays: 365 } })
+    },
+  )
+  return asked
+}
+
+export const SSO_CONNECTION = {
+  id: '0b5e8a52-8f3c-4d59-9a53-5f0f3f7d2c11',
+  protocol: 'oidc',
+  name: 'Okta',
+  enabled: true,
+  issuer: 'https://acme.okta.com',
+  clientId: 'the-artifact',
+  hasClientSecret: true,
+  trustEmail: false,
+  saml: null,
+  allowedDomains: ['acme.example'],
+  required: true,
+  organizationId: null,
+  createdAt: '2026-09-01T00:00:00.000Z',
+  updatedAt: '2026-09-01T00:00:00.000Z',
+}
+
+// Single sign-on needs an Enterprise license on a self-hosted install, which the e2e servers don't
+// have (license keys are only signed by the hosted service), so its screens are shown by answering
+// the API the way a licensed install would. What the API does is in apps/api/test/integration/sso.test.ts,
+// saml.test.ts and scim.test.ts.
+export async function licensedSso(page: Page) {
+  await page.route('**/api/config', async (route) => {
+    const response = await route.fetch()
+    await route.fulfill({ response, json: { ...(await response.json()), selfHosted: true, sso: [{ id: SSO_CONNECTION.id, name: 'Okta' }] } })
+  })
+  await page.route('**/api/admin/sso', (route) =>
+    route.request().method() === 'POST'
+      ? route.fulfill({ status: 201, json: { ...SSO_CONNECTION, id: '7d0c1f4e-2b8a-4c3d-9e6f-1a2b3c4d5e6f', name: 'Keycloak', required: false } })
+      : route.fulfill({
+          json: {
+            redirectUri: 'http://localhost:5177/api/auth/sso/oidc/callback',
+            saml: { entityId: 'http://localhost:5177/api/auth/sso/saml/metadata', acsUrl: 'http://localhost:5177/api/auth/sso/saml/acs' },
+            connections: [SSO_CONNECTION],
+            organizations: [],
+          },
+        }),
+  )
+  const scim = {
+    baseUrl: 'http://localhost:5177/scim/v2',
+    organizations: [],
+    tokens: [
+      {
+        id: '1d6c3b0e-2a3f-4e5d-9c1b-7a8e9f0a1b2c',
+        name: 'Okta',
+        organizationId: null,
+        organizationName: null,
+        createdAt: '2026-09-01T00:00:00.000Z',
+        lastUsedAt: null,
+      },
+    ],
+  }
+  await page.route('**/api/admin/scim', (route) => route.fulfill({ json: scim }))
+  await page.route('**/api/admin/scim/tokens', (route) => route.fulfill({ status: 201, json: { ...scim, token: 'scim_e2e-token-shown-once' } }))
+  await page.route('**/api/admin/license', (route) =>
+    route.fulfill({
+      json: {
+        status: 'active',
+        invalid: null,
+        license: {
+          id: '6f1c0b8e-4a8f-4f8e-9d7a-2b1f1c0e5a11',
+          customer: 'Acme Inc',
+          email: 'it@acme.example',
+          seats: 50,
+          issuedAt: '2026-01-01T00:00:00.000Z',
+          expiresAt: '2099-01-01T00:00:00.000Z',
+          graceEndsAt: '2099-01-15T00:00:00.000Z',
+        },
+        seatsInUse: 3,
+      },
+    }),
+  )
+  await page.route('**/api/admin/sso/test-result', (route) =>
+    route.fulfill({
+      json: { connectionId: SSO_CONNECTION.id, ok: true, subject: '00u1abcd', email: 'ada@acme.example', emailVerified: true, name: 'Ada', accepted: true },
+    }),
+  )
+}

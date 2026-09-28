@@ -1,6 +1,14 @@
 # Licenses
 
-A self-hosted install is free under AGPL-3.0 and does everything described in these docs without a license. An Enterprise license key turns on enterprise features on a self-hosted install. It says who the license is for, how many seats it has, and until when it is valid.
+A self-hosted install is free under AGPL-3.0 and does everything described in these docs without a license. An Enterprise license key turns on enterprise features on a self-hosted install, such as [version retention](/docs/retention) and [single sign-on](/docs/sso). It says who the license is for, how many seats it has, and until when it is valid.
+
+## Enterprise features
+
+| Feature | What it does |
+| --- | --- |
+| [Audit log](/docs/audit-log) | Records sign-ins, sharing, member changes, organization settings and access tokens per organization, for its owners and admins to filter and export |
+| [Single sign-on](/docs/sso) | People sign in through your identity provider (OpenID Connect or [SAML](/docs/saml)), with accounts made or linked on first sign-in, and sign-in through it can be required |
+| [SCIM provisioning](/docs/scim) | Your identity provider creates accounts, keeps them current and suspends people it deactivates |
 
 ## Nothing phones home
 

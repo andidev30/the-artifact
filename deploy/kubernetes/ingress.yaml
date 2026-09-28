@@ -21,7 +21,19 @@ spec:
                 name: the-artifact
                 port:
                   number: 80
+    # With CONTENT_ORIGIN in app.env, its host goes to the same service (and into tls below)
+    # - host: artifact-content.example.net
+    #   http:
+    #     paths:
+    #       - path: /
+    #         pathType: Prefix
+    #         backend:
+    #           service:
+    #             name: the-artifact
+    #             port:
+    #               number: 80
   tls:
     - hosts:
         - artifact.example.com
+        # - artifact-content.example.net
       secretName: the-artifact-tls
