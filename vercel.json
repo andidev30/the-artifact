@@ -5,9 +5,7 @@
   "buildCommand": "pnpm --filter @the-artifact/web build && pnpm --filter @the-artifact/api build",
   "outputDirectory": "apps/web/dist",
   "git": {
-    "deploymentEnabled": {
-      "main": false
-    }
+    "deploymentEnabled": false
   },
   "regions": ["hnd1"],
   "functions": {
