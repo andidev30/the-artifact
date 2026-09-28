@@ -40,6 +40,10 @@ On the hosted service, new organizations are not available yet, but you can move
 
 Members make [access tokens](/docs/connect-your-agent#publishing-from-ci) in **Account settings** to publish to the organization from CI. Owners and admins see every member's tokens for the organization under **Access tokens** in its settings: the name, who made it, when it was last used and when it expires, never the token itself. **Revoke** stops a token at once, whoever made it, so a token that leaks doesn't have to wait for its owner.
 
+## Webhooks
+
+Owners and admins can add [webhooks](/docs/webhooks) under **Webhooks** in the organization's settings, so a Slack or Discord channel, or your own server, hears when a page in the organization is published, commented on or opened. Members don't see them.
+
 ## Requiring two-factor sign-in
 
 Owners and admins can check **Require two-factor sign-in** under **General** in the organization's settings. You need a passkey or an authenticator app on your own account first (see [Signing in](/docs/signing-in)), so turning it on can't lock you out. **Members** shows who has two-factor sign-in (**2FA on**) and who doesn't yet (**No 2FA**).

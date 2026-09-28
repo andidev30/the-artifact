@@ -136,3 +136,9 @@ Only releases that need you to do something are listed. Each section is copied i
 - **Two thumbnails render at a time** by default (`THUMBNAIL_CONCURRENCY`), so a server with thumbnails on uses a little more memory while rendering. Set it to `1` for the old behaviour.
 - **The app loads its fonts from your server**, no longer from Google, and a self-hosted install answers `/robots.txt` with `Disallow: /` for everything except link previews.
 - **The database gains two columns**, for refresh token reuse detection and for accounts whose address was never confirmed by email. They are added on the first start, and 0.4.0 still runs on the new schema.
+
+## Upgrading to 0.6.0
+
+- **The database gains two tables** for [webhooks](/docs/webhooks) and their deliveries. They are added on the first start, and 0.5.0 still runs on the new schema.
+- **The server may make outbound HTTPS requests** to the webhook addresses your workspace admins add, from the first worker. If your firewall limits outbound traffic, allow the destinations you want (such as `hooks.slack.com` or `discord.com`). Requests to private and reserved addresses are always refused; see [Webhooks can't reach private networks](/docs/security#webhooks-can-t-reach-private-networks).
+- **On hosts without a long-running server** (Vercel), webhook retries run with `GET /api/cron/sweep`, or more often with the new `GET /api/cron/webhooks`; schedule it every few minutes if your host allows. See `CRON_SECRET` in the [configuration reference](/docs/configuration).

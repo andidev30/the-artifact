@@ -32,6 +32,7 @@ Numbers and names here come from code; check them when you change it:
 | `configuration.md` limits | `apps/api/src/files.ts`, `artifacts.ts`, `sharing.ts`, `comments.ts`, `auth/`, `oauth/server.ts`, `thumbnails.ts`, `limits.ts`, `quota.ts`, `ee/plans.ts` |
 | `publishing.md` tools and arguments | `apps/api/src/mcp.ts` |
 | `sharing.md`, `organizations.md` roles | `apps/api/src/artifacts.ts` (`accessLevel`), `routes/members.ts` |
-| `security.md` | `apps/api/src/content.ts`, `embeds.ts`, `previews.ts`, `thumbnails.ts`, `auth/` |
+| `security.md` | `apps/api/src/content.ts`, `embeds.ts`, `previews.ts`, `thumbnails.ts`, `network.ts`, `webhooks.ts`, `auth/` |
+| `webhooks.md` | `apps/api/src/webhooks.ts` (events, payload, retry delays, limits), `routes/webhooks.ts` |
 | `self-hosting.md`, `kubernetes.md`, `backups.md` | `deploy/`, `Dockerfile` |
 | `licenses.md` | `apps/api/src/license.ts` (format, grace days, messages), `routes/license.ts`, `ee/licenses.ts`, `scripts/license-keygen.ts` |

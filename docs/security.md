@@ -65,6 +65,16 @@ When an agent checks a page with [`inspect_artifact`](/docs/publishing#inspect_a
 
 Screenshots are served with the same access rules as the page, from `/api/artifacts/<id>/thumbnails/<version>`. Only pages shared with **Anyone with the link**, with no password and not expired, put their title and screenshot in the link preview tags of `/a/<id>`; every other page gets the same generic tags as a page that doesn't exist (see [Link previews](/docs/sharing#link-previews)).
 
+## Webhooks can't reach private networks
+
+[Webhooks](/docs/webhooks) are requests the server makes to an address a workspace admin chooses, so they follow the same rules as thumbnail CDN requests:
+
+- **Public addresses only.** The name is looked up every time something is sent, and the request is refused when any address it resolves to is private, loopback, link-local (including the cloud metadata address `169.254.169.254`), shared, multicast or reserved, or an IPv6 form that embeds an IPv4 address. The server then connects to the address it checked, so a name can't be pointed at the server's own network in between. Addresses that are private on their face (`https://10.0.0.5/`, `https://localhost/`) are refused when the webhook is saved too.
+- **HTTPS, no redirects.** Only `https://` addresses are accepted, with the certificate checked for the name, and redirects are never followed: a `3xx` answer is a failed delivery. Plain `http://` to `localhost` is allowed only on a server whose `APP_URL` is itself `http://`, for development.
+- **Short and blind.** Each request has 5 seconds in all. Only the status code of the answer is read; its body is thrown away, so a webhook can't be used to read anything back.
+- **Nothing private in them.** Messages carry the workspace's name, the page's title and address, the version, the actor's name and a short excerpt of a comment: never page content, email addresses, link keys or passwords. Each is signed with an HMAC-SHA256 secret that is shown once and stored encrypted with a key the server keeps in its database, like single sign-on client secrets.
+- **Managed by admins only.** Only an organization's owners and admins see and change its webhooks, and the [audit log](/docs/audit-log) records it. Changes show only the destination's host, never its full address.
+
 ## Private by default
 
 A page in a personal workspace is restricted until you share it. A page that someone can't open looks the same as one that doesn't exist.
@@ -159,4 +169,4 @@ Opening a page is counted, and for pages shared with specific people or an organ
 
 ## Self-hosted data
 
-Everything lives in your own Postgres database and object storage: accounts and version history in Postgres, page HTML, files and thumbnails in the bucket. Nothing is sent to us, and the app's own fonts and scripts are served by your server rather than a CDN. The bucket should stay private; pages are only ever served through the app, which checks access and adds the sandbox headers. While rendering thumbnails, the server may fetch scripts and fonts that pages load from the public CDNs listed above; set `THUMBNAIL_CDN_HOSTS=none` to turn that off.
+Everything lives in your own Postgres database and object storage: accounts and version history in Postgres, page HTML, files and thumbnails in the bucket. Nothing is sent to us, and the app's own fonts and scripts are served by your server rather than a CDN. The bucket should stay private; pages are only ever served through the app, which checks access and adds the sandbox headers. While rendering thumbnails, the server may fetch scripts and fonts that pages load from the public CDNs listed above; set `THUMBNAIL_CDN_HOSTS=none` to turn that off. [Webhooks](/docs/webhooks) send events to the addresses your workspace admins add, and nowhere else.
