@@ -8,6 +8,7 @@ import {
   sharePeople,
   updateLink,
   type LinkSettings,
+  type ShareLink,
   type ShareRole,
   type Sharing,
   type Visibility,
@@ -259,6 +260,8 @@ export function ShareDialog({ slug, title, currentUserEmail, onClose, onVisibili
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  // Links for the people just added who weren't emailed, shown until the next change
+  const [links, setLinks] = useState<ShareLink[]>([])
   useReturnFocus()
 
   useEffect(() => {
@@ -275,6 +278,7 @@ export function ShareDialog({ slug, title, currentUserEmail, onClose, onVisibili
     setBusy(true)
     setError(null)
     setNotice(null)
+    setLinks([])
     try {
       after(await action())
     } catch (err) {
@@ -292,11 +296,17 @@ export function ShareDialog({ slug, title, currentUserEmail, onClose, onVisibili
         setSharing(r.sharing)
         setEmails('')
         setMessage('')
+        setLinks(r.links)
         const who = r.shared.length === 1 ? r.shared[0] : `${r.shared.length} people`
+        const emailed = r.shared.length - r.links.length
         setNotice(
           r.notifyFailed.length
-            ? `Shared with ${who}. The email to ${r.notifyFailed.join(', ')} could not be sent; send them the link.`
-            : `Shared with ${who}.${notify ? ' They will get an email with the link.' : canEmail ? '' : ' Send them the link; this server doesn’t send email.'}`,
+            ? `Shared with ${who}. The email to ${r.notifyFailed.join(', ')} could not be sent; send the links below.`
+            : r.links.length === 0
+              ? `Shared with ${who}. They will get an email with the link.`
+              : emailed > 0
+                ? `Shared with ${who}. Send the links below to the people who weren’t emailed.`
+                : `Shared with ${who}. Send ${r.links.length === 1 ? 'them the link' : 'each person their link'} below.`,
         )
       },
     )
@@ -382,6 +392,21 @@ export function ShareDialog({ slug, title, currentUserEmail, onClose, onVisibili
           </div>
         )}
 
+        {links.length > 0 && (
+          <section className="share-links" aria-labelledby="share-links-title">
+            <h3 id="share-links-title">Links to send</h3>
+            <p>Each link is for one person. It opens the page once they sign in with that address, and works once.</p>
+            <ul>
+              {links.map((l) => (
+                <li key={l.email}>
+                  <span>{l.email}</span>
+                  <CopyCommand command={l.link} label={`Copy the link for ${l.email}`} plain />
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
         {loadError && (
           <p className="share-message share-error" role="alert">
             Sharing settings could not be loaded. Close and try again.
@@ -411,7 +436,7 @@ export function ShareDialog({ slug, title, currentUserEmail, onClose, onVisibili
                       {p.name ?? p.email}
                       {p.email === currentUserEmail ? ' (you)' : ''}
                     </strong>
-                    <span>{p.pending ? `${p.name ? `${p.email}, ` : ''}invited, no account yet` : p.name ? p.email : ''}</span>
+                    <span>{p.pending ? `${p.name ? `${p.email}, ` : ''}invited, not signed in yet` : p.name ? p.email : ''}</span>
                   </span>
                   <label className="visually-hidden" htmlFor={`role-${p.email}`}>
                     Role for {p.email}

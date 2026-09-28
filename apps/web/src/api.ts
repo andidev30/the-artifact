@@ -424,11 +424,19 @@ export function getSharing(slug: string) {
   return sharingRequest<Sharing>(slug, '/sharing')
 }
 
+// A person who wasn't emailed and the link to send them; it opens the page once they sign in with that address
+export type ShareLink = { email: string; link: string }
+
 export function sharePeople(slug: string, emails: string, role: ShareRole, notify: boolean, message: string) {
-  return sharingRequest<{ shared: string[]; notifyFailed: string[]; sharing: Sharing }>(slug, '/sharing/people', {
+  return sharingRequest<{ shared: string[]; notifyFailed: string[]; links: ShareLink[]; sharing: Sharing }>(slug, '/sharing/people', {
     method: 'POST',
     body: JSON.stringify({ emails, role, notify, message: message || undefined }),
   })
+}
+
+// The share's link (?share=), opened while signed in: the share then counts for this account
+export function acceptShare(slug: string, token: string) {
+  return request<null>(`/artifacts/${encodeURIComponent(slug)}/sharing/accept`, { method: 'POST', json: { token } })
 }
 
 export function setPersonRole(slug: string, email: string, role: ShareRole) {
@@ -834,8 +842,8 @@ export function setUpServer(email: string, password: string, name: string) {
   return request<{ redirect: string }>('/auth/password/setup', { method: 'POST', json: { email, password, name } })
 }
 
-export function changePassword(currentPassword: string, password: string) {
-  return request<null>('/me/password', { method: 'PUT', json: { currentPassword, password } })
+export function changePassword(currentPassword: string, password: string, signOutAgents = false) {
+  return request<null>('/me/password', { method: 'PUT', json: { currentPassword, password, signOutAgents } })
 }
 
 export function requestSignInLink(email: string, intent: 'login' | 'signup', plan: string | null, next: string | null) {

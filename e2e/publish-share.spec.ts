@@ -47,7 +47,7 @@ test('publish a page, open it, share it, and open it by link while signed out', 
   await dialog.getByPlaceholder('Message (optional)').fill('Have a look')
   await dialog.getByRole('button', { name: 'Share', exact: true }).click()
   await expect(dialog.getByRole('status')).toHaveText(`Shared with ${friend}. They will get an email with the link.`)
-  await expect(dialog.getByText('invited, no account yet')).toBeVisible()
+  await expect(dialog.getByText('invited, not signed in yet')).toBeVisible()
 
   // They get an email with the link
   const mail = await latestMail(page.request, friend, /shared/)

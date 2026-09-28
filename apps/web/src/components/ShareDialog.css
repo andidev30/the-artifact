@@ -469,3 +469,33 @@
     flex: 1 1 auto;
   }
 }
+
+.share-links {
+  display: grid;
+  gap: 8px;
+}
+
+.share-links p {
+  margin: 0;
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+}
+
+.share-links ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.share-links li {
+  display: grid;
+  gap: 4px;
+  font-size: var(--step--1);
+}
+
+.share-links .command code {
+  padding: 10px 12px;
+  font-size: 0.8125rem;
+}

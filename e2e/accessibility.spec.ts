@@ -406,6 +406,12 @@ test('viewer with its history, views and comments panels, and the share dialog',
   await share.getByRole('button', { name: 'Share', exact: true }).click()
   await expect(share.getByText(/^Shared with/)).toBeVisible()
   await expectAccessible(page, 'share dialog, after sharing')
+  // Someone who isn't emailed: the dialog lists the link to send them
+  await share.getByLabel('Add people by email').fill(uniqueEmail('a11y-link'))
+  await share.getByLabel('Notify people by email').uncheck()
+  await share.getByRole('button', { name: 'Share', exact: true }).click()
+  await expect(share.getByRole('heading', { name: 'Links to send' })).toBeVisible()
+  await expectAccessible(page, 'share dialog, links to send')
   await expect(share.getByText('The link never expires.')).toBeVisible()
   await share.getByRole('radio', { name: 'On a date' }).check()
   await share.getByRole('button', { name: 'Save link settings' }).click()

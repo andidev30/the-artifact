@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import {
+  acceptShare,
   currentVersion,
   downloadUrl,
   FRAME_SANDBOX,
@@ -47,13 +48,36 @@ export function Viewer() {
   const { slug = '' } = useParams()
   const [state, setState] = useState<State>({ kind: 'loading' })
   const [attempt, setAttempt] = useState(0)
+  const [params, setParams] = useSearchParams()
   // The key of a public link (/a/<slug>?k=<key>), for people without access of their own
-  const key = useSearchParams()[0].get('k')
+  const key = params.get('k')
+  // A share's own link (/a/<slug>?share=<token>): opened signed in with the address it was shared with,
+  // the share counts for this account even before its address is verified
+  const shareToken = params.get('share')
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: attempt loads the page again once the password is entered
   useEffect(() => {
     let active = true
-    getArtifact(slug, key)
+    // Signed out, used already or for another address: the page loads as it would without it
+    const accepted = shareToken
+      ? acceptShare(slug, shareToken).then(
+          () => true,
+          () => false,
+        )
+      : Promise.resolve(false)
+    accepted
+      .then((used) => {
+        // The link works once; drop it from the address so a reload or a copied address doesn't carry it
+        if (used && active)
+          setParams(
+            (p) => {
+              p.delete('share')
+              return p
+            },
+            { replace: true },
+          )
+        return getArtifact(slug, key)
+      })
       .then(async (page) => {
         if (!active) return
         if (page) {
@@ -70,7 +94,7 @@ export function Viewer() {
     return () => {
       active = false
     }
-  }, [slug, key, attempt])
+  }, [slug, key, shareToken, attempt])
 
   useEffect(
     () => () => {
@@ -91,7 +115,7 @@ export function Viewer() {
         The page could not be loaded. Reload to try again.
       </div>
     )
-  if (state.kind === 'missing') return <Unavailable slug={slug} email={state.email} />
+  if (state.kind === 'missing') return <Unavailable slug={slug} email={state.email} shareToken={shareToken} />
   if (state.kind === 'locked') return <PasswordGate slug={slug} linkKey={key} onUnlocked={() => setAttempt((n) => n + 1)} />
 
   // Keyed by page, so opening another one (such as a copy just made) starts with its panels and dialogs closed
@@ -163,8 +187,9 @@ function PasswordGate({ slug, linkKey, onUnlocked }: { slug: string; linkKey: st
 }
 
 // Missing and no-access look the same on purpose, so private pages don't reveal they exist
-function Unavailable({ slug, email }: { slug: string; email: string | null }) {
-  const back = `${LOGIN_URL}?next=${encodeURIComponent(`/a/${slug}`)}`
+function Unavailable({ slug, email, shareToken }: { slug: string; email: string | null; shareToken: string | null }) {
+  // Back to the share's link after signing in, so it can be used then
+  const back = `${LOGIN_URL}?next=${encodeURIComponent(`/a/${slug}${shareToken ? `?share=${encodeURIComponent(shareToken)}` : ''}`)}`
 
   async function switchAccount() {
     await logout()
