@@ -4,8 +4,8 @@ import { publish } from '../../src/artifacts.js'
 import { db, schema } from '../../src/db/index.js'
 import type { Artifact } from '../../src/db/schema.js'
 import { env } from '../../src/env.js'
-import { deleteOldViews, forgetRecentViews } from '../../src/views.js'
-import { addMember, call, callTool, connectAgent, createOrg, createPage, createUser, type TestUser } from './helpers.js'
+import { batchViewCounts, deleteOldViews, forgetRecentViews, stopViewCounts, totalViews } from '../../src/views.js'
+import { addMember, call, callTool, connectAgent, createOrg, createPage, createUser, flushViews, type TestUser } from './helpers.js'
 
 type Views = {
   total: number
@@ -26,6 +26,7 @@ async function open(page: Artifact, version: number, opts: { viewer?: TestUser; 
 }
 
 async function views(page: Artifact, user: TestUser) {
+  await flushViews()
   const res = await call(`/api/artifacts/${page.slug}/views`, { cookie: user.cookie })
   return { status: res.status, body: (await res.json()) as Views }
 }
@@ -134,6 +135,7 @@ describe('page views', () => {
     expect((await call(`/api/artifacts/${page.slug}/views`)).status).toBe(401)
     expect((await views(page, admin)).body.total).toBe(1)
 
+    await flushViews()
     const details = async (u: TestUser) => (await (await call(`/api/artifacts/${page.slug}`, { cookie: u.cookie })).json()).views
     expect(await details(owner)).toBe(1)
     expect(await details(admin)).toBe(1)
@@ -174,6 +176,7 @@ describe('page views', () => {
   it('tells agents who can edit the page', async () => {
     const { owner, member, page } = await orgPage()
     await open(page, 1, { viewer: member })
+    await flushViews()
     const { access_token } = await connectAgent(owner, page.organizationId)
     const result = await callTool(access_token, 'list_views', { artifact_id: page.slug })
     expect(result.isError).toBeFalsy()
@@ -186,5 +189,55 @@ describe('page views', () => {
       isError: true,
       text: `No page you can edit has the id "${page.slug}".`,
     })
+  })
+
+  it('adds up counts summed in memory across many views and flushes', async () => {
+    const owner = await createUser()
+    const page = await createPage(owner, { visibility: 'link' })
+    const other = await createPage(owner, { visibility: 'link' })
+    // Nothing reaches the database until a flush
+    await Promise.all(Array.from({ length: 40 }, (_, i) => open(page, 1, { agent: `a-${i}` })))
+    expect(await db.select().from(schema.artifactViewCounts)).toEqual([])
+    await flushViews()
+    expect(await totalViews(page)).toBe(40)
+
+    // Views arriving while a flush runs wait for the next one
+    const opening = Promise.all(Array.from({ length: 25 }, (_, i) => open(page, 1, { agent: `b-${i}` })))
+    const flushing = flushViews()
+    await Promise.all([opening, flushing, open(other, 1, { agent: 'c' })])
+    await flushViews()
+    await flushViews()
+    expect(await totalViews(page)).toBe(65)
+    expect(await totalViews(other)).toBe(1)
+  })
+
+  it('skips counts of a page deleted before they were written', async () => {
+    const owner = await createUser()
+    const gone = await createPage(owner, { visibility: 'link' })
+    const kept = await createPage(owner, { visibility: 'link' })
+    await open(gone, 1)
+    await open(kept, 1)
+    await db.delete(schema.artifacts).where(sql`${schema.artifacts.id} = ${gone.id}`)
+    await flushViews()
+    expect(await totalViews(kept)).toBe(1)
+    expect(await db.select().from(schema.artifactViewCounts)).toHaveLength(1)
+  })
+
+  it('writes what waits when the server stops, then each view directly as on a serverless host', async () => {
+    const { owner, member, page } = await orgPage()
+    await open(page, 1, { viewer: member })
+    try {
+      await stopViewCounts()
+      expect(await totalViews(page)).toBe(1)
+      // Without batching (Vercel never turns it on) a view is in the database before the page answers
+      const another = await createUser()
+      await addMember(page.organizationId!, another, 'member')
+      await open(page, 1, { viewer: another })
+      expect(await totalViews(page)).toBe(2)
+      expect((await db.select().from(schema.artifactViews)).length).toBe(2)
+    } finally {
+      batchViewCounts({ every: 0 })
+    }
+    expect((await views(page, owner)).body.total).toBe(2)
   })
 })

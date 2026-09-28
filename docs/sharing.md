@@ -83,6 +83,7 @@ What is recorded:
 
 - A view is counted when a browser opens the page itself, in the app or in an [embed](#embedding). Agents reading a page with `get_artifact`, downloads, link previews and screenshots don't count.
 - Repeat visits by the same person to the same version within 30 minutes count once. For visits through the link, the server tells visitors apart by their network address and browser, in memory only; neither is stored.
+- On a server that keeps running (the Docker image, Kubernetes, `node dist/index.js`), counts are added up in memory and written every 5 seconds, so they can lag a few seconds behind, and a crash can lose the last few seconds of counts. Stopping the server normally writes them first. Who opened a page is written straight away. On hosts without a long-running server, like Vercel, each view is written as it happens.
 - After 90 days, the record of who opened a page and when is deleted. The counts stay. Deleting your account deletes the records of what you opened; deleting a page deletes its views.
 - **Views** lists each person once, with when they last opened the page, which version, and how many times in the last 90 days.
 

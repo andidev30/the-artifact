@@ -12,7 +12,7 @@ import { env } from '../../src/env.js'
 import { putBlob } from '../../src/storage.js'
 import { forgetRecentViews, totalViews } from '../../src/views.js'
 import { mountWeb } from '../../src/web.js'
-import { call, callTool, connectAgent, createPage, createUser, type TestUser } from './helpers.js'
+import { call, callTool, connectAgent, createPage, createUser, flushViews, type TestUser } from './helpers.js'
 
 const INDEX = '<!doctype html><html><head><title>The Artifact</title></head><body><div id="root"></div></body></html>'
 
@@ -351,6 +351,7 @@ describe('resetting the link', () => {
     const base = `/api/artifacts/${page.slug}/v/1/`
     const location = (await call(base, { cookie: both, headers: { 'sec-fetch-dest': 'iframe' } })).headers.get('location')!
     expect((await call(location, { cookie: both, headers: { 'sec-fetch-dest': 'iframe' } })).status).toBe(200)
+    await flushViews()
     expect(await totalViews(page)).toBe(1)
     expect(await db.select().from(schema.artifactViews)).toEqual([])
   })
