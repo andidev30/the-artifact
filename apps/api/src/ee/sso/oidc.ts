@@ -1,6 +1,8 @@
 import * as client from 'openid-client'
 import type { SsoConnection } from '../../db/schema.js'
+import { log } from '../../log.js'
 import { oidcConfig, oidcRedirectUri, openConnectionSecret, type OidcConfig } from './connections.js'
+import { oidcFetch } from './idp-requests.js'
 
 // OpenID Connect through openid-client (panva): discovery, the authorization code flow with PKCE,
 // state and nonce, and the ID token's signature checked against the provider's JWKS
@@ -9,6 +11,8 @@ import { oidcConfig, oidcRedirectUri, openConnectionSecret, type OidcConfig } fr
 const SCOPE = 'openid email profile'
 // Seconds for each request to the provider
 const TIMEOUT = 10
+// Every request to the provider goes only to addresses idpAddress allows
+const FETCH = oidcFetch(TIMEOUT * 1000)
 // Discovery is kept this long per connection, so a sign-in costs one request to the provider fewer
 const CACHE_MS = 60 * 60 * 1000
 
@@ -22,11 +26,15 @@ export async function discover(oidc: OidcConfig, clientSecret: string): Promise<
   if (new URL(oidc.issuer).protocol === 'http:') execute.push(client.allowInsecureRequests)
   let discovered: client.Configuration
   try {
-    discovered = await client.discovery(new URL(oidc.issuer), oidc.clientId, { client_secret: clientSecret }, undefined, { execute, timeout: TIMEOUT })
+    discovered = await client.discovery(new URL(oidc.issuer), oidc.clientId, { client_secret: clientSecret }, undefined, {
+      execute,
+      timeout: TIMEOUT,
+      [client.customFetch]: FETCH,
+    })
   } catch (err) {
-    throw new OidcSetupError(
-      `The provider’s settings could not be read from ${oidc.issuer}/.well-known/openid-configuration (${err instanceof Error ? err.message : String(err)}). Check the issuer URL.`,
-    )
+    // The reason stays in the log: shown to the admin, it would tell which private hosts and ports answer
+    log.warn('OIDC discovery failed', { issuer: oidc.issuer, reason: oidcErrorText(err) })
+    throw new OidcSetupError(`The provider’s settings could not be read from ${oidc.issuer}/.well-known/openid-configuration. Check the issuer URL.`)
   }
   const metadata = discovered.serverMetadata()
   if (metadata.response_types_supported && !metadata.response_types_supported.includes('code')) {
@@ -38,6 +46,7 @@ export async function discover(oidc: OidcConfig, clientSecret: string): Promise<
   const auth = !methods || methods.includes('client_secret_basic') ? client.ClientSecretBasic(clientSecret) : client.ClientSecretPost(clientSecret)
   const config = new client.Configuration(metadata, oidc.clientId, { client_secret: clientSecret }, auth)
   config.timeout = TIMEOUT
+  config[client.customFetch] = FETCH
   for (const fn of execute) fn(config)
   return config
 }

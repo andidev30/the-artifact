@@ -1,5 +1,7 @@
 import { X509Certificate } from 'node:crypto'
 import { DOMParser } from '@xmldom/xmldom'
+import { log } from '../../log.js'
+import { idpRequest } from './idp-requests.js'
 
 // Reads what signing in needs from an IdP's SAML metadata: its entity id, where to send people
 // (the HTTP-Redirect SingleSignOnService) and the certificates it signs with. The admin supplies the
@@ -10,6 +12,7 @@ const MD = 'urn:oasis:names:tc:SAML:2.0:metadata'
 const DS = 'http://www.w3.org/2000/09/xmldsig#'
 const REDIRECT = 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect'
 export const MAX_METADATA_BYTES = 1024 * 1024
+const TOO_LARGE = 'This metadata is larger than 1 MB. Check that it is the right file.'
 
 export type IdpMetadata = { entityId: string; ssoUrl: string; certificates: string[] }
 
@@ -28,7 +31,7 @@ function children(parent: Element, ns: string, name: string): Element[] {
 export function parseIdpMetadata(xml: string): Result {
   const text = xml.trim()
   if (!text) return { ok: false, error: NOT_METADATA }
-  if (Buffer.byteLength(text) > MAX_METADATA_BYTES) return { ok: false, error: 'This metadata is larger than 1 MB. Check that it is the right file.' }
+  if (Buffer.byteLength(text) > MAX_METADATA_BYTES) return { ok: false, error: TOO_LARGE }
   // Metadata never needs a DTD; refusing one rules out entity tricks before parsing
   if (/<!DOCTYPE|<!ENTITY/i.test(text)) return { ok: false, error: NOT_METADATA }
 
@@ -89,7 +92,11 @@ export function parseIdpMetadata(xml: string): Result {
   return { ok: true, value: { entityId, ssoUrl: url.toString(), certificates } }
 }
 
-// Metadata from the IdP's metadata URL, fetched when the admin saves the connection
+export const METADATA_URL_FAILED = 'This server couldn’t read SAML metadata from this address. Check the address, or paste the XML instead.'
+
+// Metadata from the IdP's metadata URL, fetched when the admin saves the connection. Every way it can
+// fail reads the same, so the form can't be used to find out which hosts and ports answer; the log
+// has the reason.
 export async function fetchIdpMetadata(address: string): Promise<{ ok: true; xml: string } | { ok: false; error: string }> {
   let url: URL
   try {
@@ -98,16 +105,21 @@ export async function fetchIdpMetadata(address: string): Promise<{ ok: true; xml
     return { ok: false, error: 'Enter the metadata URL, starting with https://.' }
   }
   if (url.protocol !== 'https:' && url.protocol !== 'http:') return { ok: false, error: 'Enter the metadata URL, starting with https://.' }
+  const failed = { ok: false as const, error: METADATA_URL_FAILED }
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(10_000), headers: { accept: 'application/samlmetadata+xml, application/xml, text/xml' } })
-    if (!res.ok) return { ok: false, error: `The metadata URL answered with ${res.status}. Check the address, or paste the XML instead.` }
-    const length = Number(res.headers.get('content-length') ?? 0)
-    if (length > MAX_METADATA_BYTES) return { ok: false, error: 'This metadata is larger than 1 MB. Check that it is the right file.' }
-    const xml = await res.text()
-    if (Buffer.byteLength(xml) > MAX_METADATA_BYTES) return { ok: false, error: 'This metadata is larger than 1 MB. Check that it is the right file.' }
-    return { ok: true, xml }
-  } catch {
-    return { ok: false, error: 'This server couldn’t download the metadata. Check the address, or paste the XML instead.' }
+    const res = await idpRequest(url, {
+      headers: { accept: 'application/samlmetadata+xml, application/xml, text/xml' },
+      timeoutMs: 10_000,
+      maxBytes: MAX_METADATA_BYTES,
+    })
+    if (!res.ok) {
+      log.warn('SAML metadata download failed', { url: url.toString(), status: res.status })
+      return failed
+    }
+    return { ok: true, xml: await res.text() }
+  } catch (err) {
+    log.warn('SAML metadata download failed', { url: url.toString(), reason: err instanceof Error ? err.message : String(err) })
+    return failed
   }
 }
 

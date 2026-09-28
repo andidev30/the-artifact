@@ -75,6 +75,14 @@ Screenshots are served with the same access rules as the page, from `/api/artifa
 - **Nothing private in them.** Messages carry the workspace's name, the page's title and address, the version, the actor's name and a short excerpt of a comment: never page content, email addresses, link keys or passwords. Each is signed with an HMAC-SHA256 secret that is shown once and stored encrypted with a key the server keeps in its database, like single sign-on client secrets.
 - **Managed by admins only.** Only an organization's owners and admins see and change its webhooks, and the [audit log](/docs/audit-log) records it. Changes show only the destination's host, never its full address.
 
+## Requests to identity providers
+
+For [single sign-on](/docs/sso) the server downloads a SAML IdP's metadata and an OpenID Connect provider's settings, keys and tokens, from addresses an instance admin enters:
+
+- **No loopback, link-local or reserved addresses.** The name is looked up and the request refused when any address it resolves to is loopback, link-local (including the cloud metadata address `169.254.169.254`), multicast or reserved; the server then connects to the address it checked. A self-hosted install may reach private network addresses (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10`, `fc00::/7`), since company identity providers often run there; the hosted service reaches public addresses only. Loopback is allowed only while `APP_URL` is `http://`, for trying single sign-on locally.
+- **No redirects, and small.** Redirects are never followed, each request gives up after 10 seconds, and answers larger than 1 MB are refused as they arrive.
+- **Nothing to learn from failures.** The admin form says only that the address couldn't be read, whatever the reason; the reason is in the server's log.
+
 ## Private by default
 
 A page in a personal workspace is restricted until you share it. A page that someone can't open looks the same as one that doesn't exist.

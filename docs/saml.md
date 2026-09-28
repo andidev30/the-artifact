@@ -54,7 +54,7 @@ In **Server admin** > **Single sign-on**, choose **Add a provider**, choose **SA
 | Field | What to enter |
 | --- | --- |
 | **Name on the button** | What people see: "Continue with" and this name, e.g. Okta |
-| **Metadata URL** | The IdP's metadata URL. The server downloads it on every save, which also picks up a new signing certificate after the IdP rotates it |
+| **Metadata URL** | The IdP's metadata URL. The server downloads it on every save, which also picks up a new signing certificate after the IdP rotates it. It must be the final address: redirects aren't followed. When it can't be read, the form says only that, and the server's log has the reason; paste the XML to see what is wrong with it |
 | **Or paste the metadata XML** | The metadata file, for IdPs that only give you one. When editing, leave both empty to keep the IdP as it is |
 | **Email attribute**, **Name attribute** | Optional; see [What your IdP needs](#what-your-idp-needs-from-this-server) |
 | **Allow sign-in started from the IdP's app dashboard** | Off unless you need it; see [below](#signing-in-from-the-idps-dashboard) |

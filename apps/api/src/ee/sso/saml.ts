@@ -16,7 +16,7 @@ import { log } from '../../log.js'
 import { isEmail } from '../../validation.js'
 import { coversDomain, describeConnection, parseShared, type SharedInput, usableConnection } from './connections.js'
 import { accountFor } from './routes.js'
-import { fetchIdpMetadata, parseIdpMetadata, pem } from './saml-metadata.js'
+import { fetchIdpMetadata, METADATA_URL_FAILED, parseIdpMetadata, pem } from './saml-metadata.js'
 
 // SAML 2.0 single sign-on, for connections with protocol 'saml'. SP-initiated: "Continue with …"
 // (GET /api/auth/sso/<id>, routes.ts) sends people to the IdP with an AuthnRequest (HTTP-Redirect),
@@ -246,13 +246,16 @@ async function connectionFor(requestId: string | undefined, response: string): P
       return conn?.protocol === 'saml' ? conn : null
     }
   }
-  const issuer = unverifiedIssuer(response)
-  if (!issuer || !(await hasEnterprise())) return null
+  // Nothing is parsed unless a connection could take a response nobody asked for
+  if (!(await hasEnterprise())) return null
   const rows = await db
     .select()
     .from(schema.ssoConnections)
     .where(and(eq(schema.ssoConnections.protocol, 'saml'), eq(schema.ssoConnections.enabled, true)))
-  return rows.find((r) => samlConfig(r).allowIdpInitiated && samlConfig(r).idpEntityId === issuer) ?? null
+  const candidates = rows.filter((r) => samlConfig(r).allowIdpInitiated)
+  if (!candidates.length) return null
+  const issuer = unverifiedIssuer(response)
+  return (issuer && candidates.find((r) => samlConfig(r).idpEntityId === issuer)) || null
 }
 
 // Mounted at /api/auth/sso/saml, next to the OIDC routes
@@ -359,7 +362,10 @@ export async function parseSamlConnection(body: unknown, existing: SsoConnection
   let idp: { entityId: string; ssoUrl: string; certificates: string[] }
   if (metadataXml) {
     const parsed = parseIdpMetadata(metadataXml)
-    if (!parsed.ok) return { ok: false, error: parsed.error, field: metadataUrl ? 'metadataUrl' : 'metadataXml' }
+    // What a URL answered isn't described, like a download that failed (see fetchIdpMetadata); pasting
+    // the XML shows what is wrong with it
+    if (!parsed.ok && metadataUrl) return { ok: false, error: METADATA_URL_FAILED, field: 'metadataUrl' }
+    if (!parsed.ok) return { ok: false, error: parsed.error, field: 'metadataXml' }
     idp = parsed.value
   } else if (old) {
     idp = { entityId: old.idpEntityId, ssoUrl: old.ssoUrl, certificates: old.certificates }
