@@ -18,6 +18,7 @@ import { setPlanQuota } from './quota.js'
 import { admin } from './routes/admin.js'
 import { cron } from './routes/cron.js'
 import { health } from './routes/health.js'
+import { publishApi } from './routes/publish.js'
 import { artifacts } from './routes/artifacts.js'
 import { comments } from './routes/comments.js'
 import { folders } from './routes/folders.js'
@@ -43,6 +44,8 @@ if (!env.webDir) app.get('/', (c) => c.text('The Artifact API'))
 // MCP endpoint and the OAuth server MCP clients sign in through
 app.route('/', oauth)
 app.route('/mcp', mcp)
+// Bearer tokens only, outside the cookie-authenticated routes below
+app.route('/api/publish', publishApi)
 
 const api = new Hono<AuthEnv>()
 api.use(loadUser)

@@ -136,6 +136,27 @@ export const oauthTokens = pgTable(
   (t) => [index('oauth_tokens_user_idx').on(t.userId)],
 )
 
+// Long-lived tokens people create in settings to publish from CI and scripts, for one workspace
+// (organization_id null means the personal workspace). Only the SHA-256 of the token is stored.
+export const accessTokens = pgTable(
+  'access_tokens',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    organizationId: uuid('organization_id').references(() => organizations.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    tokenHash: text('token_hash').notNull().unique(),
+    // Null for a token that never expires
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    // Updated at most once a minute while the token is used
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('access_tokens_user_idx').on(t.userId), index('access_tokens_org_idx').on(t.organizationId)],
+)
+
 export const visibilityEnum = pgEnum('visibility', ['private', 'organization', 'link'])
 
 // Folders group pages inside one workspace: an organization's (organization_id set) or a person's
