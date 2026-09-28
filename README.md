@@ -128,6 +128,7 @@ Other clients, HTTPS, email and backups are covered in [Self-hosting](docs/self-
 | `list_folders` | Lists the workspace's folders |
 | `move_artifact` | Files a page into a folder, or takes it out, or moves it to another workspace |
 | `duplicate_artifact` | Copies a page's current version into a new, restricted page, in any workspace you can publish to |
+| `tag_artifact` | Adds or removes a page's tags |
 | `get_artifact` | Reads a page's HTML and files, to edit it |
 | `inspect_artifact` | Checks a page before sharing it: screenshots, console errors, missing files, broken links and accessibility problems |
 | `rename_artifact` | Renames a page |
