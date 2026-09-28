@@ -83,6 +83,8 @@
 
 .settings-card {
   display: grid;
+  /* An explicit track, so a long unbreakable value (a URL in a copy box) scrolls inside its box instead of widening the card */
+  grid-template-columns: minmax(0, 1fr);
   gap: 18px;
   min-width: 0;
   padding: clamp(20px, 3.5vw, 32px);
@@ -227,8 +229,9 @@
 
 .settings-who strong {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 2px 8px;
   min-width: 0;
   font-size: var(--step--1);
   overflow-wrap: anywhere;

@@ -202,7 +202,7 @@
   /* The plain chip hides on phones; the switcher stays, just narrower */
   .switcher .switcher-button {
     display: inline-flex;
-    max-width: 8.5rem;
+    max-width: min(8.5rem, 100%);
   }
 
   /* The menu spans the header's content width instead of hanging off the chip, so it never

@@ -35,3 +35,13 @@
   outline: 3px solid var(--ink);
   outline-offset: 2px;
 }
+
+/* Three buttons don't fit beside the name on a phone, so they get a row of their own */
+@media (max-width: 560px) {
+  .settings-row .sso-actions {
+    grid-column: 2 / -1;
+    grid-row: 3;
+    flex-direction: row;
+    justify-content: flex-start;
+  }
+}
