@@ -210,6 +210,7 @@ export function OrganizationStep({
           maxLength={60}
           autoFocus
           aria-invalid={error?.field === 'name' || undefined}
+          aria-describedby={error?.field === 'name' ? 'organization-error' : undefined}
         />
       </div>
 
@@ -226,7 +227,7 @@ export function OrganizationStep({
             }}
             placeholder="acme"
             required
-            aria-describedby="slug-status"
+            aria-describedby={error?.field === 'slug' ? 'slug-status organization-error' : 'slug-status'}
             aria-invalid={shownCheck?.available === false || error?.field === 'slug' || undefined}
           />
         </div>
@@ -236,7 +237,7 @@ export function OrganizationStep({
       </div>
 
       {(error || notice) && (
-        <p className="auth-notice" role="alert">
+        <p id="organization-error" className="auth-notice" role="alert">
           {error?.message ?? notice}
         </p>
       )}

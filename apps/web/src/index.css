@@ -4,6 +4,8 @@
   --grid-fine: #eef2f8;
   --ink: #1c2b4b;
   --ink-soft: #4a587a;
+  /* Placeholders and other quiet text; still 4.5:1 on paper and white */
+  --ink-faint: #66728c;
   --line: #3056d3;
   --marker: #ffe066;
   --white: #ffffff;
@@ -77,6 +79,11 @@ a {
   outline: 3px solid var(--line);
   outline-offset: 3px;
   border-radius: 2px;
+}
+
+::placeholder {
+  color: var(--ink-faint);
+  opacity: 1;
 }
 
 code {

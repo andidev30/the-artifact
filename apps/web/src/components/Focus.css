@@ -1,0 +1,23 @@
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: var(--gutter);
+  z-index: 100;
+  padding: 8px 12px;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--marker);
+  border: 1.5px solid var(--ink);
+  border-radius: 3px;
+}
+
+.skip-link:focus {
+  top: 12px;
+}
+
+/* Headings and main take focus after moving to another page so screen readers start there; they
+   aren't controls, so they get no focus ring */
+h1[tabindex='-1']:focus,
+main[tabindex='-1']:focus {
+  outline: none;
+}

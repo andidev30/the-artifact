@@ -27,7 +27,7 @@ React 19, React Router 8, Vite 8, TypeScript. No UI or state library: plain comp
 - The look is a blueprint on grid paper: ink-blue lines, numbered circles for steps, "wires" between boxes. Reuse existing patterns (settings rail, cards, `CopyCommand`) before inventing new ones.
 - Check phone widths: headers wrap, menus must open on screen, and there is no horizontal scroll.
 - Published pages render in a sandboxed `<iframe>` loaded from `/api/artifacts/<slug>/v/<n>/` (never `srcdoc`), so their relative files resolve and they can't reach the app.
-- Keyboard and screen readers: menus close on Escape and move with arrow keys (`PageActions`, `WorkspaceSwitcher`); keep labels on icon buttons.
+- Keyboard and screen readers: menus close on Escape and move with arrow keys (`PageActions`, `WorkspaceSwitcher`); keep labels on icon buttons. Dialogs are native `<dialog>` with `showModal()` and `useReturnFocus()` from `src/focus.ts`; errors are tied to their field with `aria-describedby`; colours come from the tokens, which meet AA contrast (`--ink-faint` is the lightest text colour). `components/Focus.tsx` holds the skip link and moves focus to the heading after navigation.
 
 ## Docs pages
 

@@ -390,7 +390,7 @@ function AddPerson() {
             placeholder="name@example.com"
             autoComplete="off"
             aria-invalid={Boolean(problem) || undefined}
-            aria-describedby="add-person-hint"
+            aria-describedby={problem ? 'add-person-hint add-person-error' : 'add-person-hint'}
           />
         </div>
         <button type="submit" className="button button-small" disabled={busy || !email.trim()}>
@@ -404,7 +404,7 @@ function AddPerson() {
         </Link>
       </p>
       {problem && (
-        <p className="auth-notice" role="alert">
+        <p id="add-person-error" className="auth-notice" role="alert">
           {problem}
         </p>
       )}
@@ -1027,7 +1027,7 @@ function SignupSection({ onChanged }: { onChanged: () => void }) {
                 placeholder={'example.com\nexample.org'}
                 spellCheck={false}
                 aria-invalid={status?.field === 'allowedDomains' || undefined}
-                aria-describedby="signup-domains-hint"
+                aria-describedby={status?.field === 'allowedDomains' ? 'signup-domains-hint signup-status' : 'signup-domains-hint'}
               />
               <p id="signup-domains-hint" className="field-hint">
                 One per line, or separated by commas. Subdomains need their own line.
@@ -1048,7 +1048,7 @@ function SignupSection({ onChanged }: { onChanged: () => void }) {
               maxLength={60}
               placeholder="Acme pages"
               aria-invalid={status?.field === 'instanceName' || undefined}
-              aria-describedby="instance-name-hint"
+              aria-describedby={status?.field === 'instanceName' ? 'instance-name-hint signup-status' : 'instance-name-hint'}
             />
             <p id="instance-name-hint" className="field-hint">
               Optional. Shown next to the logo for everyone who signs in.
@@ -1060,7 +1060,7 @@ function SignupSection({ onChanged }: { onChanged: () => void }) {
               {saving ? 'Saving' : 'Save'}
             </button>
           </div>
-          <p className="field-hint" data-tone={status?.tone} aria-live="polite" role={status?.tone === 'bad' ? 'alert' : undefined}>
+          <p id="signup-status" className="field-hint" data-tone={status?.tone} aria-live="polite" role={status?.tone === 'bad' ? 'alert' : undefined}>
             {status?.text ?? (settings.data.updatedAt ? `Last saved ${timeAgo(settings.data.updatedAt)}.` : '')}
           </p>
         </form>

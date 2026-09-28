@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
 import {
   addComment,
   deleteComment,
@@ -410,6 +410,7 @@ function Composer({ label, placeholder, initial = '', submitLabel, autoFocus, on
   }
 
   const left = MAX_COMMENT_LENGTH - body.length
+  const errorId = useId()
 
   return (
     <form className="comment-form" onSubmit={submit}>
@@ -423,10 +424,11 @@ function Composer({ label, placeholder, initial = '', submitLabel, autoFocus, on
         onChange={(e) => setBody(e.target.value)}
         onKeyDown={onKeyDown}
         aria-invalid={error ? true : undefined}
+        aria-describedby={error ? errorId : undefined}
       />
       {left < 500 && <span className="comment-left">{left} characters left</span>}
       {error && (
-        <p className="history-error" role="alert">
+        <p id={errorId} className="history-error" role="alert">
           {error}
         </p>
       )}

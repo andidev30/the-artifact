@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { downloadUrl, listArtifacts, listFolders, thumbnailUrl, type ArtifactSummary, type FolderSummary, type Visibility } from '../api'
 import { pollThumbnails, withFreshThumbnails } from '../thumbnailPoll'
@@ -259,143 +259,162 @@ export function Gallery({ workspaceId, workspaceName, email, aside, onWorkspaceC
   const showFolders = tab === 'workspace' && folders !== null && (folders.length > 0 || (totals.workspace ?? 0) > 0)
   const empty = list.kind === 'ready' && items.length === 0
 
+  // Tabs in the WAI-ARIA pattern: one tab stop, arrow keys switch between them
+  function onTabKey(e: KeyboardEvent<HTMLDivElement>) {
+    const next = e.key === 'ArrowRight' || e.key === 'End' ? 'shared' : e.key === 'ArrowLeft' || e.key === 'Home' ? 'workspace' : null
+    if (!next) return
+    e.preventDefault()
+    setTab(next)
+    e.currentTarget.querySelector<HTMLElement>(`#gallery-tab-${next}`)?.focus()
+  }
+
   return (
     <>
-      <div className="gallery-tabs" role="tablist" aria-label="Which pages">
-        <button type="button" role="tab" aria-selected={tab === 'workspace'} onClick={() => setTab('workspace')}>
-          {workspaceName}
-        </button>
-        <button type="button" role="tab" aria-selected={tab === 'shared'} onClick={() => setTab('shared')}>
-          Shared with you{totals.shared ? ` (${totals.shared})` : ''}
-        </button>
+      <div className="gallery-tabs" role="tablist" aria-label="Which pages" onKeyDown={onTabKey}>
+        {(['workspace', 'shared'] as Tab[]).map((t) => (
+          <button
+            key={t}
+            type="button"
+            role="tab"
+            id={`gallery-tab-${t}`}
+            aria-selected={tab === t}
+            aria-controls="gallery-panel"
+            tabIndex={tab === t ? 0 : -1}
+            onClick={() => setTab(t)}
+          >
+            {t === 'workspace' ? workspaceName : `Shared with you${totals.shared ? ` (${totals.shared})` : ''}`}
+          </button>
+        ))}
       </div>
 
-      {showSearch && (
-        <div className="gallery-search" role="search">
-          <label className="visually-hidden" htmlFor="gallery-search">
-            Search pages by title
-          </label>
-          <svg viewBox="0 0 20 20" aria-hidden="true">
-            <path d="M8.5 3a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11zM12.5 12.5 17 17" />
-          </svg>
-          <input
-            id="gallery-search"
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={tab === 'workspace' ? `Search ${current?.name ?? workspaceName}` : 'Search pages shared with you'}
-            autoComplete="off"
-            spellCheck={false}
-          />
-        </div>
-      )}
-
-      {showFolders && (
-        <FolderBar folders={folders} total={totals.workspace} selected={filter} onSelect={setFilter} onNew={() => setPending({ kind: 'new-folder' })} />
-      )}
-
-      {current && (
-        <div className="folder-head">
-          <h2>
-            <FolderIcon />
-            {current.name}
-          </h2>
-          <button type="button" className="text-link gallery-clear" onClick={() => setPending({ kind: 'rename-folder', folder: current })}>
-            Rename
-          </button>
-          <button type="button" className="text-link gallery-clear" onClick={() => setPending({ kind: 'delete-folder', folder: current })}>
-            Delete folder
-          </button>
-        </div>
-      )}
-
-      <div className={withAside ? 'app-grid' : 'app-grid app-grid-full'}>
-        {withAside}
-
-        {list.kind === 'error' && (
-          <p className="auth-notice" role="alert">
-            These pages could not be loaded. Reload to try again.
-          </p>
+      <div id="gallery-panel" role="tabpanel" aria-labelledby={`gallery-tab-${tab}`}>
+        {showSearch && (
+          <div className="gallery-search" role="search">
+            <label className="visually-hidden" htmlFor="gallery-search">
+              Search pages by title
+            </label>
+            <svg viewBox="0 0 20 20" aria-hidden="true">
+              <path d="M8.5 3a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11zM12.5 12.5 17 17" />
+            </svg>
+            <input
+              id="gallery-search"
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={tab === 'workspace' ? `Search ${current?.name ?? workspaceName}` : 'Search pages shared with you'}
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </div>
         )}
 
-        {empty && searching && (
-          <div className="gallery-no-match">
-            <p>
-              No pages {current ? `in ${current.name} ` : ''}match “{search}”.
-            </p>
-            <button type="button" className="text-link gallery-clear" onClick={() => setQuery('')}>
-              Clear search
+        {showFolders && (
+          <FolderBar folders={folders} total={totals.workspace} selected={filter} onSelect={setFilter} onNew={() => setPending({ kind: 'new-folder' })} />
+        )}
+
+        {current && (
+          <div className="folder-head">
+            <h2>
+              <FolderIcon />
+              {current.name}
+            </h2>
+            <button type="button" className="text-link gallery-clear" onClick={() => setPending({ kind: 'rename-folder', folder: current })}>
+              Rename
+            </button>
+            <button type="button" className="text-link gallery-clear" onClick={() => setPending({ kind: 'delete-folder', folder: current })}>
+              Delete folder
             </button>
           </div>
         )}
 
-        {empty && !searching && inFolder && (
-          <p className="gallery-note">
-            {filter === 'none'
-              ? 'Every page here is in a folder.'
-              : "Nothing in this folder yet. Choose Move to folder in a page's menu, or ask your agent to publish into it."}
-          </p>
-        )}
+        <div className={withAside ? 'app-grid' : 'app-grid app-grid-full'}>
+          {withAside}
 
-        {tab === 'shared' && empty && !searching && (
-          <p className="gallery-note">Nothing has been shared with you yet. When someone adds {email} to a page, it shows up here.</p>
-        )}
+          {list.kind === 'error' && (
+            <p className="auth-notice" role="alert">
+              These pages could not be loaded. Reload to try again.
+            </p>
+          )}
 
-        {tab === 'workspace' && empty && !searching && !inFolder && (
-          <section className="gallery-empty" aria-label="Your pages">
-            <div className="ghost-grid" aria-hidden="true">
-              <div className="ghost ghost-first">
-                <span>Your first page lands here</span>
-              </div>
-              <div className="ghost" />
-              <div className="ghost" />
-              <div className="ghost" />
+          {empty && searching && (
+            <div className="gallery-no-match">
+              <p>
+                No pages {current ? `in ${current.name} ` : ''}match “{search}”.
+              </p>
+              <button type="button" className="text-link gallery-clear" onClick={() => setQuery('')}>
+                Clear search
+              </button>
             </div>
-            <p>No pages yet. When your agent publishes, each page appears here with its link.</p>
-          </section>
-        )}
+          )}
 
-        {items.length > 0 && (
-          <div className="gallery-list">
-            <ul
-              className="gallery"
-              aria-label={tab === 'workspace' ? `Pages in ${current?.name ?? workspaceName}` : 'Pages shared with you'}
-              aria-busy={stale || reloading || loadingMore || undefined}
-              data-stale={stale || reloading || undefined}
-            >
-              {items.map((a) => (
-                <li key={a.slug}>
-                  <Card
-                    page={a}
-                    showFolder={tab === 'workspace' && filter === 'all'}
-                    canMove={tab === 'workspace' && a.canEdit}
-                    onRename={() => setPending({ kind: 'rename', page: a })}
-                    onDelete={() => setPending({ kind: 'delete', page: a })}
-                    onMove={() => setPending({ kind: 'move', page: a })}
-                  />
-                </li>
-              ))}
-            </ul>
-            {hasMore && (
-              <div className="gallery-more" ref={sentinel}>
-                {loadingMore ? (
-                  <p className="gallery-loading">Loading more pages…</p>
-                ) : moreFailed ? (
-                  <>
-                    <p>More pages could not be loaded.</p>
-                    <button type="button" className="button button-quiet" onClick={() => loadMore(tab)}>
-                      Try again
-                    </button>
-                  </>
-                ) : (
-                  <button type="button" className="button button-quiet" onClick={() => loadMore(tab)}>
-                    Show more pages
-                  </button>
-                )}
+          {empty && !searching && inFolder && (
+            <p className="gallery-note">
+              {filter === 'none'
+                ? 'Every page here is in a folder.'
+                : "Nothing in this folder yet. Choose Move to folder in a page's menu, or ask your agent to publish into it."}
+            </p>
+          )}
+
+          {tab === 'shared' && empty && !searching && (
+            <p className="gallery-note">Nothing has been shared with you yet. When someone adds {email} to a page, it shows up here.</p>
+          )}
+
+          {tab === 'workspace' && empty && !searching && !inFolder && (
+            <section className="gallery-empty" aria-label="Your pages">
+              <div className="ghost-grid" aria-hidden="true">
+                <div className="ghost ghost-first">
+                  <span>Your first page lands here</span>
+                </div>
+                <div className="ghost" />
+                <div className="ghost" />
+                <div className="ghost" />
               </div>
-            )}
-          </div>
-        )}
+              <p>No pages yet. When your agent publishes, each page appears here with its link.</p>
+            </section>
+          )}
+
+          {items.length > 0 && (
+            <div className="gallery-list">
+              <ul
+                className="gallery"
+                aria-label={tab === 'workspace' ? `Pages in ${current?.name ?? workspaceName}` : 'Pages shared with you'}
+                aria-busy={stale || reloading || loadingMore || undefined}
+                data-stale={stale || reloading || undefined}
+              >
+                {items.map((a) => (
+                  <li key={a.slug}>
+                    <Card
+                      page={a}
+                      showFolder={tab === 'workspace' && filter === 'all'}
+                      canMove={tab === 'workspace' && a.canEdit}
+                      onRename={() => setPending({ kind: 'rename', page: a })}
+                      onDelete={() => setPending({ kind: 'delete', page: a })}
+                      onMove={() => setPending({ kind: 'move', page: a })}
+                    />
+                  </li>
+                ))}
+              </ul>
+              {hasMore && (
+                <div className="gallery-more" ref={sentinel}>
+                  {loadingMore ? (
+                    <p className="gallery-loading">Loading more pages…</p>
+                  ) : moreFailed ? (
+                    <>
+                      <p>More pages could not be loaded.</p>
+                      <button type="button" className="button button-quiet" onClick={() => loadMore(tab)}>
+                        Try again
+                      </button>
+                    </>
+                  ) : (
+                    <button type="button" className="button button-quiet" onClick={() => loadMore(tab)}>
+                      Show more pages
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       <p className="visually-hidden" role="status">

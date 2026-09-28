@@ -117,7 +117,7 @@
 }
 
 .contact-form select:invalid {
-  color: #8a95ad;
+  color: var(--ink-faint);
 }
 
 .contact-form option {
@@ -127,10 +127,6 @@
 .contact-form textarea {
   min-height: 120px;
   resize: vertical;
-}
-
-.contact-form textarea::placeholder {
-  color: #8a95ad;
 }
 
 .contact-form select[aria-invalid='true'],

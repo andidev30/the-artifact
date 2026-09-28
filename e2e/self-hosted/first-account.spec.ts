@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { expect, test } from '@playwright/test'
 import { selfHostedAccountCount } from '../../apps/api/test/e2e-db.ts'
+import { expectAccessible } from '../axe'
 import { signUp, uniqueEmail } from '../helpers'
 
 test('the first account on a fresh install becomes its admin and names the server organization', async ({ page }) => {
@@ -21,6 +22,7 @@ test('the first account on a fresh install becomes its admin and names the serve
   await expect(rail).toContainText('Name your organization')
   await expect(rail).not.toContainText('Choose a workspace')
   await expect(page.getByRole('button', { name: 'Skip, just me for now' })).toBeVisible()
+  await expectAccessible(page, 'self-hosted onboarding')
 
   await page.getByLabel('Organization name').fill('Self Hosted Team')
   await page.getByLabel('Address').fill(`sh-${randomBytes(4).toString('hex')}`)

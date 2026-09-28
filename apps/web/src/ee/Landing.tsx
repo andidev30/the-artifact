@@ -26,10 +26,6 @@ export function Landing() {
 
   return (
     <>
-      <a className="skip" href="#main">
-        Skip to content
-      </a>
-
       <header className="nav">
         <Wordmark />
         <nav aria-label="Primary">

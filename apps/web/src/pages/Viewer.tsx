@@ -134,6 +134,14 @@ function PageFrame({ page, email, onChange }: { page: ArtifactPage; email: strin
     page.comments && new URLSearchParams(window.location.search).has('comments') ? 'comments' : null,
   )
   const toggle = (which: 'history' | 'comments') => setPanel((p) => (p === which ? null : which))
+  const historyButton = useRef<HTMLButtonElement>(null)
+  const commentsButton = useRef<HTMLButtonElement>(null)
+  // The panel took focus when it opened; closing it hands focus back to the button that opened it
+  function closePanel() {
+    const button = panel === 'history' ? historyButton : commentsButton
+    setPanel(null)
+    button.current?.focus()
+  }
   // Once opened, drop ?comments so Copy link hands on the page's plain address
   useEffect(() => {
     if (new URLSearchParams(window.location.search).has('comments')) navigate({ search: '' }, { replace: true })
@@ -183,6 +191,7 @@ function PageFrame({ page, email, onChange }: { page: ArtifactPage; email: strin
           </span>
           {page.comments && (
             <button
+              ref={commentsButton}
               type="button"
               className="viewer-history viewer-comments"
               aria-expanded={panel === 'comments'}
@@ -202,6 +211,7 @@ function PageFrame({ page, email, onChange }: { page: ArtifactPage; email: strin
           )}
           {page.canEdit && (
             <button
+              ref={historyButton}
               type="button"
               className="viewer-history"
               aria-expanded={panel === 'history'}
@@ -235,7 +245,7 @@ function PageFrame({ page, email, onChange }: { page: ArtifactPage; email: strin
           onRestored={() => onRestored(viewing.version)}
         />
       )}
-      <div className="viewer-body">
+      <main id="main" className="viewer-body">
         <iframe
           key={viewing ? `v${viewing.version}` : 'current'}
           className="viewer-frame"
@@ -244,19 +254,13 @@ function PageFrame({ page, email, onChange }: { page: ArtifactPage; email: strin
           src={versionUrl(page.slug, viewing ? viewing.version : page.version)}
         />
         {panel === 'history' && (
-          <HistoryPanel
-            slug={page.slug}
-            currentVersion={page.version}
-            selected={viewing?.version ?? page.version}
-            onSelect={setViewing}
-            onClose={() => setPanel(null)}
-          />
+          <HistoryPanel slug={page.slug} currentVersion={page.version} selected={viewing?.version ?? page.version} onSelect={setViewing} onClose={closePanel} />
         )}
         {panel === 'comments' && page.comments && (
           <CommentsPanel
             slug={page.slug}
             currentVersion={page.version}
-            onClose={() => setPanel(null)}
+            onClose={closePanel}
             onSeen={() => onChange({ ...pageRef.current, comments: { total: pageRef.current.comments?.total ?? 0, unread: 0 } })}
             onTotalChange={(delta) => {
               const counts = pageRef.current.comments ?? { total: 0, unread: 0 }
@@ -264,7 +268,7 @@ function PageFrame({ page, email, onChange }: { page: ArtifactPage; email: strin
             }}
           />
         )}
-      </div>
+      </main>
       {dialog === 'rename' && (
         <RenameDialog
           slug={page.slug}

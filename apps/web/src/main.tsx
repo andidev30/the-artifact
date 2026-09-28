@@ -17,6 +17,7 @@ import { NewOrganization } from './pages/NewOrganization.tsx'
 import { ConfirmSignIn } from './pages/ConfirmSignIn.tsx'
 import { Loading } from './pages/Status.tsx'
 import { TwoFactor } from './pages/TwoFactor.tsx'
+import { FocusRescue, RouteFocus, SkipLink } from './components/Focus.tsx'
 
 // Pages most visits never open stay out of the first download. The signed-in ones show Loading
 // while their chunk arrives, which is what they render first anyway, so nothing changes on screen.
@@ -29,6 +30,9 @@ const Docs = lazy(() => import('./pages/Docs.tsx').then((m) => ({ default: m.Doc
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
+      <SkipLink />
+      <RouteFocus />
+      <FocusRescue />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Auth mode="login" />} />

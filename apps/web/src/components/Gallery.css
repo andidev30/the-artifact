@@ -37,7 +37,7 @@
 }
 
 .gallery-search input:focus-visible {
-  outline: none;
+  outline-offset: 1px;
   box-shadow: 3px 3px 0 var(--marker);
 }
 

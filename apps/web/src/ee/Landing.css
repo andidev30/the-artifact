@@ -1,19 +1,5 @@
 /* The marketing site on the hosted service */
 
-.skip {
-  position: absolute;
-  left: var(--gutter);
-  top: -100px;
-  padding: 8px 12px;
-  background: var(--marker);
-  border: 1.5px solid var(--ink);
-  z-index: 10;
-}
-
-.skip:focus {
-  top: 12px;
-}
-
 .nav-pending {
   width: 180px;
   height: 34px;
@@ -257,8 +243,10 @@
   transition: opacity 400ms ease;
 }
 
-.page h3 {
+/* Not a heading: the demo page's title would break the landing page's outline */
+.page .page-heading {
   font-size: var(--step-0);
+  color: var(--ink);
   font-weight: 700;
   letter-spacing: -0.01em;
 }

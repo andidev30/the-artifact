@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { getSharing, removePerson, setPersonRole, setVisibility, sharePeople, type ShareRole, type Sharing, type Visibility } from '../api'
 import { APP_URL } from '../config'
+import { useReturnFocus } from '../focus'
 import { useConfig } from '../useConfig'
 import { CopyCommand } from './CopyCommand'
 import './ShareDialog.css'
@@ -67,6 +68,7 @@ export function ShareDialog({ slug, title, currentUserEmail, onClose, onVisibili
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  useReturnFocus()
 
   useEffect(() => {
     dialog.current?.showModal()
@@ -162,7 +164,16 @@ export function ShareDialog({ slug, title, currentUserEmail, onClose, onVisibili
             <input type="checkbox" checked={notifyChoice} onChange={(e) => setNotify(e.target.checked)} />
             Notify people by email
           </label>
-          {notify && <textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Message (optional)" rows={2} maxLength={500} />}
+          {notify && (
+            <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              aria-label="Message for the email"
+              placeholder="Message (optional)"
+              rows={2}
+              maxLength={500}
+            />
+          )}
         </div>
       )}
 

@@ -95,7 +95,7 @@ export function FlowDemo() {
             <span className="browser-url">{step >= 3 ? URL : ''}</span>
           </div>
           <div className="page">
-            <h3>API latency, last 7 days</h3>
+            <p className="page-heading">API latency, last 7 days</p>
             <p>p95 in milliseconds. Friday's spike lines up with the cache deploy.</p>
             <svg viewBox="0 0 140 70" role="img" aria-label="Bar chart of daily p95 latency, peaking on Friday at 90 ms">
               {BARS.map((h, i) => (
