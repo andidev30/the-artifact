@@ -1,0 +1,46 @@
+{
+  "name": "@the-artifact/cli",
+  "version": "0.1.0",
+  "description": "Publish HTML pages to The Artifact from the command line and CI",
+  "keywords": [
+    "the-artifact",
+    "html",
+    "publish",
+    "ci",
+    "cli"
+  ],
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andidev30/the-artifact.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/andidev30/the-artifact/blob/main/docs/publishing.md#command-line",
+  "bugs": "https://github.com/andidev30/the-artifact/issues",
+  "bin": {
+    "the-artifact": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc",
+    "lint": "tsc -p tsconfig.test.json",
+    "test": "vitest run",
+    "prepack": "tsc && node -e \"require('node:fs').copyFileSync('../../LICENSE', 'LICENSE')\""
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "typescript": "~7.0.2",
+    "vitest": "^5.0.2"
+  }
+}

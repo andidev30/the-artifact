@@ -6,6 +6,8 @@ dist-ssr
 .env
 .env.production
 .DS_Store
+# Copied from the root by the CLI's prepack, for the npm package
+packages/cli/LICENSE
 .idea
 .vscode/*
 !.vscode/extensions.json

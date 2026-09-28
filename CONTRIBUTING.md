@@ -28,6 +28,11 @@ Releases are made by [release-please](https://github.com/googleapis/release-plea
 - Each push to `main` updates an open pull request titled `chore: release x.y.z`, with the next version, its `CHANGELOG.md` entry and the version bumped in `package.json` and the files in `deploy/`.
 - Merging that pull request tags `vx.y.z`, creates the GitHub release with the same notes, and publishes the image as `x.y.z`, `x.y` and `latest`, then the Helm chart as `oci://ghcr.io/andidev30/charts/the-artifact` version `x.y.z`. Every push to `main` is also published as `main`.
 
+The CLI in `packages/cli` is released on its own, from the commits that touch it (use the `cli` scope), and they stay out of the server's notes:
+
+- It has its own pull request, `chore(cli): release x.y.z`, with `packages/cli/CHANGELOG.md` and the version in `packages/cli/package.json`.
+- Merging it tags `cli-vx.y.z`, creates its GitHub release (not marked latest, which stays the server's) and publishes `@the-artifact/cli` to npm with provenance. That needs the `NPM_TOKEN` repository secret: an npm granular access token with read and write access to `@the-artifact/cli`.
+
 Pull requests are merged with **Rebase and merge**, or with a merge commit whose description is left empty. release-please reads every commit, and a merge commit that repeats the pull request title in its description lists the change a second time.
 
 Which commits go into the notes, and how they move the version:

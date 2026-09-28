@@ -290,6 +290,22 @@ function buildServer(auth: McpAuth) {
         limit: z.number().int().min(1).max(MAX_PAGE_SIZE).optional().describe(`How many to list, 1 to ${MAX_PAGE_SIZE}; 25 when left out`),
         cursor: z.string().optional().describe('The cursor from the end of the previous answer, for the next pages'),
       }),
+      // The same list as data, for scripts and the CLI (packages/cli); the text is what agents read
+      outputSchema: z.object({
+        pages: z.array(
+          z.object({
+            id: z.string(),
+            title: z.string(),
+            url: z.string(),
+            version: z.number(),
+            visibility: z.enum(['private', 'organization', 'link']),
+            folder: z.string().nullable(),
+            updated_at: z.string(),
+          }),
+        ),
+        total: z.number().nullable().describe('How many pages match, on the first batch only'),
+        cursor: z.string().nullable().describe('Pass it back for the next pages; null when there are no more'),
+      }),
       annotations: { readOnlyHint: true },
     },
     limited(async ({ query, folder, limit, cursor }) => {
@@ -308,19 +324,32 @@ function buildServer(auth: McpAuth) {
         throw err
       }
       if (listed.rows.length === 0) {
-        if (cursor) return text('No more pages.')
-        return text(query || folder !== undefined ? 'No pages match.' : 'No pages yet. Use publish_artifact to publish one.')
+        const empty = { pages: [], total: cursor ? null : 0, cursor: null }
+        if (cursor) return { ...text('No more pages.'), structuredContent: empty }
+        return { ...text(query || folder !== undefined ? 'No pages match.' : 'No pages yet. Use publish_artifact to publish one.'), structuredContent: empty }
       }
       const total = cursor ? null : await countForWorkspace(auth.userId, auth.organizationId, opts)
       const lines = listed.rows.map(
         ({ artifact: a, folderName }) =>
           `- ${a.title} (artifact_id: ${a.slug}, v${a.currentVersion}, ${VISIBILITY_LABEL[a.visibility]}${folderName ? `, folder: ${folderName}` : ''}) ${artifactUrl(a.slug)}`,
       )
-      return text(
-        (total !== null && total > listed.rows.length ? `${total} pages match; the ${listed.rows.length} most recently updated:\n` : '') +
-          lines.join('\n') +
-          (listed.next ? `\nThere are more. To see them, call list_artifacts again with the same arguments and cursor: ${listed.next}` : ''),
-      )
+      const pages = listed.rows.map(({ artifact: a, folderName }) => ({
+        id: a.slug,
+        title: a.title,
+        url: artifactUrl(a.slug),
+        version: a.currentVersion,
+        visibility: a.visibility,
+        folder: folderName,
+        updated_at: a.updatedAt.toISOString(),
+      }))
+      return {
+        ...text(
+          (total !== null && total > listed.rows.length ? `${total} pages match; the ${listed.rows.length} most recently updated:\n` : '') +
+            lines.join('\n') +
+            (listed.next ? `\nThere are more. To see them, call list_artifacts again with the same arguments and cursor: ${listed.next}` : ''),
+        ),
+        structuredContent: { pages, total, cursor: listed.next ?? null },
+      }
     }),
   )
 

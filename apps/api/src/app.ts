@@ -21,7 +21,7 @@ import { setPlanQuota } from './quota.js'
 import { admin } from './routes/admin.js'
 import { cron } from './routes/cron.js'
 import { health } from './routes/health.js'
-import { publishApi } from './routes/publish.js'
+import { publishApi, whoamiApi } from './routes/publish.js'
 import { artifacts } from './routes/artifacts.js'
 import { comments } from './routes/comments.js'
 import { folders } from './routes/folders.js'
@@ -50,6 +50,7 @@ app.route('/', oauth)
 app.route('/mcp', mcp)
 // Bearer tokens only, outside the cookie-authenticated routes below
 app.route('/api/publish', publishApi)
+app.route('/api/whoami', whoamiApi)
 
 // /e/<slug> and /api/oembed, outside the session middleware: embeds never look at who is signed in
 app.route('/', embeds)

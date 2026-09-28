@@ -26,9 +26,9 @@ Hono on Node 26, Drizzle ORM over `postgres`, S3 via `@aws-sdk/client-s3`, MCP v
 | `src/instance.ts` | Instance admins, sign-up policy and instance settings |
 | `src/mcp.ts` | The MCP tools (`publish_artifact`, `list_artifacts`, `list_folders`, `move_artifact`, `get_artifact`, `rename_artifact`, `set_artifact_visibility`, `share_artifact`, `delete_artifact`, `list_versions`, `restore_version`, `download_artifact`, `list_comments`, `add_comment`, `reply_comment`, `resolve_comment`, and `prepare_upload`/`publish_upload` when `S3_PUBLIC_ENDPOINT` is set) |
 | `src/uploads.ts` | Publishing by direct upload: upload links, then checking and claiming what arrived |
-| `src/oauth/` | OAuth 2.1 server for MCP clients (discovery, dynamic registration, PKCE) and the consent API; `authenticateBearer` resolves every bearer token |
+| `src/oauth/` | OAuth 2.1 server for MCP clients and the CLI (discovery, dynamic registration, PKCE, revocation) and the consent API; `authenticateBearer` resolves every bearer token |
 | `src/tokens.ts` | Access tokens (`art_…`) people make in settings for CI: one person, one workspace, checked against the database on every use (expiry, suspension, membership) |
-| `src/routes/publish.ts` | `POST /api/publish` for CI and scripts: bearer token only, JSON or multipart, the same `publish` as `publish_artifact`. Documented in `docs/publishing.md`; keep it stable |
+| `src/routes/publish.ts` | `POST /api/publish` for CI and scripts: bearer token only, JSON or multipart, the same `publish` as `publish_artifact`; `GET /api/whoami` for the same tokens. Documented in `docs/publishing.md`, used by `packages/cli`; keep them stable |
 | `src/auth/` | Sessions, email links, passwords, Google sign-in, account lookup/creation; passkeys (`passkeys.ts`, @simplewebauthn/server), authenticator apps (`totp.ts`), the second-factor step and recovery codes (`twofactor.ts`), who has a second factor and which organizations it blocks (`factors.ts`) |
 | `src/routes/` | REST routers for the web app; `security.ts` has sign-in security and sessions under `/api/me` |
 | `src/secrets.ts` | Keys the server makes for itself on first use (`server_secrets`): content link signing, TOTP secret encryption |

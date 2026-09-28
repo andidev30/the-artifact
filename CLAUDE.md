@@ -8,6 +8,7 @@ Hosts the HTML pages coding agents build. An agent publishes through the MCP ser
 | --- | --- | --- |
 | `apps/api` | Hono API, MCP server, OAuth 2.1 server, thumbnail renderer | see `apps/api/CLAUDE.md` |
 | `apps/web` | React 19 + Vite single-page app, including the in-app docs | see `apps/web/CLAUDE.md` |
+| `packages/cli` | `@the-artifact/cli` on npm: `publish`, `list`, `share`, `login` over `POST /api/publish`, `/mcp` and the OAuth server. No dependencies | versions on its own (`cli-vX.Y.Z`); its tests against a real server are in `apps/api/test/integration/cli.test.ts` |
 | `docs/` | User and operator docs, rendered at `/docs` and read on GitHub | see `docs/CLAUDE.md` |
 | `deploy/` | Docker Compose, Kubernetes manifests and the Helm chart for self-hosting | see `deploy/CLAUDE.md` |
 | `apps/*/src/ee/` | Hosted-service-only code (marketing, contact sales, workspace choice), under `LICENSE-EE` | see `apps/*/src/ee/CLAUDE.md` |
@@ -49,7 +50,7 @@ Everything is AGPL-3.0 (`LICENSE`) except folders named `ee/`, which are under `
 
 - Node 26, TypeScript 7, ESM. Biome (`biome.json`) formats and lints everything: no semicolons, single quotes, 2-space indent, 160 columns. Run `pnpm format` before committing; `pnpm lint` fails on unformatted code.
 - Silence a Biome rule only at the line, with `// biome-ignore <rule>: <why>`; the reason is required.
-- The API imports local files with a `.js` suffix; the web app imports without one (`.tsx` in `main.tsx`).
+- The API imports local files with a `.js` suffix; the web app imports without one (`.tsx` in `main.tsx`); the CLI imports with `.ts` (rewritten to `.js` by `tsc`), so Node runs its sources directly in tests.
 - Comments say why, or state a rule that isn't visible in the code (security, races, compatibility). Don't add comments that restate the code, section labels, or change logs.
 - Product copy says "page", not "artifact"; "artifact" is the internal name (tables, MCP tool names, URLs under `/api/artifacts`). Copy is plain, short sentences, no exclamation marks.
 - Errors from the API are `{ error: string, field?: string }` with a 4xx status; the message is shown to people as is, so write it for them.

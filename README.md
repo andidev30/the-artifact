@@ -67,6 +67,7 @@ sequenceDiagram
 - **Organizations** with owners, admins and members, invitations, and a shared gallery.
 - **A gallery with real thumbnails,** rendered in headless Chromium that has no network of its own.
 - **Works with any MCP client.** Streamable HTTP with OAuth 2.1 sign-in (PKCE, dynamic registration); setup steps for Claude Code, Cursor and Codex are in the docs.
+- **Publishing from CI, without an agent.** Access tokens, `POST /api/publish`, and a CLI: `npx @the-artifact/cli publish ./dist` (see [Command line](docs/publishing.md#command-line)).
 - **Runs with or without email.** Without SMTP, people sign in with a password and admins pass sign-up links on by hand.
 - **Passkeys and two-factor sign-in.** Sign in with a passkey, or add one or an authenticator app as a second factor, with recovery codes; organizations can require it. Account settings list your sessions.
 - **Server admin area:** people, organizations, suspensions and the sign-up policy.
