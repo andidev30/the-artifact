@@ -6,6 +6,7 @@ import type { User } from '../db/schema.js'
 import { env } from '../env.js'
 import { instanceSettings, lockAdmins, newAccountFields, revokeAccess } from '../instance.js'
 import { log } from '../log.js'
+import { SetupCodeError } from '../setup-code.js'
 import { deleteSecondFactors } from './factors.js'
 import { sameOriginPath } from './next.js'
 
@@ -22,6 +23,8 @@ type Profile = {
   method: SignUpMethod
   // Called with an existing account before it is signed in to; throws a SignupClosedError to refuse it
   checkExisting?: (existing: User) => void | Promise<void>
+  // Needed when this is the first account on a self-hosted install (src/setup-code.ts)
+  setupCode?: string
 }
 
 // `code` is the error the sign-in routes redirect to (/login?error=…)
@@ -31,6 +34,12 @@ export class SignupClosedError extends Error {
 
 export class AccountSuspendedError extends SignupClosedError {
   code = 'account_suspended'
+}
+
+// The first account on a self-hosted install, without the setup code: Google and single sign-on have
+// nowhere to type it, so the first account is made from the email link or the setup form
+export class NeedsSetupError extends SignupClosedError {
+  code = 'needs_setup'
 }
 
 // The sign-up policy comes from the admin area's settings (anyone, until they are saved). In every
@@ -130,27 +139,31 @@ export async function findOrCreateUser(profile: Profile): Promise<User> {
   }
 
   if (!profile.approved && !(await canSignUp(email))) throw new SignupClosedError()
-  const { user, created } = await db.transaction(async (tx) => {
-    // One account at a time, so only the very first one can become the instance admin
-    await lockAdmins(tx)
-    const [raced] = await tx.select().from(schema.users).where(eq(schema.users.email, email))
-    if (raced) {
-      await profile.checkExisting?.(raced)
-      return { user: raced, created: false }
-    }
-    const [created] = await tx
-      .insert(schema.users)
-      .values({
-        email,
-        name: profile.name,
-        avatarUrl: profile.avatarUrl,
-        googleSub: profile.googleSub,
-        passwordHash: profile.passwordHash,
-        ...(await newAccountFields(tx)),
-      })
-      .returning()
-    return { user: created, created: true }
-  })
+  const { user, created } = await db
+    .transaction(async (tx) => {
+      // One account at a time, so only the very first one can become the instance admin
+      await lockAdmins(tx)
+      const [raced] = await tx.select().from(schema.users).where(eq(schema.users.email, email))
+      if (raced) {
+        await profile.checkExisting?.(raced)
+        return { user: raced, created: false }
+      }
+      const [created] = await tx
+        .insert(schema.users)
+        .values({
+          email,
+          name: profile.name,
+          avatarUrl: profile.avatarUrl,
+          googleSub: profile.googleSub,
+          passwordHash: profile.passwordHash,
+          ...(await newAccountFields(tx, profile.setupCode)),
+        })
+        .returning()
+      return { user: created, created: true }
+    })
+    .catch((err) => {
+      throw err instanceof SetupCodeError ? new NeedsSetupError() : err
+    })
   if (created) track({ event: 'signed_up', userId: user.id, detail: profile.method })
   return user
 }

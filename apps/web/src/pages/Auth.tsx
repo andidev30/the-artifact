@@ -42,6 +42,7 @@ const SIGN_IN_ERRORS: Record<string, string> = {
   link_expired: 'That sign-in link has expired. Request a new one below.',
   account_suspended: 'This account is suspended. Ask an admin of this server if you think that is a mistake.',
   signup_closed: 'This server only accepts accounts from invited people and certain email domains. Ask an admin to invite you.',
+  needs_setup: 'This server has no accounts yet. Create the first one with your email and the setup code from the server log.',
   ...SSO_ERRORS,
 }
 
@@ -89,7 +90,7 @@ export function Auth({ mode }: { mode: Mode }) {
   )
 
   const form = settingUp ? (
-    <SetupForm />
+    <SetupForm setupCode={Boolean(config?.setupCode)} />
   ) : (
     <AuthForm
       mode={mode}
@@ -382,8 +383,13 @@ function AuthForm({ mode, plan, next, lede, notice }: { mode: Mode; plan: string
           placeholder="you@company.com"
           required
           aria-invalid={status.kind === 'error' || undefined}
-          aria-describedby={status.kind === 'error' ? 'auth-error' : undefined}
+          aria-describedby={status.kind === 'error' ? 'auth-error' : config.setupCode ? 'setup-code-hint' : undefined}
         />
+        {config.setupCode && (
+          <p id="setup-code-hint" className="field-hint">
+            This server has no accounts yet. The first one becomes its admin: when you open the link, enter the setup code from the server log.
+          </p>
+        )}
         {status.kind === 'error' && (
           <p id="auth-error" className="auth-error" role="alert">
             {status.message}
@@ -436,7 +442,7 @@ function PasskeyButton({ plan, next }: { plan: string | null; next: string | nul
 }
 
 // First run on a server without email: the first account, which becomes the admin of this server
-function SetupForm() {
+function SetupForm({ setupCode }: { setupCode: boolean }) {
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<{ message: string; field?: string } | null>(null)
 
@@ -448,7 +454,12 @@ function SetupForm() {
     setBusy(true)
     setProblem(null)
     try {
-      const { redirect } = await setUpServer(String(data.get('email') ?? '').trim(), password, String(data.get('name') ?? '').trim())
+      const { redirect } = await setUpServer(
+        String(data.get('email') ?? '').trim(),
+        password,
+        String(data.get('name') ?? '').trim(),
+        String(data.get('setupCode') ?? '').trim(),
+      )
       window.location.assign(redirect)
     } catch (err) {
       setBusy(false)
@@ -469,6 +480,24 @@ function SetupForm() {
       <h1 id="auth-title">Set up this server</h1>
       <p className="auth-lede">Create the first account. It becomes the admin of this server, so you can add people and choose who may sign up.</p>
       <form className="auth-form" onSubmit={onSubmit} noValidate>
+        {setupCode && (
+          <>
+            <label htmlFor="setup-code">Setup code</label>
+            <input
+              id="setup-code"
+              name="setupCode"
+              autoComplete="off"
+              autoCapitalize="characters"
+              spellCheck={false}
+              required
+              aria-invalid={invalid('setupCode')}
+              aria-describedby={describedBy('setupCode', 'setup-code-hint')}
+            />
+            <p id="setup-code-hint" className="field-hint">
+              The server prints it to its log when it starts, e.g. <code>docker compose logs app</code>.
+            </p>
+          </>
+        )}
         <label htmlFor="setup-name">Your name</label>
         <input id="setup-name" name="name" autoComplete="name" maxLength={80} />
         <label htmlFor="setup-email">Email</label>

@@ -105,6 +105,20 @@ export function encryptionKeys(current: string | undefined, previous: string | u
   return { key, previousKey }
 }
 
+// A setup code as it is compared: case, spaces and dashes don't matter, so XXXX-XXXX-XXXX can be typed any way
+export function normalizeSetupCode(value: unknown): string {
+  return typeof value === 'string' ? value.replace(/[\s-]/g, '').toUpperCase() : ''
+}
+
+// SETUP_CODE: the code the first account on a self-hosted install is created with, instead of one the
+// server makes and prints as it starts (src/setup-code.ts). For installs set up by a script.
+export function setupCodeSetting(value: string | undefined): string | null {
+  if (!value?.trim()) return null
+  const code = normalizeSetupCode(value)
+  if (code.length < 12) throw new Error('SETUP_CODE must have at least 12 letters or digits, e.g. SETUP_CODE=$(openssl rand -hex 12).')
+  return code
+}
+
 const appUrl = required('APP_URL').replace(/\/$/, '')
 
 export const env = {
@@ -134,6 +148,7 @@ export const env = {
   // Self-hosted installs skip the marketing pages and go straight to the app, and their first
   // account becomes the instance admin. On unless SELF_HOSTED=false, which the hosted service sets.
   selfHosted: process.env.SELF_HOSTED !== 'false',
+  setupCode: setupCodeSetting(process.env.SETUP_CODE),
   // Built web app to serve from this process (the Docker image sets it); empty in development
   webDir: process.env.WEB_DIR ?? '',
   // Ask GitHub once a day for the newest release, to tell self-hosted admins about it (src/releases.ts).

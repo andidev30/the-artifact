@@ -25,7 +25,7 @@ export function ConfirmSignIn() {
   const next = sameOriginPath(params.get('next'), window.location.origin)
   const [state, setState] = useState<State>(token ? { kind: 'loading' } : { kind: 'invalid' })
   const [busy, setBusy] = useState(false)
-  const [problem, setProblem] = useState<string | null>(null)
+  const [problem, setProblem] = useState<{ message: string; field?: string } | null>(null)
   const [resend, setResend] = useState<Resend>({ kind: 'idle' })
 
   useEffect(() => {
@@ -51,25 +51,29 @@ export function ConfirmSignIn() {
 
   async function onContinue(link: SignInLink, form?: HTMLFormElement) {
     let password: string | undefined
-    if (link.setPassword && form) {
+    let setupCode: string | undefined
+    if (form) {
       const data = new FormData(form)
-      password = String(data.get('password') ?? '')
-      if (password !== String(data.get('confirm') ?? '')) return setProblem('The passwords don’t match.')
+      if (link.setupCode) setupCode = String(data.get('setupCode') ?? '').trim()
+      if (link.setPassword) {
+        password = String(data.get('password') ?? '')
+        if (password !== String(data.get('confirm') ?? '')) return setProblem({ message: 'The passwords don’t match.', field: 'confirm' })
+      }
     }
     setBusy(true)
     setProblem(null)
     try {
-      const { redirect } = await confirmSignInLink(token, plan, next, password)
+      const { redirect } = await confirmSignInLink(token, plan, next, password, setupCode)
       window.location.assign(redirect)
     } catch (err) {
       setBusy(false)
-      if (err instanceof ApiError && err.field === 'password') return setProblem(err.message)
+      if (err instanceof ApiError && (err.field === 'password' || err.field === 'setupCode')) return setProblem({ message: err.message, field: err.field })
       if (err instanceof ApiError && err.code === 'link_expired')
         return setState({ kind: 'expired', email: link.email, newAccount: link.newAccount, canResend: link.emailEnabled })
       if (err instanceof ApiError && err.code === 'link_invalid') return setState({ kind: 'invalid' })
-      if (err instanceof ApiError && err.code === 'signup_closed') return setState({ kind: 'closed', message: err.message })
+      if (err instanceof ApiError && (err.code === 'signup_closed' || err.code === 'needs_setup')) return setState({ kind: 'closed', message: err.message })
       if (err instanceof ApiError && err.code === 'account_suspended') return setState({ kind: 'closed', message: err.message, suspended: true })
-      setProblem('You could not be signed in. Check your connection and try again.')
+      setProblem({ message: 'You could not be signed in. Check your connection and try again.' })
     }
   }
 
@@ -82,6 +86,10 @@ export function ConfirmSignIn() {
       setResend({ kind: 'failed', message: err instanceof ApiError ? err.message : 'The link could not be sent. Try again.' })
     }
   }
+
+  const invalid = (field: string) => (problem?.field === field ? true : undefined)
+  // The error is read out with the field it is about
+  const describedBy = (field: string, hint?: string) => [hint, invalid(field) && 'confirm-error'].filter(Boolean).join(' ') || undefined
 
   const loginAgain = `${LOGIN_URL}${next ? `?next=${encodeURIComponent(next)}` : ''}`
 
@@ -105,7 +113,7 @@ export function ConfirmSignIn() {
                 {state.link.newAccount ? 'You are about to create an account as' : 'You are about to log in as'}{' '}
                 <strong className="confirm-email">{state.link.email}</strong>.
               </p>
-              {state.link.setPassword ? (
+              {state.link.setPassword || state.link.setupCode ? (
                 <form
                   className="auth-form"
                   onSubmit={(e) => {
@@ -114,36 +122,74 @@ export function ConfirmSignIn() {
                   }}
                   noValidate
                 >
-                  <input type="email" name="username" autoComplete="username" value={state.link.email} readOnly hidden />
-                  <label htmlFor="confirm-password">{state.link.newAccount ? 'Choose a password' : 'New password'}</label>
-                  <input
-                    id="confirm-password"
-                    name="password"
-                    type="password"
-                    autoComplete="new-password"
-                    minLength={8}
-                    required
-                    aria-describedby="confirm-password-hint"
-                  />
-                  <p id="confirm-password-hint" className="field-hint">
-                    At least 8 characters. You will log in with it from now on.
-                  </p>
-                  <label htmlFor="confirm-password-again">Confirm password</label>
-                  <input id="confirm-password-again" name="confirm" type="password" autoComplete="new-password" required />
+                  {state.link.setupCode && (
+                    <>
+                      <label htmlFor="confirm-setup-code">Setup code</label>
+                      <input
+                        id="confirm-setup-code"
+                        name="setupCode"
+                        autoComplete="off"
+                        autoCapitalize="characters"
+                        spellCheck={false}
+                        required
+                        aria-invalid={invalid('setupCode')}
+                        aria-describedby={describedBy('setupCode', 'confirm-setup-code-hint')}
+                      />
+                      <p id="confirm-setup-code-hint" className="field-hint">
+                        This is the first account on this server, so it becomes its admin. The server prints the code to its log when it starts, e.g.{' '}
+                        <code>docker compose logs app</code>.
+                      </p>
+                    </>
+                  )}
+                  {state.link.setPassword && (
+                    <>
+                      <input type="email" name="username" autoComplete="username" value={state.link.email} readOnly hidden />
+                      <label htmlFor="confirm-password">{state.link.newAccount ? 'Choose a password' : 'New password'}</label>
+                      <input
+                        id="confirm-password"
+                        name="password"
+                        type="password"
+                        autoComplete="new-password"
+                        minLength={8}
+                        required
+                        aria-invalid={invalid('password')}
+                        aria-describedby={describedBy('password', 'confirm-password-hint')}
+                      />
+                      <p id="confirm-password-hint" className="field-hint">
+                        At least 8 characters. You will log in with it from now on.
+                      </p>
+                      <label htmlFor="confirm-password-again">Confirm password</label>
+                      <input
+                        id="confirm-password-again"
+                        name="confirm"
+                        type="password"
+                        autoComplete="new-password"
+                        required
+                        aria-invalid={invalid('confirm')}
+                        aria-describedby={describedBy('confirm')}
+                      />
+                    </>
+                  )}
                   {problem && (
-                    <p className="auth-error" role="alert">
-                      {problem}
+                    <p id="confirm-error" className="auth-error" role="alert">
+                      {problem.message}
                     </p>
                   )}
                   <button type="submit" className="button confirm-continue" disabled={busy}>
-                    {busy ? 'Signing in' : state.link.newAccount ? 'Create my account' : 'Set password and log in'}
+                    {busy
+                      ? 'Signing in'
+                      : !state.link.setPassword
+                        ? `Continue as ${state.link.email}`
+                        : state.link.newAccount
+                          ? 'Create my account'
+                          : 'Set password and log in'}
                   </button>
                 </form>
               ) : (
                 <>
                   {problem && (
                     <p className="auth-notice" role="alert">
-                      {problem}
+                      {problem.message}
                     </p>
                   )}
                   <button type="button" className="button confirm-continue" onClick={() => onContinue(state.link)} disabled={busy}>

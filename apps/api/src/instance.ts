@@ -2,6 +2,7 @@ import { and, count, eq, isNull, ne, sql, type SQL } from 'drizzle-orm'
 import { db, schema } from './db/index.js'
 import type { SignupPolicy, User } from './db/schema.js'
 import { env } from './env.js'
+import { forgetSetupCode, SetupCodeError, setupCodeMatches } from './setup-code.js'
 import { CONTROL_CHARS_ERROR, hasControlChars } from './validation.js'
 
 // Instance administration: who runs this install, and the settings they edit in the web app.
@@ -35,10 +36,19 @@ export async function activeAdminCount(tx: Tx | typeof db = db): Promise<number>
 // admin and sets the server up in onboarding; everyone after it starts in their personal workspace
 // with nothing to choose, and joins organizations by invitation. On the hosted service everyone
 // chooses a workspace. Call inside the transaction holding lockAdmins.
-export async function newAccountFields(tx: Tx): Promise<{ isAdmin: boolean; onboardedAt: Date | null }> {
+// The first account needs the setup code (src/setup-code.ts), whichever way it signs up: without it
+// this throws SetupCodeError, so whoever reaches a fresh server first can't make themselves its admin.
+export async function newAccountFields(tx: Tx, setupCode?: unknown): Promise<{ isAdmin: boolean; onboardedAt: Date | null }> {
   if (!env.selfHosted) return { isAdmin: false, onboardedAt: null }
-  const isAdmin = !(await hasAccounts(tx))
-  return { isAdmin, onboardedAt: isAdmin ? null : new Date() }
+  if (await hasAccounts(tx)) return { isAdmin: false, onboardedAt: new Date() }
+  if (!(await setupCodeMatches(setupCode, tx))) throw new SetupCodeError()
+  await forgetSetupCode(tx)
+  return { isAdmin: true, onboardedAt: null }
+}
+
+// Whether the next account would be the first on a self-hosted install, which needs the setup code
+export async function needsSetupCode(tx: Tx | typeof db = db): Promise<boolean> {
+  return env.selfHosted && !(await hasAccounts(tx))
 }
 
 export async function hasAccounts(tx: Tx | typeof db = db): Promise<boolean> {

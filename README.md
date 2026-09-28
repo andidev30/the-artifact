@@ -110,7 +110,7 @@ cp .env.example .env         # passwords for the bundled Postgres and MinIO, the
 docker compose up -d         # pulls ghcr.io/andidev30/the-artifact at that version
 ```
 
-Open http://localhost:8080 and create the first account; it becomes the admin of the server. Then connect your agent:
+Open http://localhost:8080 on the same machine and create the first account with the setup code from `docker compose logs app`; it becomes the admin of the server. The port is only published on `127.0.0.1` until you set `ARTIFACT_BIND` in `.env` or put a reverse proxy in front. Then connect your agent:
 
 ```sh
 claude mcp add --transport http --scope user the-artifact http://localhost:8080/mcp
