@@ -15,6 +15,7 @@ Hono on Node 26, Drizzle ORM over `postgres`, S3 via `@aws-sdk/client-s3`, MCP v
 | `src/cache.ts` | In-process caches (`Lru`, `memo`), one per process: a version's files by version id (`artifacts.ts`), `/api/config`'s account and SSO lookups. Only for immutable rows looked up by a key the request just read fresh (the page row and version row always are), or answers a few seconds old may give |
 | `src/zip.ts` | Writes zip archives (no dependency) |
 | `src/files.ts` | Multi-file page validation and size limits |
+| `src/prepare.ts` | Checks, decodes and hashes inline publishes of 256 KB or more on a pool of up to four worker threads, so they don't hold up the event loop; `src/files.ts` is the worker's entry, so it imports only Node's own modules. Falls back to the main thread if workers can't start |
 | `src/storage.ts`, `src/gc.ts` | Content-addressed blobs in S3 and the sweep that deletes unreferenced ones; `addPruner` jobs run before each sweep |
 | `src/thumbnails.ts` | Gallery screenshots of untrusted HTML with no network of its own |
 | `src/previews.ts` | Link preview (Open Graph) tags in the HTML shell of `/a/<slug>`, for link-shared pages only; mounted by `src/web.ts` and by `api/index.js` on Vercel. `SHELL_FRAMING` keeps the app itself out of other sites' frames |

@@ -5,7 +5,8 @@ import { audit } from './audit.js'
 import { db, schema } from './db/index.js'
 import type { Artifact, Visibility } from './db/schema.js'
 import { env } from './env.js'
-import { checkHtmlSize, checkManifest, MAX_HTML_BYTES, prepareFiles, PublishError, sha256, type FileInput, type FileMeta, type ManifestEntry } from './files.js'
+import { checkManifest, MAX_HTML_BYTES, PublishError, type FileInput, type FileMeta, type ManifestEntry } from './files.js'
+import { prepare } from './prepare.js'
 import { Lru } from './cache.js'
 import { belongsTo, checkFolderName, ensureFolder, FolderError } from './folders.js'
 import { holdStorageLock } from './gc.js'
@@ -196,16 +197,13 @@ async function insertVersion(tx: Tx, values: Omit<typeof schema.artifactVersions
 }
 
 export async function publish(input: PublishInput): Promise<Artifact> {
-  const htmlBytes = Buffer.byteLength(input.html, 'utf8')
-  checkHtmlSize(htmlBytes)
-  const files = prepareFiles(input.files, htmlBytes)
-  const htmlSha256 = sha256(input.html)
+  const { html, htmlSha256, htmlSize, files } = await prepare(input.html, input.files)
   return publishContent(input, {
     htmlSha256,
-    htmlSize: htmlBytes,
+    htmlSize,
     files,
     store: async () => {
-      await Promise.all([putBlob(input.html, htmlSha256), ...files.map((f) => putBlob(f.content, f.sha256))])
+      await Promise.all([putBlob(html, htmlSha256), ...files.map((f) => putBlob(f.content, f.sha256))])
     },
   })
 }
