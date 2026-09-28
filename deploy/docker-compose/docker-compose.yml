@@ -16,8 +16,10 @@ services:
   app:
     image: ghcr.io/andidev30/the-artifact:${ARTIFACT_VERSION:-0.6.1} # x-release-please-version
     restart: unless-stopped
+    # Only this machine reaches the app unless ARTIFACT_BIND in .env says otherwise: with TRUST_PROXY on,
+    # anyone who could reach the port directly could claim any address in X-Forwarded-For
     ports:
-      - '${ARTIFACT_PORT:-8080}:3000'
+      - '${ARTIFACT_BIND:-127.0.0.1}:${ARTIFACT_PORT:-8080}:3000'
     env_file: app.env
     # Docker's default seccomp profile plus the namespace calls Chromium's sandbox needs to render
     # thumbnails of untrusted pages safely (see docs/security.md)

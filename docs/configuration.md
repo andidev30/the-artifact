@@ -1,6 +1,6 @@
 # Configuration reference
 
-Settings are environment variables. With Docker Compose they go in `deploy/docker-compose/app.env`, except the ones Compose reads itself (`ARTIFACT_VERSION`, `ARTIFACT_PORT`, the passwords and `S3_*`), which go in `.env`. On Kubernetes they all go in `deploy/kubernetes/app.env` (except `WEB_CONCURRENCY`, which `deploy/kubernetes/app.yaml` sets and you change there), or in Helm values, which name them differently (see [Install with Helm](/docs/kubernetes#install-with-helm)); `extraEnv` passes any of them as is. The Docker image sets the ones marked "set by the image".
+Settings are environment variables. With Docker Compose they go in `deploy/docker-compose/app.env`, except the ones Compose reads itself (`ARTIFACT_VERSION`, `ARTIFACT_PORT`, `ARTIFACT_BIND`, the passwords and `S3_*`), which go in `.env`. On Kubernetes they all go in `deploy/kubernetes/app.env` (except `WEB_CONCURRENCY`, which `deploy/kubernetes/app.yaml` sets and you change there), or in Helm values, which name them differently (see [Install with Helm](/docs/kubernetes#install-with-helm)); `extraEnv` passes any of them as is. The Docker image sets the ones marked "set by the image".
 
 ## Required
 
@@ -45,6 +45,7 @@ Settings are environment variables. With Docker Compose they go in `deploy/docke
 | `PORT` | `3000` | Port inside the container |
 | `ARTIFACT_VERSION` | the release the compose file was written for | Release of `ghcr.io/andidev30/the-artifact` that `deploy/docker-compose/docker-compose.yml` runs: an exact version like `0.2.0`, or a major.minor like `0.2`. Set it in the `.env` next to the compose file. See [Upgrading](/docs/upgrading). |
 | `ARTIFACT_PORT` | `8080` | Host port in `deploy/docker-compose/docker-compose.yml` |
+| `ARTIFACT_BIND` | `127.0.0.1` | Host address `deploy/docker-compose/docker-compose.yml` publishes the port on. The default lets only the server itself in, such as a reverse proxy running there; `0.0.0.0` publishes it on every network. See [Put it behind HTTPS](/docs/self-hosting#3-put-it-behind-https). |
 | `POSTGRES_PASSWORD` | `artifact` | Database password in `deploy/docker-compose/docker-compose.yml`; set it in a `.env` file next to the compose file before the first start |
 
 ## More than one worker
