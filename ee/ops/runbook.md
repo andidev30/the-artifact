@@ -13,7 +13,7 @@ On-call notes for the hosted service at https://the-artifact-pi.vercel.app. Self
 | Page content | Supabase Storage, private bucket, S3 protocol | Objects under `blobs/<sha256>` |
 | Page files in the browser | The same Vercel project on a second alias, `https://the-artifact-content.vercel.app`, set as `CONTENT_ORIGIN` (Production) | `vercel.app` is on the Public Suffix List, so the alias is another site and the app's cookies never reach it. `vercel.json` redirects everything but `/api/` on that host to the app; change the host there if the alias changes |
 | Email | Brevo SMTP (`smtp-relay.brevo.com:587`) | |
-| Backups | GitHub Actions in the private repository [andidev30/the-artifact-backups](https://github.com/andidev30/the-artifact-backups): **Hosted backup** nightly, **Hosted restore test** weekly | See [Backups](#backups) |
+| Backups, migrations and deploys | GitHub Actions in the private repository [andidev30/the-artifact-backups](https://github.com/andidev30/the-artifact-backups): **Hosted backup** nightly, **Hosted restore test** weekly, **Hosted migrate** on each release | See [Backups](#backups) and [Rolling back a migration](#rolling-back-a-migration) |
 
 Health checks, both public and uncached:
 
@@ -28,12 +28,12 @@ Health checks, both public and uncached:
 | Build failures | Vercel dashboard → **Deployments** → the deployment → **Build Logs** |
 | Cron runs | Vercel dashboard → **Settings** → **Cron Jobs** → **View Logs** |
 | Postgres, pooler, storage | Supabase dashboard → **Logs & Analytics** (Postgres, Pooler, Storage). Slow queries: **Database** → **Query Performance** |
-| Backups and restore tests | GitHub → andidev30/the-artifact-backups → **Actions** → **Hosted backup** / **Hosted restore test**; each run's summary has the result |
+| Backups, restore tests, migrations and deploys | GitHub → andidev30/the-artifact-backups → **Actions** → **Hosted backup** / **Hosted restore test** / **Hosted migrate**; each run's summary has the result |
 | Email delivery | Brevo dashboard → **Transactional** → **Logs** |
 
 ## Rolling back a release
 
-Every push to `main` deploys to production. To go back:
+Production runs the newest release (see the next section). To go back:
 
 1. Vercel dashboard → **Deployments**, find the last good production deployment, open its menu and choose **Instant Rollback** (the CLI equivalent is `vercel rollback <deployment-url>`). It takes seconds and doesn't rebuild. On the Hobby plan it only offers the previous production deployment; to go further back, choose **Promote** (or `vercel promote <deployment-url>`) on an older production deployment.
 2. While rolled back, new pushes to `main` build but don't go live. Once the fix is merged and its deployment is good, choose **Undo Rollback**, or **Promote** the new deployment.
@@ -43,9 +43,9 @@ A rollback only changes code. If the bad release ran a migration, read the next 
 
 ## Rolling back a migration
 
-Migrations only go forward (Drizzle has no down migrations), and the Vercel function never runs them. **Hosted migrate** (`.github/workflows/hosted-migrate.yml`) does, **when a server release is published** (the Release workflow calls it after tagging `vX.Y.Z`), or when run by hand: it counts the migrations the database hasn't applied, and when there are any it backs up the database (kept as the `database-before-migrate` artifact for 90 days) and runs `pnpm db:migrate` with `HOSTED_DATABASE_URL`. A run without a new migration finishes in about a minute. **Merges to `main` don't deploy**: production runs releases, and every deployment counts against Vercel's 100 a day. A merged change reaches the hosted service with the next release, or earlier if you run the workflow by hand.
+Migrations only go forward (Drizzle has no down migrations), and the Vercel function never runs them. **Hosted migrate** (`hosted-migrate.yml` in the private andidev30/the-artifact-backups) does, **when a server release is published**, or when run by hand. After tagging `vX.Y.Z`, the Release workflow here starts it with the tag, using the `HOSTED_DISPATCH_TOKEN` secret (see [The dispatch token](#the-dispatch-token)); it checks out that tag. Keeping it there keeps the database URL, the deploy hook and the pre-migration backup out of this public repository. Each run counts the migrations the database hasn't applied, and when there are any it backs up the database (kept there as the `database-before-migrate` artifact for 90 days) and runs `pnpm db:migrate` with `HOSTED_DATABASE_URL`. A run without a new migration finishes in about a minute. **Merges to `main` don't deploy**: production runs releases, and every deployment counts against Vercel's 100 a day. A merged change reaches the hosted service with the next release, or earlier if you run the workflow by hand.
 
-Vercel doesn't deploy `main` by itself: `vercel.json` turns git deployments off (pull request previews too: they used up the Hobby plan's 100 deployments a day), and the workflow's last step starts the production deployment through a Vercel deploy hook (`VERCEL_DEPLOY_HOOK`, made with `vercel deploy-hooks create after-migrate --ref main`), only after the migrations are in. A failed migration leaves the previous deployment live. Pull requests get no Vercel preview; CI tests them. To preview a branch by hand, run `vercel deploy` from a checkout of it. To deploy `main` between releases (a hotfix), or to redeploy, run the workflow by hand: `gh workflow run hosted-migrate.yml`. The hook always deploys the newest commit on `main`, and Vercel skips it when that commit is already deployed; for a change to environment variables alone, use `vercel redeploy <production deployment URL> --target production`. If the hook URL leaks, anyone can start deployments of `main`: remove it with `vercel deploy-hooks remove <id>`, make a new one and set the secret again.
+Vercel doesn't deploy `main` by itself: `vercel.json` turns git deployments off (pull request previews too: they used up the Hobby plan's 100 deployments a day), and the workflow's last step starts the production deployment through a Vercel deploy hook (`VERCEL_DEPLOY_HOOK` in the backups repository, made with `vercel deploy-hooks create hosted-migrate --ref main`), only after the migrations are in. A failed migration leaves the previous deployment live. Pull requests get no Vercel preview; CI tests them. To preview a branch by hand, run `vercel deploy` from a checkout of it. To deploy `main` between releases (a hotfix), or to redeploy, run the workflow by hand: `gh workflow run hosted-migrate.yml -R andidev30/the-artifact-backups` (it takes `-f ref=vX.Y.Z` for a release; the default is `main`). The hook always deploys the newest commit on `main`, and Vercel skips it when that commit is already deployed; for a change to environment variables alone, use `vercel redeploy <production deployment URL> --target production`. If the hook URL leaks, anyone can start deployments of `main`: remove it with `vercel deploy-hooks remove <id>`, make a new one and set the secret again (`gh secret set VERCEL_DEPLOY_HOOK -R andidev30/the-artifact-backups`).
 
 To run migrations by hand (a failed run, or before the workflow existed), use a checkout of the release and Supabase's **session** pooler URL (port 5432). Back up first with `gh workflow run hosted-backup.yml -R andidev30/the-artifact-backups`, then `gh run watch -R andidev30/the-artifact-backups`:
 
@@ -77,8 +77,6 @@ The job only holds the age **public** key. The private key is needed only to res
 
 Workflow artifacts need no setup (the workflow's own token uploads them) and expire by themselves, up to 90 days. In a public repository anyone signed in to GitHub can download them, which is why the backups moved from this repository to a private one. They are still encrypted with age, so a leaked file is unreadable without the private key; only its name, size and date show. Keep the private key out of both repositories except as the `BACKUP_AGE_IDENTITY` secret.
 
-The one backup still made here is the one **Hosted migrate** takes before a migration (`database-before-migrate`), because that workflow runs in this repository with the release. It is encrypted the same way.
-
 Limits to watch:
 
 - Artifacts in a private repository count against the account's Actions storage: 500 MB on GitHub Free. The bucket copy is a full copy every night, so 90 of them are 90 times the bucket. Past a few hundred MB, lower `retention-days` or switch the bucket to an incremental copy (e.g. `rclone copy` into a private R2 or B2 bucket with its own versioning).
@@ -87,7 +85,7 @@ Limits to watch:
 
 ### Setting the secrets
 
-Both workflows skip themselves until their secrets exist. Set them in the backups repository with the GitHub CLI (`-R andidev30/the-artifact-backups`); `gh secret set NAME` prompts for the value, so it doesn't land in the shell history. **Hosted migrate** in this repository needs `HOSTED_DATABASE_URL` and `BACKUP_AGE_RECIPIENT` here as well.
+The workflows skip themselves until their secrets exist. Set them in the backups repository with the GitHub CLI (`-R andidev30/the-artifact-backups`); `gh secret set NAME` prompts for the value, so it doesn't land in the shell history. **Hosted migrate** uses `HOSTED_DATABASE_URL`, `BACKUP_AGE_RECIPIENT` and `VERCEL_DEPLOY_HOOK` from there too. This public repository holds only `HOSTED_DISPATCH_TOKEN`.
 
 1. Make an age key pair on your own machine (`brew install age` or `apt install age`):
 
@@ -99,15 +97,13 @@ Both workflows skip themselves until their secrets exist. Set them in the backup
 
    ```sh
    gh secret set BACKUP_AGE_RECIPIENT -R andidev30/the-artifact-backups --body 'age1…'
-   gh secret set BACKUP_AGE_RECIPIENT --body 'age1…'   # for Hosted migrate, in this repository
    gh secret set BACKUP_AGE_IDENTITY -R andidev30/the-artifact-backups < artifact-backup.key
    ```
 
 2. The database. Supabase dashboard → **Connect** → **Session pooler** (port 5432). Not the direct connection, which is IPv6 only and GitHub's runners can't reach it, and not the transaction pooler on 6543, which `pg_dump` can't use:
 
    ```sh
-   gh secret set HOSTED_DATABASE_URL -R andidev30/the-artifact-backups
-   gh secret set HOSTED_DATABASE_URL   # the same value, for Hosted migrate; postgresql://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres
+   gh secret set HOSTED_DATABASE_URL -R andidev30/the-artifact-backups   # postgresql://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres
    ```
 
 3. The bucket. Supabase dashboard → **Storage** → **S3 Configuration**: the endpoint and region are shown there; make a new access key for backups under **S3 Access Keys** rather than reusing the app's, so it can be revoked on its own:
@@ -122,7 +118,13 @@ Both workflows skip themselves until their secrets exist. Set them in the backup
 
 4. Run both once to check: `gh workflow run hosted-backup.yml -R andidev30/the-artifact-backups`, wait for it (`gh run watch -R andidev30/the-artifact-backups`), then `gh workflow run hosted-restore-test.yml -R andidev30/the-artifact-backups` and read its summary.
 
-If the Supabase project runs a Postgres newer than 17 (**Settings** → **Infrastructure**), raise `PG_MAJOR` in both backup workflows and in `hosted-migrate.yml`, and the `postgres` image in the restore test; `pg_dump` refuses to dump a newer server.
+If the Supabase project runs a Postgres newer than 17 (**Settings** → **Infrastructure**), raise `PG_MAJOR` in all three workflows there, and the `postgres` image in the restore test; `pg_dump` refuses to dump a newer server.
+
+### The dispatch token
+
+`HOSTED_DISPATCH_TOKEN` in this repository lets the Release workflow start Hosted migrate. It is a fine-grained personal access token limited to andidev30/the-artifact-backups, with **Actions** set to read and write and nothing else, so it can start workflows there but can't read their secrets, code or backups. Hosted migrate only accepts `main` or a `vX.Y.Z` tag, so whoever holds the token can at most redeploy an official release.
+
+When it expires, the Release workflow's `hosted` job fails and nothing deploys. Make a new one at https://github.com/settings/personal-access-tokens/new with the same settings, then `gh secret set HOSTED_DISPATCH_TOKEN`, and deploy the missed release with `gh workflow run hosted-migrate.yml -R andidev30/the-artifact-backups -f ref=vX.Y.Z`.
 
 ### Restoring
 
