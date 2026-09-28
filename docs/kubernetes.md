@@ -254,6 +254,9 @@ kubectl -n the-artifact exec deploy/the-artifact -c app -- node dist/scripts/res
 
 # Remove unreferenced content now instead of at the next sweep
 kubectl -n the-artifact exec deploy/the-artifact -c app -- node dist/scripts/sweep-storage.js
+
+# Index every page for search now instead of a few hundred per sweep
+kubectl -n the-artifact exec deploy/the-artifact -c app -- node dist/scripts/backfill-search.js
 ```
 
 ### Health checks and metrics

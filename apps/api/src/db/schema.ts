@@ -367,6 +367,40 @@ export const artifactFiles = pgTable(
   (t) => [primaryKey({ columns: [t.versionId, t.path] })],
 )
 
+// Labels on a page, lowercase, up to 10 per page (src/tags.ts). They belong to the page's workspace
+// and are seen by everyone who can open the page.
+export const artifactTags = pgTable(
+  'artifact_tags',
+  {
+    artifactId: uuid('artifact_id')
+      .notNull()
+      .references(() => artifacts.id, { onDelete: 'cascade' }),
+    tag: text('tag').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.artifactId, t.tag] }), index('artifact_tags_tag_idx').on(t.tag, t.artifactId)],
+)
+
+const tsvector = customType<{ data: string }>({ dataType: () => 'tsvector' })
+
+// The words of a page's current version, for search (src/search.ts). One row per page, replaced when
+// another version becomes current; version_id says which one it was built from, so pages whose row is
+// missing or older can be found and indexed again. Only the words are kept, not the text.
+export const artifactSearch = pgTable(
+  'artifact_search',
+  {
+    artifactId: uuid('artifact_id')
+      .primaryKey()
+      .references(() => artifacts.id, { onDelete: 'cascade' }),
+    versionId: uuid('version_id')
+      .notNull()
+      .references(() => artifactVersions.id, { onDelete: 'cascade' }),
+    words: tsvector('words').notNull(),
+    indexedAt: timestamp('indexed_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('artifact_search_words_idx').using('gin', t.words)],
+)
+
 // A screenshot of a version for gallery cards, rendered in a headless browser after publishing.
 // A row without an image records a render that failed, so it isn't retried on every gallery load.
 export const artifactThumbnails = pgTable('artifact_thumbnails', {
@@ -776,6 +810,63 @@ export const releaseCheck = pgTable('release_check', {
   releaseUrl: text('release_url'),
 })
 
+// Where a workspace sends events (src/webhooks.ts): an organization's (organization_id set, managed
+// by its owners and admins) or a person's personal workspace (user_id set). The signing secret is
+// sealed with a server secret, like an SSO client secret, and shown only when it is created.
+export const webhooks = pgTable(
+  'webhooks',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id').references(() => organizations.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    url: text('url').notNull(),
+    // "json", "slack" or "discord": the shape of the body
+    format: text('format').notNull(),
+    // WEBHOOK_EVENTS in src/webhooks.ts
+    events: jsonb('events').$type<string[]>().notNull(),
+    enabled: boolean('enabled').notNull().default(true),
+    secret: text('secret').notNull(),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check('webhooks_one_workspace', sql`(${t.organizationId} is null) <> (${t.userId} is null)`),
+    index('webhooks_org_idx').on(t.organizationId),
+    index('webhooks_user_idx').on(t.userId),
+  ],
+)
+
+// One event for one webhook: queued here so any process can add it and one sends it, and retries
+// survive a restart. Also the delivery log people see; rows are deleted after 14 days.
+export const webhookDeliveries = pgTable(
+  'webhook_deliveries',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    webhookId: uuid('webhook_id')
+      .notNull()
+      .references(() => webhooks.id, { onDelete: 'cascade' }),
+    event: text('event').notNull(),
+    // The JSON payload; Slack and Discord bodies are made from it when sending
+    payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
+    // "pending", "delivered" or "failed" (no attempts left)
+    status: text('status').notNull().default('pending'),
+    attempts: integer('attempts').notNull().default(0),
+    // When a pending delivery is next due; while an attempt is running, when it may be taken over
+    nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true }).notNull().defaultNow(),
+    // The HTTP status of the last answer, and why the last attempt failed
+    responseStatus: integer('response_status'),
+    lastError: text('last_error'),
+    lastAttemptAt: timestamp('last_attempt_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('webhook_deliveries_due_idx').on(t.nextAttemptAt).where(sql`${t.status} = 'pending'`),
+    index('webhook_deliveries_webhook_idx').on(t.webhookId, t.createdAt),
+    index('webhook_deliveries_created_at_idx').on(t.createdAt),
+  ],
+)
+
 export type User = typeof users.$inferSelect
 export type Passkey = typeof passkeys.$inferSelect
 export type SignupPolicy = (typeof signupPolicyEnum.enumValues)[number]
@@ -788,3 +879,5 @@ export type Role = (typeof roleEnum.enumValues)[number]
 export type InviteRole = (typeof inviteRoleEnum.enumValues)[number]
 export type SsoConnection = typeof ssoConnections.$inferSelect
 export type DataExport = typeof dataExports.$inferSelect
+export type Webhook = typeof webhooks.$inferSelect
+export type WebhookDelivery = typeof webhookDeliveries.$inferSelect

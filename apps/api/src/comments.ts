@@ -9,6 +9,7 @@ import { hit } from './limits.js'
 import { log } from './log.js'
 import { sendCommentNotice } from './mail.js'
 import { UUID_RE } from './validation.js'
+import { emitWebhookEvent } from './webhooks.js'
 
 export const MAX_COMMENT_LENGTH = 5000
 export const THREADS_PER_PAGE = 50
@@ -135,6 +136,7 @@ export async function addComment(
   }
   if (thread?.resolvedAt) await db.update(c).set({ resolvedAt: null, resolvedBy: null }).where(eq(c.id, thread.id))
   await notify(artifact, by, row, thread)
+  await emitWebhookEvent({ event: 'comment.created', artifact, version: row.version, actorId: by.id, comment: { id: row.id, body: row.body } })
   return { comment: row, thread }
 }
 

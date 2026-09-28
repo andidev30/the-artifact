@@ -136,3 +136,16 @@ Only releases that need you to do something are listed. Each section is copied i
 - **Two thumbnails render at a time** by default (`THUMBNAIL_CONCURRENCY`), so a server with thumbnails on uses a little more memory while rendering. Set it to `1` for the old behaviour.
 - **The app loads its fonts from your server**, no longer from Google, and a self-hosted install answers `/robots.txt` with `Disallow: /` for everything except link previews.
 - **The database gains two columns**, for refresh token reuse detection and for accounts whose address was never confirmed by email. They are added on the first start, and 0.4.0 still runs on the new schema.
+
+## Upgrading to 0.6.0
+
+- **The database gains two tables** for [webhooks](/docs/webhooks) and their deliveries. They are added on the first start, and 0.5.0 still runs on the new schema.
+- **The server may make outbound HTTPS requests** to the webhook addresses your workspace admins add, from the first worker. If your firewall limits outbound traffic, allow the destinations you want (such as `hooks.slack.com` or `discord.com`). Requests to private and reserved addresses are always refused; see [Webhooks can't reach private networks](/docs/security#webhooks-can-t-reach-private-networks).
+- **On hosts without a long-running server** (Vercel), webhook retries run with `GET /api/cron/sweep`, or more often with the new `GET /api/cron/webhooks`; schedule it every few minutes if your host allows. See `CRON_SECRET` in the [configuration reference](/docs/configuration).
+- **Search looks inside pages, and pages have tags.** The database gains a table for tags and one for the words of each page's current version, with a full-text index. They are added on the first start and nothing existing changes, so 0.5.0 still runs on the new schema. Take a backup first; see [Before you upgrade](#before-you-upgrade).
+- **Index the pages you already have.** New versions are indexed as they are published. Pages from before the upgrade are indexed by the storage sweep a few hundred at a time (every few hours, or on each `/api/cron/sweep`); to have search find all of them right away, run once after the upgrade:
+  - Docker Compose: `docker compose exec app node dist/scripts/backfill-search.js`
+  - Kubernetes: `kubectl -n the-artifact exec deploy/the-artifact -c app -- node dist/scripts/backfill-search.js`
+  - From a checkout: `pnpm --filter @the-artifact/api search:backfill`
+
+  It reads each page's HTML from object storage, so it takes a while on a large server; the app keeps serving meanwhile, and running it again picks up where it stopped. See [Search](/docs/publishing#search).

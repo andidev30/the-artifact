@@ -48,6 +48,7 @@ import type { Artifact, ShareRole, Visibility } from '../db/schema.js'
 import { allowed, downloadVersion, serveVersion } from '../content.js'
 import { compareVersions } from '../compare.js'
 import { MAX_VIEWERS, pageViewers, totalViews, versionViews, VIEWER_RETENTION_DAYS } from '../views.js'
+import { changeTags, checkTag, TagError, tagsOf } from '../tags.js'
 import { parseVersion } from '../validation.js'
 import { getSharing, MAX_PEOPLE_PER_INVITE, parseEmails, removePerson, setPersonRole, sharePeople, SharingError } from '../sharing.js'
 import { canMove, duplicatePage, movePage, TransferError, workspaceKey } from '../transfer.js'
@@ -55,7 +56,8 @@ import { canMove, duplicatePage, movePage, TransferError, workspaceKey } from '.
 export const artifacts = new Hono<AuthEnv>()
 
 // ?workspace=personal, ?workspace=<organization id>, or ?workspace=shared for pages shared with you.
-// ?q= narrows to titles containing it; ?folder=<id> or ?folder=none to one folder of the workspace.
+// ?q= narrows to pages whose title contains it or whose text has its words; ?folder=<id> or
+// ?folder=none to one folder of the workspace; ?tag= to pages with that tag.
 // The body is one page of the list, newest first (?limit=, 50 by default, up to 100). X-Next-Cursor
 // holds the ?cursor= for the next one and is left out on the last; the first also says X-Total-Count.
 artifacts.get('/', requireUser, async (c) => {
@@ -64,6 +66,13 @@ artifacts.get('/', requireUser, async (c) => {
   const query = c.req.query('q')?.slice(0, 200)
   const cursor = c.req.query('cursor') || undefined
   const limit = c.req.query('limit') ? Number(c.req.query('limit')) : undefined
+  const tagParam = c.req.query('tag')
+  let tag: string | undefined
+  if (tagParam !== undefined) {
+    const checked = checkTag(tagParam)
+    if ('error' in checked) return c.json({ error: checked.error, field: 'tag' }, 400)
+    tag = checked.tag
+  }
 
   const headers = (next: string | null, total: number | null) => ({
     ...(next ? { 'X-Next-Cursor': next } : {}),
@@ -72,8 +81,11 @@ artifacts.get('/', requireUser, async (c) => {
 
   try {
     if (workspace === 'shared') {
-      const [{ rows, next }, total] = await Promise.all([listSharedWith(user, { query, cursor, limit }), cursor ? null : countSharedWith(user, query)])
-      const [editable, thumbs, counts] = await Promise.all([
+      const [{ rows, next }, total] = await Promise.all([
+        listSharedWith(user, { query, tag, cursor, limit }),
+        cursor ? null : countSharedWith(user, { query, tag }),
+      ])
+      const [editable, thumbs, counts, tags] = await Promise.all([
         editableIds(
           user,
           rows.map((r) => r.artifact),
@@ -83,10 +95,11 @@ artifacts.get('/', requireUser, async (c) => {
           user.id,
           rows.map((r) => r.artifact.id),
         ),
+        tagsOf(rows.map((r) => r.artifact.id)),
       ])
       return c.json(
         rows.map(({ artifact: a, ownerName, ownerEmail, role }) => ({
-          ...summary(a, ownerName ?? ownerEmail, thumbs.get(a.id), counts.get(a.id)),
+          ...summary(a, ownerName ?? ownerEmail, thumbs.get(a.id), counts.get(a.id), tags.get(a.id)),
           mine: false,
           canEdit: editable.has(a.id),
           role,
@@ -108,10 +121,10 @@ artifacts.get('/', requireUser, async (c) => {
       folder = folderParam
     }
     const [{ rows, next }, total] = await Promise.all([
-      listForWorkspace(user.id, organizationId, { query, folder, cursor, limit }),
-      cursor ? null : countForWorkspace(user.id, organizationId, { query, folder }),
+      listForWorkspace(user, organizationId, { query, folder, tag, cursor, limit }),
+      cursor ? null : countForWorkspace(user, organizationId, { query, folder, tag }),
     ])
-    const [editable, thumbs, counts] = await Promise.all([
+    const [editable, thumbs, counts, tags] = await Promise.all([
       editableIds(
         user,
         rows.map((r) => r.artifact),
@@ -121,10 +134,11 @@ artifacts.get('/', requireUser, async (c) => {
         user.id,
         rows.map((r) => r.artifact.id),
       ),
+      tagsOf(rows.map((r) => r.artifact.id)),
     ])
     return c.json(
       rows.map(({ artifact: a, ownerName, ownerEmail, folderName }) => ({
-        ...summary(a, ownerName ?? ownerEmail, thumbs.get(a.id), counts.get(a.id)),
+        ...summary(a, ownerName ?? ownerEmail, thumbs.get(a.id), counts.get(a.id), tags.get(a.id)),
         mine: a.ownerId === user.id,
         canEdit: editable.has(a.id),
         // Everyone listing a workspace belongs to it, so editors can move its pages elsewhere
@@ -140,10 +154,11 @@ artifacts.get('/', requireUser, async (c) => {
   }
 })
 
-function summary(a: Artifact, owner: string, thumb: ThumbnailState | undefined, comments: CommentCount | undefined) {
+function summary(a: Artifact, owner: string, thumb: ThumbnailState | undefined, comments: CommentCount | undefined, tags: string[] | undefined) {
   return {
     slug: a.slug,
     title: a.title,
+    tags: tags ?? [],
     visibility: a.visibility,
     version: a.currentVersion,
     publishedWith: a.publishedWith,
@@ -177,9 +192,11 @@ artifacts.get('/:slug', async (c) => {
   // Only people who can manage the page see how often it was opened
   const views = access === 'edit' ? await totalViews(artifact) : null
   const movable = user ? await canMove(artifact, user, access === 'edit') : false
+  const tags = (await tagsOf([artifact.id])).get(artifact.id) ?? []
   return c.json({
     slug: artifact.slug,
     title: artifact.title,
+    tags,
     visibility: artifact.visibility,
     version: artifact.currentVersion,
     updatedAt: artifact.updatedAt,
@@ -395,6 +412,19 @@ artifacts.patch('/:slug', requireUser, async (c) => {
     link: linkSettings(updated),
     ...(folder !== undefined ? { folder } : {}),
   })
+})
+
+// { add: [...], remove: [...] }: removes first, then adds; answers with the page's tags
+artifacts.patch('/:slug/tags', requireUser, async (c) => {
+  const artifact = await editable(c)
+  if (!artifact) return c.json({ error: 'Not found' }, 404)
+  const body = (await c.req.json().catch(() => ({}))) as { add?: unknown; remove?: unknown }
+  try {
+    return c.json({ tags: await changeTags(artifact, body) })
+  } catch (err) {
+    if (err instanceof TagError) return c.json({ error: err.message, field: 'tags' }, 400)
+    throw err
+  }
 })
 
 // Version history is for editors only: older versions can hold things the author deliberately

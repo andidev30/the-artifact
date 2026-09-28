@@ -1,11 +1,22 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { downloadUrl, listArtifacts, listFolders, thumbnailUrl, type ArtifactSummary, type FolderSummary, type Visibility } from '../api'
+import {
+  downloadUrl,
+  listArtifacts,
+  listFolders,
+  listTags,
+  thumbnailUrl,
+  type ArtifactSummary,
+  type FolderSummary,
+  type TagSummary,
+  type Visibility,
+} from '../api'
 import { pollThumbnails, withFreshThumbnails } from '../thumbnailPoll'
 import { timeAgo } from '../time'
 import { DeleteFolderDialog, FolderBar, FolderIcon, FolderNameDialog, MoveDialog, type FolderFilter } from './Folders'
 import { DeleteDialog, PageMenu, RenameDialog, type MenuItem } from './PageActions'
 import { DuplicateDialog, MoveWorkspaceDialog } from './WorkspaceDialogs'
+import { TagBar, TagIcon, TagsDialog } from './Tags'
 import './Gallery.css'
 
 const VISIBILITY_LABEL: Record<Visibility, string> = {
@@ -32,7 +43,7 @@ type Ready = {
 type List = { kind: 'loading' } | Ready | { kind: 'error' }
 type Tab = 'workspace' | 'shared'
 type Pending =
-  | { kind: 'rename' | 'delete' | 'move' | 'duplicate' | 'move-workspace'; page: ArtifactSummary }
+  | { kind: 'rename' | 'delete' | 'move' | 'duplicate' | 'move-workspace' | 'tags'; page: ArtifactSummary }
   | { kind: 'new-folder' }
   | { kind: 'rename-folder' | 'delete-folder'; folder: FolderSummary }
   | null
@@ -54,6 +65,9 @@ export function Gallery({ workspaceId, workspaceName, email, aside, onWorkspaceC
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<FolderFilter>('all')
   const [folders, setFolders] = useState<FolderSummary[] | null>(null)
+  // Only pages with this tag, in either tab
+  const [tag, setTag] = useState<string | null>(null)
+  const [tags, setTags] = useState<TagSummary[]>([])
   const [lists, setLists] = useState<Record<Tab, List>>({ workspace: { kind: 'loading' }, shared: { kind: 'loading' } })
   const [totals, setTotals] = useState<Record<Tab, number | null>>({ workspace: null, shared: null })
   const [pending, setPending] = useState<Pending>(null)
@@ -68,7 +82,7 @@ export function Gallery({ workspaceId, workspaceName, email, aside, onWorkspaceC
   })
 
   const folderParam = filter === 'all' ? undefined : filter
-  const source = (t: Tab) => (t === 'workspace' ? { id: workspaceId, folder: folderParam } : { id: 'shared', folder: undefined })
+  const source = (t: Tab) => (t === 'workspace' ? { id: workspaceId, folder: folderParam, tag } : { id: 'shared', folder: undefined, tag })
 
   useEffect(() => {
     const t = setTimeout(() => setSearch(query.trim()), query.trim() ? SEARCH_DELAY : 0)
@@ -87,15 +101,23 @@ export function Gallery({ workspaceId, workspaceName, email, aside, onWorkspaceC
 
   useEffect(reloadFolders, [workspaceId])
 
+  function reloadTags() {
+    listTags(workspaceId)
+      .then(setTags)
+      .catch(() => {})
+  }
+
+  useEffect(reloadTags, [workspaceId])
+
   function firstPage(t: Tab, id: string, folder: string | undefined, signal: AbortSignal) {
     setLists((l) => {
       const cur = l[t]
       return { ...l, [t]: cur.kind === 'ready' ? { ...cur, reloading: true } : { kind: 'loading' } }
     })
-    listArtifacts(id, { query: search, folder }, signal)
+    listArtifacts(id, { query: search, folder, tag }, signal)
       .then(({ items, next, total }) => {
         setLists((l) => ({ ...l, [t]: { kind: 'ready', items, next, total, more: 'idle' } }))
-        if (!search && !folder && total !== null) {
+        if (!search && !folder && !tag && total !== null) {
           setTotals((c) => ({ ...c, [t]: total }))
           if (t === 'workspace') countRef.current?.(total)
         }
@@ -105,30 +127,30 @@ export function Gallery({ workspaceId, workspaceName, email, aside, onWorkspaceC
       })
   }
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: firstPage reads search, which is listed
+  // biome-ignore lint/correctness/useExhaustiveDependencies: firstPage reads search and tag, which are listed
   useEffect(() => {
     const abort = new AbortController()
     firstPage('workspace', workspaceId, folderParam, abort.signal)
     return () => abort.abort()
-  }, [workspaceId, folderParam, search])
+  }, [workspaceId, folderParam, search, tag])
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: firstPage reads search, which is listed
+  // biome-ignore lint/correctness/useExhaustiveDependencies: firstPage reads search and tag, which are listed
   useEffect(() => {
     const abort = new AbortController()
     firstPage('shared', 'shared', undefined, abort.signal)
     return () => abort.abort()
-  }, [search])
+  }, [search, tag])
 
   async function loadMore(t: Tab) {
     const l = listsRef.current[t]
     if (l.kind !== 'ready' || !l.next || l.more === 'loading') return
     const cursor = l.next
-    const { id, folder } = source(t)
+    const { id, folder, tag } = source(t)
     // Only if the list is still the one this page follows (not reloaded for a new search meanwhile)
     const same = (cur: List): cur is Ready => cur.kind === 'ready' && cur.next === cursor
     setLists((prev) => (same(prev[t]) ? { ...prev, [t]: { ...prev[t], more: 'loading' } } : prev))
     try {
-      const page = await listArtifacts(id, { query: search, folder, cursor })
+      const page = await listArtifacts(id, { query: search, folder, tag, cursor })
       setLists((prev) => {
         const cur = prev[t]
         if (!same(cur)) return prev
@@ -160,16 +182,16 @@ export function Gallery({ workspaceId, workspaceName, email, aside, onWorkspaceC
   // Cards on screen whose screenshot is still being rendered on the server
   const waiting = items.some((a) => a.thumbnailState === 'pending')
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: source only reads workspaceId and folderParam, which are listed
+  // biome-ignore lint/correctness/useExhaustiveDependencies: source only reads workspaceId, folderParam and tag, which are listed
   useEffect(() => {
     if (!waiting) return
     const t = tab
-    const { id, folder } = source(t)
+    const { id, folder, tag } = source(t)
     const abort = new AbortController()
     const stop = pollThumbnails({
       refresh: async () => {
         // The newest pages are the ones still being rendered
-        const fresh = (await listArtifacts(id, { query: search, folder }, abort.signal)).items
+        const fresh = (await listArtifacts(id, { query: search, folder, tag }, abort.signal)).items
         setLists((l) => {
           const current = l[t]
           return current.kind === 'ready' ? { ...l, [t]: { ...current, items: withFreshThumbnails(current.items, fresh) } } : l
@@ -181,7 +203,7 @@ export function Gallery({ workspaceId, workspaceName, email, aside, onWorkspaceC
       stop()
       abort.abort()
     }
-  }, [waiting, tab, workspaceId, folderParam, search])
+  }, [waiting, tab, workspaceId, folderParam, search, tag])
 
   function update(slug: string, change: (a: ArtifactSummary) => ArtifactSummary | null) {
     setLists((l) => {
@@ -212,6 +234,7 @@ export function Gallery({ workspaceId, workspaceName, email, aside, onWorkspaceC
       countRef.current?.(left)
     }
     if (page.folder) reloadFolders()
+    if (page.tags?.length) reloadTags()
     setPending(null)
     setAnnounce(message)
   }
@@ -224,6 +247,22 @@ export function Gallery({ workspaceId, workspaceName, email, aside, onWorkspaceC
     update(page.slug, (a) => (stays ? { ...a, folder } : null))
     reloadFolders()
     setAnnounce(folder ? `Moved “${page.title}” to ${folder.name}.` : `“${page.title}” is in no folder now.`)
+  }
+
+  function onTagged(page: ArtifactSummary, pageTags: string[]) {
+    // A page that lost the tag on screen leaves the list, once the dialog is closed
+    update(page.slug, (a) => ({ ...a, tags: pageTags }))
+    reloadTags()
+  }
+
+  function onTagsClosed(page: ArtifactSummary) {
+    setPending(null)
+    if (tag) update(page.slug, (a) => (a.tags?.includes(tag) ? a : null))
+  }
+
+  function chooseTag(next: string | null) {
+    setTag(next)
+    setAnnounce(next ? `Showing pages tagged ${next}.` : 'Showing every page.')
   }
 
   function onFolderSaved(folder: { id: string; name: string }, created: boolean) {
@@ -254,6 +293,7 @@ export function Gallery({ workspaceId, workspaceName, email, aside, onWorkspaceC
   }
 
   const searching = search.length > 0
+  const narrowed = searching || tag !== null
   const total = totals[tab]
   const showSearch = searching || query.length > 0 || (total ?? 0) > 0
   const stale = query.trim() !== search
@@ -295,7 +335,7 @@ export function Gallery({ workspaceId, workspaceName, email, aside, onWorkspaceC
         {showSearch && (
           <div className="gallery-search" role="search">
             <label className="visually-hidden" htmlFor="gallery-search">
-              Search pages by title
+              Search pages by title or text
             </label>
             <svg viewBox="0 0 20 20" aria-hidden="true">
               <path d="M8.5 3a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11zM12.5 12.5 17 17" />
@@ -314,6 +354,23 @@ export function Gallery({ workspaceId, workspaceName, email, aside, onWorkspaceC
 
         {showFolders && (
           <FolderBar folders={folders} total={totals.workspace} selected={filter} onSelect={setFilter} onNew={() => setPending({ kind: 'new-folder' })} />
+        )}
+
+        {tab === 'workspace' && <TagBar tags={tags} selected={tag} onSelect={chooseTag} />}
+
+        {tag && (
+          <div className="gallery-filter">
+            <span>
+              Pages tagged{' '}
+              <strong>
+                <TagIcon />
+                {tag}
+              </strong>
+            </span>
+            <button type="button" className="text-link gallery-clear" onClick={() => chooseTag(null)}>
+              Show every page
+            </button>
+          </div>
         )}
 
         {current && (
@@ -340,18 +397,26 @@ export function Gallery({ workspaceId, workspaceName, email, aside, onWorkspaceC
             </p>
           )}
 
-          {empty && searching && (
+          {empty && narrowed && (
             <div className="gallery-no-match">
               <p>
-                No pages {current ? `in ${current.name} ` : ''}match “{search}”.
+                No pages {current ? `in ${current.name} ` : ''}
+                {tag ? `tagged ${tag} ` : ''}
+                {searching ? <>match “{search}”.</> : 'yet.'}
               </p>
-              <button type="button" className="text-link gallery-clear" onClick={() => setQuery('')}>
-                Clear search
-              </button>
+              {searching ? (
+                <button type="button" className="text-link gallery-clear" onClick={() => setQuery('')}>
+                  Clear search
+                </button>
+              ) : (
+                <button type="button" className="text-link gallery-clear" onClick={() => chooseTag(null)}>
+                  Show every page
+                </button>
+              )}
             </div>
           )}
 
-          {empty && !searching && inFolder && (
+          {empty && !narrowed && inFolder && (
             <p className="gallery-note">
               {filter === 'none'
                 ? 'Every page here is in a folder.'
@@ -359,11 +424,11 @@ export function Gallery({ workspaceId, workspaceName, email, aside, onWorkspaceC
             </p>
           )}
 
-          {tab === 'shared' && empty && !searching && (
+          {tab === 'shared' && empty && !narrowed && (
             <p className="gallery-note">Nothing has been shared with you yet. When someone adds {email} to a page, it shows up here.</p>
           )}
 
-          {tab === 'workspace' && empty && !searching && !inFolder && (
+          {tab === 'workspace' && empty && !narrowed && !inFolder && (
             <section className="gallery-empty" aria-label="Your pages">
               <div className="ghost-grid" aria-hidden="true">
                 <div className="ghost ghost-first">
@@ -397,6 +462,8 @@ export function Gallery({ workspaceId, workspaceName, email, aside, onWorkspaceC
                       onMove={() => setPending({ kind: 'move', page: a })}
                       onDuplicate={() => setPending({ kind: 'duplicate', page: a })}
                       onMoveWorkspace={() => setPending({ kind: 'move-workspace', page: a })}
+                      onTags={() => setPending({ kind: 'tags', page: a })}
+                      onTag={chooseTag}
                     />
                   </li>
                 ))}
@@ -470,6 +537,16 @@ export function Gallery({ workspaceId, workspaceName, email, aside, onWorkspaceC
           onMoved={(_, name) => onGone(pending.page, `Moved “${pending.page.title}” to ${name}.`)}
         />
       )}
+      {pending?.kind === 'tags' && (
+        <TagsDialog
+          slug={pending.page.slug}
+          title={pending.page.title}
+          tags={pending.page.tags ?? []}
+          suggestions={tags.map((t) => t.tag)}
+          onClose={() => onTagsClosed(pending.page)}
+          onChanged={(pageTags) => onTagged(pending.page, pageTags)}
+        />
+      )}
       {pending?.kind === 'new-folder' && (
         <FolderNameDialog workspaceId={workspaceId} onClose={() => setPending(null)} onSaved={(f) => onFolderSaved(f, true)} />
       )}
@@ -493,9 +570,12 @@ type CardProps = {
   onMove: () => void
   onDuplicate: () => void
   onMoveWorkspace: () => void
+  onTags: () => void
+  // Shows only the pages with this tag
+  onTag: (tag: string) => void
 }
 
-function Card({ page: a, showFolder, canMove, canMoveWorkspace, onRename, onDelete, onMove, onDuplicate, onMoveWorkspace }: CardProps) {
+function Card({ page: a, showFolder, canMove, canMoveWorkspace, onRename, onDelete, onMove, onDuplicate, onMoveWorkspace, onTags, onTag }: CardProps) {
   const menu: MenuItem[] = [
     { label: 'Open', to: `/a/${a.slug}` },
     { label: 'Download', download: downloadUrl(a.slug) },
@@ -504,6 +584,7 @@ function Card({ page: a, showFolder, canMove, canMoveWorkspace, onRename, onDele
   menu.push({ label: 'Duplicate', onSelect: onDuplicate })
   if (canMove) menu.push({ label: 'Move to folder', onSelect: onMove })
   if (canMoveWorkspace) menu.push({ label: 'Move to workspace…', onSelect: onMoveWorkspace })
+  if (a.canEdit && a.tags) menu.push({ label: 'Tags', onSelect: onTags })
   if (a.mine) menu.push({ label: 'Delete', onSelect: onDelete, danger: true })
 
   return (
@@ -528,6 +609,12 @@ function Card({ page: a, showFolder, canMove, canMoveWorkspace, onRename, onDele
         {a.role ? <span>{a.role === 'editor' ? 'Editor' : 'Viewer'}</span> : <span data-visibility={a.visibility}>{VISIBILITY_LABEL[a.visibility]}</span>}
         {a.publishedWith && <span>{a.publishedWith}</span>}
         {a.comments ? <CommentCount total={a.comments} unread={a.unreadComments ?? 0} /> : null}
+        {a.tags?.map((t) => (
+          <button key={t} type="button" className="page-card-tag" aria-label={`${t}, show pages with this tag`} onClick={() => onTag(t)}>
+            <TagIcon />
+            {t}
+          </button>
+        ))}
       </span>
       <PageMenu className="page-card-menu" label={`More actions for ${a.title}`} items={menu} />
     </div>

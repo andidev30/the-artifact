@@ -71,6 +71,7 @@ import { hit, rule, waitText, windowText } from './limits.js'
 import { canFile, checkFolderName, ensureFolder, fileInto, FolderError, folderNamed, listFolders, MAX_FOLDER_NAME, workspaceOf } from './folders.js'
 import { ALLOWED_EXTENSIONS, checkPath, ENTRY_PATH, isText, MAX_FILE_BYTES, MAX_FILES, MAX_HTML_BYTES, MAX_TOTAL_BYTES } from './files.js'
 import { MAX_PEOPLE_PER_INVITE, parseEmails, sharePeople, SharingError } from './sharing.js'
+import { changeTags, checkTag, MAX_TAG_LENGTH, MAX_TAGS, TagError, tagsOf } from './tags.js'
 import { authenticateBearer, RESOURCE_METADATA_URL, type McpAuth } from './oauth/server.js'
 import { directUploads, UPLOAD_TTL_SECONDS } from './storage.js'
 import { thumbnailsEnabled } from './thumbnails.js'
@@ -454,10 +455,16 @@ function buildServer(auth: McpAuth) {
       title: 'List pages',
       description:
         'List the pages in the connected workspace, most recently updated first, one batch at a time. ' +
-        'Narrow it with query (words in the title) or folder. When there are more, the answer ends with a cursor: pass it back to get the next ones.',
+        'Narrow it with query (words in the title or the text of the page), folder or tag; they combine. ' +
+        'When there are more, the answer ends with a cursor: pass it back to get the next ones.',
       inputSchema: z.object({
-        query: z.string().max(200).optional().describe('Only pages whose title contains this, ignoring case'),
+        query: z
+          .string()
+          .max(200)
+          .optional()
+          .describe('Only pages whose title contains this, or whose current text has these words (or words starting with them), ignoring case'),
         folder: z.string().optional().describe('Only pages in the folder with this name; an empty string for pages in no folder'),
+        tag: z.string().optional().describe('Only pages with this tag'),
         limit: z.number().int().min(1).max(MAX_PAGE_SIZE).optional().describe(`How many to list, 1 to ${MAX_PAGE_SIZE}; 25 when left out`),
         cursor: z.string().optional().describe('The cursor from the end of the previous answer, for the next pages'),
       }),
@@ -471,6 +478,7 @@ function buildServer(auth: McpAuth) {
             version: z.number(),
             visibility: z.enum(['private', 'organization', 'link']),
             folder: z.string().nullable(),
+            tags: z.array(z.string()),
             updated_at: z.string(),
           }),
         ),
@@ -479,17 +487,23 @@ function buildServer(auth: McpAuth) {
       }),
       annotations: { readOnlyHint: true },
     },
-    limited(async ({ query, folder, limit, cursor }) => {
+    limited(async ({ query, folder, tag, limit, cursor }) => {
       let folderId: string | null | undefined
       if (folder !== undefined) {
         const found = folder.trim() ? await folderNamed(db, workspace, folder.trim()) : null
         if (folder.trim() && !found) return text(`There is no folder called "${folder.trim()}" in this workspace. Call list_folders to see them.`, true)
         folderId = found?.id ?? null
       }
-      const opts = { query, folder: folderId, cursor, limit: limit ?? 25 }
+      let tagName: string | undefined
+      if (tag !== undefined) {
+        const checked = checkTag(tag)
+        if ('error' in checked) return text(checked.error, true)
+        tagName = checked.tag
+      }
+      const opts = { query, folder: folderId, tag: tagName, cursor, limit: limit ?? 25 }
       let listed: Awaited<ReturnType<typeof listForWorkspace>>
       try {
-        listed = await listForWorkspace(auth.userId, auth.organizationId, opts)
+        listed = await listForWorkspace(viewer, auth.organizationId, opts)
       } catch (err) {
         if (err instanceof CursorError) return text(err.message, true)
         throw err
@@ -497,13 +511,22 @@ function buildServer(auth: McpAuth) {
       if (listed.rows.length === 0) {
         const empty = { pages: [], total: cursor ? null : 0, cursor: null }
         if (cursor) return { ...text('No more pages.'), structuredContent: empty }
-        return { ...text(query || folder !== undefined ? 'No pages match.' : 'No pages yet. Use publish_artifact to publish one.'), structuredContent: empty }
+        return {
+          ...text(query || folder !== undefined || tag !== undefined ? 'No pages match.' : 'No pages yet. Use publish_artifact to publish one.'),
+          structuredContent: empty,
+        }
       }
-      const total = cursor ? null : await countForWorkspace(auth.userId, auth.organizationId, opts)
-      const lines = listed.rows.map(
-        ({ artifact: a, folderName }) =>
-          `- ${a.title} (artifact_id: ${a.slug}, v${a.currentVersion}, ${VISIBILITY_LABEL[a.visibility]}${folderName ? `, folder: ${folderName}` : ''}) ${artifactUrl(a.slug)}`,
-      )
+      const [total, tags] = await Promise.all([
+        cursor ? null : countForWorkspace(viewer, auth.organizationId, opts),
+        tagsOf(listed.rows.map((r) => r.artifact.id)),
+      ])
+      const lines = listed.rows.map(({ artifact: a, folderName }) => {
+        const pageTags = tags.get(a.id)
+        return (
+          `- ${a.title} (artifact_id: ${a.slug}, v${a.currentVersion}, ${VISIBILITY_LABEL[a.visibility]}` +
+          `${folderName ? `, folder: ${folderName}` : ''}${pageTags ? `, tags: ${pageTags.join(', ')}` : ''}) ${artifactUrl(a.slug)}`
+        )
+      })
       const pages = listed.rows.map(({ artifact: a, folderName }) => ({
         id: a.slug,
         title: a.title,
@@ -511,6 +534,7 @@ function buildServer(auth: McpAuth) {
         version: a.currentVersion,
         visibility: a.visibility,
         folder: folderName,
+        tags: tags.get(a.id) ?? [],
         updated_at: a.updatedAt.toISOString(),
       }))
       return {
@@ -677,6 +701,35 @@ function buildServer(auth: McpAuth) {
   )
 
   server.registerTool(
+    'tag_artifact',
+    {
+      title: 'Tag a page',
+      description:
+        'Add tags to a page or remove them, without publishing a new version. Tags are short lowercase labels, like "q3" or "design review", ' +
+        `up to ${MAX_TAG_LENGTH} characters and ${MAX_TAGS} per page; list_artifacts filters by them. For pages you can edit. ` +
+        'Everyone who can open the page sees its tags.',
+      inputSchema: z.object({
+        artifact_id: z.string().describe('Id or link of the page'),
+        add: z.array(z.string()).max(MAX_TAGS).optional().describe('Tags to add; they are lowercased, and ones the page has are left as they are'),
+        remove: z.array(z.string()).max(50).optional().describe('Tags to remove; removed before any are added'),
+      }),
+      annotations: { idempotentHint: true },
+    },
+    limited(async ({ artifact_id, add, remove }) => {
+      const artifact = await findBySlug(parseArtifactRef(artifact_id))
+      if (!artifact || !(await canEdit(artifact, viewer))) return text(`No page you can edit has the id "${artifact_id}".`, true)
+      if (!add?.length && !remove?.length) return text('Pass tags in add, remove or both.', true)
+      try {
+        const tags = await changeTags(artifact, { add, remove })
+        return text(`"${artifact.title}" ${tags.length ? `has the tags: ${tags.join(', ')}` : 'has no tags now'}.\nLink: ${artifactUrl(artifact.slug)}`)
+      } catch (err) {
+        if (err instanceof TagError) return text(err.message, true)
+        throw err
+      }
+    }),
+  )
+
+  server.registerTool(
     'get_artifact',
     {
       title: 'Read a page',
@@ -719,7 +772,8 @@ function buildServer(auth: McpAuth) {
       const feedback = open
         ? `Comments: ${open} open ${open === 1 ? 'thread' : 'threads'}; read them with list_comments before publishing a new version.\n`
         : ''
-      return text(`Title: ${artifact.title}\nVersion: ${artifact.currentVersion}\n${feedback}${list}\n${html}`)
+      const tags = (await tagsOf([artifact.id])).get(artifact.id)
+      return text(`Title: ${artifact.title}\nVersion: ${artifact.currentVersion}\n${tags ? `Tags: ${tags.join(', ')}\n` : ''}${feedback}${list}\n${html}`)
     }),
   )
 

@@ -1,16 +1,28 @@
 import { availableParallelism } from 'node:os'
 import { Worker } from 'node:worker_threads'
-import { FILES_MODULE, type FileInput, PREPARE_WORKER, type PrepareReply, prepareContent, type PreparedContent, PublishError } from './files.js'
+import {
+  FILES_MODULE,
+  type FileInput,
+  pageText,
+  PREPARE_WORKER,
+  type PrepareReply,
+  type PrepareRequest,
+  prepareContent,
+  type PreparedContent,
+  PublishError,
+} from './files.js'
 import { log } from './log.js'
 
 // Checking, decoding base64 and hashing a page of a few MB takes milliseconds of CPU, and every other
 // request waits while it runs on the main thread: 20 agents publishing 2.8 MB pages at once held the
 // event loop up to 105 ms (issue #121). Large pages are prepared on a few worker threads instead.
-// Small ones stay here, where they cost less than the trip to a worker and back.
+// Small ones stay here, where they cost less than the trip to a worker and back. Pulling the text out
+// of a large stored page for search (src/search.ts) runs on the same workers.
 export const WORKER_MIN_CHARS = 256 * 1024
 const POOL_SIZE = Math.min(4, availableParallelism())
 
-type Job = { html: string; files: FileInput[] | undefined; resolve: (content: PreparedContent) => void; reject: (err: unknown) => void }
+// run does the same work here, when there is no worker for it
+type Job = { request: PrepareRequest; run: () => unknown; resolve: (value: never) => void; reject: (err: unknown) => void }
 type Slot = { worker: Worker; job: Job | null; worked: boolean; error?: Error }
 
 const slots: Slot[] = []
@@ -19,7 +31,7 @@ let disabled = false
 
 function inline(job: Job) {
   try {
-    job.resolve(prepareContent(job.html, job.files))
+    job.resolve(job.run() as never)
   } catch (err) {
     job.reject(err)
   }
@@ -36,7 +48,7 @@ function start(slot: Slot, job: Job) {
   // Referenced only while it works, so a waiting publish keeps a script alive but an idle pool doesn't
   slot.worker.ref()
   try {
-    slot.worker.postMessage({ html: job.html, files: job.files })
+    slot.worker.postMessage(job.request)
   } catch {
     // Input that can't be copied to a thread (never the case for JSON) is prepared here instead
     slot.job = null
@@ -72,7 +84,8 @@ function spawn(): Slot {
     slot.job = null
     slot.worked = true
     if (job) {
-      if ('content' in reply) job.resolve(revive(reply.content))
+      if ('content' in reply) job.resolve(revive(reply.content) as never)
+      else if ('text' in reply) job.resolve(reply.text as never)
       else job.reject(reply.publishError ? new PublishError(reply.error) : new Error(reply.error))
     }
     const next = waiting.shift()
@@ -100,6 +113,14 @@ function spawn(): Slot {
   return slot
 }
 
+function enqueue(job: Job, chars: number) {
+  if (disabled || chars < WORKER_MIN_CHARS) return inline(job)
+  const idle = slots.find((s) => !s.job)
+  if (idle) start(idle, job)
+  else if (slots.length < POOL_SIZE) startNew(job)
+  else waiting.push(job)
+}
+
 function charCount(html: string, files: FileInput[] | undefined): number {
   let n = html.length
   if (Array.isArray(files)) for (const f of files) n += typeof f?.content === 'string' || f?.content instanceof Uint8Array ? f.content.length : 0
@@ -110,12 +131,15 @@ function charCount(html: string, files: FileInput[] | undefined): number {
 // PublishError with the same message either way.
 export function prepare(html: string, files: FileInput[] | undefined): Promise<PreparedContent> {
   return new Promise((resolve, reject) => {
-    const job: Job = { html, files, resolve, reject }
-    if (disabled || charCount(html, files) < WORKER_MIN_CHARS) return inline(job)
-    const idle = slots.find((s) => !s.job)
-    if (idle) start(idle, job)
-    else if (slots.length < POOL_SIZE) startNew(job)
-    else waiting.push(job)
+    enqueue({ request: { html, files }, run: () => prepareContent(html, files), resolve, reject }, charCount(html, files))
+  })
+}
+
+// The searchable text of a stored page (see pageText), on a worker thread when it is large
+export function extractText(entry: string, others: { path: string; html: string }[] = []): Promise<string> {
+  const chars = others.reduce((n, f) => n + f.html.length, entry.length)
+  return new Promise((resolve, reject) => {
+    enqueue({ request: { text: { entry, others } }, run: () => pageText(entry, others), resolve, reject }, chars)
   })
 }
 

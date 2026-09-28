@@ -50,6 +50,10 @@ const CORE = {
   'comment-email': { max: 1, seconds: 15 * MINUTE },
   // Data exports of one account, and of one organization; one that fails doesn't count
   'data-export': { max: 1, seconds: HOUR },
+  // Webhooks one account adds and test messages it sends
+  webhook: { max: 60, seconds: HOUR },
+  // "Page opened" events one webhook gets for one page; opens past it aren't sent
+  'webhook-page-opened': { max: 1, seconds: 10 * MINUTE },
 } satisfies Record<string, Rule>
 
 const defaults = new Map<string, Rule>(Object.entries(CORE))

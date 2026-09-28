@@ -58,6 +58,14 @@ docker compose exec app node dist/scripts/sweep-storage.js
 
 Back up both; see [Backup and restore](/docs/backups).
 
+The words of each page's current version are kept in Postgres too, for [search](/docs/publishing#search). The same sweep indexes pages that missed it, a few hundred at a time. To index every page now, for example after upgrading from a release before 0.6.0:
+
+```sh
+docker compose exec app node dist/scripts/backfill-search.js
+```
+
+Add `--all` to index every page again rather than only the ones missing.
+
 ### Using S3, R2 or your own MinIO
 
 Set these in `.env` (`.env.example` has blocks for AWS S3, R2 and others), then remove the `minio` service and the app's `depends_on: minio` from the compose file:

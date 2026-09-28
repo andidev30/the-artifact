@@ -70,7 +70,7 @@ Options:
 Lists the pages in the workspace you're signed in to, most recently updated first.
 
 Options:
-  --query <words>    Only pages whose title contains this
+  --query <words>    Only pages whose title contains this, or whose text has these words
   --folder <name>    Only pages in this folder ("" for pages in no folder)
   --limit <n>        How many, 1 to 100. Default: 25
   --cursor <cursor>  Continue a previous list`,

@@ -219,6 +219,104 @@ export function applyChanges(current: PageFiles, changes: { html: FileMeta | nul
   return { html, files }
 }
 
+// Search keeps this much of a page's text: the start of a long page is what people remember of it,
+// and it bounds the row and its index entries
+export const MAX_TEXT_CHARS = 200_000
+
+export const isHtml = (contentType: string) => contentType.startsWith('text/html')
+
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  nbsp: ' ',
+  shy: '',
+  copy: '©',
+  reg: '®',
+  trade: '™',
+  hellip: '…',
+  mdash: '—',
+  ndash: '–',
+  lsquo: '‘',
+  rsquo: '’',
+  ldquo: '“',
+  rdquo: '”',
+  laquo: '«',
+  raquo: '»',
+  bull: '•',
+  middot: '·',
+  times: '×',
+  divide: '÷',
+  deg: '°',
+  plusmn: '±',
+  euro: '€',
+  pound: '£',
+  yen: '¥',
+  cent: '¢',
+  sect: '§',
+  para: '¶',
+  larr: '←',
+  rarr: '→',
+  uarr: '↑',
+  darr: '↓',
+}
+
+function decodeEntity(entity: string, body: string): string {
+  if (body[0] === '#') {
+    const code = body[1] === 'x' || body[1] === 'X' ? Number.parseInt(body.slice(2), 16) : Number.parseInt(body.slice(1), 10)
+    // Not NUL, surrogates or past Unicode: Postgres text can't hold them
+    if (!Number.isFinite(code) || code < 1 || code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff)) return ' '
+    return String.fromCodePoint(code)
+  }
+  return NAMED_ENTITIES[body.toLowerCase()] ?? entity
+}
+
+// Elements whose content is never shown as text
+const HIDDEN_START = /<(script|style|template|noscript|iframe|object)\b/gi
+
+// Removes them with their content. One element left open hides the rest of the document, as it does
+// in a browser, which also keeps this linear on input that opens many and closes none.
+function withoutHidden(html: string): string {
+  let out = ''
+  let from = 0
+  HIDDEN_START.lastIndex = 0
+  for (let m = HIDDEN_START.exec(html); m; m = HIDDEN_START.exec(html)) {
+    out += `${html.slice(from, m.index)} `
+    const close = new RegExp(`</${m[1]}\\s*>`, 'gi')
+    close.lastIndex = HIDDEN_START.lastIndex
+    if (!close.exec(html)) return out
+    from = close.lastIndex
+    HIDDEN_START.lastIndex = from
+  }
+  return out + html.slice(from)
+}
+
+// The text a reader sees in an HTML document, roughly: markup, comments, scripts and styles removed,
+// entities decoded, whitespace collapsed. Linear-time only, since the input is untrusted and up to 2 MB.
+export function htmlText(html: string): string {
+  return withoutHidden(html.replace(/<!--[\s\S]*?(?:-->|$)/g, ' '))
+    .replace(/<[a-zA-Z/!?][^>]*>?/g, ' ')
+    .replace(/&(#[0-9]{1,7}|#[xX][0-9a-fA-F]{1,6}|[a-zA-Z][a-zA-Z0-9]{1,31});/g, decodeEntity)
+    .replace(/[\s\p{Cc}]+/gu, ' ')
+    .trim()
+}
+
+// The text of a page: its entry, then its other HTML files by path, cut at MAX_TEXT_CHARS
+export function pageText(entry: string, others: { path: string; html: string }[] = []): string {
+  let text = htmlText(entry)
+  for (const file of [...others].sort((a, b) => (a.path < b.path ? -1 : 1))) {
+    if (text.length >= MAX_TEXT_CHARS) break
+    const more = htmlText(file.html)
+    if (more) text = text ? `${text} ${more}` : more
+  }
+  if (text.length <= MAX_TEXT_CHARS) return text
+  const cut = text.slice(0, MAX_TEXT_CHARS)
+  // Not half of a surrogate pair
+  return /[\ud800-\udbff]$/.test(cut) ? cut.slice(0, -1) : cut
+}
+
 const SHA256 = /^[0-9a-f]{64}$/
 
 // Validates the files an agent is about to upload itself: index.html, which is the page, and the
@@ -270,7 +368,8 @@ export function isText(contentType: string): boolean {
 export const FILES_MODULE = import.meta.url
 export const PREPARE_WORKER = 'the-artifact:prepare'
 
-export type PrepareReply = { content: PreparedContent } | { error: string; publishError: boolean }
+export type PrepareRequest = { html: string; files: FileInput[] | undefined } | { text: { entry: string; others: { path: string; html: string }[] } }
+export type PrepareReply = { content: PreparedContent } | { text: string } | { error: string; publishError: boolean }
 
 // A buffer with memory of its own, so it can be transferred to the main thread without copying there
 function owned(data: Buffer): Buffer {
@@ -281,11 +380,15 @@ function owned(data: Buffer): Buffer {
 
 if (!isMainThread && workerData === PREPARE_WORKER && parentPort) {
   const port = parentPort
-  port.on('message', ({ html, files }: { html: string; files: FileInput[] | undefined }) => {
+  port.on('message', (request: PrepareRequest) => {
     let reply: PrepareReply
     const transfer: ArrayBuffer[] = []
     try {
-      const content = prepareContent(html, files)
+      if ('text' in request) {
+        port.postMessage({ text: pageText(request.text.entry, request.text.others) } satisfies PrepareReply)
+        return
+      }
+      const content = prepareContent(request.html, request.files)
       content.html = owned(content.html)
       for (const file of content.files) file.content = owned(file.content)
       for (const data of [content.html, ...content.files.map((f) => f.content)]) transfer.push(data.buffer as ArrayBuffer)

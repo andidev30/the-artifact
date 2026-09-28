@@ -104,11 +104,15 @@ export type ArtifactSummary = {
   comments?: number
   // Written by others since you last opened the page's comments
   unreadComments?: number
+  // Missing from servers older than tags
+  tags?: string[]
 }
 
 export type ArtifactPage = {
   slug: string
   title: string
+  // Missing from servers older than tags
+  tags?: string[]
   visibility: Visibility
   version: number
   updatedAt: string
@@ -134,13 +138,14 @@ export type ArtifactList = {
   total: number | null
 }
 
-// folder: 'none' for pages in no folder, or a folder id; left out for every page
-export type ListQuery = { query?: string; folder?: string; cursor?: string | null; limit?: number }
+// folder: 'none' for pages in no folder, or a folder id; left out for every page. tag: only pages with it.
+export type ListQuery = { query?: string; folder?: string; tag?: string | null; cursor?: string | null; limit?: number }
 
 export async function listArtifacts(workspace: string, q: ListQuery = {}, signal?: AbortSignal): Promise<ArtifactList> {
   const params = new URLSearchParams({ workspace })
   if (q.query?.trim()) params.set('q', q.query.trim())
   if (q.folder) params.set('folder', q.folder)
+  if (q.tag) params.set('tag', q.tag)
   if (q.cursor) params.set('cursor', q.cursor)
   if (q.limit) params.set('limit', String(q.limit))
   const res = await fetch(`/api/artifacts?${params}`, { credentials: 'same-origin', signal })
@@ -178,6 +183,28 @@ export async function renameFolder(id: string, name: string): Promise<{ id: stri
 
 export function deleteFolder(id: string) {
   return request<null>(`/folders/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
+export const MAX_TAGS = 10
+export const MAX_TAG_LENGTH = 32
+
+export type TagSummary = {
+  tag: string
+  // Pages with it that this person sees in the gallery
+  pages: number
+}
+
+export function listTags(workspace: string) {
+  return request<TagSummary[]>(`/tags?workspace=${encodeURIComponent(workspace)}`)
+}
+
+// Removes, then adds; resolves to the page's tags
+export async function changeTags(slug: string, change: { add?: string[]; remove?: string[] }): Promise<string[]> {
+  try {
+    return (await request<{ tags: string[] }>(`/artifacts/${encodeURIComponent(slug)}/tags`, { method: 'PATCH', json: change })).tags
+  } catch (err) {
+    throw err instanceof ApiError ? new FieldError(err.message, err.field) : err
+  }
 }
 
 // null takes the page out of its folder
@@ -914,4 +941,66 @@ export function passkeySignInOptions() {
 
 export function signInWithPasskey(response: unknown, plan: string | null, next: string | null) {
   return request<{ redirect: string }>('/auth/passkey', { method: 'POST', json: { response, plan, next } })
+}
+
+// Webhooks of one workspace: 'personal' (your own) or an organization id (its owners and admins)
+export type WebhookEvent = 'page.published' | 'comment.created' | 'page.opened'
+export type WebhookFormat = 'json' | 'slack' | 'discord'
+export type WebhookDeliveryStatus = 'pending' | 'delivered' | 'failed'
+export type Webhook = {
+  id: string
+  url: string
+  format: WebhookFormat
+  events: WebhookEvent[]
+  enabled: boolean
+  createdAt: string
+  updatedAt: string
+  lastDelivery: { status: WebhookDeliveryStatus; createdAt: string } | null
+}
+export type WebhookDelivery = {
+  id: string
+  event: WebhookEvent | 'webhook.test'
+  status: WebhookDeliveryStatus
+  attempts: number
+  responseStatus: number | null
+  lastError: string | null
+  nextAttemptAt: string
+  lastAttemptAt: string | null
+  createdAt: string
+}
+export type WebhookInput = { url: string; format: WebhookFormat; events: WebhookEvent[]; enabled?: boolean }
+
+const webhooksPath = (workspace: string) => (workspace === 'personal' ? '/me/webhooks' : `${orgPath(workspace)}/webhooks`)
+const webhookPath = (workspace: string, id: string) => `${webhooksPath(workspace)}/${encodeURIComponent(id)}`
+
+export function listWebhooks(workspace: string) {
+  return request<{ webhooks: Webhook[]; max: number }>(webhooksPath(workspace))
+}
+
+export async function createWebhook(workspace: string, input: WebhookInput) {
+  try {
+    return await request<{ webhook: Webhook; secret: string }>(webhooksPath(workspace), { method: 'POST', json: input })
+  } catch (err) {
+    throw err instanceof ApiError ? new FieldError(err.message, err.field) : err
+  }
+}
+
+export async function updateWebhook(workspace: string, id: string, input: Partial<WebhookInput>) {
+  try {
+    return (await request<{ webhook: Webhook }>(webhookPath(workspace, id), { method: 'PATCH', json: input })).webhook
+  } catch (err) {
+    throw err instanceof ApiError ? new FieldError(err.message, err.field) : err
+  }
+}
+
+export function deleteWebhook(workspace: string, id: string) {
+  return request<null>(webhookPath(workspace, id), { method: 'DELETE' })
+}
+
+export async function testWebhook(workspace: string, id: string) {
+  return (await request<{ delivery: WebhookDelivery }>(`${webhookPath(workspace, id)}/test`, { method: 'POST', json: {} })).delivery
+}
+
+export async function listWebhookDeliveries(workspace: string, id: string) {
+  return (await request<{ deliveries: WebhookDelivery[] }>(`${webhookPath(workspace, id)}/deliveries`)).deliveries
 }

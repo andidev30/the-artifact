@@ -259,6 +259,33 @@ test('duplicate and move to another workspace dialogs', async ({ page }) => {
   await page.keyboard.press('Escape')
 })
 
+test('tags: the tag bar, tags on cards and the tags dialog', async ({ page }) => {
+  await signUpPersonal(page, uniqueEmail('a11y-tags'))
+  const token = await connectAgent(page)
+  const slug = await publishViaMcp(page.request, token, { title: 'Tagged page', html: HTML })
+  const res = await page.request.post('/mcp', {
+    headers: { authorization: `Bearer ${token}`, accept: 'application/json, text/event-stream' },
+    data: { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'tag_artifact', arguments: { artifact_id: slug, add: ['launch', 'q4'] } } },
+  })
+  expect(res.status()).toBe(200)
+  await page.reload()
+
+  await expect(page.getByRole('navigation', { name: 'Tags' }).getByRole('button', { name: /launch/ })).toBeVisible()
+  await expectAccessible(page, 'gallery with tags')
+  await page.getByRole('navigation', { name: 'Tags' }).getByRole('button', { name: /q4/ }).click()
+  await expect(page.locator('.gallery-filter').getByText('Pages tagged')).toBeVisible()
+  await expect(page.locator('.gallery[data-stale]')).toHaveCount(0)
+  await expectAccessible(page, 'gallery filtered by a tag')
+
+  await page.getByRole('button', { name: 'More actions for Tagged page' }).click()
+  await page.getByRole('menuitem', { name: 'Tags' }).click()
+  await expect(page.getByRole('dialog', { name: 'Tags for “Tagged page”' })).toBeVisible()
+  await expectAccessible(page, 'tags dialog')
+  await page.getByLabel('Add tags').fill('x'.repeat(40))
+  await expect(page.getByText('over the 32 character limit')).toBeVisible()
+  await expectAccessible(page, 'tags dialog, a tag too long')
+})
+
 test('viewer with its history, views and comments panels, and the share dialog', async ({ page, browser }) => {
   await signUpPersonal(page, uniqueEmail('a11y-viewer'))
   const token = await connectAgent(page)
@@ -427,6 +454,37 @@ test('data export in account and organization settings', async ({ page }) => {
   await page.goto(`/organizations/${org.slug}/settings#export`)
   await expect(page.locator('section#export').getByRole('heading', { name: 'Export organization data' })).toBeVisible()
   await expectAccessible(page, 'organization settings, data export')
+})
+
+test('webhooks in account settings', async ({ page }) => {
+  await signUpPersonal(page, uniqueEmail('a11y-webhooks'))
+  await page.goto('/settings#webhooks')
+  const section = page.locator('section#webhooks')
+  await expect(section.getByText('No webhooks yet.')).toBeVisible()
+
+  // With the keyboard alone: open the form, fill it and add
+  await section.getByRole('button', { name: 'Add webhook' }).focus()
+  await page.keyboard.press('Enter')
+  await expect(section.getByLabel('Address')).toBeFocused()
+  // .invalid never resolves, so the test message fails at once without leaving the machine
+  await page.keyboard.type('https://hooks.example.invalid/services/T000')
+  await expect(section.getByLabel('New comment')).toBeChecked()
+  await expectAccessible(page, 'account settings, new webhook form')
+  await section.getByRole('button', { name: 'Add webhook' }).press('Enter')
+  await expect(section.locator('.settings-token-new')).toBeVisible()
+  await expect(section.getByRole('button', { name: 'Copy signing secret' })).toBeVisible()
+  await expectAccessible(page, 'account settings, new webhook secret')
+  await section.getByRole('button', { name: 'Done' }).click()
+
+  await section.getByRole('button', { name: 'Send a test to hooks.example.invalid' }).press('Enter')
+  await expect(section.getByText('hooks.example.invalid could not be found.')).toBeVisible()
+  await section.getByRole('button', { name: 'Recent deliveries' }).press('Enter')
+  await expect(section.getByRole('table', { name: 'Recent deliveries to hooks.example.invalid' })).toBeVisible()
+  await expectAccessible(page, 'account settings, webhook deliveries')
+
+  await section.getByRole('button', { name: 'Edit webhook to hooks.example.invalid' }).press('Enter')
+  await expect(section.getByRole('button', { name: 'Save' })).toBeVisible()
+  await expectAccessible(page, 'account settings, edit webhook')
 })
 
 test('version retention in organization settings, with and without a license', async ({ page }) => {

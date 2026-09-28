@@ -25,6 +25,7 @@ Every event says when it happened, who did it, what it was about, and the addres
 | Suspended, reactivated | Your identity provider deactivates or reactivates a member's account over [SCIM](/docs/scim) |
 | Changed settings | The organization's name or its two-factor requirement changes |
 | Created an access token, revoked an access token | A member makes an access token for the organization, or someone revokes one |
+| Added a webhook, changed a webhook, deleted a webhook | An owner or admin adds, edits, turns on or off, or deletes one of the organization's [webhooks](/docs/webhooks). Only the destination's host is recorded, not its full address |
 
 Sign-ins are recorded in every organization the person belongs to. Failed sign-ins are recorded only when they belong to an account; a wrong email address can't be tied to anyone. Pages in personal workspaces and personal access tokens aren't recorded.
 
