@@ -646,6 +646,26 @@ export function listVersions(slug: string) {
   return pageRequest<ArtifactVersion[]>(slug, '/versions', 'The history could not be loaded.')
 }
 
+// What changed between two versions; see apps/api/src/compare.ts
+export type ComparedFile = {
+  path: string
+  status: 'added' | 'removed' | 'changed'
+  from: { size: number; contentType: string } | null
+  to: { size: number; contentType: string } | null
+  // A unified diff, as `diff -u` writes it; null when there is none
+  diff: string | null
+  additions: number | null
+  deletions: number | null
+  // Why there is no diff: not text, too big, too many changed lines, or the comparison is already as big as it may be
+  omitted: 'binary' | 'large' | 'complex' | 'budget' | null
+}
+
+export type Comparison = { from: number; to: number; files: ComparedFile[]; unchanged: number }
+
+export function compareVersions(slug: string, from: number, to: number) {
+  return pageRequest<Comparison>(slug, `/compare?from=${from}&to=${to}`, 'The versions could not be compared.')
+}
+
 export type PageViews = {
   total: number
   versions: { version: number; views: number }[]
@@ -680,6 +700,10 @@ export function deleteArtifact(slug: string) {
 export function downloadUrl(slug: string, version?: number) {
   return `/api/artifacts/${encodeURIComponent(slug)}/download${version ? `?version=${version}` : ''}`
 }
+
+// Opaque origin: the page's scripts run, but can't read cookies or reach this app. The frame loads the
+// version from its own URL (versionUrl), so a page's files resolve by relative paths.
+export const FRAME_SANDBOX = 'allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads'
 
 // A version as its own sandboxed document; its CSS, JS and images load by relative paths from here
 export function versionUrl(slug: string, version: number) {

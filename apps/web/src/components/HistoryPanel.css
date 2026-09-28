@@ -55,6 +55,66 @@
   list-style: none;
 }
 
+.history-row {
+  position: relative;
+}
+
+/* Sits over the item's top-right corner, next to the version number, as a sibling of the button */
+.history-pick {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.history-pick input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--ink);
+  cursor: inherit;
+}
+
+.history-pick:has(input:disabled) {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.history-row:has(.history-pick) .history-item-top {
+  padding-right: 96px;
+}
+
+.history-compare {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
+  background: var(--white);
+  border: 1.5px dashed var(--grid);
+  border-radius: 3px;
+}
+
+.history-compare .button {
+  font: 700 var(--step--1) var(--sans);
+  cursor: pointer;
+}
+
+.history-compare .button:disabled {
+  opacity: 0.55;
+  cursor: default;
+  transform: none;
+}
+
 .history-item {
   display: grid;
   gap: 2px;

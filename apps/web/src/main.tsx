@@ -16,6 +16,7 @@ import { Authorize } from './pages/Authorize.tsx'
 import { ContactSalesPage, Home, HostedInsights, LegalPage } from './pages/Home.tsx'
 import { NotFound } from './pages/NotFound.tsx'
 import { Onboarding } from './pages/Onboarding.tsx'
+import { Compare } from './pages/Compare.tsx'
 import { Viewer } from './pages/Viewer.tsx'
 import { Invite } from './pages/Invite.tsx'
 import { NewOrganization } from './pages/NewOrganization.tsx'
@@ -50,6 +51,7 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/onboarding" element={<Onboarding />} />
         <Route path="/authorize" element={<Authorize />} />
         <Route path="/a/:slug" element={<Viewer />} />
+        <Route path="/a/:slug/compare" element={<Compare />} />
         <Route
           path="/settings"
           element={

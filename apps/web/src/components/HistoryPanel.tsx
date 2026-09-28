@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router'
 import { listVersions, restoreVersion, type ArtifactVersion } from '../api'
 import { timeAgo } from '../time'
 import './HistoryPanel.css'
@@ -22,10 +23,12 @@ type Props = {
 }
 
 // Every version of the page, newest first. Picking one shows it in the frame; nothing changes
-// until someone restores it.
+// until someone restores it. Ticking two opens them side by side, with what changed.
 export function HistoryPanel({ slug, currentVersion, selected, onSelect, onClose }: Props) {
+  const navigate = useNavigate()
   const [versions, setVersions] = useState<ArtifactVersion[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [picked, setPicked] = useState<number[]>([])
   const heading = useRef<HTMLHeadingElement>(null)
 
   useEffect(() => {
@@ -47,6 +50,15 @@ export function HistoryPanel({ slug, currentVersion, selected, onSelect, onClose
     onSelect(v.version === currentVersion ? null : { version: v.version, createdAt: v.createdAt })
     // On narrow screens the panel covers the page, so get out of the way
     if (window.matchMedia('(max-width: 640px)').matches) onClose()
+  }
+
+  function togglePick(version: number, on: boolean) {
+    setPicked((p) => (on ? [...p, version] : p.filter((v) => v !== version)))
+  }
+
+  function compare() {
+    const [from, to] = [...picked].sort((a, b) => a - b)
+    navigate(`/a/${encodeURIComponent(slug)}/compare?from=${from}&to=${to}`)
   }
 
   return (
@@ -71,10 +83,20 @@ export function HistoryPanel({ slug, currentVersion, selected, onSelect, onClose
           Loading versions
         </p>
       )}
+      {versions && versions.length > 1 && (
+        <div className="history-compare">
+          <p id="history-compare-hint">
+            {picked.length < 2 ? 'Tick two versions to compare them.' : `Version ${Math.min(...picked)} and version ${Math.max(...picked)}.`}
+          </p>
+          <button type="button" className="button button-small" disabled={picked.length < 2} onClick={compare} aria-describedby="history-compare-hint">
+            Compare
+          </button>
+        </div>
+      )}
       {versions && (
         <ol className="history-list">
           {versions.map((v) => (
-            <li key={v.version}>
+            <li key={v.version} className="history-row">
               <button type="button" className="history-item" aria-current={v.version === selected ? 'true' : undefined} onClick={() => pick(v)}>
                 <span className="history-item-top">
                   <strong>Version {v.version}</strong>
@@ -85,6 +107,19 @@ export function HistoryPanel({ slug, currentVersion, selected, onSelect, onClose
                 </time>
                 <span className="history-source">{source(v)}</span>
               </button>
+              {versions.length > 1 && (
+                <label className="history-pick">
+                  <input
+                    type="checkbox"
+                    checked={picked.includes(v.version)}
+                    disabled={picked.length >= 2 && !picked.includes(v.version)}
+                    onChange={(e) => togglePick(v.version, e.target.checked)}
+                  />
+                  <span>
+                    Compare<span className="visually-hidden"> version {v.version}</span>
+                  </span>
+                </label>
+              )}
             </li>
           ))}
         </ol>
