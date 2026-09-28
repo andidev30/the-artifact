@@ -1,0 +1,81 @@
+name: Release
+
+# release-please keeps a release PR open with the next version and its changelog, built from the
+# conventional commits merged to main. Merging that PR tags vX.Y.Z, creates the GitHub release and
+# publishes the image. See docs/upgrading.md and CONTRIBUTING.md.
+on:
+  push:
+    branches: [main]
+
+# Two runs must not edit the release PR or create the same release at once
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  release-please:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - id: release
+        uses: googleapis/release-please-action@v5
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+      - if: steps.release.outputs.release_created == 'true'
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.release.outputs.tag_name }}
+
+      # The generated notes list what changed; what operators have to do is written by hand in
+      # docs/upgrading.md, under "## Upgrading to X.Y.Z", and added to the release here
+      - name: Add the upgrade notes to the release
+        if: steps.release.outputs.release_created == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag_name }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          awk -v heading="## Upgrading to $VERSION" '
+            $0 == heading { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+          ' docs/upgrading.md > section.md
+          # Links in docs/ are in-app paths (/docs/<slug>, #anchor); on the release page they have to
+          # point at the docs on GitHub
+          docs="https://github.com/$GITHUB_REPOSITORY/blob/$TAG/docs"
+          sed -E -e "s|\]\(/docs/([a-z0-9-]+)|](${docs}/\1.md|g" -e "s|\]\(#|](${docs}/upgrading.md#|g" section.md > upgrading.md
+          if [ -z "$(tr -d '[:space:]' < upgrading.md)" ]; then
+            echo "No upgrade notes for $VERSION"
+            exit 0
+          fi
+          # GitHub drops the dots from heading anchors: "Upgrading to 0.2.0" is #upgrading-to-020
+          anchor="upgrading-to-${VERSION//./}"
+          {
+            gh release view "$TAG" --json body --jq .body
+            printf '\n## Upgrading\n'
+            cat upgrading.md
+            printf '\nThe same notes are in the docs: [Upgrading to %s](https://github.com/%s/blob/%s/docs/upgrading.md#%s).\n' "$VERSION" "$GITHUB_REPOSITORY" "$TAG" "$anchor"
+          } > notes.md
+          gh release edit "$TAG" --notes-file notes.md
+
+  image:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/image.yml
+    with:
+      version: ${{ needs.release-please.outputs.version }}

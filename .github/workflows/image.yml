@@ -1,20 +1,32 @@
 name: Image
 
+# Every push to main is published as `main` and its short sha. Releases are published by the
+# Release workflow, which calls this one with the version: tags created there with GITHUB_TOKEN
+# don't start other workflows, so a `push: tags` trigger would never run for them.
 on:
   push:
     branches: [main]
-    tags: ['v*']
+  workflow_call:
+    inputs:
+      version:
+        description: Version being released, without the v (e.g. 0.2.0). Tags the image x.y.z, x.y and latest.
+        required: true
+        type: string
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
   publish:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.version && format('v{0}', inputs.version) || github.sha }}
       - uses: docker/setup-qemu-action@v4
       - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v4
@@ -26,11 +38,14 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository }}
+          # latest is the newest release, never an unreleased commit
+          flavor: latest=false
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=sha,prefix=
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=main,enable=${{ !inputs.version }}
+            type=sha,prefix=,enable=${{ !inputs.version }}
+            type=semver,pattern={{version}},value=${{ inputs.version }},enable=${{ !!inputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ inputs.version }},enable=${{ !!inputs.version }}
+            type=raw,value=latest,enable=${{ !!inputs.version }}
           labels: |
             org.opencontainers.image.title=The Artifact
             org.opencontainers.image.description=Hosts the HTML pages coding agents build
