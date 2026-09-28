@@ -175,12 +175,21 @@ function parseFilter(filter: string): SQL | null | 'invalid' {
   return eq(schema.users.email, value.toLowerCase())
 }
 
+// A whole number of any size, which the caller clamps; null when not given
+function pagingNumber(value: string | undefined): number | null | 'invalid' {
+  if (value === undefined || value.trim() === '') return null
+  return /^\s*[+-]?\d+\s*$/.test(value) ? Number(value) : 'invalid'
+}
+
 scim.get('/Users', async (c) => {
   const filter = parseFilter(c.req.query('filter') ?? '')
   if (filter === 'invalid') return scimError(c, 400, 'Only "eq" filters on userName, externalId, id or emails are supported.', 'invalidFilter')
-  const startIndex = Math.max(1, Number.parseInt(c.req.query('startIndex') ?? '1', 10) || 1)
-  const requested = Number.parseInt(c.req.query('count') ?? String(MAX_PAGE), 10)
-  const size = Math.min(MAX_PAGE, Math.max(0, Number.isNaN(requested) ? MAX_PAGE : requested))
+  const start = pagingNumber(c.req.query('startIndex'))
+  const requested = pagingNumber(c.req.query('count'))
+  if (start === 'invalid' || requested === 'invalid') return scimError(c, 400, 'startIndex and count must be whole numbers.', 'invalidValue')
+  // RFC 7644 3.4.2.4: a startIndex below 1 means 1, a negative count means 0. Past the end is an empty page.
+  const startIndex = Math.min(Number.MAX_SAFE_INTEGER, Math.max(1, start ?? 1))
+  const size = Math.min(MAX_PAGE, Math.max(0, requested ?? MAX_PAGE))
   const where = and(filter ?? undefined, reach(c.get('scimToken')))
   const [{ total }] = await db
     .select({ total: count() })

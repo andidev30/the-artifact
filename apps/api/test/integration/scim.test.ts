@@ -156,6 +156,20 @@ describe('SCIM Users', () => {
     expect(page).toMatchObject({ totalResults: 2, startIndex: 2, itemsPerPage: 1 })
   })
 
+  it('clamps paging numbers of any size, and refuses ones that aren’t whole numbers', async () => {
+    await create()
+    const past = await scim(`/Users?startIndex=${'9'.repeat(30)}&count=${'9'.repeat(30)}`)
+    expect(past.status).toBe(200)
+    expect(await past.json()).toMatchObject({ totalResults: 2, startIndex: Number.MAX_SAFE_INTEGER, itemsPerPage: 0, Resources: [] })
+    // RFC 7644: below 1 means 1, a negative count means none
+    expect(await (await scim('/Users?startIndex=-5&count=-1')).json()).toMatchObject({ startIndex: 1, itemsPerPage: 0 })
+    for (const query of ['startIndex=1e22', 'count=1.5', 'startIndex=abc', 'count=0x10']) {
+      const res = await scim(`/Users?${query}`)
+      expect(res.status, query).toBe(400)
+      expect(await res.json()).toMatchObject({ schemas: [ERROR], status: '400', scimType: 'invalidValue' })
+    }
+  })
+
   it('refuses filters it doesn’t support with invalidFilter', async () => {
     const res = await scim(`/Users?filter=${encodeURIComponent('name.givenName sw "J"')}`)
     expect(res.status).toBe(400)
