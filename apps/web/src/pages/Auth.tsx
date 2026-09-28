@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
-import { ApiError, fetchMe, logInWithPassword, setUpServer, signUpWithPassword } from '../api'
+import { ApiError, fetchMe, logInWithPassword, passkeySignInOptions, setUpServer, signInWithPasskey, signUpWithPassword } from '../api'
+import { askForPasskey, passkeyErrorText, passkeysSupported } from '../passkeys'
 import { useConfig } from '../useConfig'
 import { ServerUnreachable } from './Status'
 import { Wordmark } from '../components/Wordmark'
@@ -136,6 +137,8 @@ function AuthForm({ mode, plan, next, lede, notice }: { mode: Mode; plan: string
   const query = new URLSearchParams({ intent: mode, ...(plan ? { plan } : {}), ...(next ? { next } : {}) }).toString()
   // Servers without email: log in with a password; new people need a link from an admin
   const withPassword = config?.emailSignIn === false
+  // Only when logging in: a passkey belongs to an account that already exists
+  const passkey = mode === 'login' && passkeysSupported()
 
   async function onPasswordSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -297,9 +300,10 @@ function AuthForm({ mode, plan, next, lede, notice }: { mode: Mode; plan: string
             {notice}
           </p>
         )}
-        {google && (
+        {(google || passkey) && (
           <>
-            {googleButton}
+            {google && googleButton}
+            {passkey && <PasskeyButton plan={plan} next={next} />}
             <div className="auth-divider">
               <span>or use your password</span>
             </div>
@@ -344,9 +348,10 @@ function AuthForm({ mode, plan, next, lede, notice }: { mode: Mode; plan: string
         </p>
       )}
 
-      {google && (
+      {(google || passkey) && (
         <>
-          {googleButton}
+          {google && googleButton}
+          {passkey && <PasskeyButton plan={plan} next={next} />}
           <div className="auth-divider">
             <span>or use your email</span>
           </div>
@@ -375,6 +380,44 @@ function AuthForm({ mode, plan, next, lede, notice }: { mode: Mode; plan: string
         </button>
       </form>
     </section>
+  )
+}
+
+// Signs in with a passkey alone: the browser offers the passkeys it has for this site, so no email is needed
+function PasskeyButton({ plan, next }: { plan: string | null; next: string | null }) {
+  const [busy, setBusy] = useState(false)
+  const [problem, setProblem] = useState<string | null>(null)
+
+  async function onClick() {
+    setBusy(true)
+    setProblem(null)
+    try {
+      const response = await askForPasskey(await passkeySignInOptions())
+      const { redirect } = await signInWithPasskey(response, plan, next)
+      window.location.assign(redirect)
+    } catch (err) {
+      setProblem(passkeyErrorText(err, 'You could not be signed in with a passkey. Try again, or use another way.'))
+      setBusy(false)
+    }
+  }
+
+  return (
+    <>
+      <button type="button" className="button button-quiet auth-provider" onClick={onClick} disabled={busy}>
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="9" cy="8" r="4" />
+          <path d="M2 21v-1a6 6 0 0 1 9.5-4.9" />
+          <circle cx="18" cy="14" r="2.5" />
+          <path d="M18 16.5V22l1.5-1.5M18 19.5l1.5 1" />
+        </svg>
+        {busy ? 'Waiting for your passkey' : 'Sign in with a passkey'}
+      </button>
+      {problem && (
+        <p className="auth-error" role="alert">
+          {problem}
+        </p>
+      )}
+    </>
   )
 }
 

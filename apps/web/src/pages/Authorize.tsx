@@ -36,7 +36,7 @@ export function Authorize() {
           navigate(`/login?next=${encodeURIComponent(`/authorize?request=${requestId}`)}`, { replace: true })
           return
         }
-        setWorkspace(request.workspaces[0]?.id ?? null)
+        setWorkspace(request.workspaces.find((w) => !w.blocked)?.id ?? null)
         setState({ kind: 'ready', request })
       })
       .catch((err) =>
@@ -107,9 +107,12 @@ export function Authorize() {
                 <fieldset className="consent-workspaces">
                   <legend>Publish pages to</legend>
                   {state.request.workspaces.map((w) => (
-                    <label key={w.id ?? 'personal'} className="consent-option">
-                      <input type="radio" name="workspace" checked={workspace === w.id} onChange={() => setWorkspace(w.id)} />
-                      <span>{w.name}</span>
+                    <label key={w.id ?? 'personal'} className="consent-option" data-disabled={w.blocked || undefined}>
+                      <input type="radio" name="workspace" checked={workspace === w.id} disabled={w.blocked} onChange={() => setWorkspace(w.id)} />
+                      <span>
+                        {w.name}
+                        {w.blocked && <small className="consent-blocked"> Requires two-factor sign-in. Set it up in account settings first.</small>}
+                      </span>
                     </label>
                   ))}
                 </fieldset>
