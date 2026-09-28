@@ -5,6 +5,7 @@
   "include-v-in-tag": true,
   "bump-minor-pre-major": true,
   "bump-patch-for-minor-pre-major": false,
+  "separate-pull-requests": true,
   "pull-request-title-pattern": "chore: release ${version}",
   "pull-request-header": "Merging this pull request tags the release, publishes the image and the release notes. Before merging, check that every change that needs action on upgrade has a section in `docs/upgrading.md` (see CONTRIBUTING.md).",
   "changelog-sections": [
@@ -24,7 +25,16 @@
     ".": {
       "package-name": "the-artifact",
       "changelog-path": "CHANGELOG.md",
-      "extra-files": ["deploy/docker-compose/docker-compose.yml", "deploy/docker-compose/.env.example", "deploy/kubernetes/kustomization.yaml"]
+      "extra-files": ["deploy/docker-compose/docker-compose.yml", "deploy/docker-compose/.env.example", "deploy/kubernetes/kustomization.yaml"],
+      "exclude-paths": ["packages/cli"]
+    },
+    "packages/cli": {
+      "package-name": "@the-artifact/cli",
+      "component": "cli",
+      "include-component-in-tag": true,
+      "changelog-path": "CHANGELOG.md",
+      "pull-request-title-pattern": "chore(cli): release ${version}",
+      "pull-request-header": "Merging this pull request tags the CLI release (`cli-vX.Y.Z`) and publishes `@the-artifact/cli` to npm."
     }
   }
 }
