@@ -56,7 +56,7 @@ export function isAllowedRedirect(uri: string): boolean {
     if (url.hash) return false
     if (url.protocol === 'https:') return true
     if (url.protocol === 'http:') return ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
-    return /^[a-z][a-z0-9+.-]*:$/.test(url.protocol) && !['javascript:', 'data:', 'file:'].includes(url.protocol)
+    return /^[a-z][a-z0-9+.-]*:$/.test(url.protocol) && !['javascript:', 'vbscript:', 'data:', 'file:'].includes(url.protocol)
   } catch {
     return false
   }

@@ -68,11 +68,13 @@ function escapeHtml(s: string) {
 }
 
 export function headingId(text: string) {
-  return text
-    .toLowerCase()
-    .replace(/<[^>]+>/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
+  // Tags are dropped until none are left, so a nested one like <a<b>> can't leave a tag behind
+  let plain = text.toLowerCase()
+  for (let prev = ''; prev !== plain; ) {
+    prev = plain
+    plain = plain.replace(/<[^<>]*>/g, '')
+  }
+  return plain.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
 }
 
 const LANG_LABEL: Record<string, string> = { sh: 'Terminal', html: 'HTML', json: 'JSON', toml: 'TOML', yaml: 'YAML' }
