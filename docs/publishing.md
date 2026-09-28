@@ -408,7 +408,7 @@ Each version counts toward the server's publish [limit](#limits), so a build tha
 
 | Command | What it does |
 | --- | --- |
-| `the-artifact list` | Lists the pages in the workspace, newest first: id, version, who can open it, folder and title. `--query <words>` searches titles and page text, `--folder <name>` narrows to a folder, `--limit <n>` (1 to 100) and `--cursor` page through. |
+| `the-artifact list` | Lists the pages in the workspace, newest first: id, version, who can open it, folder and title. `--query <words>` searches titles and page text, `--folder <name>` narrows to a folder, `--tag <tag>` to pages with that [tag](#tags), `--limit <n>` (1 to 100) and `--cursor` page through. |
 | `the-artifact share <page> --visibility link` | Changes who can open a page: `restricted`, `organization` or `link` |
 | `the-artifact share <page> --expires 2026-12-31 --password <text>` | The link stops working after that day (UTC), and asks for the password. `--expires never` and `--password ""` remove them. |
 | `the-artifact share <page> --new-link` | Resets the public link and prints the new one; public links shared before stop working. The page keeps its id. |

@@ -38,6 +38,7 @@ describe('parse', () => {
       positionals: ['dist'],
       values: { title: 'Report', ignore: ['*.map', 'drafts/'], json: true },
     })
+    expect(parse(['list', '--tag', 'q3', '--folder', 'Reports'])).toEqual({ command: 'list', positionals: [], values: { tag: 'q3', folder: 'Reports' } })
   })
 
   it('shows help and the version', () => {

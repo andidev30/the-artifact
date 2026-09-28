@@ -12,7 +12,7 @@ import { db, schema } from '../../src/db/index.js'
 import { env } from '../../src/env.js'
 import { sendShareNotice } from '../../src/mail.js'
 import { createToken, revokeToken } from '../../src/tokens.js'
-import { approve, createUser, type TestUser } from './helpers.js'
+import { approve, call, createUser, type TestUser } from './helpers.js'
 
 // The CLI in packages/cli, run as its own process against this API listening on a real port. Node
 // runs its TypeScript sources as they are, so nothing has to be built first.
@@ -348,6 +348,13 @@ describe('the-artifact list and share', () => {
     expect(first.total).toBe(2)
     const next = await run(['list', '--limit', '1', '--cursor', first.cursor, '--json'], { env })
     expect(JSON.parse(next.stdout).pages[0].title).toBe('Coverage report')
+
+    const tagged = await call(`/api/artifacts/${pageId(a.stdout)}/tags`, { cookie: user.cookie, method: 'PATCH', json: { add: ['Q3'] } })
+    expect(tagged.status).toBe(200)
+    const byTag = JSON.parse((await run(['list', '--json', '--tag', 'q3'], { env })).stdout)
+    expect(byTag.pages.map((p: { title: string; tags: string[] }) => [p.title, p.tags])).toEqual([['Coverage report', ['q3']]])
+    expect((await run(['list', '--tag', 'Q3'], { env })).stdout).toMatch(/Coverage report$/m)
+    expect(await run(['list', '--tag', 'nothing'], { env })).toMatchObject({ code: 0, stdout: '', stderr: 'No pages match.\n' })
 
     const bad = await run(['list', '--limit', '500'], { env })
     expect(bad.code).toBe(2)
