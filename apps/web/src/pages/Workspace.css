@@ -32,6 +32,11 @@
   padding: clamp(32px, 6vw, 72px) var(--gutter) 96px;
 }
 
+/* A single step, with no progress rail beside it */
+.onboarding-single {
+  grid-template-columns: minmax(0, 640px);
+}
+
 .onboarding-rail {
   display: grid;
   align-content: start;

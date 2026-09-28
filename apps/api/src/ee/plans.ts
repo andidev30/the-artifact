@@ -4,15 +4,23 @@ import { db, schema } from '../db/index.js'
 import { env } from '../env.js'
 import type { PlanQuota } from '../quota.js'
 import { requireCronSecret } from '../routes/cron.js'
+import type { OrganizationPolicy } from '../routes/organizations.js'
 
 // The hosted service's free Personal plan: a personal workspace holds up to PERSONAL_PAGES pages and
 // PERSONAL_STORAGE_BYTES of versions (src/quota.ts says what counts), and keeps older versions for
 // PERSONAL_HISTORY_DAYS. The pricing page (apps/web/src/ee/Pricing.tsx) promises the same numbers.
-// Organizations have no limits until they have billing (#34). None of this applies to a self-hosted
-// install.
+// None of this applies to a self-hosted install.
 export const PERSONAL_PAGES = 50
 export const PERSONAL_STORAGE_BYTES = 1024 ** 3
 export const PERSONAL_HISTORY_DAYS = 7
+
+// The Organization plan waits for billing (#34), so until then the hosted service creates no new
+// organizations: POST /api/organizations refuses, and the web app hides the ways in. Organizations made
+// before keep working in full (members, invitations, pages, sharing) and have no limits.
+const ORGANIZATIONS_COMING_SOON =
+  'New organizations are coming soon. Until then you can publish in your personal workspace and join organizations you are invited to.'
+
+export const organizationPlan: OrganizationPolicy = () => (env.selfHosted ? null : ORGANIZATIONS_COMING_SOON)
 
 export const personalPlan: PlanQuota = ({ organizationId }) => {
   if (env.selfHosted || organizationId) return null

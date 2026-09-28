@@ -47,7 +47,7 @@ const CLOUD_PLANS: Plan[] = [
     ],
     cta: 'Start with your team',
     href: `${SIGNUP_URL}?plan=organization`,
-    // Needs billing (#34)
+    // Needs billing (#34); until then the hosted service creates no new organizations (apps/api/src/ee/plans.ts)
     comingSoon: true,
   },
   {

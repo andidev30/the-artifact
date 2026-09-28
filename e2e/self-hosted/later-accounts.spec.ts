@@ -44,6 +44,13 @@ test('someone who signs up after the first account starts in their personal work
 
   await page.getByRole('button', { name: /^Account:/ }).click()
   await expect(page.getByRole('link', { name: 'Server admin' })).toHaveCount(0)
+  await page.keyboard.press('Escape')
+
+  // Unlike the hosted service, a self-hosted server lets anyone create an organization
+  await page.getByRole('button', { name: /^Workspace:/ }).click()
+  await page.getByRole('link', { name: 'Create an organization' }).click()
+  await expect(page.getByRole('heading', { level: 1, name: 'Create an organization' })).toBeVisible()
+  await expect(page.getByLabel('Organization name')).toBeVisible()
 
   await page.goto('/onboarding')
   await expect(page).toHaveURL(/\/app$/)

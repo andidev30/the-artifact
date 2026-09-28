@@ -11,6 +11,8 @@ export type AppConfig = {
   passwordSignUp?: boolean
   // Set by the instance admin; shown in the signed-in header
   instanceName?: string | null
+  // Off on the hosted service until the Organization plan has billing: the app hides the ways to create one
+  newOrganizations?: boolean
   // The API didn't answer (restarting, or down); the other fields are guesses
   unreachable?: boolean
 }

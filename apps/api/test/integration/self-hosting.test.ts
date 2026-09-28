@@ -16,6 +16,7 @@ describe('config for the web app', () => {
       needsSetup: false,
       passwordSignUp: false,
       instanceName: null,
+      newOrganizations: false,
     })
   })
 })

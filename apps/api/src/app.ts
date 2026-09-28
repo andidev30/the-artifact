@@ -9,7 +9,7 @@ import { clearPending, passkeySignIn, twoFactor } from './auth/twofactor.js'
 import { db, schema } from './db/index.js'
 import { contact } from './ee/contact.js'
 import { issuedLicenses } from './ee/licenses.js'
-import { historyCron, personalPlan } from './ee/plans.js'
+import { historyCron, organizationPlan, personalPlan } from './ee/plans.js'
 import { embeds } from './embeds.js'
 import { env, mailEnabled } from './env.js'
 import { hasAccounts, instanceSettings, isInstanceAdmin } from './instance.js'
@@ -27,7 +27,7 @@ import { artifacts } from './routes/artifacts.js'
 import { comments } from './routes/comments.js'
 import { folders } from './routes/folders.js'
 import { invitations, members, myInvitations } from './routes/members.js'
-import { onboarding, organizations } from './routes/organizations.js'
+import { newOrganizationsOpen, onboarding, organizations, setOrganizationPolicy } from './routes/organizations.js'
 import { security, sessions } from './routes/security.js'
 import { settings } from './routes/settings.js'
 import { mountWeb } from './web.js'
@@ -39,8 +39,9 @@ app.use(observeRequests)
 app.route('/', health)
 
 // The hosted service's plan limits. They check SELF_HOSTED themselves, so a self-hosted install gets
-// only its own WORKSPACE_MAX_* settings.
+// only its own WORKSPACE_MAX_* settings and can always create organizations.
 setPlanQuota(personalPlan)
+setOrganizationPolicy(organizationPlan)
 // Every limit is defined by now, ee/ ones included; a mistake in RATE_LIMITS stops the start here
 checkRateLimits()
 
@@ -71,6 +72,8 @@ api.get('/config', async (c) =>
     // Without email, whether people can create a password account on their own
     passwordSignUp: await passwordSignUpOpen(),
     instanceName: (await instanceSettings()).instanceName,
+    // Off on the hosted service until the Organization plan has billing; the app hides the ways in
+    newOrganizations: newOrganizationsOpen(),
   }),
 )
 

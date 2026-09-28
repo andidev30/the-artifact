@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import { expect, test } from '@playwright/test'
+import { createHostedOrganization } from '../apps/api/test/e2e-db.ts'
 import { signUp, signUpPersonal, uniqueEmail } from './helpers'
 
 test('a new account joins the organization it was invited to from onboarding', async ({ page, browser }) => {
@@ -7,11 +8,9 @@ test('a new account joins the organization it was invited to from onboarding', a
   const guestEmail = uniqueEmail('inv-guest')
   const slug = `e2e-${randomBytes(4).toString('hex')}`
 
-  // The owner creates an organization and invites the guest
+  // The owner has an organization from before new ones waited for billing, and invites the guest
   await signUpPersonal(page, ownerEmail)
-  const created = await page.request.post('/api/organizations', { data: { name: 'Invite Co', slug } })
-  expect(created.status()).toBe(201)
-  const org = await created.json()
+  const org = await createHostedOrganization(ownerEmail, 'Invite Co', slug)
   const invited = await page.request.post(`/api/organizations/${org.id}/invitations`, { data: { email: guestEmail, role: 'member' } })
   expect(invited.status()).toBe(201)
 

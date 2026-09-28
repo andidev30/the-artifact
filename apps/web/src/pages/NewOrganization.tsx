@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
-import { useNavigate } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { AccountHeader } from '../components/AccountHeader'
+import { useConfig } from '../useConfig'
 import { useMe } from '../useMe'
 import { chooseWorkspace, organizationSettingsPath, useWorkspace } from '../workspace'
 import type { Me } from '../api'
@@ -11,6 +12,7 @@ import './Workspace.css'
 // Creating another organization after onboarding, from the workspace switcher
 export function NewOrganization() {
   const state = useMe()
+  const config = useConfig()
 
   useEffect(() => {
     document.title = 'New organization | The Artifact'
@@ -19,8 +21,9 @@ export function NewOrganization() {
     }
   }, [])
 
-  if (state.kind === 'loading') return <Loading />
+  if (state.kind === 'loading' || !config) return <Loading />
   if (state.kind === 'error') return <LoadError />
+  if (config.newOrganizations === false) return <ComingSoon me={state.me} />
   return <Page me={state.me} />
 }
 
@@ -50,6 +53,32 @@ function Page({ me }: { me: Me }) {
               navigate(`${organizationSettingsPath(org)}#members`)
             }}
           />
+        </div>
+      </main>
+    </div>
+  )
+}
+
+// The hosted service creates no new organizations until the Organization plan has billing
+function ComingSoon({ me }: { me: Me }) {
+  const { name } = useWorkspace(me)
+  return (
+    <div className="auth">
+      <AccountHeader me={me} workspace={name} />
+      <main id="main" className="onboarding onboarding-single">
+        <div className="onboarding-panel">
+          <div className="onboarding-step">
+            <h1>Organizations are coming soon</h1>
+            <p className="auth-lede">
+              New organizations open when the Organization plan does. Until then you can publish in your personal workspace and join organizations you are
+              invited to.
+            </p>
+            <div className="onboarding-actions">
+              <Link className="button" to="/app">
+                Go to your pages
+              </Link>
+            </div>
+          </div>
         </div>
       </main>
     </div>
