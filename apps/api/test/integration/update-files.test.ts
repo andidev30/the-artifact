@@ -143,7 +143,7 @@ describe('update_files', () => {
 
     for (const user of [viewer, stranger]) {
       const res = await callTool((await connectAgent(user)).access_token, 'update_files', { artifact_id: page.slug, files })
-      expect(res).toEqual({ isError: true, text: expect.stringMatching(new RegExp(`^No page you can edit has the id "${page.slug}"`)) })
+      expect(res).toEqual({ isError: true, text: `No page you can edit has the id "${page.slug}".` })
     }
     expect(await versions(page.id)).toHaveLength(1)
 
@@ -188,6 +188,9 @@ describe('updating by direct upload', () => {
       'remove and base_version go with update: true.',
     )
     expect((await callTool(token, 'publish_upload', { upload_id: uploadId, files, update: true })).text).toBe('Say which page to update with artifact_id.')
+    expect((await callTool(token, 'publish_upload', { upload_id: uploadId, files, artifact_id: 'nosuchpage', update: true })).text).toBe(
+      'No page you can edit has the id "nosuchpage".',
+    )
     const res = await callTool(token, 'publish_upload', {
       upload_id: uploadId,
       files,
@@ -290,6 +293,7 @@ describe('POST /api/publish with mode update', () => {
       json: { mode: 'update', artifact_id: page.slug, files: [{ path: 'data.json', content: '1' }] },
     })
     expect(res.status).toBe(400)
+    expect(await res.json()).toEqual({ error: `No page you can edit has the id "${page.slug}".` })
     expect(await versions(page.id)).toHaveLength(2)
   })
 })

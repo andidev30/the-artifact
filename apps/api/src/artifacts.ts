@@ -335,7 +335,11 @@ async function publishContent(input: PublishTarget, content: Content | ((tx: Tx,
     const existing = await findBySlug(input.slug)
     const viewer = { id: input.userId, email: input.email, blockedOrgs: input.blockedOrgs }
     if (!existing || !(await canEdit(existing, viewer))) {
-      throw new PublishError(`No page you can edit has the id "${input.slug}". Publish without artifact_id to create a new page.`)
+      throw new PublishError(
+        typeof content === 'function'
+          ? `No page you can edit has the id "${input.slug}".`
+          : `No page you can edit has the id "${input.slug}". Publish without artifact_id to create a new page.`,
+      )
     }
     if (input.visibility === 'organization' && !existing.organizationId) {
       throw new PublishError('This page is in a personal workspace. Use private (restricted) or link.')
