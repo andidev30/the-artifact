@@ -112,7 +112,7 @@ Thresholds: p95 of the first page under 500 ms, later pages under 400 ms, search
 
 ### Thumbnail queue
 
-Publishes a new 30 KB page (`HTML_KB`) `RATE` times a minute (100) for `DURATION` (`10m`), while a second scenario reads `/metrics` every `SAMPLE_EVERY` seconds (5) until `DRAIN` (`3m`) after publishing stops. It needs `METRICS_TOKEN` and a server with thumbnails on. Renders run `THUMBNAIL_CONCURRENCY` at a time per server process (2 by default), and past 1000 waiting versions the server stops queueing (`MAX_QUEUE` in `apps/api/src/thumbnails.ts`).
+Publishes a new 30 KB page (`HTML_KB`) `RATE` times a minute (100) for `DURATION` (`10m`), while a second scenario reads `/metrics` every `SAMPLE_EVERY` seconds (5) until `DRAIN` (`3m`) after publishing stops. It needs `METRICS_TOKEN` and a server with thumbnails on. Renders run `THUMBNAIL_CONCURRENCY` at a time on the whole server (2 by default): with several workers, one of them renders every thumbnail, and past 1000 waiting versions the server stops queueing (`MAX_QUEUE` in `apps/api/src/thumbnails.ts`).
 
 It reports `thumbnail_queue_length` (every sample), `thumbnail_queue_now` (the last one), `thumbnails_rendered` and `thumbnails_failed` (since the run started) and `thumbnail_render_mean_seconds` (mean since the server started). Thresholds: the queue's p95 under 100 and its maximum under 500, empty again by the end of the drain, publishes under 1 s at p95.
 
@@ -133,7 +133,7 @@ The metrics, from `apps/api/src/metrics.ts`:
 | Metric | What to look for |
 | --- | --- |
 | `artifact_http_request_duration_seconds` (`method`, `route`, `status`) | Which route is slow. `histogram_quantile(0.95, sum by (le, route) (rate(artifact_http_request_duration_seconds_bucket[1m])))` |
-| `artifact_db_pool_active`, `artifact_db_pool_max` | Active above max means queries wait for a connection. The pool is postgres.js's default of 10 per process |
+| `artifact_db_pool_active`, `artifact_db_pool_max` | Active above max means queries wait for a connection. The pool is `DATABASE_POOL_MAX` per worker: 10 with one worker, and about 20 in all shared by more (`databasePoolMax` in `apps/api/src/workers.ts`) |
 | `artifact_s3_request_duration_seconds` (`operation`, `outcome`) | Object storage time and errors; few `get` calls means the blob cache answers |
 | `artifact_thumbnail_queue_length` | Grows when publishes outpace renders |
 | `artifact_thumbnail_renders_active` | Renders running now, at most `THUMBNAIL_CONCURRENCY` |

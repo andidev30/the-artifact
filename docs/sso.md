@@ -12,11 +12,12 @@ When someone chooses the button:
 
 1. The server sends them to the provider with the authorization code flow, PKCE (`S256`), a `state` and a `nonce`.
 2. The provider sends them back to `{{APP_URL}}/api/auth/sso/oidc/callback`. The server checks the `state`, exchanges the code with the client secret and the PKCE verifier, and checks the ID token: its signature against the provider's published keys (JWKS), its issuer, audience, expiry and `nonce`.
-3. The server finds the account:
+3. The server checks that the provider says the address is verified (`email_verified`), unless you turned on **Trust addresses** for it. Without that, the sign-in is refused, for existing and new accounts alike.
+4. The server finds the account:
    - the account this person signed in to through this provider before, found by the provider's stable id for them (`sub`), even if their address changed since;
-   - otherwise the account with the same email address, which is then linked to the provider. This needs the provider to say the address is verified (`email_verified`);
+   - otherwise the account with the same email address, which is then linked to the provider;
    - otherwise a new account.
-4. As with every other way in, an account with a passkey or an authenticator app is asked for it next (see [Two-factor sign-in](/docs/signing-in#two-factor-sign-in)).
+5. As with every other way in, an account with a passkey or an authenticator app is asked for it next (see [Two-factor sign-in](/docs/signing-in#two-factor-sign-in)).
 
 New accounts follow these rules:
 
