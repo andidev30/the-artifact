@@ -6,7 +6,7 @@ import { isIP } from 'node:net'
 import { and, desc, eq, inArray, isNull, type SQL, sql } from 'drizzle-orm'
 import { db, schema } from './db/index.js'
 import type { Artifact, Webhook, WebhookDelivery } from './db/schema.js'
-import { env, isProduction } from './env.js'
+import { env, isDevServer } from './env.js'
 import { hit } from './limits.js'
 import { log } from './log.js'
 import { isPublicAddress } from './network.js'
@@ -50,8 +50,9 @@ export const POLL_MS = 5_000
 const EXCERPT_LENGTH = 200
 const SECRET_KEY = 'webhook-secrets'
 
-// Hostnames plain http may go to, and only outside production (APP_URL on http), for trying
-// webhooks against a local receiver
+// Hostnames plain http may go to, and only on a development server, for trying webhooks against a
+// local receiver. Never on a deployment, whatever its APP_URL: any account could reach the server's
+// own loopback.
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]'])
 
 type Resolved = { address: string; family: number }
@@ -59,7 +60,7 @@ type Config = { lookup: (host: string) => Promise<Resolved[]>; allowLocalHttp: b
 
 const DEFAULTS: Config = {
   lookup: (host) => lookup(host, { all: true, verbatim: true }),
-  allowLocalHttp: !isProduction,
+  allowLocalHttp: isDevServer,
 }
 let config = DEFAULTS
 
@@ -70,7 +71,7 @@ export function configureWebhooks(next: Partial<Config> | null) {
 
 export class WebhookError extends Error {}
 
-// A destination people may save: https (http only to this machine outside production), no
+// A destination people may save: https (http only to this machine on a development server), no
 // credentials in it, and not an address that is private on its face. Names are checked again, after
 // resolving them, every time something is sent.
 export function checkWebhookUrl(value: unknown): { url: string } | { error: string } {
@@ -404,14 +405,14 @@ async function post(url: URL, body: string, headers: Record<string, string>): Pr
     else {
       try {
         addresses = await withTimeout(config.lookup(host), TIMEOUT_MS)
-      } catch (err) {
-        if (err instanceof WebhookError) throw err
-        throw new WebhookError(`${host} could not be found.`)
+      } catch {
+        addresses = []
       }
     }
-    if (!addresses.length) throw new WebhookError(`${host} could not be found.`)
-    if (addresses.some((a) => !isPublicAddress(a.address)))
-      throw new WebhookError(`${host} is on a private network or a reserved address, which webhooks can’t reach.`)
+    // One message for a name that doesn't resolve and one that resolves to a private address, so the
+    // error doesn't tell a workspace how names resolve from inside the server's network
+    if (!addresses.length || addresses.some((a) => !isPublicAddress(a.address)))
+      throw new WebhookError(`Webhooks can’t reach ${host}: it could not be found, or it is on a private network or a reserved address.`)
     target = addresses[0]
   }
   const timeout = Math.max(1, TIMEOUT_MS - (Date.now() - started))

@@ -166,3 +166,8 @@ export const env = {
 export const mailEnabled = () => Boolean(env.smtp.host)
 
 export const isProduction = env.appUrl.startsWith('https://')
+
+// A server run from a checkout (`pnpm dev`, the tests), never a deployment. Not tied to APP_URL: plenty
+// of real installs serve plain http. The Docker image sets NODE_ENV=production, and anything that
+// starts dist/ without NODE_ENV counts as a deployment too.
+export const isDevServer = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test'
