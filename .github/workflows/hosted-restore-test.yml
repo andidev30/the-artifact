@@ -1,0 +1,138 @@
+name: Hosted restore test
+
+# Weekly proof that the hosted service's backups can be restored: takes the newest successful run of
+# Hosted backup, decrypts it, restores it into a throwaway Postgres, runs the app's migrations on it
+# and checks the rows and blobs. A failure fails the run, and GitHub emails the owner. The result is
+# in the run's summary. Skipped until BACKUP_AGE_IDENTITY exists. See ee/ops/runbook.md.
+on:
+  schedule:
+    - cron: '40 21 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PG_MAJOR: 17
+  # A nightly backup older than this means the backup workflow has stopped running
+  MAX_BACKUP_AGE_HOURS: 48
+
+jobs:
+  configured:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      ok: ${{ steps.check.outputs.ok }}
+    steps:
+      - id: check
+        env:
+          BACKUP_AGE_IDENTITY: ${{ secrets.BACKUP_AGE_IDENTITY }}
+        run: |
+          if [ -n "$BACKUP_AGE_IDENTITY" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Restore tests are off: set BACKUP_AGE_IDENTITY (see ee/ops/runbook.md)"
+          fi
+
+  restore:
+    needs: configured
+    if: needs.configured.outputs.ok == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      # To find the backup run and download its artifacts
+      actions: read
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: artifact
+          POSTGRES_PASSWORD: artifact
+          POSTGRES_DB: restore
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U artifact"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      DATABASE_URL: postgres://artifact:artifact@localhost:5432/restore
+      RESTORE_DATABASE_URL: postgres://artifact:artifact@localhost:5432/restore
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Install age and the Postgres client
+        run: |
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y --no-install-recommends age "postgresql-client-$PG_MAJOR"
+          echo "/usr/lib/postgresql/$PG_MAJOR/bin" >> "$GITHUB_PATH"
+
+      - name: Download the newest backup
+        id: download
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow hosted-backup.yml --status success --limit 1 \
+            --json databaseId,createdAt --jq '.[] | "\(.databaseId) \(.createdAt)"')
+          if [ -z "$run" ]; then
+            echo "::error::No successful Hosted backup run to restore"
+            exit 1
+          fi
+          read -r id created <<< "$run"
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+          echo "created=$created" >> "$GITHUB_OUTPUT"
+          gh run download "$id" --repo "$GITHUB_REPOSITORY" --dir backup
+          age_hours=$(( ($(date +%s) - $(date -d "$created" +%s)) / 3600 ))
+          echo "age_hours=$age_hours" >> "$GITHUB_OUTPUT"
+          echo "size=$(du -sh backup | cut -f 1)" >> "$GITHUB_OUTPUT"
+          if [ "$age_hours" -gt "$MAX_BACKUP_AGE_HOURS" ]; then
+            echo "::error::The newest backup is $age_hours hours old; check the Hosted backup workflow"
+            exit 1
+          fi
+
+      - name: Restore, migrate and check
+        id: restore
+        env:
+          BACKUP_AGE_IDENTITY: ${{ secrets.BACKUP_AGE_IDENTITY }}
+        run: |
+          start=$(date +%s)
+          content=
+          if find backup -name 'bucket-*' | grep -q .; then content=content; fi
+          ee/ops/backup/restore.sh backup ${content:+"$content"}
+          pnpm --filter @the-artifact/api db:migrate
+          set +e
+          ee/ops/backup/verify.sh ${content:+"$content"} > report.md
+          status=$?
+          set -e
+          echo "duration=$(( $(date +%s) - start ))" >> "$GITHUB_OUTPUT"
+          [ -n "$content" ] || echo "| Blobs | not checked: this backup has no bucket copy |" >> report.md
+          exit "$status"
+
+      - name: Summary
+        if: always() && steps.download.outputs.id
+        env:
+          OUTCOME: ${{ steps.restore.outcome }}
+          RUN_ID: ${{ steps.download.outputs.id }}
+          CREATED: ${{ steps.download.outputs.created }}
+          AGE_HOURS: ${{ steps.download.outputs.age_hours }}
+          SIZE: ${{ steps.download.outputs.size }}
+          DURATION: ${{ steps.restore.outputs.duration }}
+        run: |
+          {
+            echo "## Restore test: $([ "$OUTCOME" = success ] && echo passed || echo FAILED)"
+            echo
+            echo "- Tested: $(date -u +'%Y-%m-%d %H:%M UTC')"
+            echo "- Backup: [run $RUN_ID]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$RUN_ID), taken $CREATED ($AGE_HOURS hours old)"
+            echo "- Encrypted size: $SIZE"
+            echo "- Restore, migrations and checks: ${DURATION:-?} seconds"
+            echo
+            [ -f report.md ] && cat report.md
+          } >> "$GITHUB_STEP_SUMMARY"
