@@ -1,5 +1,6 @@
 import { and, eq, inArray } from 'drizzle-orm'
 import { artifactUrl, pageTarget } from './artifacts.js'
+import { track } from './analytics.js'
 import { audit } from './audit.js'
 import { db, schema } from './db/index.js'
 import type { Artifact, ShareRole } from './db/schema.js'
@@ -88,6 +89,7 @@ export async function sharePeople(artifact: Artifact, inviter: Inviter, emails: 
     target: pageTarget(artifact),
     details: { people: targets, role },
   })
+  track({ event: 'page_shared', userId: inviter.id, detail: 'person' })
 
   // Without email there is nothing to send; the sharer passes the link on
   if (notify && mailEnabled()) {

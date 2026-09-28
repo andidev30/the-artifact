@@ -1,5 +1,6 @@
 import { and, asc, count, eq, gt, notExists, sql } from 'drizzle-orm'
 import { Hono, type Context } from 'hono'
+import { track } from '../analytics.js'
 import { audit } from '../audit.js'
 import { hasSecondFactor, twoFactorRequiredError } from '../auth/factors.js'
 import { hashPassword, passwordProblem } from '../auth/password.js'
@@ -465,6 +466,7 @@ async function join(user: User, invitation: InvitationRow, org: OrganizationRow)
     return rows.length > 0
   })
   const joined = await membershipOf(org.id, user.id)
+  if (!user.onboardedAt) track({ event: 'onboarded', userId: user.id, detail: 'invitation' })
   if (inserted) {
     audit({
       action: 'member.joined',

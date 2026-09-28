@@ -161,7 +161,7 @@ email.post('/confirm', async (c) => {
 
   let user: User
   try {
-    user = await findOrCreateUser({ email: row.email, passwordHash, approved: Boolean(row.createdBy) })
+    user = await findOrCreateUser({ email: row.email, passwordHash, approved: Boolean(row.createdBy), method: 'email_link' })
   } catch (err) {
     if (err instanceof SignupClosedError) {
       const error =

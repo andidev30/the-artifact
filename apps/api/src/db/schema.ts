@@ -3,6 +3,7 @@ import {
   bigint,
   boolean,
   check,
+  date,
   index,
   integer,
   jsonb,
@@ -656,6 +657,36 @@ export const scimUsers = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex('scim_users_user_name_unique').on(sql`lower(${t.userName})`)],
+)
+
+// The hosted service's sign-up funnel (src/ee/analytics.ts): when each account first reached a step,
+// once per account and step. Only the account, the step, a small enum and the time: never page
+// content, titles, email addresses or IP addresses. Rows go with the account and after 13 months.
+export const productEvents = pgTable(
+  'product_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    // PRODUCT_EVENTS in src/analytics.ts, e.g. "signed_up"
+    event: text('event').notNull(),
+    // How, from a fixed list per event (a sign-up method, a kind of share), or null
+    detail: text('detail'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('product_events_user_event_unique').on(t.userId, t.event), index('product_events_event_created_at_idx').on(t.event, t.createdAt)],
+)
+
+// How often something happened each day on the hosted service (publishes), counted without saying who
+export const productDailyCounts = pgTable(
+  'product_daily_counts',
+  {
+    day: date('day', { mode: 'string' }).notNull(),
+    event: text('event').notNull(),
+    count: integer('count').notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.day, t.event] })],
 )
 
 // Counters for rate limits (see src/limits.ts): how often something happened for one key in the

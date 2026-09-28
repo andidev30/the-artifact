@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { contextStorage } from 'hono/context-storage'
+import { setProductEventStore } from './analytics.js'
 import { setAuditStore } from './audit.js'
 import { email } from './auth/email.js'
 import { google } from './auth/google.js'
@@ -9,6 +10,7 @@ import { hasSecondFactor } from './auth/factors.js'
 import { endSession, loadUser, requireUser, type AuthEnv } from './auth/session.js'
 import { clearPending, passkeySignIn, twoFactor } from './auth/twofactor.js'
 import { db, schema } from './db/index.js'
+import { productAnalytics, productEventStore, pruneProductEvents } from './ee/analytics.js'
 import { auditLog, auditStore, pruneAuditEvents } from './ee/audit.js'
 import { contact } from './ee/contact.js'
 import { issuedLicenses } from './ee/licenses.js'
@@ -58,6 +60,9 @@ addPruner(pruneRetention)
 // Organizations' audit log, kept only while the install has an Enterprise license
 setAuditStore(auditStore)
 addPruner(pruneAuditEvents)
+// The hosted service's sign-up funnel; records nothing on a self-hosted install
+setProductEventStore(productEventStore)
+addPruner(pruneProductEvents)
 // Every limit is defined by now, ee/ ones included; a mistake in RATE_LIMITS stops the start here
 checkRateLimits()
 
@@ -128,6 +133,7 @@ api.route('/me/security', security)
 api.route('/me/sessions', sessions)
 api.route('/me', settings)
 api.route('/admin/issued-licenses', issuedLicenses)
+api.route('/admin/analytics', productAnalytics)
 api.route('/admin/sso', ssoAdmin)
 api.route('/admin/scim', scimAdmin)
 api.route('/admin', admin)

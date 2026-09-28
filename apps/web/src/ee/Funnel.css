@@ -1,0 +1,68 @@
+.funnel-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-variant-numeric: tabular-nums;
+}
+
+.funnel-table + .funnel-table {
+  margin-top: 24px;
+}
+
+.funnel-table caption {
+  text-align: left;
+  margin-bottom: 8px;
+}
+
+.funnel-table th,
+.funnel-table td {
+  padding: 8px 8px 8px 0;
+  border-bottom: 1px solid var(--grid);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.funnel-table thead th {
+  font-size: var(--step--1);
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.funnel-table tbody th {
+  font-weight: 500;
+}
+
+.funnel-table th:first-child {
+  width: 36%;
+}
+
+.funnel-count {
+  font-weight: 600;
+}
+
+.funnel-rate {
+  margin-left: 6px;
+  font-size: var(--step--1);
+  color: var(--ink-faint);
+}
+
+.funnel-bar {
+  display: block;
+  height: 4px;
+  margin-top: 6px;
+  background: var(--grid-fine);
+}
+
+.funnel-bar span {
+  display: block;
+  height: 100%;
+  background: var(--line);
+}
+
+@media (max-width: 560px) {
+  .funnel-rate {
+    display: block;
+    margin-left: 0;
+  }
+}

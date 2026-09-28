@@ -76,7 +76,9 @@ For each version of a page, we count how many times it was opened. When someone 
 
 ### Product events
 
-To see where people get stuck, we may record a few events in our own database, such as when an account is created, when an agent first connects, when a first page is published, and when a page is first shared. An event holds your account id, what happened, and when. It never holds page content or page titles. We don't send these events to any third-party analytics service, and they use no cookies. They are deleted, or no longer linked to you, when you delete your account.
+To see where people get stuck, we record a few steps in our own database, the first time your account reaches each one: when the account is created (and whether with an email link, a password or Google), when you finish the first setup screen, when an agent or access token first connects, when you first publish a page, and when you first share a page (by link, with your organization, or with a person). Each event holds your account id, the step, that one detail, and when it happened. It never holds page content, page titles, email addresses or IP addresses. We also count how many pages are published each day, without saying by whom.
+
+We don't send these events to any third-party analytics service, and they use no cookies. We keep them for 13 months. They are deleted when you delete your account.
 
 ### Contact sales
 
@@ -138,6 +140,7 @@ We use no advertising cookies and no tracking cookies. Website analytics use no 
 - Pages, versions, comments and organizations: until they are deleted. On the free Personal plan, older versions go after 7 days.
 - Sessions, sign-in links, invitations and tokens: they stop working when they expire, and are deleted when they are used, when you sign out or end them, or with your account.
 - Records of who opened a page: 90 days.
+- Product events: 13 months, or until you delete your account.
 - Rate limit counters: about a day after their window ends.
 - Vercel's request logs and website analytics: as long as Vercel keeps them for our plan.
 
@@ -148,7 +151,7 @@ You can delete your account in **Account settings → Delete account**. Before y
 - Your personal pages are deleted, with their history.
 - Organizations with nobody else in them are deleted, with their pages.
 - Pages you published in organizations with other people stay in those organizations and move to another owner. The organization can keep them.
-- Your sessions, passkeys, authenticator app, recovery codes, agent connections, access tokens, memberships, and shares and invitations to your email address are deleted.
+- Your sessions, passkeys, authenticator app, recovery codes, agent connections, access tokens, memberships, product events, and shares and invitations to your email address are deleted.
 - Comments you wrote stay on pages that remain, shown as "Deleted account". Versions you published stay without your name.
 
 You can't delete your account while you are the only owner of an organization that has other people in it. Make someone else an owner first, or remove the other people.

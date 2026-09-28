@@ -396,6 +396,21 @@ test('server admin', async ({ page }) => {
   await expectAccessible(page, 'server admin, license keys', { include: '#license-keys' })
 })
 
+// Hosted only: the sign-up funnel has no controls of its own, so reaching it from the rail is the keyboard path
+test('server admin, sign-up funnel', async ({ page }) => {
+  const email = uniqueEmail('a11y-funnel')
+  await signUpPersonal(page, email)
+  await grantInstanceAdmin(email)
+  await page.goto('/admin')
+  const rail = page.getByRole('navigation', { name: 'Admin sections' }).getByRole('link', { name: 'Sign-up funnel' })
+  await rail.focus()
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(/#funnel$/)
+  const funnel = page.locator('#funnel')
+  await expect(funnel.getByRole('table', { name: 'Steps' }).getByRole('row', { name: /Signed up/ })).toBeVisible()
+  await expectAccessible(page, 'server admin, sign-up funnel', { include: '#funnel' })
+})
+
 test('agent consent page', async ({ page }) => {
   await signUpPersonal(page, uniqueEmail('a11y-consent'))
   const redirectUri = 'http://127.0.0.1:43999/callback'

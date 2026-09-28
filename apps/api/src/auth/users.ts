@@ -1,4 +1,5 @@
 import { and, eq, gt } from 'drizzle-orm'
+import { track, type SignUpMethod } from '../analytics.js'
 import { db, schema } from '../db/index.js'
 import type { User } from '../db/schema.js'
 import { env } from '../env.js'
@@ -13,6 +14,8 @@ type Profile = {
   passwordHash?: string
   // An instance admin made the link, so the sign-up policy doesn't apply
   approved?: boolean
+  // How a new account was made, for the hosted service's sign-up funnel
+  method: SignUpMethod
 }
 
 // `code` is the error the sign-in routes redirect to (/login?error=…)
@@ -90,11 +93,11 @@ export async function findOrCreateUser(profile: Profile): Promise<User> {
   }
 
   if (!profile.approved && !(await canSignUp(email))) throw new SignupClosedError()
-  return db.transaction(async (tx) => {
+  const { user, created } = await db.transaction(async (tx) => {
     // One account at a time, so only the very first one can become the instance admin
     await lockAdmins(tx)
     const [raced] = await tx.select().from(schema.users).where(eq(schema.users.email, email))
-    if (raced) return raced
+    if (raced) return { user: raced, created: false }
     const [created] = await tx
       .insert(schema.users)
       .values({
@@ -106,8 +109,10 @@ export async function findOrCreateUser(profile: Profile): Promise<User> {
         ...(await newAccountFields(tx)),
       })
       .returning()
-    return created
+    return { user: created, created: true }
   })
+  if (created) track({ event: 'signed_up', userId: user.id, detail: profile.method })
+  return user
 }
 
 const PLANS = new Set(['organization'])
@@ -134,7 +139,7 @@ export function signInErrorUrl(error: string): string {
 // A new account with a password, or null when the address already has one. Never touches an
 // existing account, unlike findOrCreateUser.
 export async function createPasswordAccount(email: string, name: string | null, passwordHash: string): Promise<User | null> {
-  return db.transaction(async (tx) => {
+  const user = await db.transaction(async (tx) => {
     await lockAdmins(tx)
     const [taken] = await tx.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, email))
     if (taken) return null
@@ -144,4 +149,6 @@ export async function createPasswordAccount(email: string, name: string | null, 
       .returning()
     return created
   })
+  if (user) track({ event: 'signed_up', userId: user.id, detail: 'password' })
+  return user
 }
