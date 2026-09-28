@@ -9,6 +9,25 @@ import { LegalFooter } from './LegalFooter'
 import { Pricing } from './Pricing'
 import './Landing.css'
 
+// Sample pages on the hosted service, shared by link (examples/ has their sources)
+const EXAMPLES = [
+  {
+    href: 'https://the-artifact-pi.vercel.app/a/2be2xh8nid',
+    title: 'Support report, Q3',
+    text: 'Numbers, a weekly chart and a table, the kind of page that follows a CSV.',
+  },
+  {
+    href: 'https://the-artifact-pi.vercel.app/a/fnr34dz8cp',
+    title: 'Release checklist',
+    text: 'An interactive list with progress and filters, all in one HTML file.',
+  },
+  {
+    href: 'https://the-artifact-pi.vercel.app/a/j69kinxscr',
+    title: 'How an agent signs in with PKCE',
+    text: 'A diagram you step through, to explain something in a few clicks.',
+  },
+]
+
 // undefined while checking, null when signed out
 type Session = Me | null | undefined
 
@@ -175,6 +194,21 @@ export function Landing() {
               <dd>Every page your agents have published, newest first, with the agent that made it.</dd>
             </div>
           </dl>
+        </section>
+
+        <section id="examples" className="section examples">
+          <h2>See a few</h2>
+          <p className="section-lede">Pages an agent wrote and published here. Open them the way anyone with the link would.</p>
+          <ul>
+            {EXAMPLES.map((e) => (
+              <li key={e.href}>
+                <a href={e.href} target="_blank" rel="noopener">
+                  <strong>{e.title}</strong>
+                  <span>{e.text}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
         </section>
 
         <section id="pricing" className="section">

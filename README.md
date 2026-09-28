@@ -59,6 +59,16 @@ sequenceDiagram
 </tr>
 </table>
 
+## Examples
+
+Pages an agent wrote and published on the hosted service, shared by link:
+
+- [Support report, Q3](https://the-artifact-pi.vercel.app/a/2be2xh8nid): numbers, a weekly chart and a table
+- [Release checklist](https://the-artifact-pi.vercel.app/a/fnr34dz8cp): an interactive list with progress and filters
+- [How an agent signs in with PKCE](https://the-artifact-pi.vercel.app/a/j69kinxscr): a diagram you step through
+
+Their sources are in [`examples/`](examples/).
+
 ## Features
 
 - **One link per page, every version kept.** Republishing keeps the address; restore any older version from the history.
