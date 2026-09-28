@@ -86,7 +86,7 @@ spec:
               containerPort: 5432
           readinessProbe:
             exec:
-              command: ['pg_isready', '-U', {{ .Values.postgresql.auth.username | quote }}, '-d', {{ .Values.postgresql.auth.database | quote }}]
+              command: ['pg_isready', '-h', '127.0.0.1', '-U', {{ .Values.postgresql.auth.username | quote }}, '-d', {{ .Values.postgresql.auth.database | quote }}]
             periodSeconds: 5
           {{- with .Values.postgresql.resources }}
           resources:
