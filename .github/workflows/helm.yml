@@ -1,0 +1,101 @@
+name: Helm chart
+
+on:
+  push:
+    branches: [main]
+    paths: ['deploy/helm/**', 'deploy/seccomp-chromium.json', '.github/workflows/helm.yml']
+  pull_request:
+    paths: ['deploy/helm/**', 'deploy/seccomp-chromium.json', '.github/workflows/helm.yml']
+
+concurrency:
+  group: helm-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CHART: deploy/helm/the-artifact
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/setup-helm@v5
+        with:
+          version: v4.3.0
+      - name: Install kubeconform
+        run: |
+          curl -sSfL https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64.tar.gz | tar -xz -C /usr/local/bin kubeconform
+      # Each file in ci/ is one way operators install it: the defaults, their own services, values inline
+      - name: Lint, render and validate
+        run: |
+          crds='https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
+          for values in "$CHART"/ci/*-values.yaml; do
+            echo "::group::$values"
+            helm lint "$CHART" --strict -f "$values"
+            helm template ci "$CHART" -f "$values" \
+              | kubeconform -strict -summary -kubernetes-version 1.30.0 -schema-location default -schema-location "$crds" -
+            echo "::endgroup::"
+          done
+
+  # helm install into a throwaway cluster, with the image built from this commit and thumbnails on
+  install:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          load: true
+          tags: the-artifact:ci
+          cache-from: type=gha
+      - uses: azure/setup-helm@v5
+        with:
+          version: v4.3.0
+      # Chromium's sandbox needs unprivileged user namespaces, which Ubuntu 24.04 restricts by default
+      - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      # The seccomp profile goes onto the node, where the kubelet looks for it, as on a real cluster
+      - name: Write the kind config
+        run: |
+          cat > "$RUNNER_TEMP/kind.yaml" <<EOF
+          kind: Cluster
+          apiVersion: kind.x-k8s.io/v1alpha4
+          nodes:
+            - role: control-plane
+              extraMounts:
+                - hostPath: $GITHUB_WORKSPACE/deploy/seccomp-chromium.json
+                  containerPath: /var/lib/kubelet/seccomp/profiles/the-artifact-chromium.json
+                  readOnly: true
+          EOF
+      - uses: helm/kind-action@v1
+        with:
+          cluster_name: the-artifact
+          config: ${{ runner.temp }}/kind.yaml
+      - run: kind load docker-image the-artifact:ci --name the-artifact
+      - name: helm install
+        run: |
+          helm install ci "$CHART" --namespace the-artifact --create-namespace --wait --timeout 10m \
+            --set image.repository=the-artifact --set image.tag=ci --set image.pullPolicy=Never
+      - name: Check the instance
+        run: |
+          kubectl -n the-artifact port-forward svc/ci-the-artifact 8080:80 &
+          sleep 3
+          curl -sSf http://localhost:8080/readyz
+          curl -sSf -o /dev/null http://localhost:8080/
+          # Renders a thumbnail inside the pod, which fails unless Chromium's sandbox starts under the chart's security settings
+          kubectl -n the-artifact exec deploy/ci-the-artifact -c app -- node --input-type=module -e "
+            const t = await import('/app/dist/thumbnails.js')
+            const r = await t.renderPage({ html: '<h1>Hello</h1>', files: [] })
+            console.log('Rendered a thumbnail of', r.image.length, 'bytes')
+            process.exit(0)"
+      - name: Show what went wrong
+        if: failure()
+        run: |
+          kubectl -n the-artifact get pods -o wide
+          kubectl -n the-artifact describe pods
+          kubectl -n the-artifact logs deploy/ci-the-artifact --all-containers --tail 100

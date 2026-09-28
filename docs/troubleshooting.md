@@ -54,7 +54,7 @@ docker compose logs app
 
 ## Kubernetes: the app pod doesn't start
 
-If `kubectl -n the-artifact describe pod` says the seccomp profile couldn't be loaded, the node running the pod lacks `/var/lib/kubelet/seccomp/profiles/the-artifact-chromium.json`. Copy it there, or run without thumbnails. See [The seccomp profile](/docs/kubernetes#3-the-seccomp-profile).
+If `kubectl -n the-artifact describe pod` says the seccomp profile couldn't be loaded, the node running the pod lacks `/var/lib/kubelet/seccomp/profiles/the-artifact-chromium.json`. Copy it there, or run without thumbnails (`thumbnails.enabled=false` with the Helm chart). See [The seccomp profile](/docs/kubernetes#3-the-seccomp-profile).
 
 If the pod waits in `Init`, the app can't reach the database or object storage yet: `kubectl -n the-artifact logs deploy/the-artifact -c wait-for-services` says which address it is waiting for.
 

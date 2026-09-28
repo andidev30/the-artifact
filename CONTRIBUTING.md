@@ -26,7 +26,7 @@ Commit messages follow the style in the log: `feat: …`, `fix(web): …`, `refa
 Releases are made by [release-please](https://github.com/googleapis/release-please) from the commit messages on `main`:
 
 - Each push to `main` updates an open pull request titled `chore: release x.y.z`, with the next version, its `CHANGELOG.md` entry and the version bumped in `package.json` and the files in `deploy/`.
-- Merging that pull request tags `vx.y.z`, creates the GitHub release with the same notes, and publishes the image as `x.y.z`, `x.y` and `latest`. Every push to `main` is also published as `main`.
+- Merging that pull request tags `vx.y.z`, creates the GitHub release with the same notes, and publishes the image as `x.y.z`, `x.y` and `latest`, then the Helm chart as `oci://ghcr.io/andidev30/charts/the-artifact` version `x.y.z`. Every push to `main` is also published as `main`.
 
 Pull requests are merged with **Rebase and merge**, or with a merge commit whose description is left empty. release-please reads every commit, and a merge commit that repeats the pull request title in its description lists the change a second time.
 

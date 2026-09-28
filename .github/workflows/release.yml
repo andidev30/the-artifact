@@ -2,7 +2,7 @@ name: Release
 
 # release-please keeps a release PR open with the next version and its changelog, built from the
 # conventional commits merged to main. Merging that PR tags vX.Y.Z, creates the GitHub release and
-# publishes the image. See docs/upgrading.md and CONTRIBUTING.md.
+# publishes the image, then the Helm chart. See docs/upgrading.md and CONTRIBUTING.md.
 on:
   push:
     branches: [main]
@@ -26,6 +26,7 @@ jobs:
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
       version: ${{ steps.release.outputs.version }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
       - id: release
         uses: googleapis/release-please-action@v5
@@ -79,3 +80,30 @@ jobs:
     uses: ./.github/workflows/image.yml
     with:
       version: ${{ needs.release-please.outputs.version }}
+
+  # After the image, so a published chart never names an image that failed to publish
+  chart:
+    needs: [release-please, image]
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
+      - uses: azure/setup-helm@v5
+        with:
+          version: v4.3.0
+      - name: Push the chart to ghcr.io/<owner>/charts/the-artifact
+        env:
+          VERSION: ${{ needs.release-please.outputs.version }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$REGISTRY_TOKEN" | helm registry login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          # The release PR has bumped both in Chart.yaml already; passing them keeps a missed marker from
+          # publishing the wrong version
+          helm package deploy/helm/the-artifact --version "$VERSION" --app-version "$VERSION"
+          helm push "the-artifact-$VERSION.tgz" "oci://ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/charts"
