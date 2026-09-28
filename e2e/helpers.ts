@@ -126,3 +126,48 @@ export async function mockRetention(page: Page, initial: RetentionState, preview
   })
   return saves
 }
+
+// The audit log is an Enterprise feature of self-hosted installs, which the e2e servers can't turn on
+// (license keys only verify against keys in the code), so its screen is shown by answering /api/config
+// and the audit log API the way a licensed self-hosted server would. `licensed: false` answers like a
+// server without a license. Returns the audit log requests the page made.
+export async function mockAuditLog(page: Page, { licensed = true, events = 60 } = {}) {
+  await page.route('**/api/config', async (route) => {
+    const res = await route.fetch()
+    await route.fulfill({ json: { ...(await res.json()), selfHosted: true } })
+  })
+  const kinds = [
+    { action: 'sign_in.succeeded', target: null, details: { method: 'password' } },
+    { action: 'page.visibility_changed', target: { type: 'page', id: 'abc', label: 'Launch plan' }, details: { from: 'private', to: 'link' } },
+    { action: 'member.role_changed', target: { type: 'member', id: 'm1', label: 'bo@example.com' }, details: { from: 'member', to: 'admin' } },
+    { action: 'sign_in.failed', target: null, details: { reason: 'wrong password' } },
+  ]
+  const all = Array.from({ length: events }, (_, i) => ({
+    id: `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
+    at: new Date(Date.UTC(2026, 8, 28, 12) - i * 3_600_000).toISOString(),
+    actor: { id: null, email: i % 2 ? 'ana@example.com' : 'owner@example.com' },
+    ip: '203.0.113.7',
+    userAgent: 'Mozilla/5.0',
+    ...kinds[i % kinds.length],
+  }))
+  const asked: URL[] = []
+  await page.route(
+    (url) => /\/api\/organizations\/[^/]+\/audit-log$/.test(url.pathname),
+    async (route) => {
+      const url = new URL(route.request().url())
+      asked.push(url)
+      if (!licensed) {
+        return route.fulfill({
+          status: 403,
+          json: { error: 'This needs an Enterprise license. An instance admin can add one under Server admin.', code: 'enterprise_required' },
+        })
+      }
+      const action = url.searchParams.get('action')
+      const matching = all.filter((e) => !action || e.action === action)
+      const start = Number(url.searchParams.get('cursor') ?? 0)
+      const next = start + 50 < matching.length ? String(start + 50) : null
+      await route.fulfill({ json: { events: matching.slice(start, start + 50), next, actions: [], retentionDays: 365 } })
+    },
+  )
+  return asked
+}

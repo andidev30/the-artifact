@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
 import { createHostedOrganization, forgetSignInLinks } from '../apps/api/test/e2e-db.ts'
-import { connectAgent, latestMail, mockRetention, publishViaMcp, signUpPersonal, uniqueEmail } from './helpers'
+import { connectAgent, latestMail, mockAuditLog, mockRetention, publishViaMcp, signUpPersonal, uniqueEmail } from './helpers'
 
 // Every flow here is driven with the keyboard alone: no clicks, no fill()
 
@@ -206,6 +206,53 @@ test('move a page to a folder from its card menu', async ({ page }) => {
   await page.keyboard.press('Escape')
   await expect(move).toBeHidden()
   await expect(more).toBeFocused()
+})
+
+test('filter, page through and export the audit log', async ({ page }) => {
+  const email = uniqueEmail('kb-audit')
+  await signUpPersonal(page, email)
+  const org = await createHostedOrganization(email, 'Audit Keys', `kb-audit-${Date.now().toString(36)}`)
+  const asked = await mockAuditLog(page)
+  await page.goto(`/organizations/${org.slug}/settings`)
+
+  const audit = page.locator('section#audit')
+  const rail = page.getByRole('navigation', { name: 'Organization settings sections' }).getByRole('link', { name: 'Audit log' })
+  await tabTo(page, rail)
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(/#audit$/)
+
+  const action = audit.getByLabel('Action')
+  await tabTo(page, action)
+  await expectFocusRing(action)
+  // Type-ahead, which picks an option of a closed select the same way on every platform
+  await page.keyboard.type('Signed')
+  await expect(action).toHaveValue('sign_in.succeeded')
+  const person = audit.getByLabel('Person')
+  await tabTo(page, person)
+  await page.keyboard.type('owner@')
+  await page.keyboard.press('Enter')
+  await expect.poll(() => asked.at(-1)?.searchParams.get('action')).toBe('sign_in.succeeded')
+  expect(asked.at(-1)?.searchParams.get('actor')).toBe('owner@')
+  await expect(audit.getByRole('listitem')).toHaveCount(15)
+
+  const clear = audit.getByRole('button', { name: 'Clear' })
+  await tabTo(page, clear)
+  await page.keyboard.press('Enter')
+  await expect(audit.getByRole('listitem')).toHaveCount(50)
+  await expect(action).toBeFocused()
+
+  const csv = audit.getByRole('link', { name: 'CSV' })
+  await tabTo(page, csv)
+  await expectFocusRing(csv)
+  await expect(csv).toHaveAttribute('href', /\/audit-log\/export\?format=csv$/)
+
+  // Showing more moves focus to the first event that was added
+  const more = audit.getByRole('button', { name: 'Show more' })
+  await tabTo(page, more)
+  await page.keyboard.press('Enter')
+  await expect(audit.getByRole('listitem')).toHaveCount(60)
+  await expect(audit.getByRole('listitem').nth(50)).toBeFocused()
+  await expect(more).toHaveCount(0)
 })
 
 test('account menu and settings forms', async ({ page }) => {

@@ -1,4 +1,5 @@
 import { and, desc, eq, sql } from 'drizzle-orm'
+import { audit } from './audit.js'
 import { hashToken, randomToken } from './auth/session.js'
 import { db, schema } from './db/index.js'
 import type { McpAuth } from './oauth/server.js'
@@ -137,12 +138,36 @@ export async function tokensIn(organizationId: string) {
   return rows.map((r) => ({ ...describe(r), owner: { id: r.ownerId, name: r.ownerName, email: r.ownerEmail } }))
 }
 
-// Whether a token was deleted; `where` narrows it to one person's or one organization's tokens
-export async function revokeToken(id: string, where: { userId: string } | { organizationId: string }): Promise<boolean> {
+type Actor = { id: string; email: string }
+
+// For the audit log of the token's organization; personal tokens aren't recorded
+export function auditToken(
+  action: 'access_token.created' | 'access_token.revoked',
+  token: { id: string; name: string; organizationId: string | null; userId: string },
+  actor: Actor,
+) {
+  audit({
+    action,
+    organizationId: token.organizationId,
+    actor: { id: actor.id, email: actor.email },
+    target: { type: 'access_token', id: token.id, label: token.name },
+    details: token.userId === actor.id ? {} : { owner: token.userId },
+  })
+}
+
+// Whether a token was deleted; `where` narrows it to one person's or one organization's tokens.
+// `actor` is who revoked it, for the audit log.
+export async function revokeToken(id: string, where: { userId: string } | { organizationId: string }, actor?: Actor): Promise<boolean> {
   const scope = 'userId' in where ? eq(schema.accessTokens.userId, where.userId) : eq(schema.accessTokens.organizationId, where.organizationId)
   const rows = await db
     .delete(schema.accessTokens)
     .where(and(eq(schema.accessTokens.id, id), scope))
-    .returning({ id: schema.accessTokens.id })
+    .returning({
+      id: schema.accessTokens.id,
+      name: schema.accessTokens.name,
+      organizationId: schema.accessTokens.organizationId,
+      userId: schema.accessTokens.userId,
+    })
+  if (rows.length && actor) auditToken('access_token.revoked', rows[0], actor)
   return rows.length > 0
 }

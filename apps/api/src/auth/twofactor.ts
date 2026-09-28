@@ -3,6 +3,7 @@ import { and, count, eq, isNotNull, lt } from 'drizzle-orm'
 import { Hono, type Context } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import type { AuthenticationResponseJSON } from '@simplewebauthn/server'
+import { audit } from '../audit.js'
 import { db, schema } from '../db/index.js'
 import type { User } from '../db/schema.js'
 import { env, isProduction } from '../env.js'
@@ -31,7 +32,12 @@ const RECOVERY_LENGTH = 10
 
 // After the first factor: a session, or a pending sign-in when the account has a second factor.
 // Returns where the browser goes next.
-export async function continueSignIn(c: Context, user: Pick<User, 'id'>, redirect: string): Promise<string> {
+export async function continueSignIn(
+  c: Context,
+  user: Pick<User, 'id' | 'email'>,
+  redirect: string,
+  method: 'password' | 'email link' | 'google',
+): Promise<string> {
   if (await hasSecondFactor(user.id)) {
     const token = randomToken()
     await db.delete(schema.pendingSignIns).where(lt(schema.pendingSignIns.expiresAt, new Date()))
@@ -40,6 +46,7 @@ export async function continueSignIn(c: Context, user: Pick<User, 'id'>, redirec
     return new URL('/login/two-factor', env.appUrl).toString()
   }
   await startSession(c, user.id)
+  signedIn(user, { method })
   return await setUpFirst(user.id, redirect)
 }
 
@@ -67,12 +74,22 @@ export function clearPending(c: Context) {
   deleteCookie(c, PENDING_COOKIE, { path: PENDING_PATH })
 }
 
+export function signedIn(user: Pick<User, 'id' | 'email'>, details: Record<string, string>) {
+  audit({ action: 'sign_in.succeeded', actor: { id: user.id, email: user.email }, memberOf: user.id, details })
+}
+
+// A wrong password or second factor for an account that exists, so it can be told to its organizations
+export function signInFailed(user: Pick<User, 'id' | 'email'>, reason: string) {
+  audit({ action: 'sign_in.failed', actor: { id: user.id, email: user.email }, memberOf: user.id, details: { reason } })
+}
+
 // The second factor checked out: the pending sign-in becomes a session, once
-async function finish(c: Context, pendingId: string, userId: string) {
+async function finish(c: Context, pendingId: string, user: Pick<User, 'id' | 'email'>, secondFactor: string) {
   const [used] = await db.delete(schema.pendingSignIns).where(eq(schema.pendingSignIns.id, pendingId)).returning()
   clearPending(c)
   if (!used) return null
-  await startSession(c, userId)
+  await startSession(c, user.id)
+  signedIn(user, { secondFactor })
   return used.redirect
 }
 
@@ -175,6 +192,7 @@ twoFactor.post('/code', async (c) => {
   const ok = digits ? await useTotpCode(row.user.id, code) : await useRecoveryCode(row.user.id, code)
   if (!ok) {
     await hit('two-factor', row.user.id)
+    signInFailed(row.user, digits ? 'wrong authenticator code' : 'wrong recovery code')
     return c.json(
       { error: digits ? 'That code is wrong or was already used. Wait for the next one.' : 'That recovery code is wrong or was already used.', field: 'code' },
       400,
@@ -182,7 +200,7 @@ twoFactor.post('/code', async (c) => {
   }
   await clearHits('two-factor', row.user.id)
   if (!digits) log.info('Signed in with a recovery code', { userId: row.user.id })
-  const redirect = await finish(c, row.pending.id, row.user.id)
+  const redirect = await finish(c, row.pending.id, row.user, digits ? 'authenticator app' : 'recovery code')
   if (!redirect) return c.json(EXPIRED, 401)
   return c.json({ redirect })
 })
@@ -205,10 +223,13 @@ twoFactor.post('/passkey', async (c) => {
   try {
     await verifyAuthentication('second-factor', row.user.id, body?.response as AuthenticationResponseJSON)
   } catch (err) {
-    if (err instanceof PasskeyError) return c.json({ error: err.message }, 400)
+    if (err instanceof PasskeyError) {
+      signInFailed(row.user, 'passkey not accepted')
+      return c.json({ error: err.message }, 400)
+    }
     throw err
   }
-  const redirect = await finish(c, row.pending.id, row.user.id)
+  const redirect = await finish(c, row.pending.id, row.user, 'passkey')
   if (!redirect) return c.json(EXPIRED, 401)
   return c.json({ redirect })
 })
@@ -234,11 +255,16 @@ passkeySignIn.post('/', async (c) => {
     if (err instanceof PasskeyError) return c.json({ error: err.message }, 400)
     throw err
   }
-  const [user] = await db.select({ suspendedAt: schema.users.suspendedAt }).from(schema.users).where(eq(schema.users.id, passkey.userId))
+  const [user] = await db
+    .select({ id: schema.users.id, email: schema.users.email, suspendedAt: schema.users.suspendedAt })
+    .from(schema.users)
+    .where(eq(schema.users.id, passkey.userId))
   if (user?.suspendedAt) {
+    signInFailed(user, 'account suspended')
     return c.json({ error: 'This account is suspended. Ask an admin of this server to restore it.', code: 'account_suspended' }, 403)
   }
   await startSession(c, passkey.userId)
+  if (user) signedIn(user, { method: 'passkey' })
   const plan = typeof body?.plan === 'string' ? body.plan : null
   return c.json({ redirect: afterSignInUrl(plan, safeNext(typeof body?.next === 'string' ? body.next : null)) })
 })

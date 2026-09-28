@@ -2,6 +2,12 @@
 
 A self-hosted install is free under AGPL-3.0 and does everything described in these docs without a license. An Enterprise license key turns on enterprise features on a self-hosted install, such as [version retention](/docs/retention). It says who the license is for, how many seats it has, and until when it is valid.
 
+## Enterprise features
+
+| Feature | What it does |
+| --- | --- |
+| [Audit log](/docs/audit-log) | Records sign-ins, sharing, member changes, organization settings and access tokens per organization, for its owners and admins to filter and export |
+
 ## Nothing phones home
 
 Your server checks the key itself. The key is signed, and the public keys that check the signature are part of the code, so no request leaves your server to check a license, not when you enter it and not later. An install without internet access checks a key the same way.

@@ -524,6 +524,33 @@ export const retentionPolicies = pgTable(
   ],
 )
 
+// What happened in an organization, for its audit log (src/audit.ts, src/ee/audit.ts). Recorded only
+// while the install has an Enterprise license; kept for AUDIT_LOG_RETENTION_DAYS. Emails and labels
+// are copied in, so an event still says who and what after the account or page is gone.
+export const auditEvents = pgTable(
+  'audit_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    // e.g. "sign_in.succeeded", "page.visibility_changed" (AUDIT_ACTIONS in src/audit.ts)
+    action: text('action').notNull(),
+    actorId: uuid('actor_id').references(() => users.id, { onDelete: 'set null' }),
+    actorEmail: text('actor_email'),
+    // "page", "member", "invitation", "access_token" or "organization"
+    targetType: text('target_type'),
+    targetId: text('target_id'),
+    targetLabel: text('target_label'),
+    details: jsonb('details').$type<Record<string, unknown>>().notNull().default({}),
+    ip: text('ip'),
+    userAgent: text('user_agent'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  // The log pages through one organization newest first by (created_at, id); retention deletes by created_at
+  (t) => [index('audit_events_org_idx').on(t.organizationId, t.createdAt, t.id), index('audit_events_created_at_idx').on(t.createdAt)],
+)
+
 // Counters for rate limits (see src/limits.ts): how often something happened for one key in the
 // current window, which starts at the first hit and ends at resets_at. Kept in Postgres so every
 // server process, or serverless instance, counts the same thing.

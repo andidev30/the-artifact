@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { Hono, type Context } from 'hono'
 import {
+  auditVisibility,
   canDelete,
   canEdit,
   checkTitle,
@@ -307,9 +308,12 @@ artifacts.patch('/:slug', requireUser, async (c) => {
   }
 
   let updated = title !== undefined ? await rename(artifact, title) : artifact
-  if (body.visibility) await db.update(schema.artifacts).set({ visibility: body.visibility }).where(eq(schema.artifacts.id, artifact.id))
+  if (body.visibility) {
+    await db.update(schema.artifacts).set({ visibility: body.visibility }).where(eq(schema.artifacts.id, artifact.id))
+    auditVisibility(artifact, body.visibility, c.get('user')!)
+  }
   if (folder !== undefined) await fileInto(artifact, folder?.id ?? null)
-  if (changesLink) updated = await updateLink(updated, link)
+  if (changesLink) updated = await updateLink(updated, link, c.get('user')!)
   return c.json({
     slug: updated.slug,
     title: updated.title,
@@ -424,7 +428,7 @@ artifacts.patch('/:slug/sharing/people', requireUser, async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as { email?: string; role?: ShareRole }
   if (!body.email || !body.role || !ROLES.has(body.role)) return c.json({ error: 'Choose viewer or editor.' }, 400)
   try {
-    await setPersonRole(artifact, body.email, body.role)
+    await setPersonRole(artifact, body.email, body.role, c.get('user')!)
     return c.json(await getSharing(artifact))
   } catch (err) {
     if (err instanceof SharingError) return c.json({ error: err.message }, 400)
@@ -437,6 +441,6 @@ artifacts.delete('/:slug/sharing/people', requireUser, async (c) => {
   if (!artifact) return c.json({ error: 'Not found' }, 404)
   const email = c.req.query('email')
   if (!email) return c.json({ error: 'Say whose access to remove.' }, 400)
-  await removePerson(artifact, email)
+  await removePerson(artifact, email, c.get('user')!)
   return c.json(await getSharing(artifact))
 })

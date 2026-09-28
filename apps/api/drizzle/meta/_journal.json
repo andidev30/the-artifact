@@ -148,6 +148,13 @@
       "when": 1790595819561,
       "tag": "0020_retention_policies",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1790597785038,
+      "tag": "0021_audit_log",
+      "breakpoints": true
     }
   ]
 }

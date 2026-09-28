@@ -1,5 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { and, asc, count, desc, eq, ilike, inArray, isNull, ne, or, sql, type SQL } from 'drizzle-orm'
+import { audit } from './audit.js'
 import { db, schema } from './db/index.js'
 import type { Artifact, Visibility } from './db/schema.js'
 import { env } from './env.js'
@@ -254,6 +255,7 @@ async function publishContent(input: PublishTarget, content: Content): Promise<A
       return { updated, versionId }
     })
     queueThumbnail(versionId)
+    if (input.visibility) auditVisibility(existing, input.visibility, { id: input.userId, email: input.email })
     return updated
   }
 
@@ -440,6 +442,20 @@ export async function countSharedWith(viewer: Viewer, query?: string) {
     .innerJoin(schema.artifacts, eq(schema.artifactShares.artifactId, schema.artifacts.id))
     .where(sharedWith(viewer, query))
   return row.n
+}
+
+// For the audit log of the page's organization
+export const pageTarget = (a: Pick<Artifact, 'slug' | 'title'>) => ({ type: 'page' as const, id: a.slug, label: a.title })
+
+export function auditVisibility(artifact: Artifact, to: Visibility, actor: { id: string; email: string }) {
+  if (to === artifact.visibility) return
+  audit({
+    action: 'page.visibility_changed',
+    organizationId: artifact.organizationId,
+    actor,
+    target: pageTarget(artifact),
+    details: { from: artifact.visibility, to },
+  })
 }
 
 export function describeVisibility(v: Visibility): string {

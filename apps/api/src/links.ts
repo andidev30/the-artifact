@@ -2,7 +2,8 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import type { Context } from 'hono'
 import { getCookie, setCookie } from 'hono/cookie'
-import { accessLevel, artifactUrl, keyMatches, linkOpen, type Access, type LinkPass } from './artifacts.js'
+import { accessLevel, artifactUrl, keyMatches, linkOpen, pageTarget, type Access, type LinkPass } from './artifacts.js'
+import { audit } from './audit.js'
 import { hashPassword, passwordProblem } from './auth/password.js'
 import type { AuthEnv } from './auth/session.js'
 import { db, schema } from './db/index.js'
@@ -59,13 +60,30 @@ export function checkLinkPassword(value: unknown): string | null {
 
 export type LinkChange = { expiresAt?: Date | null; password?: string | null; reset?: boolean }
 
-export async function updateLink(artifact: Artifact, change: LinkChange): Promise<Artifact> {
+// `actor` is who changed it, for the audit log of the page's organization
+export async function updateLink(artifact: Artifact, change: LinkChange, actor: { id: string; email: string }): Promise<Artifact> {
   const set: Partial<typeof schema.artifacts.$inferInsert> = {}
   if (change.expiresAt !== undefined) set.linkExpiresAt = change.expiresAt
   if (change.password !== undefined) set.linkPasswordHash = change.password === null ? null : await hashPassword(change.password)
   if (change.reset) set.linkToken = randomBytes(16).toString('base64url')
   if (Object.keys(set).length === 0) return artifact
   const [updated] = await db.update(schema.artifacts).set(set).where(eq(schema.artifacts.id, artifact.id)).returning()
+  // What changed, never the password itself
+  const details: Record<string, unknown> = {}
+  if (change.expiresAt !== undefined && change.expiresAt?.getTime() !== artifact.linkExpiresAt?.getTime()) {
+    details.expiresAt = { from: artifact.linkExpiresAt?.toISOString() ?? null, to: change.expiresAt?.toISOString() ?? null }
+  }
+  if (change.password !== undefined && (change.password !== null || artifact.linkPasswordHash)) details.password = change.password === null ? 'removed' : 'set'
+  if (change.reset) details.reset = true
+  if (Object.keys(details).length) {
+    audit({
+      action: 'page.link_changed',
+      organizationId: artifact.organizationId,
+      actor: { id: actor.id, email: actor.email },
+      target: pageTarget(artifact),
+      details,
+    })
+  }
   return updated
 }
 

@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import { expect, test } from '@playwright/test'
 import { createHostedOrganization, grantInstanceAdmin } from '../apps/api/test/e2e-db.ts'
 import { expectAccessible } from './axe'
-import { connectAgent, latestMail, mockRetention, publishViaMcp, signInLink, signUpPersonal, uniqueEmail } from './helpers'
+import { connectAgent, latestMail, mockAuditLog, mockRetention, publishViaMcp, signInLink, signUpPersonal, uniqueEmail } from './helpers'
 
 const HTML = '<!doctype html><title>Plan</title><h1>Plan</h1>'
 
@@ -335,6 +335,44 @@ test('version retention in organization settings, with and without a license', a
   await expect(section.getByText(/kept but not applied/)).toBeVisible()
   await expect(section.getByLabel('Keep older versions for')).toBeDisabled()
   await expectAccessible(page, 'organization settings, version retention without a license')
+})
+
+test('organization audit log', async ({ page }) => {
+  const email = uniqueEmail('a11y-audit')
+  await signUpPersonal(page, email)
+  const org = await createOrganization(email, 'Audit Co')
+  await mockAuditLog(page)
+
+  await page.goto(`/organizations/${org.slug}/settings#audit`)
+  const audit = page.locator('section#audit')
+  await expect(audit.getByRole('heading', { name: 'Audit log' })).toBeVisible()
+  await expect(audit.getByRole('list', { name: 'Audit log events' }).getByRole('listitem')).toHaveCount(50)
+  await expectAccessible(page, 'organization audit log', { include: 'section#audit' })
+
+  await audit.getByLabel('Action').selectOption('member.role_changed')
+  await audit.getByLabel('From').fill('2026-09-30')
+  await audit.getByLabel('To').fill('2026-09-01')
+  await audit.getByRole('button', { name: 'Filter' }).click()
+  await expect(audit.getByText('Choose an end date on or after the start date.')).toBeVisible()
+  await expectAccessible(page, 'organization audit log, date error', { include: 'section#audit' })
+
+  await audit.getByLabel('To').fill('')
+  await audit.getByLabel('Action').selectOption('member.invited')
+  await audit.getByRole('button', { name: 'Filter' }).click()
+  await expect(audit.getByText('No events match these filters.')).toBeVisible()
+  await expectAccessible(page, 'organization audit log, no matches', { include: 'section#audit' })
+})
+
+test('organization settings without an Enterprise license leave the audit log out', async ({ page }) => {
+  const email = uniqueEmail('a11y-audit-unlicensed')
+  await signUpPersonal(page, email)
+  const org = await createOrganization(email, 'Unlicensed Co')
+  const asked = await mockAuditLog(page, { licensed: false })
+  await page.goto(`/organizations/${org.slug}/settings`)
+  await expect(page.getByRole('heading', { level: 1, name: 'Unlicensed Co settings' })).toBeVisible()
+  await expect.poll(() => asked.length).toBeGreaterThan(0)
+  await expect(page.locator('section#audit')).toHaveCount(0)
+  await expect(page.getByRole('link', { name: 'Audit log' })).toHaveCount(0)
 })
 
 test('server admin', async ({ page }) => {

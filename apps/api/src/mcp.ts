@@ -5,6 +5,7 @@ import { z } from 'zod'
 import {
   accessLevel,
   artifactUrl,
+  auditVisibility,
   canDelete,
   canEdit,
   canView,
@@ -523,8 +524,11 @@ function buildServer(auth: McpAuth) {
         if (err instanceof LinkError) return text(err.message, true)
         throw err
       }
-      if (visibility) await db.update(schema.artifacts).set({ visibility }).where(eq(schema.artifacts.id, artifact.id))
-      const updated = await updateLink({ ...artifact, visibility: visibility ?? artifact.visibility }, change)
+      if (visibility) {
+        await db.update(schema.artifacts).set({ visibility }).where(eq(schema.artifacts.id, artifact.id))
+        auditVisibility(artifact, visibility, viewer)
+      }
+      const updated = await updateLink({ ...artifact, visibility: visibility ?? artifact.visibility }, change, viewer)
       const lines = [`"${updated.title}" is now ${describeVisibility(updated.visibility)}${describeLink(updated)}.`]
       if (change.reset) lines.push('The public link was reset; earlier public links no longer work.')
       if (updated.visibility !== 'link' && (updated.linkExpiresAt || updated.linkPasswordHash || change.reset))

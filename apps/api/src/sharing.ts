@@ -1,5 +1,6 @@
 import { and, eq, inArray } from 'drizzle-orm'
-import { artifactUrl } from './artifacts.js'
+import { artifactUrl, pageTarget } from './artifacts.js'
+import { audit } from './audit.js'
 import { db, schema } from './db/index.js'
 import type { Artifact, ShareRole } from './db/schema.js'
 import { mailEnabled } from './env.js'
@@ -80,6 +81,13 @@ export async function sharePeople(artifact: Artifact, inviter: Inviter, emails: 
     .insert(schema.artifactShares)
     .values(targets.map((email) => ({ artifactId: artifact.id, email, role, invitedBy: inviter.id })))
     .onConflictDoUpdate({ target: [schema.artifactShares.artifactId, schema.artifactShares.email], set: { role } })
+  audit({
+    action: 'page.shared',
+    organizationId: artifact.organizationId,
+    actor: { id: inviter.id, email: inviter.email },
+    target: pageTarget(artifact),
+    details: { people: targets, role },
+  })
 
   // Without email there is nothing to send; the sharer passes the link on
   if (notify && mailEnabled()) {
@@ -95,15 +103,35 @@ export async function sharePeople(artifact: Artifact, inviter: Inviter, emails: 
   return { shared: targets, notifyFailed: [] }
 }
 
-export async function setPersonRole(artifact: Artifact, email: string, role: ShareRole) {
+type Actor = { id: string; email: string }
+
+export async function setPersonRole(artifact: Artifact, email: string, role: ShareRole, actor: Actor) {
   const updated = await db
     .update(schema.artifactShares)
     .set({ role })
     .where(and(eq(schema.artifactShares.artifactId, artifact.id), eq(schema.artifactShares.email, email.toLowerCase())))
     .returning()
   if (!updated.length) throw new SharingError('That person does not have access to this page.')
+  audit({
+    action: 'page.share_role_changed',
+    organizationId: artifact.organizationId,
+    actor: { id: actor.id, email: actor.email },
+    target: pageTarget(artifact),
+    details: { person: email.toLowerCase(), role },
+  })
 }
 
-export async function removePerson(artifact: Artifact, email: string) {
-  await db.delete(schema.artifactShares).where(and(eq(schema.artifactShares.artifactId, artifact.id), eq(schema.artifactShares.email, email.toLowerCase())))
+export async function removePerson(artifact: Artifact, email: string, actor: Actor) {
+  const removed = await db
+    .delete(schema.artifactShares)
+    .where(and(eq(schema.artifactShares.artifactId, artifact.id), eq(schema.artifactShares.email, email.toLowerCase())))
+    .returning({ email: schema.artifactShares.email })
+  if (!removed.length) return
+  audit({
+    action: 'page.unshared',
+    organizationId: artifact.organizationId,
+    actor: { id: actor.id, email: actor.email },
+    target: pageTarget(artifact),
+    details: { person: removed[0].email },
+  })
 }

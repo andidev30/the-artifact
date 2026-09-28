@@ -6,7 +6,7 @@ import { mailEnabled } from '../env.js'
 import { hasAccounts, instanceSettings, lockAdmins, newAccountFields } from '../instance.js'
 import { atLimit, clearHits, clientIp, hit, limitRequest, tooManyRequests, waitText } from '../limits.js'
 import { startSession } from './session.js'
-import { continueSignIn } from './twofactor.js'
+import { continueSignIn, signInFailed } from './twofactor.js'
 import { EMAIL_RE } from '../validation.js'
 import { afterSignInUrl, createPasswordAccount, waitingForAccess } from './users.js'
 
@@ -78,15 +78,17 @@ password.post('/login', async (c) => {
   const [user] = await db.select().from(schema.users).where(eq(schema.users.email, email))
   if (!(await verifyPassword(given, user?.passwordHash ?? null)) || !user) {
     await hit('password', email)
+    if (user) signInFailed(user, 'wrong password')
     const hint = user && !user.passwordHash ? ' This account has no password yet; use Google, or ask an admin for a sign-in link.' : ''
     return c.json({ error: `The email or password is wrong.${hint}`, code: 'wrong_password' }, 401)
   }
   if (user.suspendedAt) {
+    signInFailed(user, 'account suspended')
     return c.json({ error: 'This account is suspended. Ask an admin of this server to restore it.', code: 'account_suspended' }, 403)
   }
   await clearHits('password', email)
   const redirect = afterSignInUrl(typeof body?.plan === 'string' ? body.plan : null, typeof body?.next === 'string' ? body.next : null)
-  return c.json({ redirect: await continueSignIn(c, user, redirect) })
+  return c.json({ redirect: await continueSignIn(c, user, redirect, 'password') })
 })
 
 // The first account on a server without email. It becomes the instance admin on a self-hosted install.
