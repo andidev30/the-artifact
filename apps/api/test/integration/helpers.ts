@@ -4,6 +4,7 @@ import { app } from '../../src/app.js'
 import { publish } from '../../src/artifacts.js'
 import { hashToken, randomToken } from '../../src/auth/session.js'
 import { db, schema } from '../../src/db/index.js'
+import { env } from '../../src/env.js'
 import type { Role, Visibility } from '../../src/db/schema.js'
 
 type RequestOptions = {
@@ -16,8 +17,9 @@ type RequestOptions = {
 }
 
 // Calls the Hono app in-process, no server needed
-export function call(path: string, opts: RequestOptions = {}) {
-  const headers: Record<string, string> = { ...opts.headers }
+// Sends Origin as the web app would (src/auth/origin.ts); a header given as '' is left out
+export async function call(path: string, opts: RequestOptions = {}): Promise<Response> {
+  const headers: Record<string, string> = Object.fromEntries(Object.entries({ origin: env.appUrl, ...opts.headers }).filter(([, v]) => v !== ''))
   if (opts.cookie) headers.cookie = opts.cookie
   if (opts.bearer) headers.authorization = `Bearer ${opts.bearer}`
   let body: string | undefined

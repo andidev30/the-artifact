@@ -5,7 +5,7 @@ import { track } from '../analytics.js'
 import { db, schema } from '../db/index.js'
 import { mailEnabled } from '../env.js'
 import { hasAccounts, instanceSettings, lockAdmins, newAccountFields } from '../instance.js'
-import { atLimit, clearHits, clientIp, hit, limitRequest, tooManyRequests, waitText } from '../limits.js'
+import { clearHits, clientIp, hit, limitRequest, tooManyRequests, waitText } from '../limits.js'
 import { ssoRequiredError, ssoRequiredFor } from '../ee/sso/connections.js'
 import { startSession } from './session.js'
 import { continueSignIn, signInFailed } from './twofactor.js'
@@ -69,8 +69,9 @@ password.post('/login', async (c) => {
   const given = typeof body?.password === 'string' ? body.password : ''
   if (!EMAIL_RE.test(email)) return c.json({ error: 'Enter a valid email address.', field: 'email' }, 400)
   if (!given) return c.json({ error: 'Enter your password.', field: 'password' }, 400)
-  // Counts wrong passwords only, so someone who knows theirs isn't locked out by their own sign-ins
-  const locked = await atLimit('password', email)
+  // Counted before the check, so attempts sent at once can't all be checked; a right password clears
+  // the count, so someone who knows theirs isn't locked out by their own sign-ins
+  const locked = await hit('password', email)
   if (locked) {
     return tooManyRequests(c, `Too many wrong passwords for this address. Try again in ${waitText(locked)}, or ask an admin for a new sign-in link.`, locked, {
       code: 'too_many_attempts',
@@ -79,7 +80,6 @@ password.post('/login', async (c) => {
 
   const [user] = await db.select().from(schema.users).where(eq(schema.users.email, email))
   if (!(await verifyPassword(given, user?.passwordHash ?? null)) || !user) {
-    await hit('password', email)
     if (user) signInFailed(user, 'wrong password')
     const hint = user && !user.passwordHash ? ' This account has no password yet; use Google, or ask an admin for a sign-in link.' : ''
     return c.json({ error: `The email or password is wrong.${hint}`, code: 'wrong_password' }, 401)

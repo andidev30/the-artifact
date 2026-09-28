@@ -190,6 +190,16 @@ describe('magic link sign-in', () => {
     expect((await (await confirm(link, { next: '//evil.com' })).json()).redirect).toBe('http://localhost:5177/app')
   })
 
+  it('drops next paths that a browser would read as another site', async () => {
+    const tricky = ['/\t/evil.example', '/\n/evil.example', '/\t\\evil.example', '/\\evil.example', '/%2F/evil.example', '/..//evil.example']
+    for (const [i, next] of tricky.entries()) {
+      sendMock.mockClear()
+      const { link } = await requestLink(`tricky${i}@example.com`, { next })
+      expect(link.searchParams.has('next')).toBe(false)
+      expect((await (await confirm(link, { next })).json()).redirect).toBe('http://localhost:5177/app')
+    }
+  })
+
   it('rejects invalid email addresses', async () => {
     for (const email of ['', 'nope', 'a@b', 'a b@c.com']) {
       const res = await call('/api/auth/email', { json: { email } })

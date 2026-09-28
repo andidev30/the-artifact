@@ -4,6 +4,7 @@ import { db, schema } from '../db/index.js'
 import type { User } from '../db/schema.js'
 import { env } from '../env.js'
 import { instanceSettings, lockAdmins, newAccountFields } from '../instance.js'
+import { sameOriginPath } from './next.js'
 
 type Profile = {
   email: string
@@ -121,9 +122,9 @@ export async function findOrCreateUser(profile: Profile): Promise<User> {
 
 const PLANS = new Set(['organization'])
 
-// Only same-site paths, so a crafted link can't send people elsewhere after signing in
+// Only paths on this app, so a crafted link can't send people elsewhere after signing in
 export function safeNext(next: string | null | undefined): string | null {
-  return next?.startsWith('/') && !next.startsWith('//') && !next.startsWith('/\\') ? next : null
+  return sameOriginPath(next, env.appUrl)
 }
 
 export function afterSignInUrl(plan: string | null | undefined, next?: string | null): string {

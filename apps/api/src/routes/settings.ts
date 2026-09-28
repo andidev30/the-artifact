@@ -1,13 +1,13 @@
 import { and, asc, count, eq, gt, inArray, max, ne, sql } from 'drizzle-orm'
-import { Hono } from 'hono'
+import { Hono, type MiddlewareHandler } from 'hono'
 import { deleteCookie } from 'hono/cookie'
 import { hashPassword, passwordProblem, verifyPassword } from '../auth/password.js'
 import { twoFactorRequiredError } from '../auth/factors.js'
-import { requireUser, startSession, type AuthEnv } from '../auth/session.js'
+import { requireRecentSignIn, requireUser, startSession, type AuthEnv } from '../auth/session.js'
 import { track } from '../analytics.js'
 import { db, schema } from '../db/index.js'
 import { isLastAdmin, lastAdminError } from '../instance.js'
-import { limitRequest } from '../limits.js'
+import { clearHits, hit, limitRequest, tooManyRequests, waitText } from '../limits.js'
 import { auditToken, checkExpiry, checkTokenName, createToken, describeToken, revokeToken, tokensOf } from '../tokens.js'
 import { CONTROL_CHARS_ERROR, hasControlChars, UUID_RE } from '../validation.js'
 
@@ -25,14 +25,25 @@ settings.patch('/', async (c) => {
   return c.json({ name })
 })
 
-// { currentPassword, password }. The current one is needed only when the account has a password.
+// { currentPassword, password }. Changing a password needs the current one. Adding the first one
+// needs a recent sign-in instead, through the way the account signs in now (an email link, Google,
+// single sign-on or a passkey): otherwise a session cookie someone else got hold of could add a
+// password, sign in with it for a fresh session, and add a second factor of their own.
 // Other devices are signed out; this one gets a fresh session.
-settings.put('/password', async (c) => {
+const firstPasswordNeedsRecentSignIn: MiddlewareHandler<AuthEnv> = (c, next) => (c.get('user')!.passwordHash ? next() : requireRecentSignIn(c, next))
+
+settings.put('/password', firstPasswordNeedsRecentSignIn, async (c) => {
   const user = c.get('user')!
   const body = (await c.req.json().catch(() => null)) as { currentPassword?: unknown; password?: unknown } | null
   if (user.passwordHash) {
     const current = typeof body?.currentPassword === 'string' ? body.currentPassword : ''
+    // Counted with wrong passwords at sign-in, and before the check, so it can't be used to guess faster
+    const locked = await hit('password', user.email)
+    if (locked) {
+      return tooManyRequests(c, `Too many wrong passwords. Try again in ${waitText(locked)}.`, locked, { code: 'too_many_attempts', field: 'currentPassword' })
+    }
     if (!(await verifyPassword(current, user.passwordHash))) return c.json({ error: 'Your current password is wrong.', field: 'currentPassword' }, 400)
+    await clearHits('password', user.email)
   }
   const problem = passwordProblem(body?.password)
   if (problem) return c.json({ error: problem, field: 'password' }, 400)

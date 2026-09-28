@@ -273,6 +273,12 @@
   color: var(--ink);
 }
 
+.settings-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
 .settings-actions {
   display: flex;
   align-items: center;

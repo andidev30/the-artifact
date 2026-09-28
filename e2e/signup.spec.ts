@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import { expect, test } from '@playwright/test'
-import { openSignInLink, signInLink, signUp, uniqueEmail } from './helpers'
+import { fromApp, openSignInLink, signInLink, signUp, uniqueEmail } from './helpers'
 
 test('sign up with a magic link and land in a personal workspace; new organizations are coming soon', async ({ page }) => {
   const email = uniqueEmail('signup')
@@ -25,7 +25,10 @@ test('sign up with a magic link and land in a personal workspace; new organizati
   await expect(page.getByText(email)).toBeVisible()
 
   // The API refuses a new organization, with a reason written for people
-  const refused = await page.request.post('/api/organizations', { data: { name: 'E2E Team', slug: `e2e-${randomBytes(4).toString('hex')}` } })
+  const refused = await page.request.post('/api/organizations', {
+    headers: fromApp(page),
+    data: { name: 'E2E Team', slug: `e2e-${randomBytes(4).toString('hex')}` },
+  })
   expect(refused.status()).toBe(403)
   expect((await refused.json()).error).toMatch(/^New organizations are coming soon\./)
 

@@ -218,7 +218,7 @@ describe('embeds', () => {
 
     const res = await site.request(`/api/artifacts/${page.slug}`, {
       method: 'PATCH',
-      headers: { cookie: owner.cookie, 'content-type': 'application/json' },
+      headers: { cookie: owner.cookie, origin: env.appUrl, 'content-type': 'application/json' },
       body: JSON.stringify({ visibility: 'private' }),
     })
     expect(res.status).toBe(200)

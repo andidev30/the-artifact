@@ -59,6 +59,12 @@ export async function signUpPersonal(page: Page, email: string) {
   await expect(page).toHaveURL(/\/app$/)
 }
 
+// Headers for page.request calls that change something with the browser's session: it isn't a browser,
+// so it sends no Origin by itself, and the API refuses changes from anywhere but the app
+export function fromApp(page: Page) {
+  return { origin: new URL(page.url()).origin }
+}
+
 // What an MCP client does: register, authorize, get consent from the signed-in browser, exchange the code.
 // page.request shares the browser's cookies and goes through the web app's proxy.
 export async function connectAgent(page: Page, organizationId: string | null = null) {
@@ -74,7 +80,7 @@ export async function connectAgent(page: Page, organizationId: string | null = n
   })
   const requestId = new URL(authorize.headers().location).searchParams.get('request')!
 
-  const approved = await (await request.post(`/api/oauth/requests/${requestId}/approve`, { data: { organizationId } })).json()
+  const approved = await (await request.post(`/api/oauth/requests/${requestId}/approve`, { headers: fromApp(page), data: { organizationId } })).json()
   const code = new URL(approved.redirect).searchParams.get('code')!
   const tokens = await (
     await request.post('/oauth/token', { form: { grant_type: 'authorization_code', code, code_verifier: verifier, redirect_uri: redirectUri } })

@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { expect, test } from '@playwright/test'
 import { createHostedOrganization } from '../apps/api/test/e2e-db.ts'
-import { signUp, signUpPersonal, uniqueEmail } from './helpers'
+import { fromApp, signUp, signUpPersonal, uniqueEmail } from './helpers'
 
 test('a new account joins the organization it was invited to from onboarding', async ({ page, browser }) => {
   const ownerEmail = uniqueEmail('inv-owner')
@@ -11,7 +11,7 @@ test('a new account joins the organization it was invited to from onboarding', a
   // The owner has an organization from before new ones waited for billing, and invites the guest
   await signUpPersonal(page, ownerEmail)
   const org = await createHostedOrganization(ownerEmail, 'Invite Co', slug)
-  const invited = await page.request.post(`/api/organizations/${org.id}/invitations`, { data: { email: guestEmail, role: 'member' } })
+  const invited = await page.request.post(`/api/organizations/${org.id}/invitations`, { headers: fromApp(page), data: { email: guestEmail, role: 'member' } })
   expect(invited.status()).toBe(201)
 
   // The guest signs up without opening the invitation email and sees it on the first step

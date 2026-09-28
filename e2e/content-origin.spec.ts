@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { connectAgent, publishViaMcp, signUpPersonal, uniqueEmail } from './helpers'
+import { fromApp, connectAgent, publishViaMcp, signUpPersonal, uniqueEmail } from './helpers'
 
 // The hosted e2e server serves pages from CONTENT_ORIGIN (playwright.config.ts): the API's address on
 // 127.0.0.1, while the app is on localhost, a different site whose cookies the browser keeps to itself.
@@ -38,7 +38,7 @@ test('pages load from the content origin with a token, and the app keeps its coo
   expect((await page.request.get(`${contentOrigin}/api/artifacts/${slug}/v/1/`)).status()).toBe(404)
 
   // A link with a password: the visitor's frame carries the grant in its path, not a cookie
-  const shared = await page.request.patch(`/api/artifacts/${slug}`, { data: { visibility: 'link', linkPassword: 'open sesame' } })
+  const shared = await page.request.patch(`/api/artifacts/${slug}`, { headers: fromApp(page), data: { visibility: 'link', linkPassword: 'open sesame' } })
   expect(shared.ok()).toBe(true)
   const visitor = await browser.newContext()
   const visitorPage = await visitor.newPage()

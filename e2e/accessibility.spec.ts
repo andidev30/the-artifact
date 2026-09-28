@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import { expect, type Page, test } from '@playwright/test'
 import { createHostedOrganization, grantInstanceAdmin } from '../apps/api/test/e2e-db.ts'
 import { expectAccessible } from './axe'
-import { connectAgent, latestMail, licensedSso, mockAuditLog, mockRetention, publishViaMcp, signInLink, signUpPersonal, uniqueEmail } from './helpers'
+import { fromApp, connectAgent, latestMail, licensedSso, mockAuditLog, mockRetention, publishViaMcp, signInLink, signUpPersonal, uniqueEmail } from './helpers'
 
 const HTML = '<!doctype html><title>Plan</title><h1>Plan</h1>'
 
@@ -301,7 +301,9 @@ test('account and organization settings', async ({ page, browser }) => {
 
   const org = await createOrganization(email, 'Settings Co')
   const guest = uniqueEmail('a11y-invited')
-  expect((await page.request.post(`/api/organizations/${org.id}/invitations`, { data: { email: guest, role: 'member' } })).status()).toBe(201)
+  expect(
+    (await page.request.post(`/api/organizations/${org.id}/invitations`, { headers: fromApp(page), data: { email: guest, role: 'member' } })).status(),
+  ).toBe(201)
   await page.goto(`/organizations/${org.slug}/settings`)
   await expect(page.getByRole('heading', { level: 1, name: 'Settings Co settings' })).toBeVisible()
   await expect(page.getByText(guest)).toBeVisible()

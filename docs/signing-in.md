@@ -46,7 +46,7 @@ The first time you add a passkey or an authenticator app, you get 10 recovery co
 
 **Sessions** lists every browser where you are signed in, with the browser and system, when it signed in and when it was last active. **Sign out** ends one; **Sign out other devices** ends every one but this. A session lasts 30 days and is extended while you use it.
 
-Changing your password signs out every other device. Adding a passkey or an authenticator app doesn't; if you added one because you think someone else could sign in, choose **Sign out other devices** as well.
+Changing your password asks for the current one, and signs out every other device. Adding a password to an account that doesn't have one yet (under **Password**, on servers where you can have one) needs a sign-in from the last hour, like **Sign-in security**; if yours is older, choose **Sign in again** first. Adding a passkey or an authenticator app doesn't; if you added one because you think someone else could sign in, choose **Sign out other devices** as well.
 
 ## Organizations that require it
 
