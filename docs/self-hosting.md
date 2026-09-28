@@ -90,7 +90,7 @@ Each person adds the MCP server once, using `APP_URL` followed by `/mcp`:
 claude mcp add --transport http --scope user the-artifact https://artifact.example.com/mcp
 ```
 
-See [Connect your agent](/docs/connect-your-agent) for Cursor, Codex and other MCP clients.
+See [Connect your agent](/docs/connect-your-agent) for Claude Desktop, Cursor, VS Code, Codex, Windsurf and other MCP clients. Custom connectors in Claude Desktop and Claude.ai connect from Anthropic's servers, so they only reach a server that is on the internet over HTTPS. On a private network, people use [the `mcp-remote` bridge](/docs/connect-your-agent#claude-desktop-with-mcp-remote) instead.
 
 ## The instance admin
 
