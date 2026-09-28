@@ -10,6 +10,8 @@ import { afterSignInUrl, findOrCreateUser, safeNext, signInErrorUrl, SignupClose
 const AUTHORIZE_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
 const TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const USERINFO_URL = 'https://openidconnect.googleapis.com/v1/userinfo'
+// For each request to Google, body included; the person is waiting on the callback
+const TIMEOUT_MS = 10_000
 
 // Short-lived cookies that carry the OAuth round trip
 const FLOW_COOKIE = { path: '/api/auth/google', httpOnly: true, secure: isProduction, sameSite: 'Lax', maxAge: 600 } as const
@@ -74,6 +76,7 @@ google.get('/callback', async (c) => {
   try {
     const tokenRes = await fetch(TOKEN_URL, {
       method: 'POST',
+      signal: AbortSignal.timeout(TIMEOUT_MS),
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         code,
@@ -87,7 +90,7 @@ google.get('/callback', async (c) => {
     if (!tokenRes.ok) throw new Error(`token exchange failed: ${tokenRes.status} ${await tokenRes.text()}`)
     const { access_token } = (await tokenRes.json()) as { access_token: string }
 
-    const userRes = await fetch(USERINFO_URL, { headers: { Authorization: `Bearer ${access_token}` } })
+    const userRes = await fetch(USERINFO_URL, { headers: { Authorization: `Bearer ${access_token}` }, signal: AbortSignal.timeout(TIMEOUT_MS) })
     if (!userRes.ok) throw new Error(`userinfo failed: ${userRes.status}`)
     const profile = (await userRes.json()) as GoogleUser
     if (!profile.email_verified) return c.redirect(signInErrorUrl('google_unverified'))
