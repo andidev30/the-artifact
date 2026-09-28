@@ -9,6 +9,8 @@ A self-hosted install keeps its data in two places, and a backup needs both:
 
 Also keep a copy of `app.env` and the `.env` next to the compose file. They hold your mail settings and passwords, and they aren't in either backup.
 
+With [`ENCRYPTION_KEY`](/docs/configuration#encryption-key) set, keep it apart from the database backups, e.g. in a password manager. A backup restored without it can't open the keys in `server_secrets`, and the server refuses to start; with it, a stolen backup alone doesn't give away authenticator app, webhook or single sign-on secrets. After changing the key, keep the old one as long as you keep backups taken before the change.
+
 The commands below are for `deploy/docker-compose/docker-compose.yml` with its bundled MinIO. Run them from `deploy/docker-compose`. They work while the app is running.
 
 ## Back up

@@ -142,7 +142,7 @@ Nothing is deleted: accounts, their links to the provider and the provider setti
 
 ## Security notes
 
-- The client secret is encrypted at rest (AES-256-GCM) with a key the server keeps in its `server_secrets` table, like authenticator app secrets. A full database backup holds both, so protect backups like the database.
+- The client secret is encrypted at rest (AES-256-GCM) with a key the server keeps in its `server_secrets` table, like authenticator app secrets. Set `ENCRYPTION_KEY` so a copy of the database alone can't open it; see [Keys in the database](/docs/security#keys-in-the-database).
 - The redirect URI is built from `APP_URL`, never from the request's `Host` header, and the page people return to after signing in is always on this server.
 - Addresses link to existing accounts only as [Linking existing accounts](#linking-existing-accounts) describes: never an instance admin's, and without domains only for addresses the provider verified. Anyone who controls the provider can still sign in as any other account at its domains; treat admin access to the provider like admin access to this server.
 - Adding, changing and removing providers is written to the server log with the admin who did it (see [The security log](/docs/security#the-security-log)).

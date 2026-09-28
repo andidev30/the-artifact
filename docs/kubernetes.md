@@ -63,6 +63,7 @@ Put your values in a file and pass it with `-f`. `helm show values oci://ghcr.io
 | `thumbnails.concurrency` | `2` | `THUMBNAIL_CONCURRENCY`: how many thumbnails render at once, 1 to 8. A typical page renders in under a second, so 2 keeps up with about 150 new pages a minute; each extra render adds another Chromium page, so check `resources.limits` when you raise it. |
 | `webConcurrency` | the CPU limit, or 1 without one | `WEB_CONCURRENCY`: how many worker processes serve requests. Empty follows `resources.limits.cpu` when you set one (one per core, up to 8), and runs one process otherwise. See [Using more cores](#using-more-cores). |
 | `databasePoolMax` | 10 with one worker, about 20 in all with more | `DATABASE_POOL_MAX`: database connections per worker |
+| `encryptionKey` | none | `ENCRYPTION_KEY`, recommended: the output of `openssl rand -base64 32`, which encrypts the keys the server keeps in its database. Or put `ENCRYPTION_KEY` in your `existingSecret`, which keeps it out of your values file. The chart never makes one, and the server needs it to start once set; see [Encryption key](/docs/configuration#encryption-key). |
 | `metrics.token`, `metrics.serviceMonitor.enabled` | off | [Prometheus metrics](#health-checks-and-metrics) |
 | `releaseCheck` | `true` | `false` sets `RELEASE_CHECK=false`: no daily request to GitHub for [new releases](/docs/upgrading#new-releases), for clusters without internet access |
 | `rateLimits`, `workspaceQuota.maxPages`, `workspaceQuota.maxVersions`, `workspaceQuota.maxStorage` | the defaults | `RATE_LIMITS` and the [workspace quotas](/docs/configuration#workspace-quotas) |
@@ -204,6 +205,7 @@ cp deploy/kubernetes/app.env.example deploy/kubernetes/app.env
 | `DATABASE_URL`, `POSTGRES_PASSWORD` | The same new password in both lines, letters and digits only. |
 | `S3_SECRET_ACCESS_KEY` | A new password; it is also the bundled MinIO's password. |
 | `SMTP_*`, `GOOGLE_*` | Optional, as in the [configuration reference](/docs/configuration). Without `SMTP_HOST` the server [runs without email](/docs/self-hosting#running-without-email). |
+| `ENCRYPTION_KEY` | Recommended. The output of `openssl rand -base64 32`, kept apart from your backups too: the server needs it to start. See [Encryption key](/docs/configuration#encryption-key). |
 | `TRUST_PROXY` | Already `true`, since people reach the app through the ingress. It makes [rate limits](/docs/configuration#rate-limits) see each visitor's address instead of the ingress controller's. |
 
 The database and MinIO keep the passwords they were created with, so changing them later means changing them inside Postgres and MinIO too. `app.env` is ignored by git.
