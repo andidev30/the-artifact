@@ -275,6 +275,76 @@ describe('organization invitations', () => {
   })
 })
 
+describe('sharing with addresses nobody checked', () => {
+  const share = async (owner: TestUser, slug: string, email: string) => {
+    const res = await call(`/api/artifacts/${slug}/sharing/people`, { cookie: owner.cookie, json: { emails: email, role: 'editor', notify: true } })
+    expect(res.status).toBe(200)
+    return (await res.json()) as { links: { email: string; link: string }[] }
+  }
+  const opens = async (cookie: string, slug: string) => (await call(`/api/artifacts/${slug}`, { cookie })).status
+  const accept = (cookie: string, slug: string, link: string) =>
+    call(`/api/artifacts/${slug}/sharing/accept`, { cookie, json: { token: new URL(link).searchParams.get('share') } })
+
+  beforeEach(async () => {
+    await createUser({ admin: true })
+  })
+
+  it('someone who signed up with another person’s address doesn’t get what is shared with it', async () => {
+    const signUp = await call('/api/auth/password/sign-up', { json: { email: 'cfo@corp.test', password: 'squatter password' } })
+    expect(signUp.status).toBe(201)
+    const squatter = sessionCookie(signUp)!
+    const owner = await createUser()
+    const page = await createPage(owner)
+    const { links } = await share(owner, page.slug, 'cfo@corp.test')
+    expect(links).toEqual([{ email: 'cfo@corp.test', link: expect.stringContaining(`/a/${page.slug}?share=`) }])
+    expect(await opens(squatter, page.slug)).toBe(404)
+    expect(await (await call('/api/artifacts?workspace=shared', { cookie: squatter })).json()).toEqual([])
+  })
+
+  it('the share’s link, passed on by the sharer, opens it for the account it reaches', async () => {
+    const signUp = await call('/api/auth/password/sign-up', { json: { email: 'self@corp.test', password: 'their password' } })
+    const cookie = sessionCookie(signUp)!
+    const owner = await createUser()
+    const page = await createPage(owner)
+    const { links } = await share(owner, page.slug, 'self@corp.test')
+    expect((await accept(cookie, page.slug, links[0].link)).status).toBe(204)
+    expect(await opens(cookie, page.slug)).toBe(200)
+  })
+
+  it('an account made from an invitation link needs the share’s link too', async () => {
+    const owner = await createUser()
+    const org = await createOrg(owner)
+    const invited = await (
+      await call(`/api/organizations/${org.id}/invitations`, { cookie: owner.cookie, json: { email: 'joiner@corp.test', role: 'member' } })
+    ).json()
+    const joined = await call(`/api/invitations/${new URL(invited.link).pathname.split('/').pop()}/sign-up`, { json: { password: 'joiner password' } })
+    expect(joined.status).toBe(201)
+    const cookie = sessionCookie(joined)!
+    const page = await createPage(owner)
+    const { links } = await share(owner, page.slug, 'joiner@corp.test')
+    expect(await opens(cookie, page.slug)).toBe(404)
+    expect((await accept(cookie, page.slug, links[0].link)).status).toBe(204)
+    expect(await opens(cookie, page.slug)).toBe(200)
+  })
+
+  it('an admin’s sign-in link proves the address: the squatter is out and every share counts', async () => {
+    const signUp = await call('/api/auth/password/sign-up', { json: { email: 'boss@corp.test', password: 'squatter password' } })
+    const squatter = sessionCookie(signUp)!
+    const owner = await createUser()
+    const page = await createPage(owner)
+    await share(owner, page.slug, 'boss@corp.test')
+
+    const adminCookie = (await createUser({ admin: true })).cookie
+    const made = await (await call('/api/admin/sign-up-links', { cookie: adminCookie, json: { email: 'boss@corp.test' } })).json()
+    const res = await call('/api/auth/email/confirm', { json: { token: new URL(made.link).searchParams.get('token'), password: 'the real password' } })
+    expect(res.status).toBe(200)
+
+    expect((await call('/api/me', { cookie: squatter })).status).toBe(401)
+    expect((await login('boss@corp.test', 'squatter password')).status).toBe(401)
+    expect(await opens(sessionCookie(res)!, page.slug)).toBe(200)
+  })
+})
+
 describe('sharing and settings', () => {
   it('shares without trying to email', async () => {
     const owner = await createUser()

@@ -865,7 +865,9 @@ function buildServer(auth: McpAuth) {
     'share_artifact',
     {
       title: 'Share a page with people',
-      description: 'Give specific people access to a page by email, like sharing a Google Doc. They get an email with the link.',
+      description:
+        'Give specific people access to a page by email, like sharing a Google Doc. They get an email with the link; ' +
+        'when they can’t be emailed, the answer has a link for each person to pass on.',
       inputSchema: z.object({
         artifact_id: z.string().describe('Id or link of the page'),
         emails: z.array(z.string()).min(1).describe('Email addresses to share with'),
@@ -882,7 +884,7 @@ function buildServer(auth: McpAuth) {
       if (wait) return text(refusal('invite', 'people invited or shared with', wait), true)
       const [me] = await db.select({ name: schema.users.name }).from(schema.users).where(eq(schema.users.id, auth.userId))
       try {
-        const { shared, notifyFailed } = await sharePeople(
+        const { shared, notifyFailed, links } = await sharePeople(
           artifact,
           { id: auth.userId, email: auth.email, name: me?.name ?? null },
           people,
@@ -892,7 +894,10 @@ function buildServer(auth: McpAuth) {
         )
         return text(
           `Shared "${artifact.title}" with ${shared.join(', ')} as ${role}.` +
-            (notifyFailed.length ? `\nThe email could not be sent to ${notifyFailed.join(', ')}; send them the link yourself.` : '') +
+            (notifyFailed.length ? `\nThe email could not be sent to ${notifyFailed.join(', ')}.` : '') +
+            (links.length
+              ? `\nThese people were not emailed. Send each of them their own link; it opens the page once they sign in with that address:\n${links.map((l) => `- ${l.email}: ${l.link}`).join('\n')}`
+              : '') +
             `\nLink: ${artifactUrl(artifact.slug)}`,
         )
       } catch (err) {

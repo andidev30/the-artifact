@@ -1,9 +1,10 @@
 import { eq, sql } from 'drizzle-orm'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { hashPassword } from '../../src/auth/password.js'
 import { db, schema } from '../../src/db/index.js'
 import { env } from '../../src/env.js'
 import { deleteExpiredLimits } from '../../src/limits.js'
+import { sendInvitation, sendShareNotice } from '../../src/mail.js'
 import { call, callTool, connectAgent, createOrg, createPage, createUser, REDIRECT_URI, slugFrom, type TestUser } from './helpers.js'
 
 // Tests run in-process with no connection address, so each request says where it comes from in
@@ -169,23 +170,56 @@ describe('invitations and shares', () => {
   })
 
   it('counts every person a page is shared with by email, in the web app and by agents', async () => {
-    env.rateLimits = 'invite=3/1h'
+    env.rateLimits = 'invite=4/1h'
     const owner = await createUser()
     const page = await createPage(owner)
     const share = (emails: string[], notify = true) =>
       call(`/api/artifacts/${page.slug}/sharing/people`, { cookie: owner.cookie, json: { emails, role: 'viewer', notify } })
     expect((await share(['a@example.com', 'b@example.com'])).status).toBe(200)
-    // Without an email, nobody is sent anything, so it doesn't count
+    // Without an email it counts too: the answer says which addresses have an account
     expect((await share(['quiet@example.com'], false)).status).toBe(200)
-    await expectTooMany(await share(['c@example.com', 'd@example.com']), /invited a lot of people/)
+    await expectTooMany(await share(['c@example.com', 'd@example.com'], false), /invited a lot of people/)
 
     const token = (await connectAgent(owner)).access_token
     expect((await callTool(token, 'share_artifact', { artifact_id: page.slug, emails: ['e@example.com'] })).isError).toBe(false)
     const refused = await callTool(token, 'share_artifact', { artifact_id: page.slug, emails: ['f@example.com'] })
     expect(refused).toEqual({
       isError: true,
-      text: expect.stringMatching(/^This account is past this server's limit of 3 people invited or shared with per hour\./),
+      text: expect.stringMatching(/^This account is past this server's limit of 4 people invited or shared with per hour\./),
     })
+  })
+
+  it('limits how many people one account removes from pages', async () => {
+    env.rateLimits = 'unshare=2/1h'
+    const owner = await createUser()
+    const page = await createPage(owner)
+    await call(`/api/artifacts/${page.slug}/sharing/people`, { cookie: owner.cookie, json: { emails: ['a@example.com', 'b@example.com'], notify: false } })
+    const remove = (email: string) => call(`/api/artifacts/${page.slug}/sharing/people?email=${email}`, { cookie: owner.cookie, method: 'DELETE' })
+    expect((await remove('a@example.com')).status).toBe(200)
+    expect((await remove('b@example.com')).status).toBe(200)
+    await expectTooMany(await remove('a@example.com'), /^You have removed a lot of people in a short time/)
+  })
+
+  it('emails one address only so often, from everyone together, and hands the link back instead', async () => {
+    env.rateLimits = 'invite-recipient=2/1d'
+    const owners = [await createUser(), await createUser(), await createUser()]
+    const shares = []
+    for (const owner of owners) {
+      const page = await createPage(owner)
+      const res = await call(`/api/artifacts/${page.slug}/sharing/people`, { cookie: owner.cookie, json: { emails: ['busy@example.com'] } })
+      expect(res.status).toBe(200)
+      shares.push((await res.json()) as { notifyFailed: string[]; links: { email: string; link: string }[] })
+    }
+    expect(vi.mocked(sendShareNotice)).toHaveBeenCalledTimes(2)
+    expect(shares[1]).toMatchObject({ links: [], notifyFailed: [] })
+    // Skipped quietly: not an error, the sharer gets the link to pass on
+    expect(shares[2]).toMatchObject({ notifyFailed: [], links: [{ email: 'busy@example.com', link: expect.stringContaining('?share=') }] })
+
+    // Invitations count toward the same limit; the inviter gets the link
+    const org = await createOrg(owners[0])
+    const res = await call(`/api/organizations/${org.id}/invitations`, { cookie: owners[0].cookie, json: { email: 'busy@example.com', role: 'member' } })
+    expect(await res.json()).toMatchObject({ emailed: false, link: expect.stringContaining('/invite/') })
+    expect(vi.mocked(sendInvitation)).not.toHaveBeenCalled()
   })
 })
 

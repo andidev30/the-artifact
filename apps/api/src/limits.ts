@@ -33,6 +33,11 @@ const CORE = {
   // People one account invites to an organization or shares a page with
   invite: { max: 200, seconds: HOUR },
   'invite-ip': { max: 500, seconds: HOUR },
+  // Invitation and share emails one address gets, from everyone together; past it the email is skipped
+  // and the sender gets the link to pass on
+  'invite-recipient': { max: 10, seconds: 24 * HOUR },
+  // People one account removes from pages
+  unshare: { max: 200, seconds: HOUR },
   // MCP tool calls by one account, and the ones among them (or through POST /api/publish) that publish a version or duplicate a page
   mcp: { max: 600, seconds: 10 * MINUTE },
   publish: { max: 200, seconds: HOUR },
@@ -202,6 +207,11 @@ export async function limitInvites(c: Context, userId: string, people: number): 
     (await limitRequest(c, 'invite', userId, 'You have invited a lot of people in a short time.', people)) ??
     (await limitRequest(c, 'invite-ip', clientIp(c), 'Too many invitations were sent from your network.', people))
   )
+}
+
+// Whether one more invitation or share email may go to this address (the invite-recipient limit)
+export async function mayEmailRecipient(address: string): Promise<boolean> {
+  return (await hit('invite-recipient', address.toLowerCase())) === null
 }
 
 // Without brackets or a zone id, and IPv4-mapped addresses as plain IPv4

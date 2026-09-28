@@ -97,6 +97,17 @@ export function linkLetsIn(artifact: Artifact, link: LinkPass = {}): boolean {
   return link.granted === true || (keyMatches(artifact, link.key) && artifact.linkPasswordHash === null)
 }
 
+// Shares with the viewer's address that count for this account: all of them once its address was
+// checked, otherwise only the ones whose link it opened (src/sharing.ts). Someone who signed up with a
+// password on a server without email may have typed another person's address.
+export function sharedWithViewer(viewer: Viewer): SQL {
+  const s = schema.artifactShares
+  return and(
+    eq(s.email, viewer.email.toLowerCase()),
+    or(eq(s.acceptedBy, viewer.id), sql`exists (select 1 from ${schema.users} u where u.id = ${viewer.id} and not u.email_unverified)`),
+  ) as SQL
+}
+
 // Like Google Drive: owners and invited editors can edit, invited viewers can view,
 // organization admins can edit every page in it, and general access opens a page wider.
 export async function accessLevel(artifact: Artifact, viewer: Viewer | null, link: LinkPass = {}): Promise<Access> {
@@ -107,7 +118,7 @@ export async function accessLevel(artifact: Artifact, viewer: Viewer | null, lin
   const [share] = await db
     .select({ role: schema.artifactShares.role })
     .from(schema.artifactShares)
-    .where(and(eq(schema.artifactShares.artifactId, artifact.id), eq(schema.artifactShares.email, viewer.email.toLowerCase())))
+    .where(and(eq(schema.artifactShares.artifactId, artifact.id), sharedWithViewer(viewer)))
   if (share?.role === 'editor') return 'edit'
   if (share) level = 'view'
 
@@ -564,7 +575,7 @@ export function readableIn(viewer: Viewer, organizationId: string | null): SQL |
     eq(a.ownerId, viewer.id),
     eq(a.visibility, 'organization'),
     and(eq(a.visibility, 'link'), isNull(a.linkPasswordHash), isNull(a.linkToken), sql`(${a.linkExpiresAt} is null or ${a.linkExpiresAt} > now())`),
-    sql`exists (select 1 from ${schema.artifactShares} s where s.artifact_id = ${a.id} and s.email = ${viewer.email.toLowerCase()})`,
+    sql`exists (select 1 from ${schema.artifactShares} where ${schema.artifactShares.artifactId} = ${a.id} and ${sharedWithViewer(viewer)})`,
     sql`exists (select 1 from ${schema.memberships} m where m.organization_id = ${a.organizationId} and m.user_id = ${viewer.id} and m.role in ('owner', 'admin'))`,
   )
 }
@@ -673,12 +684,7 @@ export async function countForWorkspace(viewer: Viewer, organizationId: string |
 
 // Pages other people shared with this email address. Their folders belong to the owner's workspace, so they aren't part of it.
 function sharedWith(viewer: Viewer, opts: Pick<ListOptions, 'query' | 'tag'>): SQL {
-  return and(
-    eq(schema.artifactShares.email, viewer.email.toLowerCase()),
-    ne(schema.artifacts.ownerId, viewer.id),
-    matches(opts.query),
-    taggedWith(opts.tag),
-  ) as SQL
+  return and(sharedWithViewer(viewer), ne(schema.artifacts.ownerId, viewer.id), matches(opts.query), taggedWith(opts.tag)) as SQL
 }
 
 export async function listSharedWith(viewer: Viewer, opts: Omit<ListOptions, 'folder'> = {}) {
@@ -764,7 +770,7 @@ export async function editableIds(viewer: Viewer, artifacts: Artifact[]): Promis
           schema.artifactShares.artifactId,
           rest.map((a) => a.id),
         ),
-        eq(schema.artifactShares.email, viewer.email.toLowerCase()),
+        sharedWithViewer(viewer),
         eq(schema.artifactShares.role, 'editor'),
       ),
     )
