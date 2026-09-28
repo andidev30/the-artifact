@@ -29,7 +29,7 @@
   ],
   "rewrites": [
     {
-      "source": "/api/:path*",
+      "source": "/api/(.*)",
       "destination": "/api"
     },
     {
@@ -37,15 +37,19 @@
       "destination": "/api"
     },
     {
-      "source": "/mcp/:path*",
+      "source": "/mcp/(.*)",
       "destination": "/api"
     },
     {
-      "source": "/oauth/:path*",
+      "source": "/oauth/(.*)",
       "destination": "/api"
     },
     {
-      "source": "/.well-known/:path*",
+      "source": "/.well-known/(.*)",
+      "destination": "/api"
+    },
+    {
+      "source": "/scim/(.*)",
       "destination": "/api"
     },
     {
