@@ -73,3 +73,20 @@ export async function forgetSignInLinks(email: string) {
     await sql`delete from email_tokens where email = ${email.toLowerCase()}`
   })
 }
+
+export async function grantSelfHostedAdmin(email: string) {
+  await withDatabase(SELF_HOSTED_DATABASE_URL, async (sql) => {
+    const rows = await sql`update users set is_admin = true where email = ${email.toLowerCase()} returning id`
+    if (rows.length !== 1) throw new Error(`No account for ${email}`)
+  })
+}
+
+// The last answer from GitHub's releases API, as if the self-hosted server had just checked, so it
+// doesn't ask GitHub again during the run
+export async function recordLatestRelease(version: string) {
+  await withDatabase(SELF_HOSTED_DATABASE_URL, async (sql) => {
+    const url = `https://github.com/andidev30/the-artifact/releases/tag/v${version}`
+    await sql`insert into release_check (id, checked_at, latest_version, release_url) values (1, now(), ${version}, ${url})
+      on conflict (id) do update set checked_at = now(), latest_version = ${version}, release_url = ${url}`
+  })
+}

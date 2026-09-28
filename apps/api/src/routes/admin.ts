@@ -11,6 +11,7 @@ import { log } from '../log.js'
 import { mailEnabled } from '../env.js'
 import { activeAdminCount, adminCondition, instanceSettings, isInstanceAdmin, lockAdmins, parseSettings, revokeAccess, saveSettings } from '../instance.js'
 import { license } from './license.js'
+import { releaseStatus } from '../releases.js'
 import { deleteAccountData, ownedAlone } from './settings.js'
 
 // The instance admin area, mounted at /api/admin. Only instance admins get past requireAdmin.
@@ -329,6 +330,8 @@ admin.delete('/organizations/:id', async (c) => {
 })
 
 admin.get('/settings', async (c) => c.json(await instanceSettings()))
+
+admin.get('/release', async (c) => c.json(await releaseStatus()))
 
 admin.put('/settings', async (c) => {
   const parsed = parseSettings(await c.req.json().catch(() => null))

@@ -105,6 +105,11 @@ export const deleteOrganization = (id: string, confirmSlug: string) =>
 
 export const getSettings = () => adminRequest<InstanceSettings>('/settings')
 
+// The release this server runs, and a newer one when GitHub lists it (self-hosted only)
+export type ReleaseStatus = { current: string; newer: { version: string; url: string } | null }
+
+export const getReleaseStatus = () => adminRequest<ReleaseStatus>('/release')
+
 export const saveSettings = (value: { signupPolicy: SignupPolicy; allowedDomains: string[]; instanceName: string }) =>
   adminRequest<InstanceSettings>('/settings', { method: 'PUT', json: value })
 

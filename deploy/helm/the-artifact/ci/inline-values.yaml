@@ -17,3 +17,4 @@ google:
   clientId: example.apps.googleusercontent.com
   clientSecret: example-secret
 trustProxy: 2
+releaseCheck: false

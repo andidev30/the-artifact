@@ -47,6 +47,9 @@ function servers(ports: { api: number; web: number }, selfHosted: boolean, datab
         WORKSPACE_MAX_PAGES: '',
         WORKSPACE_MAX_VERSIONS: '',
         WORKSPACE_MAX_STORAGE: '',
+        // On, so the admin area shows the release e2e/self-hosted/release-notice.spec.ts records;
+        // that record also keeps the server from asking GitHub itself
+        RELEASE_CHECK: 'true',
         // The MinIO from docker-compose
         S3_ENDPOINT: 'http://localhost:9000',
         S3_REGION: 'us-east-1',

@@ -51,6 +51,7 @@ Put your values in a file and pass it with `-f`. `helm show values oci://ghcr.io
 | `google.clientId`, `google.clientSecret` | off | **Continue with Google** |
 | `thumbnails.enabled` | `true` | Gallery thumbnails. Needs the [seccomp profile](#3-the-seccomp-profile) on the nodes. |
 | `metrics.token`, `metrics.serviceMonitor.enabled` | off | [Prometheus metrics](#health-checks-and-metrics) |
+| `releaseCheck` | `true` | `false` sets `RELEASE_CHECK=false`: no daily request to GitHub for [new releases](/docs/upgrading#new-releases), for clusters without internet access |
 | `rateLimits`, `workspaceQuota.maxPages`, `workspaceQuota.maxVersions`, `workspaceQuota.maxStorage` | the defaults | `RATE_LIMITS` and the [workspace quotas](/docs/configuration#workspace-quotas) |
 | `existingSecret` | none | A Secret of yours whose keys become settings, e.g. `SMTP_PASS` or `GOOGLE_CLIENT_SECRET`. Its keys win over the same settings in values. |
 | `extraEnv` | none | Any other setting from the [configuration reference](/docs/configuration), as `name` and `value` |

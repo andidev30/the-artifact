@@ -24,6 +24,10 @@ appUrl: ''
 # service turns it off.
 selfHosted: true
 
+# Asks GitHub's releases API once a day for the newest release and shows admins a notice when one
+# is out. Sends nothing about the install. false makes no request, for clusters without internet.
+releaseCheck: true
+
 # How many proxies in front of the app add the visitor's address to X-Forwarded-For: true, false
 # or a number. Empty means true when ingress.enabled (the ingress controller is one proxy) and
 # false otherwise. Rate limits count visitors by that address.
