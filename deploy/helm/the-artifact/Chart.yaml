@@ -3,8 +3,8 @@ name: the-artifact
 description: Hosts the HTML pages coding agents build. The app, with an optional bundled Postgres and MinIO for trying it out.
 type: application
 # The chart is released with the app: the release PR bumps both lines through their markers
-version: 0.3.0 # x-release-please-version
-appVersion: '0.3.0' # x-release-please-version
+version: 0.4.0 # x-release-please-version
+appVersion: '0.4.0' # x-release-please-version
 kubeVersion: '>=1.27.0-0'
 home: https://github.com/andidev30/the-artifact
 sources:
