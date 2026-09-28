@@ -18,3 +18,4 @@ google:
   clientSecret: example-secret
 trustProxy: 2
 releaseCheck: false
+encryptionKey: ExfUrXjm1rEbuSU8kbYBhdKxxN1Q/Na7GPWpl3eKlhA=
