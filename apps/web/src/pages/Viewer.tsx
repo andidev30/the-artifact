@@ -20,6 +20,7 @@ import { DeleteDialog, PageMenu, RenameDialog, type MenuItem } from '../componen
 import { ShareDialog } from '../components/ShareDialog'
 import { DuplicateDialog, MoveWorkspaceDialog } from '../components/WorkspaceDialogs'
 import { storedWorkspace } from '../workspace'
+import { TagIcon, TagsDialog } from '../components/Tags'
 import { ViewsPanel } from '../components/ViewsPanel'
 import { Wordmark } from '../components/Wordmark'
 import { LOGIN_URL } from '../config'
@@ -259,7 +260,7 @@ function PageFrame({
     navigate({ search: search.size ? `?${search}` : '' }, { replace: true })
   }, [navigate])
   const [viewing, setViewing] = useState<Viewing | null>(null)
-  const [dialog, setDialog] = useState<'rename' | 'delete' | 'duplicate' | 'move' | null>(null)
+  const [dialog, setDialog] = useState<'rename' | 'delete' | 'duplicate' | 'move' | 'tags' | null>(null)
   const [announce, setAnnounce] = useState('')
   // Signed-in people get the comment helper in the frame, to pin comments to elements of the page
   const frameRef = useRef<HTMLIFrameElement>(null)
@@ -319,6 +320,7 @@ function PageFrame({
   // Comments come only to people who are signed in, and only they can keep a copy
   if (page.comments) menu.push({ label: 'Duplicate', onSelect: () => setDialog('duplicate') })
   if (page.canMove && page.workspace) menu.push({ label: 'Move to workspace…', onSelect: () => setDialog('move') })
+  if (page.canEdit && page.tags) menu.push({ label: 'Tags', onSelect: () => setDialog('tags') })
   if (page.isOwner) menu.push({ label: 'Delete', onSelect: () => setDialog('delete'), danger: true })
 
   async function copyLink() {
@@ -356,6 +358,16 @@ function PageFrame({
             )}
             {page.owner ? ` by ${page.owner}` : ''}
           </p>
+          {page.tags && page.tags.length > 0 && (
+            <ul className="viewer-tags" aria-label="Tags">
+              {page.tags.map((t) => (
+                <li key={t}>
+                  <TagIcon />
+                  {t}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
         <div className="viewer-actions">
           <span className="viewer-badge" data-visibility={page.visibility}>
@@ -476,6 +488,15 @@ function PageFrame({
             document.title = `${title} | The Artifact`
             setAnnounce(`Renamed to “${title}”.`)
           }}
+        />
+      )}
+      {dialog === 'tags' && (
+        <TagsDialog
+          slug={page.slug}
+          title={page.title}
+          tags={page.tags ?? []}
+          onClose={() => setDialog(null)}
+          onChanged={(tags) => onChange({ ...pageRef.current, tags })}
         />
       )}
       {dialog === 'delete' && (

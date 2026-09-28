@@ -10,21 +10,26 @@ import {
   checkManifest,
   checkRemovals,
   ENTRY_PATH,
+  isHtml,
   MAX_HTML_BYTES,
+  pageText,
   PublishError,
   splitEntry,
   type FileInput,
   type FileMeta,
   type ManifestEntry,
   type PageFiles,
+  type PreparedFile,
 } from './files.js'
-import { prepare } from './prepare.js'
+import { log } from './log.js'
+import { extractText, prepare, WORKER_MIN_CHARS } from './prepare.js'
 import { Lru } from './cache.js'
 import { belongsTo, checkFolderName, ensureFolder, FolderError } from './folders.js'
 import { holdStorageLock } from './gc.js'
 import { checkQuota, type Workspace } from './quota.js'
 import { getBlob, getText, putBlob } from './storage.js'
 import { checkUploadId, claimUploads } from './uploads.js'
+import { contentMatches, INLINE_TEXT_CHARS, indexLater, writeWords } from './search.js'
 import { queueThumbnail } from './thumbnails.js'
 import { emitWebhookEvent } from './webhooks.js'
 import { CONTROL_CHARS_ERROR, hasControlChars, MAX_VERSION, SLUG_RE, UUID_RE } from './validation.js'
@@ -220,8 +225,27 @@ type PublishInput = PublishTarget & {
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0]
 
 // What a version records, and how its bytes get into storage: written by the API for an inline
-// publish, or taken over from where the agent uploaded them
-type Content = { htmlSha256: string; htmlSize: number; files: FileMeta[]; store: () => Promise<void> }
+// publish, or taken over from where the agent uploaded them. text: for search, when it is at hand
+// (null when pulling it out failed, so it is read back from storage)
+type Content = { htmlSha256: string; htmlSize: number; files: FileMeta[]; store: () => Promise<void>; text?: string | Promise<string | null> }
+
+// Short text goes into the search index with the version; anything else is indexed after the commit
+const indexedWith = (content: Content): content is Content & { text: string } => typeof content.text === 'string' && content.text.length <= INLINE_TEXT_CHARS
+
+// A small page's text is pulled out here, in a few milliseconds, and indexed with the version. A
+// large page's is pulled out on a worker thread while the version is stored, and indexed after it.
+function textOf(html: string, files: PreparedFile[]): string | Promise<string | null> {
+  const others = files.filter((f) => isHtml(f.contentType)).map((f) => ({ path: f.path, html: f.content.toString('utf8') }))
+  if (others.reduce((n, f) => n + f.html.length, html.length) < WORKER_MIN_CHARS) return pageText(html, others)
+  return extractText(html, others).catch((err) => {
+    log.warn('Reading the text of a page for search failed', { err })
+    return null
+  })
+}
+
+async function indexAfter(artifactId: string, versionId: string, content: Content) {
+  if (!indexedWith(content)) await indexLater(artifactId, content.text === undefined ? undefined : { versionId, text: content.text })
+}
 
 // Stores a version's content inside the transaction that records it, so the storage sweep can't
 // remove a blob between storing it and the commit
@@ -246,6 +270,7 @@ export async function publish(input: PublishInput): Promise<Artifact> {
     htmlSha256,
     htmlSize,
     files,
+    text: textOf(input.html, files),
     store: async () => {
       await Promise.all([putBlob(html, htmlSha256), ...files.map((f) => putBlob(f.content, f.sha256))])
     },
@@ -373,7 +398,7 @@ async function publishContent(input: PublishTarget, content: Content | ((tx: Tx,
     if (folder !== undefined && (existing.organizationId !== input.organizationId || !(await belongsTo(viewer, ws)))) {
       throw new PublishError("This page belongs to another workspace, so it can't be filed into a folder from here. Publish again without folder.")
     }
-    const { updated, versionId } = await db.transaction(async (tx) => {
+    const { updated, versionId, built } = await db.transaction(async (tx) => {
       // Lock the page so two publishes (or a publish and a restore) can't pick the same number
       const [locked] = await tx.select().from(schema.artifacts).where(eq(schema.artifacts.id, existing.id)).for('update')
       if (input.baseVersion !== undefined && input.baseVersion !== locked.currentVersion) {
@@ -399,8 +424,11 @@ async function publishContent(input: PublishTarget, content: Content | ((tx: Tx,
         })
         .where(eq(schema.artifacts.id, existing.id))
         .returning()
-      return { updated, versionId }
+      if (indexedWith(built)) await writeWords(tx, existing.id, versionId, built.text)
+      return { updated, versionId, built }
     })
+    // An update's content has no text at hand, so it is read back from storage
+    await indexAfter(existing.id, versionId, built)
     queueThumbnail(versionId)
     track({ event: 'page_published', userId: input.userId })
     if (input.visibility) auditVisibility(existing, input.visibility, { id: input.userId, email: input.email })
@@ -429,8 +457,10 @@ async function publishContent(input: PublishTarget, content: Content | ((tx: Tx,
       })
       .returning()
     const versionId = await insertVersion(tx, { artifactId: created.id, version: 1, publishedWith: input.clientName, publishedBy: input.userId }, content)
+    if (indexedWith(content)) await writeWords(tx, created.id, versionId, content.text)
     return { created, versionId }
   })
+  await indexAfter(created.id, versionId, content)
   queueThumbnail(versionId)
   track({ event: 'page_published', userId: input.userId })
   // A new page in an organization is open to it by default, which nobody chose, so only a link counts
@@ -511,9 +541,37 @@ export async function loadVersionTree(v: { id: string; artifactId: string; htmlS
 // Postgres text can't hold NUL, and nothing stored contains one
 export const likeTerm = (q: string) => `%${q.replaceAll('\0', '').replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`
 
-function titleMatches(query: string | undefined): SQL | undefined {
+// The title contains the query, or the current version's text has its words (src/search.ts)
+// readable: which of the listed pages this person may read the content of, when that is fewer than
+// the list shows (see readableIn)
+function matches(query: string | undefined, readable?: SQL): SQL | undefined {
   const q = query?.trim()
-  return q ? ilike(schema.artifacts.title, likeTerm(q)) : undefined
+  if (!q) return undefined
+  const inText = contentMatches(schema.artifacts.id, q)
+  return or(ilike(schema.artifacts.title, likeTerm(q)), inText && readable ? and(readable, inText) : inText)
+}
+
+// An organization's gallery lists its link-shared pages to every member, but a member opens one only
+// through its link (accessLevel): one with a password, a reset link (a key) or an expired link stays
+// closed to them. Its text mustn't answer searches for them either, or searching could read it word
+// by word. These are the listed pages whose content the person can open, as accessLevel decides.
+function readableIn(viewer: Viewer, organizationId: string | null): SQL | undefined {
+  if (!organizationId) return undefined
+  const a = schema.artifacts
+  return or(
+    eq(a.ownerId, viewer.id),
+    eq(a.visibility, 'organization'),
+    and(eq(a.visibility, 'link'), isNull(a.linkPasswordHash), isNull(a.linkToken), sql`(${a.linkExpiresAt} is null or ${a.linkExpiresAt} > now())`),
+    sql`exists (select 1 from ${schema.artifactShares} s where s.artifact_id = ${a.id} and s.email = ${viewer.email.toLowerCase()})`,
+    sql`exists (select 1 from ${schema.memberships} m where m.organization_id = ${a.organizationId} and m.user_id = ${viewer.id} and m.role in ('owner', 'admin'))`,
+  )
+}
+
+// A tag as checkTag leaves it (src/tags.ts)
+function taggedWith(tag: string | undefined): SQL | undefined {
+  if (tag === undefined) return undefined
+  const t = schema.artifactTags
+  return sql`${schema.artifacts.id} in (select ${t.artifactId} from ${t} where ${t.tag} = ${tag})`
 }
 
 // Pages shown in a workspace: in an organization, shared pages plus your own private ones
@@ -530,8 +588,9 @@ export const PAGE_SIZE = 50
 export const MAX_PAGE_SIZE = 100
 
 // A list is read newest first, one page at a time. folder: undefined for every page, null for pages
-// in no folder, or a folder id. cursor: the next value of the page before.
-export type ListOptions = { limit?: number; query?: string; folder?: string | null; cursor?: string }
+// in no folder, or a folder id. tag: only pages with it, as checkTag leaves it. cursor: the next value
+// of the page before.
+export type ListOptions = { limit?: number; query?: string; folder?: string | null; tag?: string; cursor?: string }
 
 export class CursorError extends Error {
   constructor() {
@@ -573,7 +632,11 @@ function inFolder(folder: string | null | undefined): SQL | undefined {
 
 const NEWEST_FIRST = [desc(schema.artifacts.updatedAt), desc(schema.artifacts.id)]
 
-export async function listForWorkspace(userId: string, organizationId: string | null, opts: ListOptions = {}) {
+function inWorkspace(viewer: Viewer, organizationId: string | null, opts: Pick<ListOptions, 'query' | 'folder' | 'tag'>) {
+  return and(pagesInWorkspace(viewer.id, organizationId), matches(opts.query, readableIn(viewer, organizationId)), inFolder(opts.folder), taggedWith(opts.tag))
+}
+
+export async function listForWorkspace(viewer: Viewer, organizationId: string | null, opts: ListOptions = {}) {
   const limit = pageLimit(opts.limit)
   const rows = await db
     .select({
@@ -586,23 +649,28 @@ export async function listForWorkspace(userId: string, organizationId: string | 
     .from(schema.artifacts)
     .innerJoin(schema.users, eq(schema.artifacts.ownerId, schema.users.id))
     .leftJoin(schema.folders, eq(schema.artifacts.folderId, schema.folders.id))
-    .where(and(pagesInWorkspace(userId, organizationId), titleMatches(opts.query), inFolder(opts.folder), after(opts.cursor)))
+    .where(and(inWorkspace(viewer, organizationId, opts), after(opts.cursor)))
     .orderBy(...NEWEST_FIRST)
     .limit(limit + 1)
   return paged(rows, limit)
 }
 
-export async function countForWorkspace(userId: string, organizationId: string | null, opts: Pick<ListOptions, 'query' | 'folder'> = {}) {
+export async function countForWorkspace(viewer: Viewer, organizationId: string | null, opts: Pick<ListOptions, 'query' | 'folder' | 'tag'> = {}) {
   const [row] = await db
     .select({ n: count() })
     .from(schema.artifacts)
-    .where(and(pagesInWorkspace(userId, organizationId), titleMatches(opts.query), inFolder(opts.folder)))
+    .where(inWorkspace(viewer, organizationId, opts))
   return row.n
 }
 
 // Pages other people shared with this email address. Their folders belong to the owner's workspace, so they aren't part of it.
-function sharedWith(viewer: Viewer, query: string | undefined): SQL {
-  return and(eq(schema.artifactShares.email, viewer.email.toLowerCase()), ne(schema.artifacts.ownerId, viewer.id), titleMatches(query)) as SQL
+function sharedWith(viewer: Viewer, opts: Pick<ListOptions, 'query' | 'tag'>): SQL {
+  return and(
+    eq(schema.artifactShares.email, viewer.email.toLowerCase()),
+    ne(schema.artifacts.ownerId, viewer.id),
+    matches(opts.query),
+    taggedWith(opts.tag),
+  ) as SQL
 }
 
 export async function listSharedWith(viewer: Viewer, opts: Omit<ListOptions, 'folder'> = {}) {
@@ -618,18 +686,18 @@ export async function listSharedWith(viewer: Viewer, opts: Omit<ListOptions, 'fo
     .from(schema.artifactShares)
     .innerJoin(schema.artifacts, eq(schema.artifactShares.artifactId, schema.artifacts.id))
     .innerJoin(schema.users, eq(schema.artifacts.ownerId, schema.users.id))
-    .where(and(sharedWith(viewer, opts.query), after(opts.cursor)))
+    .where(and(sharedWith(viewer, opts), after(opts.cursor)))
     .orderBy(...NEWEST_FIRST)
     .limit(limit + 1)
   return paged(rows, limit)
 }
 
-export async function countSharedWith(viewer: Viewer, query?: string) {
+export async function countSharedWith(viewer: Viewer, opts: Pick<ListOptions, 'query' | 'tag'> = {}) {
   const [row] = await db
     .select({ n: count() })
     .from(schema.artifactShares)
     .innerJoin(schema.artifacts, eq(schema.artifactShares.artifactId, schema.artifacts.id))
-    .where(sharedWith(viewer, query))
+    .where(sharedWith(viewer, opts))
   return row.n
 }
 
@@ -777,6 +845,7 @@ export async function restoreVersion(artifact: Artifact, version: number, userId
   if (!result) return null
   if (!result.hasThumbnail) queueThumbnail(result.versionId)
   await emitWebhookEvent({ event: 'page.published', artifact: result.updated, version: result.updated.currentVersion, actorId: userId })
+  await indexLater(artifact.id)
   return result.updated
 }
 

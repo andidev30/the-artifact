@@ -6,6 +6,7 @@ import type { Artifact, Visibility } from './db/schema.js'
 import { belongsTo, workspaceOf } from './folders.js'
 import { holdStorageLock } from './gc.js'
 import { checkQuota, type Workspace } from './quota.js'
+import { indexLater } from './search.js'
 import { queueThumbnail } from './thumbnails.js'
 import { UUID_RE } from './validation.js'
 import { emitWebhookEvent } from './webhooks.js'
@@ -125,12 +126,18 @@ export async function duplicatePage(source: Artifact, actor: Actor, workspace: u
       insert into artifact_thumbnails (version_id, sha256, content_type)
       select ${version.id}, sha256, content_type from artifact_thumbnails where version_id = ${current.id} and sha256 is not null
       returning version_id`)
-    return { created, versionId: version.id, hasThumbnail: [...copied].length > 0 }
+    // The same words for search, when the source's are of the version copied
+    const words = await tx.execute(sql`
+      insert into artifact_search (artifact_id, version_id, words)
+      select ${created.id}, ${version.id}, words from artifact_search where artifact_id = ${source.id} and version_id = ${current.id}
+      returning artifact_id`)
+    return { created, versionId: version.id, hasThumbnail: [...copied].length > 0, indexed: [...words].length > 0 }
   })
   if (!result) throw new TransferError('Not found', 404)
   if (!result.hasThumbnail) queueThumbnail(result.versionId)
   // A copy is a new page in its workspace, so its webhooks hear about it as a publish
   await emitWebhookEvent({ event: 'page.published', artifact: result.created, version: 1, actorId: actor.id })
+  if (!result.indexed) await indexLater(result.created.id)
   return result.created
 }
 

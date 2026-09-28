@@ -11,6 +11,7 @@ import { scheduleSweeps } from './gc.js'
 import { inspectElsewhere, inspectHere, inspectionAnswered } from './inspect.js'
 import { log } from './log.js'
 import { collectProcessMetrics, reportClusterMetrics } from './metrics.js'
+import { indexInBackground } from './search.js'
 import { closeThumbnailBrowser, queueThumbnail, renderThumbnailsElsewhere, rendererQueueFull, reportQueueFull } from './thumbnails.js'
 import { batchViewCounts, stopViewCounts } from './views.js'
 import { startWebhookQueue, stopWebhookQueue, useWebhookQueue } from './webhooks.js'
@@ -84,6 +85,8 @@ export function startServer({ background }: { background: boolean }) {
   // seconds (src/views.ts), by each worker for its own. Vercel's entry (api/index.js) doesn't call
   // this and writes each view.
   batchViewCounts()
+  // Likewise, long pages are indexed for search after the publish has answered (src/search.ts)
+  indexInBackground()
 
   const server = serve({ fetch: app.fetch, port: env.port }, (info) => {
     log.info('Server is running', { port: info.port, ...(worker ? { worker: cluster.worker?.id } : {}) })

@@ -327,6 +327,7 @@ describe('the-artifact list and share', () => {
           version: 1,
           visibility: 'private',
           folder: 'Reports',
+          tags: [],
           updated_at: expect.any(String),
         },
       ],

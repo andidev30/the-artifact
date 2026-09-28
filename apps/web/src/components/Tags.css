@@ -1,0 +1,175 @@
+/* Tags: chips in the gallery like folders, labels on cards, and the dialog that edits them */
+
+.tag-icon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+}
+
+.folder-bar + .tag-bar {
+  margin-top: 8px;
+}
+
+.tag-bar + .app-grid,
+.gallery-filter + .app-grid {
+  margin-top: 20px;
+}
+
+/* The tag the gallery is filtered by, with a way back to every page */
+.gallery-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 16px;
+  font-size: var(--step--1);
+}
+
+.gallery-filter strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  color: var(--ink);
+  background: var(--marker);
+  border: 1.5px solid var(--ink);
+  border-radius: 3px;
+  overflow-wrap: anywhere;
+}
+
+/* On cards: above the card's own link, so each opens the gallery filtered by it */
+.page-card-tags .page-card-tag {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 2px 8px;
+  font: 600 0.75rem var(--sans);
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--ink-soft);
+  border-radius: 3px;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.page-card-tags .page-card-tag:hover {
+  border-color: var(--ink);
+  background: var(--marker);
+}
+
+.page-card-tag .tag-icon {
+  width: 11px;
+  height: 11px;
+}
+
+/* In the viewer bar, under the title */
+.viewer-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.viewer-tags li {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ink);
+  border: 1px solid var(--ink-soft);
+  border-radius: 3px;
+}
+
+.tags-edit {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+}
+
+.tags-edit li {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  padding-left: 10px;
+  font-size: var(--step--1);
+  font-weight: 600;
+  background: var(--paper);
+  border: 1.5px solid var(--ink);
+  border-radius: 3px;
+}
+
+.tags-edit span {
+  overflow-wrap: anywhere;
+}
+
+.tags-edit button {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.tags-edit button:hover {
+  background: var(--marker);
+}
+
+.tags-edit svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.tags-none {
+  margin: 0 0 16px;
+}
+
+.tags-add {
+  display: flex;
+  gap: 8px;
+}
+
+.tags-add .page-dialog-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.tags-add .button {
+  flex: none;
+  height: 42px;
+  padding: 0 16px;
+  font: 700 var(--step--1) var(--sans);
+  cursor: pointer;
+  box-shadow: 3px 3px 0 var(--ink);
+}
+
+.tags-add .button:disabled {
+  color: var(--ink-soft);
+  background: var(--paper);
+  border-color: var(--grid);
+  box-shadow: none;
+  cursor: not-allowed;
+}

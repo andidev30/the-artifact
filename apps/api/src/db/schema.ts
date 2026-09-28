@@ -367,6 +367,40 @@ export const artifactFiles = pgTable(
   (t) => [primaryKey({ columns: [t.versionId, t.path] })],
 )
 
+// Labels on a page, lowercase, up to 10 per page (src/tags.ts). They belong to the page's workspace
+// and are seen by everyone who can open the page.
+export const artifactTags = pgTable(
+  'artifact_tags',
+  {
+    artifactId: uuid('artifact_id')
+      .notNull()
+      .references(() => artifacts.id, { onDelete: 'cascade' }),
+    tag: text('tag').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.artifactId, t.tag] }), index('artifact_tags_tag_idx').on(t.tag, t.artifactId)],
+)
+
+const tsvector = customType<{ data: string }>({ dataType: () => 'tsvector' })
+
+// The words of a page's current version, for search (src/search.ts). One row per page, replaced when
+// another version becomes current; version_id says which one it was built from, so pages whose row is
+// missing or older can be found and indexed again. Only the words are kept, not the text.
+export const artifactSearch = pgTable(
+  'artifact_search',
+  {
+    artifactId: uuid('artifact_id')
+      .primaryKey()
+      .references(() => artifacts.id, { onDelete: 'cascade' }),
+    versionId: uuid('version_id')
+      .notNull()
+      .references(() => artifactVersions.id, { onDelete: 'cascade' }),
+    words: tsvector('words').notNull(),
+    indexedAt: timestamp('indexed_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('artifact_search_words_idx').using('gin', t.words)],
+)
+
 // A screenshot of a version for gallery cards, rendered in a headless browser after publishing.
 // A row without an image records a render that failed, so it isn't retried on every gallery load.
 export const artifactThumbnails = pgTable('artifact_thumbnails', {

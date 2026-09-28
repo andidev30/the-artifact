@@ -45,6 +45,7 @@ import { newOrganizationsOpen, onboarding, organizations, setOrganizationPolicy 
 import { security, sessions } from './routes/security.js'
 import { settings } from './routes/settings.js'
 import { organizationWebhooks, personalWebhooks } from './routes/webhooks.js'
+import { tags } from './routes/tags.js'
 import { mountWeb } from './web.js'
 import { pruneWebhookDeliveries } from './webhooks.js'
 
@@ -145,6 +146,7 @@ api.route('/artifacts/:slug/comments', comments)
 api.route('/artifacts', artifacts)
 api.route('/folders', folders)
 api.route('/exports', exportsApi)
+api.route('/tags', tags)
 api.route('/contact-sales', contact)
 
 api.route('/organizations/:orgId/audit-log', auditLog)

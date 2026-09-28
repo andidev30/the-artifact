@@ -12,7 +12,7 @@ The Artifact hosts the HTML pages your coding agent builds: reports, prototypes,
 
 - **One link for every revision.** Republishing keeps the address, and older versions stay in the history.
 - **Private until you share it.** Share with specific people by email, with everyone in your organization, or with anyone who has the link.
-- **A gallery** of everything published in a workspace, with search and folders, plus pages others shared with you.
+- **A gallery** of everything published in a workspace, with search inside pages, folders and tags, plus pages others shared with you.
 - **Pages run in a sandbox.** A page's scripts run, but they can't read your session or reach the rest of the app.
 
 ## Where to go next

@@ -259,6 +259,33 @@ test('duplicate and move to another workspace dialogs', async ({ page }) => {
   await page.keyboard.press('Escape')
 })
 
+test('tags: the tag bar, tags on cards and the tags dialog', async ({ page }) => {
+  await signUpPersonal(page, uniqueEmail('a11y-tags'))
+  const token = await connectAgent(page)
+  const slug = await publishViaMcp(page.request, token, { title: 'Tagged page', html: HTML })
+  const res = await page.request.post('/mcp', {
+    headers: { authorization: `Bearer ${token}`, accept: 'application/json, text/event-stream' },
+    data: { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'tag_artifact', arguments: { artifact_id: slug, add: ['launch', 'q4'] } } },
+  })
+  expect(res.status()).toBe(200)
+  await page.reload()
+
+  await expect(page.getByRole('navigation', { name: 'Tags' }).getByRole('button', { name: /launch/ })).toBeVisible()
+  await expectAccessible(page, 'gallery with tags')
+  await page.getByRole('navigation', { name: 'Tags' }).getByRole('button', { name: /q4/ }).click()
+  await expect(page.getByText('Pages tagged')).toBeVisible()
+  await expect(page.locator('.gallery[data-stale]')).toHaveCount(0)
+  await expectAccessible(page, 'gallery filtered by a tag')
+
+  await page.getByRole('button', { name: 'More actions for Tagged page' }).click()
+  await page.getByRole('menuitem', { name: 'Tags' }).click()
+  await expect(page.getByRole('dialog', { name: 'Tags for “Tagged page”' })).toBeVisible()
+  await expectAccessible(page, 'tags dialog')
+  await page.getByLabel('Add tags').fill('x'.repeat(40))
+  await expect(page.getByText('over the 32 character limit')).toBeVisible()
+  await expectAccessible(page, 'tags dialog, a tag too long')
+})
+
 test('viewer with its history, views and comments panels, and the share dialog', async ({ page, browser }) => {
   await signUpPersonal(page, uniqueEmail('a11y-viewer'))
   const token = await connectAgent(page)

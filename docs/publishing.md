@@ -93,12 +93,13 @@ Its structured content is the same as the answer of [`POST /api/publish`](#publi
 
 ### list_artifacts
 
-Lists the pages in the connected workspace, most recently updated first, with their ids, links and folders. It answers 25 at a time; when there are more, the answer ends with a `cursor` the agent passes back for the next ones. The same list also comes as structured content, for scripts: `{ pages: [{ id, title, url, version, visibility, folder, updated_at }], total, cursor }`, where `total` is only counted on the first batch and `cursor` is `null` when there are no more.
+Lists the pages in the connected workspace, most recently updated first, with their ids, links, folders and tags. It answers 25 at a time; when there are more, the answer ends with a `cursor` the agent passes back for the next ones. The same list also comes as structured content, for scripts: `{ pages: [{ id, title, url, version, visibility, folder, tags, updated_at }], total, cursor }`, where `total` is only counted on the first batch and `cursor` is `null` when there are no more. `query`, `folder` and `tag` combine.
 
 | Argument | Required | Meaning |
 | --- | --- | --- |
-| `query` | no | Only pages whose title contains this, ignoring case |
+| `query` | no | Only pages whose title contains this, or whose text has these words (see [Search](#search)), ignoring case |
 | `folder` | no | Only pages in the folder with this name; an empty string for pages in no folder |
+| `tag` | no | Only pages with this [tag](#tags) |
 | `limit` | no | How many to list, 1 to 100. 25 by default. |
 | `cursor` | no | From the end of the previous answer, for the next pages |
 
@@ -126,9 +127,21 @@ Makes a new page with a copy of the current version of a page you can open, like
 | `workspace` | no | Where the copy goes: `personal` or the id of an organization you are a member of. The connected workspace by default. |
 | `title` | no | Title of the copy, 1 to 200 characters. By default the page's title with " (copy)" after it. |
 
+### tag_artifact
+
+Adds [tags](#tags) to a page or removes them, without publishing a new version. For people who can edit the page. Tags are lowercased; tags the page already has, and ones it doesn't have to remove, are left as they are. The answer lists the page's tags.
+
+| Argument | Required | Meaning |
+| --- | --- | --- |
+| `artifact_id` | yes | Id or link of the page |
+| `add` | no | Tags to add, each 1 to 32 characters without commas. A page has up to 10. |
+| `remove` | no | Tags to remove; they are removed before any are added |
+
+Pass `add`, `remove` or both.
+
 ### get_artifact
 
-Returns the current version of a page, so the agent can edit it and publish a new version: its title, version number, the list of its files with their sizes, and the entry HTML. With `path` (for example `css/site.css`) it returns that one file instead, as text or, for binary files, as base64.
+Returns the current version of a page, so the agent can edit it and publish a new version: its title, version number, tags, the list of its files with their sizes, and the entry HTML. With `path` (for example `css/site.css`) it returns that one file instead, as text or, for binary files, as base64.
 
 ### inspect_artifact
 
@@ -379,7 +392,7 @@ Each version counts toward the server's publish [limit](#limits), so a build tha
 
 | Command | What it does |
 | --- | --- |
-| `the-artifact list` | Lists the pages in the workspace, newest first: id, version, who can open it, folder and title. `--query <words>` searches titles, `--folder <name>` narrows to a folder, `--limit <n>` (1 to 100) and `--cursor` page through. |
+| `the-artifact list` | Lists the pages in the workspace, newest first: id, version, who can open it, folder and title. `--query <words>` searches titles and page text, `--folder <name>` narrows to a folder, `--limit <n>` (1 to 100) and `--cursor` page through. |
 | `the-artifact share <page> --visibility link` | Changes who can open a page: `restricted`, `organization` or `link` |
 | `the-artifact share <page> --expires 2026-12-31 --password <text>` | The link stops working after that day (UTC), and asks for the password. `--expires never` and `--password ""` remove them. |
 | `the-artifact share <page> --new-link` | Resets the public link and prints the new one; public links shared before stop working. The page keeps its id. |
@@ -505,9 +518,29 @@ Ask for the change in the same conversation ("make the chart a line chart"), or 
 
 ## Managing pages in the app
 
-In the gallery and the page viewer, the **…** menu lets anyone who can open a page **Download** it as a zip of `index.html` and its files or, once signed in, **Duplicate** it; lets editors rename it and move it to another workspace; and lets the owner delete it. See [Duplicating and moving pages](/docs/sharing#duplicating-a-page). In the viewer, **Download** saves the version you are looking at, including an older one picked in the history.
+In the gallery and the page viewer, the **…** menu lets anyone who can open a page **Download** it as a zip of `index.html` and its files or, once signed in, **Duplicate** it; lets editors rename it, change its **Tags** and move it to another workspace; and lets the owner delete it. See [Duplicating and moving pages](/docs/sharing#duplicating-a-page). In the viewer, **Download** saves the version you are looking at, including an older one picked in the history.
 
-The gallery shows the newest pages first and loads more as you scroll, so a workspace with thousands of pages opens as fast as one with ten. The search box above it filters by title, ignoring case, within the folder you are looking at.
+The gallery shows the newest pages first and loads more as you scroll, so a workspace with thousands of pages opens as fast as one with ten. The search box, the folders and the tags above it narrow the list, and they combine: for example the pages tagged `q3` in the folder Reports that mention "revenue".
+
+## Search
+
+The search box in the gallery, and `query` in `list_artifacts`, find a page when:
+
+- **its title contains what you typed**, anywhere and ignoring case (`port` finds "Weekly report"), or
+- **the text of its current version has every word you typed**, or words that start with them, ignoring case: `quarterly rev` finds a page that says "Quarterly revenue". Words match whole or from their start, so `venue` doesn't find "revenue".
+
+The text is what a reader sees: the words of the page's HTML files, without markup, scripts, styles or comments. Data files (JSON, CSV, JavaScript) aren't searched, nor what a script draws on the page after it loads. Words are matched as written, in any language, without stemming (`chart` doesn't find "charts"; `chart` as the start of "charts" does). Text in scripts without spaces between words, such as Chinese or Japanese, is found from the start of a run of characters only. Search reads the first 200,000 characters of a page's text.
+
+Search only looks at the pages the list shows you, and at the text of the ones you can open. An organization's gallery lists pages shared by link to every member, but a link with a password, a reset link or an expired one opens only through the link; members find those by their title only, unless the page is shared with them. Older versions aren't searched: after a new version, or a restore, the page is found by the words it has now. A long page can take a few seconds after publishing to be found by its text.
+
+## Tags
+
+Tags are short labels on a page, like `q3`, `draft` or `design review`. They work across folders: a page is in one folder but can have several tags.
+
+- **Editors add and remove them**: choose **Tags** in the page's **…** menu, in the gallery or the viewer, type one or several separated by commas and press **Enter**. Or ask your agent (it uses `tag_artifact`). Changing tags doesn't change when the page was last updated.
+- **Everyone who can open the page sees its tags**, on its card and in the viewer.
+- **Tags are lowercase**, 1 to 32 characters, without commas, and a page has up to 10.
+- **Filter by a tag** by picking it above the gallery, or on a card. The tags above the gallery are those of the pages you see in the workspace, with how many pages have each. Tags belong to the page's workspace; pages shared with you show their tags too, and filtering by one works in **Shared with you** as well.
 
 ## Folders
 

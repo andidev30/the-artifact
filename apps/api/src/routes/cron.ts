@@ -4,6 +4,7 @@ import { env } from '../env.js'
 import { resumeExports, sweepExports } from '../exports.js'
 import { runPruners, sweepStorage } from '../gc.js'
 import { deleteExpiredLimits } from '../limits.js'
+import { indexStale } from '../search.js'
 import { deleteOldViews } from '../views.js'
 import { runWebhookQueue } from '../webhooks.js'
 
@@ -40,6 +41,7 @@ cron.get('/sweep', async (c) => {
     exports: await sweepExports(),
     exportSteps: await resumeExports({ budgetMs: EXPORT_BUDGET_MS }),
     webhooks: await runWebhookQueue(),
+    indexed: await indexStale(),
   })
 })
 
