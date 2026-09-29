@@ -14,7 +14,7 @@ name: the-artifact
 
 services:
   app:
-    image: ghcr.io/andidev30/the-artifact:${ARTIFACT_VERSION:-0.6.1} # x-release-please-version
+    image: ghcr.io/andidev30/the-artifact:${ARTIFACT_VERSION:-1.0.0} # x-release-please-version
     restart: unless-stopped
     # Only this machine reaches the app unless ARTIFACT_BIND in .env says otherwise: with TRUST_PROXY on,
     # anyone who could reach the port directly could claim any address in X-Forwarded-For

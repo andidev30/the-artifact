@@ -2,6 +2,60 @@
 
 Every release of The Artifact, newest first. Entries are generated from the commit messages when a release is made; what you have to do when you upgrade is in [Upgrading](docs/upgrading.md), and the versioning policy is there too.
 
+## [1.0.0](https://github.com/andidev30/the-artifact/compare/v0.6.1...v1.0.0) (2026-09-29)
+
+
+### ⚠ BREAKING CHANGES
+
+* **api:** Email is sent only after the mail server agrees to STARTTLS (or over implicit TLS with SMTP_SECURE=true). If your mail server is a relay without TLS on a network you trust, set SMTP_REQUIRE_TLS=false in app.env (smtp.requireTls: false in Helm values) before upgrading, or sign-in links and invitations stop being sent.
+* **deploy:** The bundled MinIO in deploy/kubernetes runs as user 1000. On storage that doesn't apply fsGroup (k3s local-path, hostPath), hand its volume to user 1000 once before applying the new release, with the pod in "Upgrading to 1.0.0" in docs/upgrading.md; otherwise MinIO stops with "Unable to write to the backend".
+* **deploy:** Docker Compose publishes the app on 127.0.0.1 only. If people or a reverse proxy on another machine reach port 8080 directly, set ARTIFACT_BIND=0.0.0.0 (or the server's address on that network) in deploy/docker-compose/.env before starting the new release, and leave TRUST_PROXY unset unless only the proxy can reach that address.
+* **api:** an agent or access token connected to one workspace can no longer edit, share or delete pages in another workspace through the person's ownership or organization role. Make an access token for the organization (or connect the agent to it) for CI jobs that update its pages.
+* **api:** A SAML provider, or an OIDC provider with "Trust addresses", that lists no email domains no longer links people's existing accounts on their first single sign-on, and nobody's first single sign-on links an instance admin's account. If people with an account should sign in through such a provider, list its email domains under Server admin > Single sign-on before you upgrade.
+
+### Features
+
+* **api:** encrypt the keys in server_secrets with an optional ENCRYPTION_KEY ([3b1306e](https://github.com/andidev30/the-artifact/commit/3b1306ededce0e671561a561a9020aa7e6531446))
+* **api:** record deletions, retention, exports and agents, and log admin actions ([bb701e0](https://github.com/andidev30/the-artifact/commit/bb701e023955a0b003df62c51ac0ae3964c8580d))
+* **cli:** filter list by tag with --tag ([63200d5](https://github.com/andidev30/the-artifact/commit/63200d5962ddc055b697eae90e7044bdc0535d6e))
+* **deploy:** take ENCRYPTION_KEY in the env examples and the Helm chart ([1ae0c67](https://github.com/andidev30/the-artifact/commit/1ae0c677b8acc7ab335a3da679fb97b5da90f940))
+
+
+### Bug fixes
+
+* **api:** allow plain-http webhooks to this machine only on a development server ([f81b6e0](https://github.com/andidev30/the-artifact/commit/f81b6e0fca73033d2ff17431e6248e2b9a3bd30a))
+* **api:** cap the console errors and broken links inspect_artifact collects ([34b483e](https://github.com/andidev30/the-artifact/commit/34b483eaa6cb03f9cc499d57d35542b157ee2ad6))
+* **api:** check email addresses in linear time, and only up to 254 characters ([b7ea315](https://github.com/andidev30/the-artifact/commit/b7ea315f18a72420f390bb1621dedf7997c2f9c1))
+* **api:** check the last owner and admin under locks when deleting accounts ([6390e6c](https://github.com/andidev30/the-artifact/commit/6390e6c999a1161447a83fd007117cc3e900ce79))
+* **api:** clamp SCIM paging numbers instead of failing on huge ones ([efef890](https://github.com/andidev30/the-artifact/commit/efef89093c6b634a1c9e2c96382b31cbd6f4ca0f))
+* **api:** clear an unverified account when its address is proven, and stop telling accounts apart ([314b17b](https://github.com/andidev30/the-artifact/commit/314b17b7b8e35becda516cb923fa1bb2d6fd2f98))
+* **api:** count page ownership and tokens only in their own workspace ([d6b3cfa](https://github.com/andidev30/the-artifact/commit/d6b3cfa3437a7a36358b629bed74be2f5dd72722))
+* **api:** count shares only for checked addresses or the share's own link ([441d0bc](https://github.com/andidev30/the-artifact/commit/441d0bca8d0868bb95020416a2dfa1654c49406a))
+* **api:** count upload links toward a limit of their own ([672d96e](https://github.com/andidev30/the-artifact/commit/672d96e1a01f7fb5fef48dfb3a4db11c0141e406))
+* **api:** don't let single sign-on take over admins or unchecked addresses ([9c82ca6](https://github.com/andidev30/the-artifact/commit/9c82ca6aabaecd00533d16518d69bbf67c863d8b))
+* **api:** give each scheduled run one deadline, under Vercel's function limit ([d5b40e8](https://github.com/andidev30/the-artifact/commit/d5b40e82fb87366a306ab48863df2691666bf55b))
+* **api:** give up on Google, SMTP and storage requests that stop answering ([a8bbe73](https://github.com/andidev30/the-artifact/commit/a8bbe73c3cdc83c040f931967431eb53790998e7))
+* **api:** keep single sign-on requests off loopback and link-local addresses ([bc9854a](https://github.com/andidev30/the-artifact/commit/bc9854a998160ce69a77d69d658a848f87b4e80d))
+* **api:** keep the setup code readable once server secrets are encrypted ([ed3cffe](https://github.com/andidev30/the-artifact/commit/ed3cffea0961290f6e0f3fca9fe303775e53c26d))
+* **api:** leave out tags and comment counts of listed pages a member can't open ([53fbbc2](https://github.com/andidev30/the-artifact/commit/53fbbc2554ac827e5accb82b332510849eae200a))
+* **api:** name the workspace field when duplicating or moving asks to choose one ([cc49b91](https://github.com/andidev30/the-artifact/commit/cc49b91235cd950bbeb88081be47b8bd697340be))
+* **api:** need a recent sign-in for access tokens, and let a password change sign out agents ([8f6e594](https://github.com/andidev30/the-artifact/commit/8f6e5944509011948a0ee3cf6c05a18aae7ad59f))
+* **api:** refuse request bodies over 1 MB outside publishing ([251e753](https://github.com/andidev30/the-artifact/commit/251e7536972f0fdb1dfeef7814064685203fe44c))
+* **api:** require STARTTLS before sending email ([bc77158](https://github.com/andidev30/the-artifact/commit/bc7715859ab071dc740c450ef0457eb731e3b501))
+* **api:** say the 100-file limit counts files besides index.html ([0c1df00](https://github.com/andidev30/the-artifact/commit/0c1df00e594c8eec9e59ad1ec5fb16230b48474e))
+* **api:** send HSTS over https and lock down the app shell's CSP ([a731926](https://github.com/andidev30/the-artifact/commit/a7319267de463fb160df0f77e5d2185658b37158))
+* **api:** start before the database is ready, and stop only for keys that can't be opened ([c1186bd](https://github.com/andidev30/the-artifact/commit/c1186bd80bf336f20eb6fa331a802b4a627056ac))
+* **cli:** publish only files inside the folder, and say which page a link file names ([f45a71c](https://github.com/andidev30/the-artifact/commit/f45a71c9c19b66c4ebebbd4de5ab98310c4e304f))
+* **deploy:** harden the Kubernetes manifests like the Helm chart ([fc8b975](https://github.com/andidev30/the-artifact/commit/fc8b975fc4aca65e9d2166a9551f6a52c4d48135))
+* **deploy:** pass S3_PUBLIC_ENDPOINT in Compose and EMBED_FRAME_ANCESTORS in Helm ([b5a5ed6](https://github.com/andidev30/the-artifact/commit/b5a5ed6fad816f0021664660230a8efe4af903b2))
+* **deploy:** publish the Compose app on 127.0.0.1 unless ARTIFACT_BIND says otherwise ([48bec67](https://github.com/andidev30/the-artifact/commit/48bec67e64bfc09be845e4a6b46832c94c3583a3))
+* require a one-time setup code for the first account on a self-hosted server ([4eccd7d](https://github.com/andidev30/the-artifact/commit/4eccd7d200f0b41c0acb8131dc68b5be65bfff9c))
+* **web:** ask to keep the settings page open during an export only where the build needs it ([cb02625](https://github.com/andidev30/the-artifact/commit/cb0262554ea5906151ae92d9e9705ecc3ff2e1bb))
+* **web:** list share links to send, accept them in the viewer, and re-auth for tokens ([fff1904](https://github.com/andidev30/the-artifact/commit/fff1904958fddabe907e18dbddec0f981bad4dec))
+* **web:** make docs heading anchors the same as GitHub's ([692ab17](https://github.com/andidev30/the-artifact/commit/692ab17a4ebf08fe9942b29feebb3611d75f6ecd))
+* **web:** move focus into delete confirmations and back when they are cancelled ([3560b0e](https://github.com/andidev30/the-artifact/commit/3560b0e2f3c05c2831e93f681898c3833c603d37))
+* **web:** say page, not artifact, in the not-found page and on the landing page ([1a5755d](https://github.com/andidev30/the-artifact/commit/1a5755dd04c24ac34e9c1b439d70815a8f2e4cfd))
+
 ## [0.6.1](https://github.com/andidev30/the-artifact/compare/v0.6.0...v0.6.1) (2026-09-28)
 
 
