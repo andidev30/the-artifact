@@ -1,6 +1,8 @@
 # One image with the API and the built web app, served together on one port.
+# Both stages use node:26-slim pinned by digest, so a rebuild gets the same base until Dependabot
+# (.github/dependabot.yml) proposes the next one.
 
-FROM node:26-slim AS build
+FROM node:26-slim@sha256:ec7758ee051e457b468b32bde57b0879010b325bb9862718e9615225ce4aaae1 AS build
 WORKDIR /repo
 
 # Install dependencies first so they cache between code changes. Node 26 has no corepack, so pnpm
@@ -17,16 +19,18 @@ RUN pnpm --filter @the-artifact/web build \
  && pnpm --filter @the-artifact/api build \
  && pnpm --filter @the-artifact/api deploy --prod --legacy /out
 
-FROM node:26-slim
+FROM node:26-slim@sha256:ec7758ee051e457b468b32bde57b0879010b325bb9862718e9615225ce4aaae1
 
 # Headless Chromium renders gallery thumbnails, with no network of its own (see docs/security.md).
 # The headless shell needs no GTK, and it draws with its bundled SwiftShader, so the Mesa/LLVM
-# drivers chromium-common pulls in (~150 MB) are removed again. Fonts keep text from rendering as
-# boxes. Unset CHROME_PATH to skip thumbnails.
+# drivers chromium-common pulls in (~180 MB) are removed again: whichever libllvm this Debian has,
+# since its version is in the package name. Fonts keep text from rendering as boxes. Unset
+# CHROME_PATH to skip thumbnails. npm isn't needed to run the app, so it isn't left in the image.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends chromium-headless-shell fonts-liberation fonts-dejavu-core fonts-noto-color-emoji \
- && dpkg --remove --force-depends libgl1-mesa-dri libllvm15 libz3-4 \
- && rm -rf /var/lib/apt/lists/* /usr/share/doc/*
+ && dpkg --remove --force-depends libgl1-mesa-dri mesa-libgallium libz3-4 $(dpkg-query -W -f '${Package}\n' 'libllvm*') \
+ && rm -rf /var/lib/apt/lists/* /usr/share/doc/* \
+ && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 WORKDIR /app
 ENV NODE_ENV=production \
