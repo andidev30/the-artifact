@@ -4,7 +4,7 @@ import { migrate } from 'drizzle-orm/postgres-js/migrator'
 import { db } from './db/index.js'
 import { env } from './env.js'
 import { log } from './log.js'
-import { checkServerSecrets } from './secrets.js'
+import { checkServerSecrets, ServerSecretsError } from './secrets.js'
 import { ensureBucket } from './storage.js'
 
 // What a server does once as it starts, before it serves anything: in the only process, or in a
@@ -17,13 +17,17 @@ export async function prepare() {
     log.info('Database is up to date')
   }
   // Stops here rather than serving with keys it can't open: sign-ins with an authenticator app,
-  // webhooks and page links would all fail
+  // webhooks and page links would all fail. A database that isn't there yet (migrated or created
+  // after the server starts) doesn't stop it; the secrets are checked again when first used.
   try {
     const encrypted = await checkServerSecrets()
     if (encrypted) log.info('Encrypted the server secrets with ENCRYPTION_KEY', { rows: encrypted })
   } catch (err) {
-    log.error('Could not open the server secrets', { err })
-    throw err
+    if (err instanceof ServerSecretsError) {
+      log.error('Could not open the server secrets', { err })
+      throw err
+    }
+    log.warn('Could not read the server secrets yet; they are checked when first used', { err })
   }
   await ensureBucket()
 }

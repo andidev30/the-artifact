@@ -9,6 +9,9 @@ import { env } from './env.js'
 // or sealed with it stays valid.
 const WRAPPED = 'w1'
 
+// A row the keys given can't open, as opposed to a database that can't be reached
+export class ServerSecretsError extends Error {}
+
 type Keys = { key: Buffer | null; previousKey: Buffer | null }
 type Row = { name: string; value: string }
 
@@ -34,13 +37,15 @@ export function wrapSecret(name: string, secret: Buffer, key: Buffer): string {
 export function unwrapSecret(name: string, stored: string, keys: Keys): { secret: Buffer; stale: boolean } {
   if (!stored.includes('.')) return { secret: Buffer.from(stored, 'base64url'), stale: keys.key !== null }
   const [version, id, iv, body, tag, ...rest] = stored.split('.')
-  if (version !== WRAPPED || !id || !iv || !body || !tag || rest.length) throw new Error(`The server secret "${name}" is in an unknown format.`)
+  if (version !== WRAPPED || !id || !iv || !body || !tag || rest.length) throw new ServerSecretsError(`The server secret "${name}" is in an unknown format.`)
   if (!keys.key)
-    throw new Error(`The server secret "${name}" is encrypted, but ENCRYPTION_KEY isn't set. Set ENCRYPTION_KEY to the key this database was encrypted with.`)
+    throw new ServerSecretsError(
+      `The server secret "${name}" is encrypted, but ENCRYPTION_KEY isn't set. Set ENCRYPTION_KEY to the key this database was encrypted with.`,
+    )
   const candidates = [keys.key, keys.previousKey].filter((k) => k !== null).map(wrappingKey)
   const match = candidates.find((k) => k.id === id)
   if (!match)
-    throw new Error(
+    throw new ServerSecretsError(
       `The server secret "${name}" was encrypted with another ENCRYPTION_KEY. Set ENCRYPTION_KEY to the key this database was encrypted with; while changing keys, set the old one as ENCRYPTION_KEY_PREVIOUS.`,
     )
   try {
@@ -49,7 +54,7 @@ export function unwrapSecret(name: string, stored: string, keys: Keys): { secret
     const secret = Buffer.concat([decipher.update(Buffer.from(body, 'base64url')), decipher.final()])
     return { secret, stale: match !== candidates[0] }
   } catch {
-    throw new Error(`The server secret "${name}" can't be decrypted with ENCRYPTION_KEY: the row is damaged.`)
+    throw new ServerSecretsError(`The server secret "${name}" can't be decrypted with ENCRYPTION_KEY: the row is damaged.`)
   }
 }
 
