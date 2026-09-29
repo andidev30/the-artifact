@@ -9,6 +9,7 @@ import { signContentLink } from '../../src/content.js'
 import { db, schema } from '../../src/db/index.js'
 import { env } from '../../src/env.js'
 import { checkServerSecrets, forgetServerSecrets, serverSecret } from '../../src/secrets.js'
+import { setupCodeMatches, storeSetupCode } from '../../src/setup-code.js'
 import { prepare } from '../../src/startup.js'
 import { call, createPage, createUser, sessionCookie, type TestUser } from './helpers.js'
 
@@ -177,5 +178,21 @@ describe('ENCRYPTION_KEY', () => {
     expect((await signInWithCode(user, totp)).status).toBe(200)
     useKeys(keyA)
     await expect(checkServerSecrets()).rejects.toThrow('was encrypted with another ENCRYPTION_KEY')
+  })
+
+  it('keeps the setup code for the first account working when the rows are encrypted', async () => {
+    const code = 'ABCD-EFGH-JKLM'
+    // Stored in the clear, then encrypted by a process that opens the secrets
+    await storeSetupCode(code)
+    useKeys(keyA)
+    expect(await checkServerSecrets()).toBe(1)
+    expect(await setupCodeMatches('abcd efgh jklm')).toBe(true)
+    expect(await setupCodeMatches('ABCD-EFGH-JKLN')).toBe(false)
+
+    // Stored with the key set, as a fresh install that sets ENCRYPTION_KEY does as it starts
+    await storeSetupCode(code)
+    expect((await rows())['setup-code']).toMatch(/^w1\./)
+    expect(await checkServerSecrets()).toBe(0)
+    expect(await setupCodeMatches(code)).toBe(true)
   })
 })
