@@ -365,6 +365,8 @@ test('tags: the tag bar, tags on cards and the tags dialog', async ({ page }) =>
 })
 
 test('viewer with its history, views and comments panels, and the share dialog', async ({ page, browser }) => {
+  // Walks through every panel and the share dialog with an axe check at each step
+  test.setTimeout(60_000)
   await signUpPersonal(page, uniqueEmail('a11y-viewer'))
   const token = await connectAgent(page)
   const slug = await publishViaMcp(page.request, token, { title: 'Launch plan', html: HTML, visibility: 'link' })
