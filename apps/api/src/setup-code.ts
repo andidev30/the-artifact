@@ -2,6 +2,7 @@ import { createHash, randomInt, timingSafeEqual } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import { db, schema } from './db/index.js'
 import { env, normalizeSetupCode } from './env.js'
+import { unwrapSecret, wrapSecret } from './secrets.js'
 
 // The first account on a self-hosted install becomes its admin, so it takes a one-time code only the
 // operator can read: the server prints a new one to its log each time it starts without accounts, or
@@ -32,7 +33,11 @@ export function newSetupCode(): string {
 const digest = (code: string) => createHash('sha256').update(code).digest()
 
 export async function storeSetupCode(code: string) {
-  const value = digest(normalizeSetupCode(code)).toString('base64url')
+  // Stored like every other row of server_secrets, encrypted under ENCRYPTION_KEY when it is set,
+  // since checkServerSecrets encrypts any row it finds in the clear
+  const hash = digest(normalizeSetupCode(code))
+  const { key } = env.encryption
+  const value = key ? wrapSecret(ROW, hash, key) : hash.toString('base64url')
   await db
     .insert(schema.serverSecrets)
     .values({ name: ROW, value })
@@ -52,7 +57,7 @@ export async function setupCodeMatches(given: unknown, tx: Tx | typeof db = db):
   } else {
     const [row] = await tx.select({ value: schema.serverSecrets.value }).from(schema.serverSecrets).where(eq(schema.serverSecrets.name, ROW))
     if (!row) return false
-    expected = Buffer.from(row.value, 'base64url')
+    expected = unwrapSecret(ROW, row.value, env.encryption).secret
   }
   const actual = digest(code)
   return actual.length === expected.length && timingSafeEqual(actual, expected)
