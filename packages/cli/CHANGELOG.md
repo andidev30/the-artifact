@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.0](https://github.com/andidev30/the-artifact/compare/cli-v0.5.0...cli-v0.6.0) (2026-09-29)
+
+
+### Features
+
+* **cli:** filter list by tag with --tag ([63200d5](https://github.com/andidev30/the-artifact/commit/63200d5962ddc055b697eae90e7044bdc0535d6e))
+
+
+### Bug fixes
+
+* **cli:** publish only files inside the folder, and say which page a link file names ([f45a71c](https://github.com/andidev30/the-artifact/commit/f45a71c9c19b66c4ebebbd4de5ab98310c4e304f))
+
 ## [0.5.0](https://github.com/andidev30/the-artifact/compare/cli-v0.4.0...cli-v0.5.0) (2026-09-28)
 
 
