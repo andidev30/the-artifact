@@ -4,6 +4,7 @@ import type { Me } from '../api'
 import {
   deleteOrganization,
   deleteUser,
+  getAutoJoin,
   getOverview,
   getSettings,
   getUserDeletion,
@@ -11,11 +12,13 @@ import {
   listUsers,
   createSignUpLink,
   resetTwoFactor,
+  saveAutoJoin,
   saveSettings,
   updateUser,
   type AdminOrganization,
   type AdminOverview,
   type AdminUser,
+  type AutoJoinSettings,
   type InstanceSettings,
   type SignUpLink,
   type SignupPolicy,
@@ -99,6 +102,7 @@ function AdminPage({ me }: { me: Me }) {
     { id: 'people', label: 'People' },
     { id: 'organizations', label: 'Organizations' },
     { id: 'signup', label: 'Sign-up' },
+    { id: 'auto-join', label: 'Joining by domain' },
     ...(config?.selfHosted === true ? [{ id: 'license', label: 'License' }] : []),
     ...(config?.selfHosted === true ? [{ id: 'sso', label: 'Single sign-on' }] : []),
     ...(config?.selfHosted === true ? [{ id: 'scim', label: 'Provisioning' }] : []),
@@ -139,6 +143,7 @@ function AdminPage({ me }: { me: Me }) {
             <PeopleSection onChanged={changed} />
             <OrganizationsSection onChanged={changed} />
             <SignupSection onChanged={changed} />
+            <AutoJoinSection />
             {config?.selfHosted === true && <LicenseSection />}
             {config?.selfHosted === true && <SsoSection />}
             {config?.selfHosted === true && <ScimSection />}
@@ -1098,6 +1103,157 @@ function SignupSection({ onChanged }: { onChanged: () => void }) {
             </button>
           </div>
           <p id="signup-status" className="field-hint" data-tone={status?.tone} aria-live="polite" role={status?.tone === 'bad' ? 'alert' : undefined}>
+            {status?.text ?? (settings.data.updatedAt ? `Last saved ${timeAgo(settings.data.updatedAt)}.` : '')}
+          </p>
+        </form>
+      )}
+    </section>
+  )
+}
+
+function AutoJoinSection() {
+  const [settings, setSettings] = useState<Loadable<AutoJoinSettings>>({ kind: 'loading' })
+  const [orgId, setOrgId] = useState('')
+  const [domains, setDomains] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [status, setStatus] = useState<{ tone: 'ok' | 'bad'; text: string; field?: string } | null>(null)
+
+  function load(data: AutoJoinSettings) {
+    setSettings({ kind: 'ready', data })
+    setOrgId(data.organization?.id ?? '')
+    setDomains(data.domains.join('\n'))
+  }
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: load only sets state; the settings load once
+  useEffect(() => {
+    let active = true
+    getAutoJoin()
+      .then((data) => active && load(data))
+      .catch(() => active && setSettings({ kind: 'error' }))
+    return () => {
+      active = false
+    }
+  }, [])
+
+  async function copySignupDomains() {
+    setStatus(null)
+    try {
+      const { signupPolicy, allowedDomains } = await getSettings()
+      if (signupPolicy !== 'domains' || !allowedDomains.length) {
+        setStatus({ tone: 'bad', text: 'The sign-up policy lists no email domains.' })
+        return
+      }
+      setDomains(allowedDomains.join('\n'))
+    } catch (err) {
+      setStatus({ tone: 'bad', text: errorText(err, 'The sign-up domains could not be loaded. Try again.') })
+    }
+  }
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault()
+    setSaving(true)
+    setStatus(null)
+    try {
+      const saved = await saveAutoJoin({ organizationId: orgId || null, domains: domains.split(/[\s,]+/).filter(Boolean) })
+      load(saved)
+      setStatus({
+        tone: 'ok',
+        text: saved.organization
+          ? `Saved. People at these domains join ${saved.organization.name} when they next sign in.`
+          : 'Saved. Nobody joins automatically.',
+      })
+    } catch (err) {
+      const field = err instanceof Error && 'field' in err ? (err.field as string | undefined) : undefined
+      setStatus({ tone: 'bad', text: errorText(err, 'The settings could not be saved. Try again.'), field })
+    }
+    setSaving(false)
+  }
+
+  const choices = settings.kind === 'ready' ? settings.data.organizations : []
+  const current = settings.kind === 'ready' ? settings.data.organization : null
+
+  return (
+    <section id="auto-join" className="settings-card" aria-labelledby="auto-join-title">
+      <header className="settings-card-head">
+        <h2 id="auto-join-title">Joining by domain</h2>
+        <p>
+          People whose address is at one of these domains join an organization as members when they sign up or next sign in. Only addresses a sign-in has
+          checked count, and someone who leaves or is removed isn’t added again.{' '}
+          <Link className="text-link" to="/docs/self-hosting#joining-an-organization-by-email-domain">
+            How joining by domain works
+          </Link>
+        </p>
+      </header>
+
+      {settings.kind === 'loading' && (
+        <p className="settings-muted" role="status">
+          Loading settings
+        </p>
+      )}
+      {settings.kind === 'error' && (
+        <p className="auth-notice" role="alert">
+          The settings could not be loaded. Reload to try again.
+        </p>
+      )}
+      {settings.kind === 'ready' && (
+        <form className="settings-form" onSubmit={onSubmit} noValidate>
+          <div className="field">
+            <label htmlFor="auto-join-org">Organization</label>
+            <select
+              id="auto-join-org"
+              className="settings-select"
+              value={orgId}
+              onChange={(e) => {
+                setOrgId(e.target.value)
+                setStatus(null)
+              }}
+              aria-invalid={status?.field === 'organizationId' || undefined}
+              aria-describedby={status?.field === 'organizationId' ? 'auto-join-status' : undefined}
+            >
+              <option value="">Nobody joins automatically</option>
+              {current && !choices.some((o) => o.id === current.id) && <option value={current.id}>{current.name}</option>}
+              {choices.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name} ({o.slug})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {orgId && (
+            <div className="field">
+              <label htmlFor="auto-join-domains">Email domains</label>
+              <textarea
+                id="auto-join-domains"
+                className="admin-textarea"
+                rows={3}
+                value={domains}
+                onChange={(e) => {
+                  setDomains(e.target.value)
+                  setStatus(null)
+                }}
+                placeholder={'example.com\nexample.org'}
+                spellCheck={false}
+                aria-invalid={status?.field === 'domains' || undefined}
+                aria-describedby={status?.field === 'domains' ? 'auto-join-domains-hint auto-join-status' : 'auto-join-domains-hint'}
+              />
+              <p id="auto-join-domains-hint" className="field-hint">
+                One per line, or separated by commas. Only exact matches join, so subdomains need their own line.
+              </p>
+            </div>
+          )}
+
+          <div className="admin-panel-actions">
+            <button type="submit" className="button button-small" disabled={saving}>
+              {saving ? 'Saving' : 'Save'}
+            </button>
+            {orgId && (
+              <button type="button" className="auth-reset" onClick={copySignupDomains} disabled={saving}>
+                Use the sign-up domains
+              </button>
+            )}
+          </div>
+          <p id="auto-join-status" className="field-hint" data-tone={status?.tone} aria-live="polite" role={status?.tone === 'bad' ? 'alert' : undefined}>
             {status?.text ?? (settings.data.updatedAt ? `Last saved ${timeAgo(settings.data.updatedAt)}.` : '')}
           </p>
         </form>

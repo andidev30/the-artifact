@@ -542,7 +542,31 @@ export const instanceSettings = pgTable('instance_settings', {
   licenseKey: text('license_key'),
   licenseUpdatedBy: uuid('license_updated_by').references(() => users.id, { onDelete: 'set null' }),
   licenseUpdatedAt: timestamp('license_updated_at', { withTimezone: true }),
+  // Accounts with a checked address at one of these domains join this organization as members, once
+  // each (src/auto-join.ts). Only instance admins set it, because nothing proves who owns a domain.
+  autoJoinOrganizationId: uuid('auto_join_organization_id').references(() => organizations.id, { onDelete: 'set null' }),
+  autoJoinDomains: jsonb('auto_join_domains').$type<string[]>().notNull().default([]),
+  autoJoinUpdatedAt: timestamp('auto_join_updated_at', { withTimezone: true }),
 })
+
+// Every organization an account joined by its email domain, or was already in when its domain matched.
+// Kept after they leave or are removed, so the next sign-in doesn't add them back.
+export const autoJoins = pgTable(
+  'auto_joins',
+  {
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    domain: text('domain').notNull(),
+    // When they dismissed the notice that they joined; set at once when they were a member already
+    noticeSeenAt: timestamp('notice_seen_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.organizationId] }), index('auto_joins_org_idx').on(t.organizationId)],
+)
 
 // License keys an instance admin of the hosted service issued (src/ee/licenses.ts), so they can see
 // what went to whom. The key itself isn't kept: it is shown once, and the signing key lives only in

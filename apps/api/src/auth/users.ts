@@ -1,5 +1,6 @@
 import { and, eq, gt } from 'drizzle-orm'
 import { track, type SignUpMethod } from '../analytics.js'
+import { autoJoin } from '../auto-join.js'
 import { securityLog } from '../audit.js'
 import { db, schema } from '../db/index.js'
 import type { User } from '../db/schema.js'
@@ -94,6 +95,7 @@ async function claimAccount(user: User): Promise<User> {
     return current
   }
   log.info('Unverified account claimed by a sign-in that proves its address', { userId: claimed.id })
+  await autoJoin(claimed.id)
   return claimed
 }
 

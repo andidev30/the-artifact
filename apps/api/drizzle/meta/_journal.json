@@ -225,6 +225,13 @@
       "when": 1790638126014,
       "tag": "0031_share_links",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1790653224063,
+      "tag": "0032_auto_join",
+      "breakpoints": true
     }
   ]
 }

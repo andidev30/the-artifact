@@ -853,6 +853,46 @@ test('server admin', async ({ page }) => {
   await expectAccessible(page, 'server admin, license keys', { include: '#license-keys' })
 })
 
+// Answered by the test, so nothing changes the one setting every test on this server shares
+test('server admin: joining an organization by email domain, and the notice after joining', async ({ page }) => {
+  const email = uniqueEmail('a11y-auto-join')
+  await signUpPersonal(page, email)
+  await grantInstanceAdmin(email)
+  const org = await createOrganization(email, 'Acme Joined')
+  const settings = {
+    organization: { id: org.id, name: 'Acme Joined', slug: org.slug },
+    domains: ['acme.example'],
+    updatedAt: new Date().toISOString(),
+    organizations: [{ id: org.id, name: 'Acme Joined', slug: org.slug }],
+  }
+  await page.route('**/api/admin/auto-join', (route) =>
+    route.request().method() === 'PUT'
+      ? route.fulfill({ status: 400, json: { error: 'exa_mple.com is not a domain. List domains like example.com.', field: 'domains' } })
+      : route.fulfill({ json: settings }),
+  )
+  await page.goto('/admin#auto-join')
+  const section = page.locator('#auto-join')
+  await expect(section.getByLabel('Email domains')).toHaveValue('acme.example')
+  await expectAccessible(page, 'server admin, joining by domain', { include: '#auto-join' })
+  await section.getByRole('button', { name: 'Save' }).click()
+  await expect(section.getByRole('alert')).toBeVisible()
+  await expect(section.getByLabel('Email domains')).toHaveAttribute('aria-invalid', 'true')
+  await expectAccessible(page, 'server admin, joining by domain with an error', { include: '#auto-join' })
+
+  await page.route('**/api/me', async (route) => {
+    const res = await route.fetch()
+    const me = await res.json()
+    await route.fulfill({
+      response: res,
+      json: { ...me, autoJoined: [{ organizationId: org.id, name: 'Acme Joined', slug: org.slug, domain: 'acme.example' }] },
+    })
+  })
+  await page.goto('/app')
+  const notice = page.getByRole('region', { name: 'Organizations you joined' })
+  await expect(notice).toContainText('You joined Acme Joined because your address is on acme.example.')
+  await expectAccessible(page, 'the notice after joining by email domain')
+})
+
 test('server admin: confirmations and deleting an organization', async ({ page }) => {
   const email = uniqueEmail('a11y-admin-confirms')
   await signUpPersonal(page, email)

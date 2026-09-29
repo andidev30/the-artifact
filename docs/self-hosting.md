@@ -147,6 +147,7 @@ Admins see **Server admin** in the menu under their name, which opens `/admin`. 
   - **Delete** an account, with the same rules as deleting your own in Account settings: organizations with nobody else in them go with it, and someone who is the only owner of an organization with other members can't be deleted until another owner is chosen or the organization is deleted.
 - **Organizations**: every organization with its owners, member and page counts. Deleting one removes its pages, memberships and invitations; the people keep their accounts.
 - **Sign-up**: who can create an account, and an optional instance name shown next to the logo.
+- **Joining by domain**: an organization that people at your email domains join on their own. See [Joining an organization by email domain](#joining-an-organization-by-email-domain).
 - **License**: the Enterprise license key, if you have one: who it is for, until when, and the seats in use. The server checks it offline. See [Licenses](/docs/licenses).
 
 ### Sign-up policy
@@ -158,6 +159,22 @@ Admins see **Server admin** in the menu under their name, which opens `/admin`. 
 | Invited people only | Nobody on their own |
 
 In every mode, people invited to an organization or a page can still create an account to accept the invitation, and existing accounts can always sign in. Until an admin saves this form, anyone can sign up.
+
+### Joining an organization by email domain
+
+When everyone at your company belongs in one organization, let them join it without an invitation. In **Server admin** → **Joining by domain**, choose the organization and list your email domains (**Use the sign-up domains** copies the ones from the sign-up policy), then **Save**.
+
+From then on, an account joins that organization as a **Member** when:
+
+- its address is at one of the listed domains. Only exact matches count: `example.com` doesn't include `mail.example.com`, which needs its own line.
+- a sign-in has checked the address: an email link (or an admin's sign-in link on a server without email), Google or single sign-on. An account made with a password on a server without email, or from an invitation link passed on by hand, joins once it signs in one of those ways.
+- it isn't suspended.
+
+It happens when the account signs up, and at the next sign-in of accounts that already exist. People who are signed in when you save it join the next time they sign in. The first time they open their pages afterwards they see that they joined and why, and someone who hasn't chosen a workspace yet starts in the organization.
+
+Each account joins an organization this way once. Someone who leaves the organization, or whom an owner or admin removes, isn't added back at their next sign-in, and a member who was there already keeps their role. Choosing another organization later adds people to that one at their next sign-in, and they stay in the first. Choose **Nobody joins automatically** to turn it off; people who joined stay members. Deleting the organization turns it off too.
+
+Only instance admins can set this up, because nothing proves that an organization owns a domain. Organizations with an Enterprise license see each join in their [audit log](/docs/audit-log) as **Joined**, with how.
 
 ### An existing install without an admin
 
@@ -186,6 +203,7 @@ Leave `SMTP_HOST` empty and The Artifact sends no email:
 - **Signing up on their own**: under the **Anyone** or **Email domains** policy, the sign-up page asks for an email and a password. Nobody checks that the address belongs to the person typing it, so an address someone invited or shared a page with can't be taken there; that person uses their invitation link or a sign-up link. If people you don't trust can reach the server, choose **Invited people only**.
 - **Adding people**: under **Server admin**, **People**, enter their address and choose **Make sign-up link**. Send them the link however you like; it works once, for 7 days, and asks them to choose a password. It creates their account whatever the sign-up policy says.
 - **Organization invitations**: inviting someone gives you the invitation link to pass on. Someone without an account creates one from that page with a password. People who signed up on their own join only through that link: nobody checked their address, so invitations to it don't show up in the app for them.
+- **Joining by email domain**: accounts people made on their own with a password, or from an invitation link, don't [join by domain](#joining-an-organization-by-email-domain) until they sign in with an admin's sign-in link, Google or single sign-on.
 - **Sharing pages**: **Share** lists a link for each person you add, to send them. Accounts made by signing up with a password or from an invitation link haven't proved their address, so a share counts for them only once they open that link while signed in (see [Addresses nobody has checked](/docs/sharing#addresses-nobody-has-checked)). An admin's sign-in link, Google or single sign-on proves the address; after that, every share with it counts. Proving the address also takes the account over from whoever made it: see [Unverified accounts](/docs/security#unverified-accounts).
 - **Forgotten passwords**: an admin opens the person under **People** and chooses **Password reset link**. Using it signs them out everywhere else. If they use [two-factor sign-in](/docs/signing-in), it is still asked for after the new password; a lost second factor is reset separately with **Reset two-factor sign-in**.
 - **Sharing pages**: people are added without an email; send them the page link.

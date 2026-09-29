@@ -8,6 +8,7 @@ import { likeTerm } from '../artifacts.js'
 import { createAdminLink } from '../auth/email.js'
 import { resetSecondFactor } from '../auth/twofactor.js'
 import { securityLog } from '../audit.js'
+import { autoJoinSettings, organizationChoices, parseAutoJoin, saveAutoJoin } from '../auto-join.js'
 import { mailEnabled } from '../env.js'
 import { activeAdminCount, adminCondition, instanceSettings, isInstanceAdmin, lockAdmins, parseSettings, revokeAccess, saveSettings } from '../instance.js'
 import { license } from './license.js'
@@ -360,6 +361,30 @@ admin.put('/settings', async (c) => {
   )
   securityLog('instance.settings_changed', { actorId: c.get('user')!.id, targetId: null, changes })
   return c.json(await instanceSettings())
+})
+
+// Joining an organization by email domain (src/auto-join.ts), with the organizations to choose from
+admin.get('/auto-join', async (c) => c.json({ ...(await autoJoinSettings()), organizations: await organizationChoices() }))
+
+// { organizationId: string | null, domains: string[] }; no organization turns it off
+admin.put('/auto-join', async (c) => {
+  const parsed = await parseAutoJoin(await c.req.json().catch(() => null))
+  if (!parsed.ok) return c.json({ error: parsed.error, field: parsed.field }, 400)
+  const before = await autoJoinSettings()
+  await saveAutoJoin(parsed.value)
+  const after = await autoJoinSettings()
+  const changes = Object.fromEntries(
+    (
+      [
+        ['autoJoinOrganization', before.organization?.slug ?? null, after.organization?.slug ?? null],
+        ['autoJoinDomains', before.domains, after.domains],
+      ] as const
+    )
+      .filter(([, from, to]) => JSON.stringify(from) !== JSON.stringify(to))
+      .map(([k, from, to]) => [k, { from, to }]),
+  )
+  securityLog('instance.settings_changed', { actorId: c.get('user')!.id, targetId: null, changes })
+  return c.json({ ...after, organizations: await organizationChoices() })
 })
 
 // { email } → a link to pass on yourself, for servers that can't send email. For someone new it

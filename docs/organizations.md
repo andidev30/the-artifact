@@ -8,7 +8,7 @@ Open the workspace switcher next to the logo and pick **Create an organization**
 
 On the hosted service, new organizations are coming soon: they open together with the Organization plan and its billing. Until then everyone starts in a personal workspace, and the workspace switcher says so instead of offering **Create an organization**. Organizations that already exist keep working as before, and you can still join one when you are invited.
 
-On a self-hosted server, whoever sets it up names the organization everyone there works in. Everyone who signs up after that starts in their personal workspace and joins organizations when they are invited.
+On a self-hosted server, whoever sets it up names the organization everyone there works in. Everyone who signs up after that starts in their personal workspace and joins organizations when they are invited, or on their own when an instance admin [lets people at your email domains join](#joining-by-email-domain).
 
 ## Roles
 
@@ -25,6 +25,12 @@ An organization always keeps at least one owner. The last owner can't leave, be 
 Open the organization's settings (the gear next to it in the workspace menu, or *organization name* **settings** in the menu under your name), and under **Members** enter an email address and pick **Admin** or **Member**. The invitation link works for 7 days and only for someone signed in with that email address. Inviting the same address again sends a fresh link and cancels the old one. An address gets at most 10 invitation and share emails a day, from everyone together; past that nothing is sent, and you get the link to pass on instead. Pending invitations can be resent or revoked. One person can invite, or share pages with, up to 200 people an hour (see [Rate limits](/docs/configuration#rate-limits)).
 
 You don't need the email to accept. When you are signed in with the invited address, pending invitations show at the top of your pages, in the workspace switcher and (on the hosted service) on the first step of onboarding, so a new account can join the team instead of starting on its own. **Join** adds you with the invited role and switches to that workspace; **Decline** removes the invitation. On a server without email, an account someone created on their own with a password doesn't see them: it joins with the invitation link (see [Running without email](/docs/self-hosting#running-without-email)).
+
+## Joining by email domain
+
+An instance admin can name one organization that people at the company's email domains join on their own, as **Member**, when they sign up or next sign in. Only addresses a sign-in has checked count (an email link, Google or single sign-on). Afterwards your pages show that you joined and why, with a button to open the organization; dismiss the notice once you have read it.
+
+It happens once for each account. If you leave the organization, or an owner or admin removes you, signing in again doesn't add you back; ask for an invitation instead. Setting it up is in **Server admin**, not in the organization's settings, because nothing proves that an organization owns a domain. See [Joining an organization by email domain](/docs/self-hosting#joining-an-organization-by-email-domain).
 
 ## Switching workspaces
 

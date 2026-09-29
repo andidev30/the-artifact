@@ -261,6 +261,7 @@ describe('sessions', () => {
       agentConnected: false,
       hasPublished: false,
       isAdmin: false,
+      autoJoined: [],
     })
   })
 

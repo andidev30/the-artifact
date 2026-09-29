@@ -19,7 +19,7 @@ export type ProductEventName = (typeof PRODUCT_EVENTS)[number]
 
 export type ProductEvent =
   | { event: 'signed_up'; userId: string; detail: SignUpMethod }
-  | { event: 'onboarded'; userId: string; detail: 'personal' | 'organization' | 'invitation' }
+  | { event: 'onboarded'; userId: string; detail: 'personal' | 'organization' | 'invitation' | 'email domain' }
   | { event: 'agent_connected'; userId: string; detail: 'oauth' | 'access_token' }
   // Every publish, new page or new version; the store keeps the first per account and a daily count
   | { event: 'page_published'; userId: string; detail?: undefined }

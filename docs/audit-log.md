@@ -22,7 +22,7 @@ Every event says when it happened, who did it, what it was about, and the addres
 | Moved a page into the organization, moved a page out of the organization | Someone [moves a page](/docs/sharing#moving-a-page-to-another-workspace) between workspaces. Each organization records its side, with where the page came from or went to, and whether it became **Restricted** |
 | Deleted a page | The owner deletes an organization page, in the app or through an agent (`delete_artifact`) |
 | Invited someone, revoked an invitation | An owner or admin invites someone or revokes an invitation |
-| Joined, changed a role, removed a member, left | Someone accepts an invitation or joins through single sign-on or SCIM, a role changes, an owner or admin removes someone, or someone leaves |
+| Joined, changed a role, removed a member, left | Someone accepts an invitation, joins through single sign-on or SCIM, or [joins by email domain](/docs/self-hosting#joining-an-organization-by-email-domain) (recorded with the domain), a role changes, an owner or admin removes someone, or someone leaves |
 | Suspended, reactivated | Your identity provider deactivates or reactivates a member's account over [SCIM](/docs/scim) |
 | Changed settings | The organization's name or its two-factor requirement changes |
 | Changed version retention | An owner or admin changes how long older versions are kept ([Version retention](/docs/retention)), with the old and new limits |
@@ -51,7 +51,7 @@ Narrow the list by **Action**, by **Person** (part of the email address of who d
 | `action` | The event, e.g. `sign_in.succeeded`, `page.visibility_changed`, `page.deleted`, `member.role_changed`, `organization.retention_changed`, `organization.export_requested`, `organization.export_downloaded`, `agent.connected`, `agent.disconnected` |
 | `actor_email`, `actor_id` | Who did it |
 | `target_type`, `target_id`, `target_label` | What it was about: a page (by its id and title), a member, an invitation, an access token, a webhook, an agent (by its client id and name) or the organization |
-| `details` | More about the event as JSON, e.g. `{"from":"private","to":"link"}` or `{"password":"set","reset":true}` |
+| `details` | More about the event as JSON, e.g. `{"from":"private","to":"link"}`, `{"password":"set","reset":true}` or `{"role":"member","via":"email domain","domain":"example.com"}` |
 | `ip`, `user_agent` | Where the request came from |
 
 The JSON export is an array of the same events, each with `id`, `action`, `at`, `actor`, `target`, `details`, `ip` and `userAgent`.

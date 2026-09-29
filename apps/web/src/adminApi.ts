@@ -113,6 +113,19 @@ export const getReleaseStatus = () => adminRequest<ReleaseStatus>('/release')
 export const saveSettings = (value: { signupPolicy: SignupPolicy; allowedDomains: string[]; instanceName: string }) =>
   adminRequest<InstanceSettings>('/settings', { method: 'PUT', json: value })
 
+// Joining an organization by email domain; no organization means it is off
+export type AutoJoinSettings = {
+  organization: { id: string; name: string; slug: string } | null
+  domains: string[]
+  updatedAt: string | null
+  organizations: { id: string; name: string; slug: string }[]
+}
+
+export const getAutoJoin = () => adminRequest<AutoJoinSettings>('/auto-join')
+
+export const saveAutoJoin = (value: { organizationId: string | null; domains: string[] }) =>
+  adminRequest<AutoJoinSettings>('/auto-join', { method: 'PUT', json: value })
+
 export const createSignUpLink = (email: string) => adminRequest<SignUpLink>('/sign-up-links', { method: 'POST', json: { email } })
 
 // Removes every passkey, authenticator app and recovery code of someone else, and signs them out
