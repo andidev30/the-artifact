@@ -4,6 +4,8 @@ import { bodyLimit } from 'hono/body-limit'
 import { contextStorage } from 'hono/context-storage'
 import { setProductEventStore } from './analytics.js'
 import { setAuditStore } from './audit.js'
+import { autoJoinNotices, dismissAutoJoinNotice } from './auto-join.js'
+import { UUID_RE } from './validation.js'
 import { email } from './auth/email.js'
 import { google } from './auth/google.js'
 import { sameOriginWrites } from './auth/origin.js'
@@ -222,7 +224,15 @@ api.get('/me', requireUser, async (c) => {
     agentConnected: Boolean(token),
     hasPublished: Boolean(page),
     isAdmin: isInstanceAdmin(user),
+    // Organizations joined by email domain whose notice is still to show
+    autoJoined: await autoJoinNotices(user.id),
   })
+})
+
+api.post('/me/auto-joins/:orgId/dismiss', requireUser, async (c) => {
+  const orgId = c.req.param('orgId')
+  if (UUID_RE.test(orgId)) await dismissAutoJoinNotice(c.get('user')!.id, orgId)
+  return c.body(null, 204)
 })
 
 app.route('/api', api)

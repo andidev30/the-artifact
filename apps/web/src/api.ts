@@ -28,6 +28,15 @@ export type Me = {
   hasPublished: boolean
   // Instance admin: can open /admin
   isAdmin: boolean
+  // Organizations joined by email domain whose notice hasn't been dismissed
+  autoJoined: AutoJoined[]
+}
+
+export type AutoJoined = { organizationId: string; name: string; slug: string; domain: string }
+
+export async function dismissAutoJoinNotice(organizationId: string): Promise<void> {
+  const res = await fetch(`/api/me/auto-joins/${encodeURIComponent(organizationId)}/dismiss`, { method: 'POST', credentials: 'same-origin' })
+  if (!res.ok) throw new Error(`Dismissing the notice failed with ${res.status}`)
 }
 
 // Resolves to the signed-in user, or null when nobody is signed in

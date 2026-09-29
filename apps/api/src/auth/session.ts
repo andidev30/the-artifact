@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm'
 import type { Context } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import { createMiddleware } from 'hono/factory'
+import { autoJoin } from '../auto-join.js'
 import { db, schema } from '../db/index.js'
 import type { User } from '../db/schema.js'
 import { isProduction } from '../env.js'
@@ -39,8 +40,10 @@ export function sessionRef(id: string): string {
   return createHash('sha256').update(`session:${id}`).digest('base64url').slice(0, 22)
 }
 
-// signedInAt: when the person last proved who they are, if not now (it decides RECENT_SIGN_IN)
+// signedInAt: when the person last proved who they are, if not now (it decides RECENT_SIGN_IN).
+// Every way of signing in or up ends here, which is why joining by email domain is checked here.
 export async function startSession(c: Context, userId: string, signedInAt?: Date) {
+  await autoJoin(userId)
   const token = randomToken()
   const expiresAt = new Date(Date.now() + SESSION_TTL)
   const userAgent = c.req.header('user-agent')?.slice(0, MAX_USER_AGENT) || null

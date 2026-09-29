@@ -196,7 +196,7 @@ Organizations have an [audit log](/docs/audit-log) on installs with an Enterpris
 | `user.two_factor_reset` | An admin, or `reset-two-factor.js` on the server, resets someone's two-factor sign-in |
 | `user.sign_in_link_created` | An admin makes a sign-in link on a server without email. For an existing account (`newAccount: false`) the link sets a new password, so treat it like a password reset |
 | `organization.deleted` | An admin deletes an organization, or it goes with the account of its only member. Its audit log goes with it, so this line is what is left |
-| `instance.settings_changed` | An admin changes the sign-up policy, its domains or the instance name, with what changed |
+| `instance.settings_changed` | An admin changes the sign-up policy, its domains, the instance name, or the organization and domains of [joining by email domain](/docs/self-hosting#joining-an-organization-by-email-domain), with what changed |
 | `license.changed`, `license.removed` | An admin enters or removes the license key |
 | `scim_token.created`, `scim_token.revoked` | An admin creates or revokes a [SCIM](/docs/scim) token |
 | `sso_connection.added`, `sso_connection.changed`, `sso_connection.removed` | An admin changes a [single sign-on](/docs/sso) provider, with its domains and whether it is on and required. Never its secret |

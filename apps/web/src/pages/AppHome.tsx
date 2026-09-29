@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import type { Me } from '../api'
 import { AccountHeader } from '../components/AccountHeader'
+import { AutoJoinNotice } from '../components/AutoJoinNotice'
 import { ConnectTabs } from '../components/ConnectTabs'
 import { Gallery } from '../components/Gallery'
 import { InvitationNotice } from '../components/InvitationNotice'
@@ -49,6 +50,7 @@ function Home({ me }: { me: Me }) {
       <AccountHeader me={me} workspace={workspace} />
       <main id="main" className="app-main">
         <TwoFactorNotice me={me} />
+        <AutoJoinNotice me={me} />
         <InvitationNotice me={me} />
         <div className="app-title">
           <h1>Pages</h1>
