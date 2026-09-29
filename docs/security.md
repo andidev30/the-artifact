@@ -107,7 +107,7 @@ Pages are kept out of search engines. `/robots.txt` asks crawlers to stay away f
 
 On a server without email, an account made by signing up with a password, or from an invitation link passed on by hand, has an address nobody checked. Anyone could have typed someone else's address first. So:
 
-- Pages shared with the address open for such an account only through the share's own link, and invitations to it don't show up in the app; see [Addresses nobody has checked](/docs/sharing#addresses-nobody-has-checked).
+- Pages shared with the address open for such an account only through the share's own link, and invitations to it don't show up in the app; see [Addresses nobody has checked](/docs/sharing#addresses-nobody-has-checked). Owners and admins can't [add such an account to an organization directly](/docs/organizations#adding-people-who-already-have-an-account) either; it gets an invitation.
 - **Whoever proves the address takes the account over.** The first sign-in with an email link, an admin's sign-in link, Google or single sign-on marks the address as checked, and removes everything the account's earlier holder could get back in with: its password (an admin's link sets a new one), every session and pending sign-in, connected agents and access tokens, passkeys, the authenticator app and recovery codes, and the personal workspace's webhooks. Its pages, folders, comments and organizations stay. If this happens to your own account, set up your passkey or authenticator app again, reconnect your agents, and look through the account's pages and organizations for anything you don't recognize.
 - Deleting such an account leaves pages shared with the address, and invitations to it, waiting for the address's real owner.
 

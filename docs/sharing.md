@@ -80,7 +80,7 @@ The owner of a page in an organization counts as its owner only while they are a
 
 An agent or access token counts the owner row and the organization rows only for pages in the workspace it was connected to; elsewhere it gets the invited and link rows (see [Choosing a workspace](/docs/connect-your-agent#choosing-a-workspace)).
 
-When someone can't open a page, they see "This page isn't available", whether the page is private or doesn't exist. That way a link doesn't reveal that a private page exists.
+When someone can't open a page, they see "This page isn't available", whether the page is private or doesn't exist. That way a link doesn't reveal that a private page exists. Signed-in people with pending [organization invitations](/docs/organizations#inviting-people) see them listed there with **Join**, on every page they can't open, so the list says nothing about the page either.
 
 Everyone in the table who can open a page can also read and write its [comments](/docs/comments) once signed in. Visitors who aren't signed in don't see comments, even on a page shared with **Anyone with the link**.
 

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { sendCommentNotice, sendInvitation, sendShareNotice, sendSignInLink, transport, transportOptions } from '../../src/mail.js'
+import { sendCommentNotice, sendInvitation, sendMemberAdded, sendShareNotice, sendSignInLink, transport, transportOptions } from '../../src/mail.js'
 
 // A plain string would be parsed by nodemailer as an address list: "x<victim@example.com>" goes to
 // victim@example.com, and a comma adds a second recipient. Every send passes one mailbox as given.
@@ -16,6 +16,7 @@ describe('outgoing mail', () => {
       'invitation',
       (to: string) => sendInvitation(to, { from: 'Ana', organization: 'Acme', role: 'member', link: 'http://localhost/invite/x', expiresInDays: 7 }),
     ],
+    ['added notice', (to: string) => sendMemberAdded(to, { from: 'Ana', organization: 'Acme', role: 'member', link: 'http://localhost/app' })],
   ])('the %s goes to the address as one mailbox', async (_, send) => {
     const sendMail = vi.spyOn(transport, 'sendMail').mockResolvedValue({} as Awaited<ReturnType<typeof transport.sendMail>>)
     await send('x<victim@example.com>')

@@ -1,4 +1,4 @@
-import { and, asc, count, eq, gt, notExists, sql } from 'drizzle-orm'
+import { and, asc, count, eq, gt, isNull, notExists, sql } from 'drizzle-orm'
 import { Hono, type Context } from 'hono'
 import { track } from '../analytics.js'
 import { audit } from '../audit.js'
@@ -13,7 +13,7 @@ import { env, mailEnabled } from '../env.js'
 import { removeMembership } from '../instance.js'
 import { limitInvites, mayEmailRecipient } from '../limits.js'
 import { log } from '../log.js'
-import { sendInvitation } from '../mail.js'
+import { sendInvitation, sendMemberAdded } from '../mail.js'
 import { revokeToken, tokensIn } from '../tokens.js'
 import { CONTROL_CHARS_ERROR, hasControlChars, isEmail, UUID_RE } from '../validation.js'
 
@@ -211,6 +211,14 @@ members.post('/invitations', async (c) => {
   const busy = await limitInvites(c, user.id, 1)
   if (busy) return busy
 
+  // A self-hosted server adds someone who already has an account there at once. The hosted service always
+  // asks them first: otherwise anyone could put a stranger into their organization.
+  if (env.selfHosted) {
+    const added = await addDirectly(user, me.org, email, role)
+    if (added === 'member') return c.json({ error: `${email} is already in ${me.org.name}.`, field: 'email' }, 409)
+    if (added) return c.json({ added: true, emailed: added.emailed, member: added.member, organization: await details(me.org.id, me.role) }, 201)
+  }
+
   // Inviting the same address again replaces the old link and restarts the 7 days
   const token = randomToken()
   const expiresAt = new Date(Date.now() + INVITE_DAYS * DAY)
@@ -236,8 +244,45 @@ members.post('/invitations', async (c) => {
     }
   }
   // The link is only returned when the email could not be sent, so it can be passed on another way
-  return c.json({ emailed, link: emailed ? undefined : link, organization: await details(me.org.id, me.role) }, 201)
+  return c.json({ added: false, emailed, link: emailed ? undefined : link, organization: await details(me.org.id, me.role) }, 201)
 })
+
+// Adds the account with this address to the organization, when there is one whose address was checked
+// (email link, an admin's sign-in link, Google, single sign-on) and that isn't suspended. Anyone could have typed an unchecked
+// address, so those accounts get an invitation like people without one. Null when there is no such account;
+// 'member' when they joined in the meantime.
+async function addDirectly(adder: User, org: OrganizationRow, email: string, role: InviteRole) {
+  const [account] = await db
+    .select({ id: schema.users.id, email: schema.users.email, name: schema.users.name })
+    .from(schema.users)
+    .where(and(eq(schema.users.email, email), eq(schema.users.emailUnverified, false), isNull(schema.users.suspendedAt)))
+  if (!account) return null
+  const inserted = await db.transaction(async (tx) => {
+    const rows = await tx
+      .insert(schema.memberships)
+      .values({ userId: account.id, organizationId: org.id, role, addedBy: adder.id, addedNotice: true })
+      .onConflictDoNothing()
+      .returning({ userId: schema.memberships.userId })
+    if (!rows.length) return false
+    // An invitation from before would only offer them what they have now
+    await tx.delete(schema.invitations).where(and(eq(schema.invitations.organizationId, org.id), eq(schema.invitations.email, email)))
+    return true
+  })
+  if (!inserted) return 'member' as const
+
+  audit({ action: 'member.added', organizationId: org.id, actor: adder, target: { type: 'member', id: account.id, label: account.email }, details: { role } })
+  const from = adder.name ?? adder.email
+  let emailed = mailEnabled() && (await mayEmailRecipient(account.email))
+  if (emailed) {
+    try {
+      await sendMemberAdded(account.email, { from, organization: org.name, role, link: new URL('/app', env.appUrl).toString() })
+    } catch (err) {
+      log.error('Sending the added-to-organization email failed', { err })
+      emailed = false
+    }
+  }
+  return { emailed, member: { id: account.id, email: account.email, name: account.name, role } }
+}
 
 members.delete('/invitations/:id', async (c) => {
   const me = await actor(c)
@@ -584,5 +629,48 @@ myInvitations.post('/:id/decline', async (c) => {
   const row = await ownInvitation(c)
   if (!row) return c.json({ error: 'This invitation is not valid. It may have been revoked or already accepted.' }, 404)
   await db.delete(schema.invitations).where(eq(schema.invitations.id, row.invitation.id))
+  return c.body(null, 204)
+})
+
+// Organizations an owner or admin added the signed-in person to directly, until they dismiss the notice.
+// Mounted at /api/me/added.
+export const addedNotices = new Hono<AuthEnv>()
+addedNotices.use(requireUser)
+
+addedNotices.get('/', async (c) => {
+  const rows = await db
+    .select({
+      orgId: schema.organizations.id,
+      orgName: schema.organizations.name,
+      orgSlug: schema.organizations.slug,
+      role: schema.memberships.role,
+      addedAt: schema.memberships.createdAt,
+      adderName: schema.users.name,
+      adderEmail: schema.users.email,
+    })
+    .from(schema.memberships)
+    .innerJoin(schema.organizations, eq(schema.memberships.organizationId, schema.organizations.id))
+    .leftJoin(schema.users, eq(schema.memberships.addedBy, schema.users.id))
+    .where(and(eq(schema.memberships.userId, c.get('user')!.id), eq(schema.memberships.addedNotice, true)))
+    .orderBy(asc(schema.memberships.createdAt))
+  return c.json(
+    rows.map((r) => ({
+      organization: { id: r.orgId, name: r.orgName, slug: r.orgSlug },
+      role: r.role,
+      addedBy: r.adderName ?? r.adderEmail,
+      addedAt: r.addedAt,
+    })),
+  )
+})
+
+addedNotices.post('/:orgId/dismiss', async (c) => {
+  const orgId = c.req.param('orgId')
+  if (!UUID_RE.test(orgId)) return c.json({ error: 'Not found' }, 404)
+  const rows = await db
+    .update(schema.memberships)
+    .set({ addedNotice: false })
+    .where(and(eq(schema.memberships.userId, c.get('user')!.id), eq(schema.memberships.organizationId, orgId)))
+    .returning({ userId: schema.memberships.userId })
+  if (!rows.length) return c.json({ error: 'Not found' }, 404)
   return c.body(null, 204)
 })

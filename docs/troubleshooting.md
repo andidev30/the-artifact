@@ -38,7 +38,7 @@ The workspace is full. Delete pages you no longer need in the gallery, or ask th
 
 ## I can't open a page someone sent me
 
-You see "This page isn't available" when the page is restricted and your email isn't on it, or when it was deleted. Check that you are signed in with the address it was shared with (the page tells you which one you're using), or ask the owner to share it with you.
+You see "This page isn't available" when the page is restricted and your email isn't on it, or when it was deleted. Check that you are signed in with the address it was shared with (the page tells you which one you're using), or ask the owner to share it with you. If the page is for an organization you haven't joined yet, and you have an invitation to it, the page lists your invitations with **Join** (see [Inviting people](/docs/organizations#inviting-people)).
 
 ## The page looks broken but works as a file
 

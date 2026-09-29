@@ -174,6 +174,10 @@ export const memberships = pgTable(
       .notNull()
       .references(() => organizations.id, { onDelete: 'cascade' }),
     role: roleEnum('role').notNull(),
+    // The owner or admin who added this person directly, without an invitation to accept (self-hosted only)
+    addedBy: uuid('added_by').references(() => users.id, { onDelete: 'set null' }),
+    // Added directly and hasn't dismissed the notice that says so yet
+    addedNotice: boolean('added_notice').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.userId, t.organizationId] }), index('memberships_org_idx').on(t.organizationId)],

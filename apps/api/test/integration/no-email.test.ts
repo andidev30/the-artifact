@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { hashPassword } from '../../src/auth/password.js'
 import { db, schema } from '../../src/db/index.js'
 import { env } from '../../src/env.js'
-import { sendCommentNotice, sendInvitation, sendShareNotice } from '../../src/mail.js'
+import { sendCommentNotice, sendInvitation, sendMemberAdded, sendShareNotice } from '../../src/mail.js'
 import { storeSetupCode } from '../../src/setup-code.js'
 import { call, createOrg, createPage, createUser, sessionCookie, type TestUser } from './helpers.js'
 
@@ -178,6 +178,8 @@ describe('signing up with a password', () => {
   it('never touches an existing account', async () => {
     const existing = await createUser({ email: 'taken@example.com' })
     await withPassword(existing, 'their password')
+    // Signed up on their own with a password, so they get an invitation rather than being added at once
+    await db.update(schema.users).set({ emailUnverified: true }).where(eq(schema.users.id, existing.id))
     expect((await signUp('taken@example.com', 'someone else')).status).toBe(409)
     expect((await login('taken@example.com', 'their password')).status).toBe(200)
   })
@@ -262,6 +264,8 @@ describe('organization invitations', () => {
     const org = await createOrg(owner)
     const existing = await createUser({ email: 'taken@example.com' })
     await withPassword(existing, 'their password')
+    // Signed up on their own with a password, so they get an invitation rather than being added at once
+    await db.update(schema.users).set({ emailUnverified: true }).where(eq(schema.users.id, existing.id))
     const body = await (
       await call(`/api/organizations/${org.id}/invitations`, { cookie: owner.cookie, json: { email: 'taken@example.com', role: 'member' } })
     ).json()
@@ -296,10 +300,26 @@ describe('organization invitations', () => {
   it('lists invitations in the app for accounts whose address was checked', async () => {
     const owner = await createUser()
     const org = await createOrg(owner)
-    const member = await createUser({ email: 'checked@example.com' })
     await call(`/api/organizations/${org.id}/invitations`, { cookie: owner.cookie, json: { email: 'checked@example.com', role: 'member' } })
+    const member = await createUser({ email: 'checked@example.com' })
     const [listed] = await (await call('/api/me/invitations', { cookie: member.cookie })).json()
     expect((await call(`/api/me/invitations/${listed.id}/accept`, { cookie: member.cookie, method: 'POST' })).status).toBe(200)
+  })
+
+  it('adds an account whose address was checked at once, without emailing it', async () => {
+    const owner = await createUser({ name: 'Olivia Owner' })
+    const org = await createOrg(owner, 'Acme', 'acme')
+    const member = await createUser({ email: 'checked@example.com' })
+    const res = await call(`/api/organizations/${org.id}/invitations`, { cookie: owner.cookie, json: { email: 'checked@example.com', role: 'member' } })
+    expect(res.status).toBe(201)
+    const body = await res.json()
+    expect(body).toMatchObject({ added: true, emailed: false, member: { id: member.id, email: 'checked@example.com', role: 'member' } })
+    expect(body.link).toBeUndefined()
+    expect(sendMemberAdded).not.toHaveBeenCalled()
+    expect(await db.select().from(schema.invitations)).toHaveLength(0)
+    expect(await (await call('/api/me/added', { cookie: member.cookie })).json()).toMatchObject([
+      { organization: { id: org.id, name: 'Acme' }, addedBy: 'Olivia Owner' },
+    ])
   })
 })
 

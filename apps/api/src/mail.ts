@@ -143,6 +143,30 @@ export async function sendInvitation(to: string, n: InvitationNotice) {
   })
 }
 
+type AddedNotice = { from: string; organization: string; role: 'admin' | 'member'; link: string }
+
+// An owner or admin of a self-hosted server added someone who already has an account there
+export async function sendMemberAdded(to: string, n: AddedNotice) {
+  const as = n.role === 'admin' ? 'an admin' : 'a member'
+  await transport.sendMail({
+    from: env.smtp.from,
+    to: recipient(to),
+    subject: `${n.from} added you to ${n.organization} on The Artifact`,
+    text: `${n.from} added you to ${n.organization} on The Artifact as ${as}. You can now open the pages shared with ${n.organization}.\n\nOpen The Artifact:\n${n.link}\n\nIf you don't want to be in ${n.organization}, you can leave it from your pages or from its settings.`,
+    html: `
+      <div style="font-family: -apple-system, 'Segoe UI', sans-serif; color: #1c2b4b; max-width: 480px">
+        <p style="font-size: 16px"><strong>${escapeHtml(n.from)}</strong> added you to <strong>${escapeHtml(n.organization)}</strong> on The Artifact as ${as}.</p>
+        <p style="font-size: 14px; color: #4a587a">You can now open the pages shared with ${escapeHtml(n.organization)}.</p>
+        <p>
+          <a href="${n.link}" style="display: inline-block; padding: 12px 20px; background: #ffe066; color: #1c2b4b; border: 1.5px solid #1c2b4b; border-radius: 3px; font-weight: 700; text-decoration: none">
+            Open The Artifact
+          </a>
+        </p>
+        <p style="font-size: 14px; color: #4a587a">If you don't want to be in ${escapeHtml(n.organization)}, you can leave it from your pages or from its settings.</p>
+      </div>`,
+  })
+}
+
 type ExportNotice = { organization: string | null; link: string; hours: number }
 
 export async function sendExportReady(to: string, n: ExportNotice) {

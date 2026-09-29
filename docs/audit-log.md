@@ -1,6 +1,6 @@
 # Audit log
 
-The audit log shows what happened in an organization: who signed in, who shared, moved or deleted pages or changed who can open them, who joined, left or changed roles, who changed the organization's settings or version retention, who exported the organization's data, who connected or disconnected agents, and who made or revoked access tokens.
+The audit log shows what happened in an organization: who signed in, who shared, moved or deleted pages or changed who can open them, who added, invited or removed people, who joined, left or changed roles, who changed the organization's settings or version retention, who exported the organization's data, who connected or disconnected agents, and who made or revoked access tokens.
 
 **Enterprise feature.** The audit log works on a self-hosted server with an Enterprise license key. An instance admin adds the key under **Server admin**. Without a license, or once a license is past its 14-day grace period, nothing is recorded; events recorded before stay until they reach the end of their retention. The hosted service doesn't have it yet.
 
@@ -22,6 +22,7 @@ Every event says when it happened, who did it, what it was about, and the addres
 | Moved a page into the organization, moved a page out of the organization | Someone [moves a page](/docs/sharing#moving-a-page-to-another-workspace) between workspaces. Each organization records its side, with where the page came from or went to, and whether it became **Restricted** |
 | Deleted a page | The owner deletes an organization page, in the app or through an agent (`delete_artifact`) |
 | Invited someone, revoked an invitation | An owner or admin invites someone or revokes an invitation |
+| Added someone | On a self-hosted server, an owner or admin [adds someone who already has an account](/docs/organizations#adding-people-who-already-have-an-account), with the role they were given. The owner or admin is who did it, the person added is what it was about |
 | Joined, changed a role, removed a member, left | Someone accepts an invitation, joins through single sign-on or SCIM, or [joins by email domain](/docs/self-hosting#joining-an-organization-by-email-domain) (recorded with the domain), a role changes, an owner or admin removes someone, or someone leaves |
 | Suspended, reactivated | Your identity provider deactivates or reactivates a member's account over [SCIM](/docs/scim) |
 | Changed settings | The organization's name or its two-factor requirement changes |
@@ -48,7 +49,7 @@ Narrow the list by **Action**, by **Person** (part of the email address of who d
 | Column | What |
 | --- | --- |
 | `time` | When, in UTC (ISO 8601) |
-| `action` | The event, e.g. `sign_in.succeeded`, `page.visibility_changed`, `page.deleted`, `member.role_changed`, `organization.retention_changed`, `organization.export_requested`, `organization.export_downloaded`, `agent.connected`, `agent.disconnected` |
+| `action` | The event, e.g. `sign_in.succeeded`, `page.visibility_changed`, `page.deleted`, `member.added`, `member.role_changed`, `organization.retention_changed`, `organization.export_requested`, `organization.export_downloaded`, `agent.connected`, `agent.disconnected` |
 | `actor_email`, `actor_id` | Who did it |
 | `target_type`, `target_id`, `target_label` | What it was about: a page (by its id and title), a member, an invitation, an access token, a webhook, an agent (by its client id and name) or the organization |
 | `details` | More about the event as JSON, e.g. `{"from":"private","to":"link"}`, `{"password":"set","reset":true}` or `{"role":"member","via":"email domain","domain":"example.com"}` |

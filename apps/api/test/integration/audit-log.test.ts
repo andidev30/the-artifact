@@ -208,7 +208,6 @@ describe('audit log recording', () => {
     await license()
     const owner = await createUser()
     const org = await createOrg(owner)
-    const joiner = await createUser({ email: 'joiner@example.com' })
     const leaver = await createUser()
     await addMember(org.id, leaver, 'member')
 
@@ -216,7 +215,9 @@ describe('audit log recording', () => {
     await call(`/api/organizations/${org.id}/invitations`, { cookie: owner.cookie, json: { email: 'gone@example.com', role: 'member' } })
     const [gone] = await db.select().from(schema.invitations)
     await call(`/api/organizations/${org.id}/invitations/${gone.id}`, { method: 'DELETE', cookie: owner.cookie })
-    await call(`/api/organizations/${org.id}/invitations`, { cookie: owner.cookie, json: { email: joiner.email, role: 'admin' } })
+    // Invited before they have an account, so they accept rather than being added at once
+    await call(`/api/organizations/${org.id}/invitations`, { cookie: owner.cookie, json: { email: 'joiner@example.com', role: 'admin' } })
+    const joiner = await createUser({ email: 'joiner@example.com' })
     const [invite] = await db.select().from(schema.invitations)
     expect((await call(`/api/me/invitations/${invite.id}/accept`, { method: 'POST', cookie: joiner.cookie })).status).toBe(200)
     await call(`/api/organizations/${org.id}/members/${joiner.id}`, { method: 'PATCH', cookie: owner.cookie, json: { role: 'member' } })

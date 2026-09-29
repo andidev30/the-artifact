@@ -43,13 +43,20 @@
 
 .invitation-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 16px;
+  gap: 8px 16px;
 }
 
 .invitation-actions .button {
   font: 700 var(--step--1) var(--sans);
   cursor: pointer;
+}
+
+/* Settings.css has the same, but it loads only with the settings pages */
+.invitation-actions .button-danger {
+  color: var(--white);
+  background: #b3261e;
 }
 
 .invitation-actions .auth-reset {
