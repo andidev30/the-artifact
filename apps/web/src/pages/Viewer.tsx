@@ -12,6 +12,7 @@ import {
   unlockPage,
   versionUrl,
   type ArtifactPage,
+  type MyInvitation,
   type Visibility,
 } from '../api'
 import { CommentsPanel } from '../components/CommentsPanel'
@@ -20,6 +21,7 @@ import { HistoryPanel, OldVersionBar, type Viewing } from '../components/History
 import { DeleteDialog, PageMenu, RenameDialog, type MenuItem } from '../components/PageActions'
 import { ShareDialog } from '../components/ShareDialog'
 import { DuplicateDialog, MoveWorkspaceDialog } from '../components/WorkspaceDialogs'
+import { usePendingInvitations } from '../invitations'
 import { storedWorkspace } from '../workspace'
 import { TagIcon, TagsDialog } from '../components/Tags'
 import { ViewsPanel } from '../components/ViewsPanel'
@@ -34,7 +36,7 @@ import './Viewer.css'
 type State =
   | { kind: 'loading' }
   | { kind: 'ready'; page: ArtifactPage; email: string | null }
-  | { kind: 'missing'; email: string | null }
+  | { kind: 'missing'; email: string | null; userId: string | null }
   | { kind: 'locked' }
   | { kind: 'error' }
 
@@ -87,7 +89,7 @@ export function Viewer() {
           document.title = `${page.title} | The Artifact`
         } else {
           const me = await fetchMe().catch(() => null)
-          if (active) setState({ kind: 'missing', email: me?.email ?? null })
+          if (active) setState({ kind: 'missing', email: me?.email ?? null, userId: me?.id ?? null })
         }
       })
       .catch((err) => active && setState(err instanceof PasswordNeeded ? { kind: 'locked' } : { kind: 'error' }))
@@ -115,7 +117,7 @@ export function Viewer() {
         The page could not be loaded. Reload to try again.
       </div>
     )
-  if (state.kind === 'missing') return <Unavailable slug={slug} email={state.email} shareToken={shareToken} />
+  if (state.kind === 'missing') return <Unavailable slug={slug} email={state.email} userId={state.userId} shareToken={shareToken} />
   if (state.kind === 'locked') return <PasswordGate slug={slug} linkKey={key} onUnlocked={() => setAttempt((n) => n + 1)} />
 
   // Keyed by page, so opening another one (such as a copy just made) starts with its panels and dialogs closed
@@ -187,7 +189,7 @@ function PasswordGate({ slug, linkKey, onUnlocked }: { slug: string; linkKey: st
 }
 
 // Missing and no-access look the same on purpose, so private pages don't reveal they exist
-function Unavailable({ slug, email, shareToken }: { slug: string; email: string | null; shareToken: string | null }) {
+function Unavailable({ slug, email, userId, shareToken }: { slug: string; email: string | null; userId: string | null; shareToken: string | null }) {
   // Back to the share's link after signing in, so it can be used then
   const back = `${LOGIN_URL}?next=${encodeURIComponent(`/a/${slug}${shareToken ? `?share=${encodeURIComponent(shareToken)}` : ''}`)}`
 
@@ -223,6 +225,7 @@ function Unavailable({ slug, email, shareToken }: { slug: string; email: string 
                   Go to your pages
                 </Link>
               </div>
+              {userId && <PendingInvitations userId={userId} />}
             </>
           ) : (
             <>
@@ -240,6 +243,48 @@ function Unavailable({ slug, email, shareToken }: { slug: string; email: string 
         </section>
       </main>
     </div>
+  )
+}
+
+// Invitations waiting for this account, so someone sent a page before they joined can join from here.
+// They are listed whatever the page is: saying which organization it belongs to would tell people
+// without access that it exists.
+function PendingInvitations({ userId }: { userId: string }) {
+  const { invitations, accept } = usePendingInvitations(userId)
+  const [busy, setBusy] = useState<string | null>(null)
+  const [problem, setProblem] = useState<string | null>(null)
+  if (invitations.length === 0) return null
+
+  async function join(invitation: MyInvitation) {
+    setBusy(invitation.id)
+    setProblem(null)
+    try {
+      await accept(invitation)
+      window.location.reload()
+    } catch (err) {
+      setProblem(err instanceof Error ? err.message : 'That did not work. Try again.')
+      setBusy(null)
+    }
+  }
+
+  return (
+    <section className="unavailable-invitations" aria-label="Invitations">
+      {invitations.map((inv) => (
+        <div key={inv.id} className="unavailable-invitation">
+          <p>
+            You have an invitation to <strong>{inv.organization.name}</strong>.
+          </p>
+          <button type="button" className="button button-small" onClick={() => join(inv)} disabled={busy !== null}>
+            {busy === inv.id ? 'Joining' : `Join ${inv.organization.name}`}
+          </button>
+        </div>
+      ))}
+      {problem && (
+        <p className="auth-error" role="alert">
+          {problem}
+        </p>
+      )}
+    </section>
   )
 }
 

@@ -523,11 +523,14 @@ export function setRequireTwoFactor(id: string, requireTwoFactor: boolean) {
   return request<OrganizationDetails>(orgPath(id), { method: 'PATCH', json: { requireTwoFactor } })
 }
 
+// On a self-hosted server, someone who already has an account there is added at once (added: true);
+// anyone else gets an invitation, with its link when it wasn't emailed
+export type InviteResult =
+  | { added: true; emailed: boolean; member: { id: string; email: string; name: string | null; role: InviteRole }; organization: OrganizationDetails }
+  | { added: false; emailed: boolean; link?: string; organization: OrganizationDetails }
+
 export function inviteMember(id: string, email: string, role: InviteRole) {
-  return request<{ emailed: boolean; link?: string; organization: OrganizationDetails }>(`${orgPath(id)}/invitations`, {
-    method: 'POST',
-    json: { email, role },
-  })
+  return request<InviteResult>(`${orgPath(id)}/invitations`, { method: 'POST', json: { email, role } })
 }
 
 export function revokeInvitation(id: string, invitationId: string) {
@@ -592,6 +595,22 @@ export function acceptMyInvitation(id: string) {
 
 export function declineMyInvitation(id: string) {
   return request<null>(`/me/invitations/${encodeURIComponent(id)}/decline`, { method: 'POST' })
+}
+
+// Organizations an owner or admin added you to directly, until you dismiss the notice
+export type AddedNotice = {
+  organization: { id: string; name: string; slug: string }
+  role: Role
+  addedBy: string | null
+  addedAt: string
+}
+
+export function listAddedNotices() {
+  return request<AddedNotice[]>('/me/added')
+}
+
+export function dismissAddedNotice(organizationId: string) {
+  return request<null>(`/me/added/${encodeURIComponent(organizationId)}/dismiss`, { method: 'POST' })
 }
 
 export function updateProfile(name: string) {

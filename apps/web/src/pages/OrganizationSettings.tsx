@@ -673,7 +673,10 @@ function InviteForm({ details, myRole, onInvited }: { details: OrganizationDetai
   const [sending, setSending] = useState(false)
   const [result, setResult] = useState<{ tone: 'ok' | 'bad'; text: string; link?: string } | null>(null)
   const roles = assignable(myRole).filter((r): r is InviteRole => r !== 'owner')
-  const noEmail = useConfig()?.emailSignIn === false
+  const config = useConfig()
+  const noEmail = config?.emailSignIn === false
+  // Self-hosted servers add people who already have an account there instead of inviting them
+  const adds = config?.selfHosted === true
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -683,11 +686,13 @@ function InviteForm({ details, myRole, onInvited }: { details: OrganizationDetai
       const sent = await inviteMember(details.id, email, role)
       onInvited(sent.organization)
       setResult(
-        sent.emailed
-          ? { tone: 'ok', text: `Invitation sent to ${email.trim().toLowerCase()}.` }
-          : noEmail
-            ? { tone: 'ok', text: `Invitation made. Send ${email.trim().toLowerCase()} this link; they can create their account from it:`, link: sent.link }
-            : { tone: 'bad', text: 'The email could not be sent. Share this link with them instead:', link: sent.link },
+        sent.added
+          ? { tone: 'ok', text: `Added ${sent.member.name ?? sent.member.email} as ${ROLE_LABEL[sent.member.role].toLowerCase()}.` }
+          : sent.emailed
+            ? { tone: 'ok', text: `Invitation sent to ${email.trim().toLowerCase()}.` }
+            : noEmail
+              ? { tone: 'ok', text: `Invitation made. Send ${email.trim().toLowerCase()} this link; they can create their account from it:`, link: sent.link }
+              : { tone: 'bad', text: 'The email could not be sent. Share this link with them instead:', link: sent.link },
       )
       setEmail('')
     } catch (err) {
@@ -721,14 +726,18 @@ function InviteForm({ details, myRole, onInvited }: { details: OrganizationDetai
         ))}
       </select>
       <button type="submit" className="button button-small" disabled={sending || !email.trim()}>
-        {sending ? (noEmail ? 'Making link' : 'Sending') : noEmail ? 'Make invite link' : 'Send invite'}
+        {adds ? (sending ? 'Inviting' : 'Invite') : sending ? (noEmail ? 'Making link' : 'Sending') : noEmail ? 'Make invite link' : 'Send invite'}
       </button>
       <p className="field-hint settings-invite-hint" data-tone={result?.tone} aria-live="polite">
         {result
           ? result.text
-          : noEmail
-            ? `You get a link to send them yourself; this server doesn’t send email. It works for 7 days.`
-            : `They get an email with a link to join ${details.name}. It works for 7 days.`}
+          : adds && noEmail
+            ? `People who signed in here with Google or single sign-on are added right away. For anyone else you get a link to send them yourself; it works for 7 days.`
+            : adds
+              ? `People who already have an account here are added right away. Anyone else gets an email with a link to join ${details.name}; it works for 7 days.`
+              : noEmail
+                ? `You get a link to send them yourself; this server doesn’t send email. It works for 7 days.`
+                : `They get an email with a link to join ${details.name}. It works for 7 days.`}
         {result?.link && <code className="settings-link">{result.link}</code>}
       </p>
     </form>

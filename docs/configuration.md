@@ -166,9 +166,9 @@ Each limit counts something for one key (an email address, an account, or a netw
 | `scim` | [SCIM](/docs/scim) requests with one token | 2,000 per 10 minutes |
 | `two-factor-setup` | Passkeys, authenticator app set-ups and new recovery codes one account asks for in **Account settings** | 30 per hour |
 | `oauth-register-ip` | Agents registering with the server (`POST /oauth/register`) from one network, which each agent does once when it connects | 60 per hour |
-| `invite` | People one account invites to an organization or shares a page with by email, in the app or through an agent, whether or not they are emailed | 200 per hour |
+| `invite` | People one account invites or adds to an organization or shares a page with by email, in the app or through an agent, whether or not they are emailed | 200 per hour |
 | `invite-ip` | The same, from one network | 500 per hour |
-| `invite-recipient` | Invitation and share emails to one address, from everyone together. Past it, nothing is sent and the person who invited or shared gets the link to pass on instead. | 10 per day |
+| `invite-recipient` | Invitation and share emails, and emails saying someone was added to an organization, to one address, from everyone together. Past it, nothing is sent and the person who invited or shared gets the link to pass on instead. | 10 per day |
 | `unshare` | People one account removes from pages | 200 per hour |
 | `mcp` | MCP tool calls by one account, all agents together | 600 per 10 minutes |
 | `publish` | New pages and versions one account publishes through agents (`publish_artifact`, `update_files`, `publish_upload`, `restore_version`, `duplicate_artifact`, also counted in `mcp`), with an access token (`POST /api/publish`), or by duplicating a page in the app | 200 per hour |

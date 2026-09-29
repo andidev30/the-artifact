@@ -691,6 +691,12 @@ test('invitations: in onboarding, on your pages, and opened signed in, then decl
   await expect(them.getByRole('region', { name: 'Invitations' })).toBeVisible()
   await expectAccessible(them, 'gallery, with an invitation')
 
+  // The page that isn't available lists the invitation too
+  await them.goto('/a/doesnotexist')
+  await expect(them.getByRole('heading', { name: "This page isn't available" })).toBeVisible()
+  await expect(them.getByRole('region', { name: 'Invitations' }).getByRole('button', { name: 'Join Invite Co' })).toBeVisible()
+  await expectAccessible(them, 'page not available, with an invitation')
+
   await them.goto(new URL(link!).pathname)
   await expect(them.getByRole('heading', { level: 1, name: 'Join Invite Co' })).toBeVisible()
   await expect(them.getByRole('button', { name: 'Join Invite Co' })).toBeVisible()

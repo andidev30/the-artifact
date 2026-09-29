@@ -206,6 +206,33 @@
   font: 700 var(--step-0) var(--sans);
 }
 
+.unavailable-invitations {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1.5px dashed var(--line);
+}
+
+.unavailable-invitation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  font-size: var(--step--1);
+}
+
+.unavailable-invitation .button {
+  cursor: pointer;
+  font: 700 var(--step--1) var(--sans);
+}
+
+.unavailable-invitation .button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
 @media (max-width: 640px) {
   .viewer-bar {
     flex-wrap: wrap;

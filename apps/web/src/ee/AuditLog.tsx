@@ -38,6 +38,7 @@ const ACTION_LABEL: Record<string, string> = {
   'member.invited': 'Invited someone',
   'member.invitation_revoked': 'Revoked an invitation',
   'member.joined': 'Joined',
+  'member.added': 'Added someone',
   'member.role_changed': 'Changed a role',
   'member.removed': 'Removed a member',
   'member.left': 'Left',
@@ -105,6 +106,7 @@ function summary(e: AuditEvent): string {
     case 'member.invited':
     case 'member.invitation_revoked':
     case 'member.joined':
+    case 'member.added':
     case 'member.removed':
     case 'member.left':
       return [d.role ? `As ${label(ROLE_LABEL, d.role).toLowerCase()}` : '', d.via ? `Through ${d.via}` : ''].filter(Boolean).join(', ')

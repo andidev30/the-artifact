@@ -44,7 +44,7 @@ import { publishApi, whoamiApi } from './routes/publish.js'
 import { artifacts } from './routes/artifacts.js'
 import { comments } from './routes/comments.js'
 import { folders } from './routes/folders.js'
-import { invitations, members, myInvitations } from './routes/members.js'
+import { addedNotices, invitations, members, myInvitations } from './routes/members.js'
 import { newOrganizationsOpen, onboarding, organizations, setOrganizationPolicy } from './routes/organizations.js'
 import { security, sessions } from './routes/security.js'
 import { settings } from './routes/settings.js'
@@ -180,6 +180,7 @@ api.route('/organizations/:orgId/retention', retention)
 api.route('/organizations/:orgId/webhooks', organizationWebhooks)
 api.route('/invitations', invitations)
 api.route('/me/invitations', myInvitations)
+api.route('/me/added', addedNotices)
 api.route('/me/security', security)
 api.route('/me/sessions', sessions)
 api.route('/me/webhooks', personalWebhooks)

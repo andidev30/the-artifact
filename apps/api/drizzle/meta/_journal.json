@@ -232,6 +232,13 @@
       "when": 1790653224063,
       "tag": "0032_auto_join",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1790655152478,
+      "tag": "0033_direct_add_members",
+      "breakpoints": true
     }
   ]
 }
