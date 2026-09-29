@@ -2,6 +2,14 @@
 
 Every release of The Artifact, newest first. Entries are generated from the commit messages when a release is made; what you have to do when you upgrade is in [Upgrading](docs/upgrading.md), and the versioning policy is there too.
 
+## [1.1.0](https://github.com/andidev30/the-artifact/compare/v1.0.0...v1.1.0) (2026-09-29)
+
+
+### Features
+
+* add people who already have an account to an organization directly ([#180](https://github.com/andidev30/the-artifact/issues/180)) ([cc99589](https://github.com/andidev30/the-artifact/commit/cc9958998cd071080eea0c054a91a010ca38cb88))
+* join an organization automatically by email domain ([#179](https://github.com/andidev30/the-artifact/issues/179)) ([cebe3de](https://github.com/andidev30/the-artifact/commit/cebe3de372a5ce1e6b2bd75537645da29d942fcd)), closes [#177](https://github.com/andidev30/the-artifact/issues/177)
+
 ## [1.0.0](https://github.com/andidev30/the-artifact/compare/v0.6.1...v1.0.0) (2026-09-29)
 
 
