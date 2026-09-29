@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { dismissAddedNotice, listAddedNotices, removeMember, type AddedNotice as Notice, type Me } from '../api'
 import { useConfirmFocus } from '../focus'
 import { refreshMe } from '../useMe'
@@ -99,17 +99,19 @@ function AddedRow({ me, notice, onDone }: { me: Me; notice: Notice; onDone: () =
         )}
       </p>
       <div className="invitation-actions">
+        {/* Keyed so the two sets of buttons never share elements: reusing the Open button as the
+            confirmation's Leave would skip its autoFocus and leave focus on what became Cancel */}
         {confirming ? (
-          <>
+          <Fragment key="confirm">
             <button type="button" className="button button-small button-danger" onClick={leave} disabled={busy} autoFocus>
               {busy ? 'Leaving' : `Leave ${org.name}`}
             </button>
             <button type="button" className="auth-reset" onClick={() => setConfirming(false)} disabled={busy}>
               Cancel
             </button>
-          </>
+          </Fragment>
         ) : (
-          <>
+          <Fragment key="actions">
             <button type="button" className="button button-small" onClick={open} disabled={busy}>
               Open {org.name}
             </button>
@@ -132,7 +134,7 @@ function AddedRow({ me, notice, onDone }: { me: Me; notice: Notice; onDone: () =
             >
               Dismiss
             </button>
-          </>
+          </Fragment>
         )}
       </div>
       {problem && (
