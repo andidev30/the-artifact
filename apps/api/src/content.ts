@@ -21,10 +21,14 @@ import type { Artifact } from './db/schema.js'
 import { env } from './env.js'
 import { checkPath, ENTRY_PATH } from './files.js'
 import { HELPER_MARK, HELPER_TAG, withFrameHelper } from './frame-helper.js'
-import { clientIp } from './limits.js'
+import { clientIp, limitRequest } from './limits.js'
 import { isGrant, linkPassFor, signGrant, verifyGrant } from './links.js'
+import { log } from './log.js'
 import { onUnhandledError } from './metrics.js'
+import { storedPdf, storePdf } from './pdf.js'
+import { render } from './renders.js'
 import { serverSecret } from './secrets.js'
+import { thumbnailsEnabled } from './thumbnails.js'
 import { parseVersion } from './validation.js'
 import { recordView } from './views.js'
 import { zip } from './zip.js'
@@ -324,14 +328,14 @@ contentHost.notFound(notFound)
 contentHost.onError(onUnhandledError)
 
 // "Signups by week" → "signups-by-week-v3.zip"; titles with no Latin letters or digits fall back to the page id
-function zipName(artifact: Artifact, version: number) {
+function fileName(artifact: Artifact, version: number, extension: 'zip' | 'pdf') {
   const base = artifact.title
     .normalize('NFKD')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 80)
-  return `${base || artifact.slug}-v${version}.zip`
+  return `${base || artifact.slug}-v${version}.${extension}`
 }
 
 // A download link an agent can fetch without a session. It carries a link token like the sandboxed
@@ -342,26 +346,35 @@ export async function downloadLink(userId: string, artifact: Artifact, version: 
   return `${env.appUrl}/api/artifacts/${artifact.slug}/download?version=${version}&token=${token}`
 }
 
-// GET /api/artifacts/:slug/download[?version=<n>][&token=<link token>]: index.html and every file of a
-// version as one zip, with the same access as viewing that version
-export async function downloadVersion(c: Context<AuthEnv>) {
+// The version a download asks for ([?version=<n>][&token=<link token>], the current one without a
+// number), with the same access as viewing it; null when it is missing or not theirs to open
+async function versionToDownload(c: Context<AuthEnv>) {
   const artifact = await findBySlug(c.req.param('slug')!)
-  if (!artifact) return notFound(c)
+  if (!artifact) return null
   const asked = c.req.query('version')
   const version = asked === undefined ? artifact.currentVersion : parseVersion(asked)
-  if (version === null) return notFound(c)
+  if (version === null) return null
 
   let viewer: Viewer | null = c.get('user')
   const token = c.req.query('token')
   if (token) {
     viewer = await linkViewer(token, artifact, version)
-    if (!viewer) return notFound(c)
+    if (!viewer) return null
   }
   const link = token ? {} : await linkPassFor(c, artifact)
-  if (!allowed(await accessLevel(artifact, viewer, link), version === artifact.currentVersion)) return notFound(c)
+  if (!allowed(await accessLevel(artifact, viewer, link), version === artifact.currentVersion)) return null
   const v = await getVersion(artifact, version)
-  const tree = v ? await loadVersionTree(v) : null
-  if (!v || !tree) return notFound(c)
+  return v ? { artifact, version, v, viewer } : null
+}
+
+const DOWNLOAD_HEADERS = { 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'private, no-store', 'Referrer-Policy': 'no-referrer' }
+
+// GET /api/artifacts/:slug/download: index.html and every file of a version as one zip
+export async function downloadVersion(c: Context<AuthEnv>) {
+  const found = await versionToDownload(c)
+  const tree = found ? await loadVersionTree(found.v) : null
+  if (!found || !tree) return notFound(c)
+  const { artifact, version, v } = found
 
   const archive = zip(
     [{ path: ENTRY_PATH, content: Buffer.from(tree.html, 'utf8') }, ...tree.files.map((f) => ({ path: f.path, content: f.content }))],
@@ -369,9 +382,42 @@ export async function downloadVersion(c: Context<AuthEnv>) {
   )
   return c.body(new Uint8Array(archive), 200, {
     'Content-Type': 'application/zip',
-    'Content-Disposition': `attachment; filename="${zipName(artifact, version)}"`,
-    'X-Content-Type-Options': 'nosniff',
-    'Cache-Control': 'private, no-store',
-    'Referrer-Policy': 'no-referrer',
+    'Content-Disposition': `attachment; filename="${fileName(artifact, version, 'zip')}"`,
+    ...DOWNLOAD_HEADERS,
+  })
+}
+
+// GET /api/artifacts/:slug/pdf: a version printed to PDF on the server (src/pdf.ts), only where
+// thumbnails are rendered; printed once and kept in the bucket after. Errors are JSON for the web app,
+// which fetches it and shows what went wrong.
+export async function pdfVersion(c: Context<AuthEnv>) {
+  const found = await versionToDownload(c)
+  if (!found) return c.json({ error: 'Not found' }, 404, { 'Cache-Control': 'no-store' })
+  if (!thumbnailsEnabled()) return c.json({ error: "This server can't make PDFs." }, 404, { 'Cache-Control': 'no-store' })
+  const { artifact, version, v, viewer } = found
+
+  let pdf = await storedPdf(v.id)
+  if (!pdf) {
+    // Only printing counts: it is what takes Chromium's time
+    const busy = await limitRequest(c, 'pdf', viewer?.id ?? clientIp(c), 'You have made a lot of PDFs in a short time.')
+    if (busy) return busy
+    const answer = await render({ kind: 'pdf', versionId: v.id })
+    if (!answer.ok) {
+      if (answer.reason === 'missing') return c.json({ error: 'Not found' }, 404, { 'Cache-Control': 'no-store' })
+      if (answer.reason === 'busy') return c.json({ error: answer.message }, 503, { 'Retry-After': '60', 'Cache-Control': 'no-store' })
+      return c.json({ error: `The PDF could not be made: ${answer.message}. A page that never finishes loading ends up here too.` }, 422, {
+        'Cache-Control': 'no-store',
+      })
+    }
+    pdf = Buffer.from(answer.value.data, 'base64')
+    // Not kept only means it is printed again next time
+    await storePdf(v.id, pdf).catch((err) => log.warn('Keeping the PDF failed', { versionId: v.id, error: err instanceof Error ? err.message : String(err) }))
+  }
+  return c.body(new Uint8Array(pdf), 200, {
+    'Content-Type': 'application/pdf',
+    'Content-Disposition': `attachment; filename="${fileName(artifact, version, 'pdf')}"`,
+    // Opened on its own, the PDF gets no scripts and no origin
+    'Content-Security-Policy': "default-src 'none'; sandbox",
+    ...DOWNLOAD_HEADERS,
   })
 }

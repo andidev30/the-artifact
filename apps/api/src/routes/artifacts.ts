@@ -45,7 +45,7 @@ import {
 import { verifyPassword } from '../auth/password.js'
 import { currentThumbnails, getThumbnail, queueThumbnail, thumbnailsEnabled, type ThumbnailState } from '../thumbnails.js'
 import type { Artifact, ShareRole, Visibility } from '../db/schema.js'
-import { allowed, downloadVersion, serveVersion } from '../content.js'
+import { allowed, downloadVersion, pdfVersion, serveVersion } from '../content.js'
 import { compareVersions } from '../compare.js'
 import { MAX_VIEWERS, pageViewers, totalViews, versionViews, VIEWER_RETENTION_DAYS } from '../views.js'
 import { changeTags, checkTag, TagError, tagsOf } from '../tags.js'
@@ -231,6 +231,9 @@ artifacts.get('/:slug/v/:version/*', serveVersion)
 
 // A version and its files as one zip, with the same access as viewing it
 artifacts.get('/:slug/download', downloadVersion)
+
+// A version printed to PDF on the server, with the same access as viewing it
+artifacts.get('/:slug/pdf', pdfVersion)
 
 // Older link to the current HTML, from before pages were served as a tree
 artifacts.get('/:slug/content', async (c) => {

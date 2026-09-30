@@ -4,6 +4,7 @@ import { env } from '../env.js'
 import { resumeExports, sweepExports } from '../exports.js'
 import { runPruners, sweepStorage } from '../gc.js'
 import { deleteExpiredLimits } from '../limits.js'
+import { sweepPdfs } from '../pdf.js'
 import { indexStale } from '../search.js'
 import { deleteOldViews } from '../views.js'
 import { runWebhookQueue } from '../webhooks.js'
@@ -55,8 +56,9 @@ cron.get('/sweep', async (c) => {
   const webhooks = await runWebhookQueue({ deadline })
   const exportSteps = await resumeExports({ budgetMs: Math.min(EXPORT_BUDGET_MS, deadline - Date.now()) })
   const indexed = await indexStale(500, deadline)
+  const pdfs = await sweepPdfs(deadline)
   const storage = await sweepStorage({ deadline })
-  return c.json({ ...storage, rateLimits, views, exports, exportSteps, webhooks, indexed })
+  return c.json({ ...storage, rateLimits, views, exports, exportSteps, webhooks, indexed, pdfs })
 })
 
 // Webhook retries that are due (src/webhooks.ts). Without a long-running process, first attempts are

@@ -37,6 +37,7 @@ import { observeRequests, onUnhandledError } from './metrics.js'
 import { consent } from './oauth/consent.js'
 import { oauth } from './oauth/server.js'
 import { setPlanQuota } from './quota.js'
+import { thumbnailsEnabled } from './thumbnails.js'
 import { admin } from './routes/admin.js'
 import { cron } from './routes/cron.js'
 import { health } from './routes/health.js'
@@ -147,6 +148,8 @@ api.get('/config', async (c) => {
     newOrganizations: newOrganizationsOpen(),
     // Enterprise single sign-on buttons; none without a license that counts
     sso,
+    // Pages can be downloaded as PDFs, printed by the Chromium that renders thumbnails (CHROME_PATH)
+    pdf: thumbnailsEnabled(),
   })
 })
 

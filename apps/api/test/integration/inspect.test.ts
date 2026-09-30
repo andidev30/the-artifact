@@ -5,7 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { publish } from '../../src/artifacts.js'
 import { db, schema } from '../../src/db/index.js'
 import { env } from '../../src/env.js'
-import { type InspectAnswer, inspectElsewhere, inspectHere, inspectionAnswered } from '../../src/inspect.js'
+import { type Answer, renderAnswered, renderElsewhere, renderHere } from '../../src/renders.js'
 import { closeThumbnailBrowser, configureThumbnails, renderPage } from '../../src/thumbnails.js'
 import { callTool, connectAgent, createPage, createUser, mcpRequest, type TestUser, type ToolResult } from './helpers.js'
 
@@ -17,7 +17,7 @@ const originalLimits = env.rateLimits
 afterEach(() => {
   env.rateLimits = originalLimits
   configureThumbnails({ chromePath: '' })
-  inspectElsewhere(null)
+  renderElsewhere(null)
 })
 
 afterAll(async () => {
@@ -288,12 +288,10 @@ describe.skipIf(!hasChrome)('inspecting in headless Chrome', { timeout: 60_000 }
     const page = await createPage(owner, { title: 'Elsewhere' })
     const asked: string[] = []
     // What src/server.ts and src/primary.ts do, with the message going through JSON as IPC does
-    inspectElsewhere((request) => {
-      asked.push(request.versionId)
+    renderElsewhere((request) => {
+      asked.push(request.job.versionId)
       const message = JSON.parse(JSON.stringify(request)) as typeof request
-      void inspectHere(message.versionId, message.widths).then((answer: InspectAnswer) =>
-        inspectionAnswered(message.id, JSON.parse(JSON.stringify(answer)) as InspectAnswer),
-      )
+      void renderHere(message.job).then((answer) => renderAnswered(message.id, JSON.parse(JSON.stringify(answer)) as Answer))
     })
     const { text, images } = await inspectRaw(await agentFor(owner), { artifact_id: page.slug })
     expect(asked).toHaveLength(1)

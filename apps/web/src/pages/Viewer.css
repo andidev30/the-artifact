@@ -149,6 +149,34 @@
   background: var(--white);
 }
 
+/* Presenting: the frame fills the screen with nothing of the app around it */
+.viewer-frame:fullscreen {
+  background: var(--white);
+}
+
+/* Strip above the frame while a PDF is made, or when it couldn't be */
+.viewer-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  padding: 10px var(--gutter);
+  background: var(--paper);
+  border-bottom: 1.5px solid var(--ink);
+}
+
+.viewer-notice p {
+  font-size: var(--step--1);
+}
+
+.viewer-notice .button {
+  height: 34px;
+  padding: 0 14px;
+  font: 700 var(--step--1) var(--sans);
+  cursor: pointer;
+}
+
 .viewer-status {
   display: grid;
   place-items: center;

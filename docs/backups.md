@@ -5,7 +5,7 @@ A self-hosted install keeps its data in two places, and a backup needs both:
 | Where | What |
 | --- | --- |
 | Postgres | Accounts, organizations, members and invitations, sharing, the list of pages and versions, connected agents, admin settings |
-| Object storage (the bundled MinIO, or your bucket) | The content: every version's HTML, its files and its thumbnail, one object per distinct content under `blobs/<sha256>` |
+| Object storage (the bundled MinIO, or your bucket) | The content: every version's HTML, its files and its thumbnail, one object per distinct content under `blobs/<sha256>`. PDFs people downloaded are kept under `pdfs/`; they are printed again when missing, so they needn't be backed up |
 
 Also keep a copy of `app.env` and the `.env` next to the compose file. They hold your mail settings and passwords, and they aren't in either backup.
 

@@ -60,7 +60,7 @@ The app starts one worker process per CPU the container may use, up to 8, since 
 
 ## Where content is stored
 
-Postgres holds accounts, organizations, sharing and the list of versions. The content itself (every version's HTML, its files and its thumbnail) is in object storage, one object per distinct content under `blobs/<sha256>`. Versions that reuse a stylesheet or image, and restored versions, store nothing new. When pages or accounts are deleted, their objects are removed by a sweep that runs every few hours. The same sweep deletes records of [who opened a page](/docs/sharing#who-opened-a-page) once they are 90 days old, and [data exports](/docs/exporting-your-data), kept under `exports/`, once their 24 hours are up. To run it now:
+Postgres holds accounts, organizations, sharing and the list of versions. The content itself (every version's HTML, its files and its thumbnail) is in object storage, one object per distinct content under `blobs/<sha256>`. Versions that reuse a stylesheet or image, and restored versions, store nothing new. When pages or accounts are deleted, their objects are removed by a sweep that runs every few hours. The same sweep deletes records of [who opened a page](/docs/sharing#who-opened-a-page) once they are 90 days old, [data exports](/docs/exporting-your-data), kept under `exports/`, once their 24 hours are up, and the [PDFs of pages](/docs/publishing#managing-pages-in-the-app) kept under `pdfs/` once their version is gone. To run it now:
 
 ```sh
 docker compose exec app node dist/scripts/sweep-storage.js

@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import {
   acceptShare,
   currentVersion,
+  downloadPdf,
   downloadUrl,
   FRAME_SANDBOX,
   fetchMe,
@@ -30,6 +31,7 @@ import { LOGIN_URL } from '../config'
 import { HELPER_MARK } from '../frameMessages'
 import { pollCurrentVersion } from '../livePoll'
 import { timeAgo } from '../time'
+import { useConfig } from '../useConfig'
 import './Auth.css'
 import './Viewer.css'
 
@@ -332,6 +334,9 @@ function PageFrame({
   const [viewing, setViewing] = useState<Viewing | null>(null)
   const [dialog, setDialog] = useState<'rename' | 'delete' | 'duplicate' | 'move' | 'tags' | null>(null)
   const [announce, setAnnounce] = useState('')
+  const config = useConfig()
+  // A PDF of the version on screen, printed by the server
+  const [pdf, setPdf] = useState<{ making: true } | { error: string } | null>(null)
   // Signed-in people get the comment helper in the frame, to pin comments to elements of the page
   const frameRef = useRef<HTMLIFrameElement>(null)
   const frameVersion = viewing ? viewing.version : page.version
@@ -386,12 +391,37 @@ function PageFrame({
 
   // Downloads what the frame shows, which can be an older version picked in the history
   const menu: MenuItem[] = [{ label: 'Download', download: downloadUrl(page.slug, viewing?.version) }]
+  if (config?.pdf) menu.push({ label: 'Download PDF', onSelect: savePdf })
   if (page.canEdit) menu.push({ label: 'Rename', onSelect: () => setDialog('rename') })
   // Comments come only to people who are signed in, and only they can keep a copy
   if (page.comments) menu.push({ label: 'Duplicate', onSelect: () => setDialog('duplicate') })
   if (page.canMove && page.workspace) menu.push({ label: 'Move to workspace…', onSelect: () => setDialog('move') })
   if (page.canEdit && page.tags) menu.push({ label: 'Tags', onSelect: () => setDialog('tags') })
   if (page.isOwner) menu.push({ label: 'Delete', onSelect: () => setDialog('delete'), danger: true })
+
+  async function savePdf() {
+    if (pdf && 'making' in pdf) return
+    setPdf({ making: true })
+    try {
+      await downloadPdf(page.slug, viewing?.version)
+      setPdf(null)
+      setAnnounce('The PDF was downloaded.')
+    } catch (err) {
+      setPdf({ error: err instanceof Error ? err.message : 'The PDF could not be made. Try again.' })
+    }
+  }
+
+  // The page alone, without the app around it, for presenting. Keys go to the page, so a deck's arrow keys work at once.
+  async function fullScreen() {
+    const frame = frameRef.current
+    if (!frame) return
+    try {
+      await frame.requestFullscreen()
+      frame.contentWindow?.focus()
+    } catch {
+      setAnnounce("This browser can't show the page full screen.")
+    }
+  }
 
   async function copyLink() {
     try {
@@ -488,6 +518,11 @@ function PageFrame({
               History
             </button>
           )}
+          {document.fullscreenEnabled && (
+            <button type="button" className="viewer-history" onClick={fullScreen}>
+              Full screen
+            </button>
+          )}
           {page.canEdit ? (
             <button type="button" className="viewer-copy" onClick={() => setSharing(true)}>
               Share
@@ -503,6 +538,20 @@ function PageFrame({
           {copied ? 'Link copied' : announce}
         </span>
       </header>
+      {pdf && (
+        <div className="viewer-notice" role="region" aria-label="PDF">
+          {'making' in pdf ? (
+            <p role="status">Making a PDF of version {viewing?.version ?? page.version}. This takes a few seconds.</p>
+          ) : (
+            <>
+              <p role="alert">{pdf.error}</p>
+              <button type="button" className="button button-quiet" onClick={() => setPdf(null)}>
+                Dismiss
+              </button>
+            </>
+          )}
+        </div>
+      )}
       {viewing && (
         <OldVersionBar
           key={viewing.version}
