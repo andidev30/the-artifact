@@ -22,7 +22,7 @@ The chart is published with every release from 0.2.0 on, under the release's ver
 <!-- x-release-please-start-version -->
 
 ```sh
-helm install the-artifact oci://ghcr.io/andidev30/charts/the-artifact --version 1.1.0 \
+helm install the-artifact oci://ghcr.io/andidev30/charts/the-artifact --version 1.2.0 \
   --namespace the-artifact --create-namespace
 kubectl -n the-artifact rollout status deploy/the-artifact
 ```
@@ -49,7 +49,7 @@ With the release name `the-artifact`, the app's Deployment and Service are calle
 
 <!-- x-release-please-start-version -->
 
-Put your values in a file and pass it with `-f`. `helm show values oci://ghcr.io/andidev30/charts/the-artifact --version 1.1.0` prints every value with what it does. The ones most servers set:
+Put your values in a file and pass it with `-f`. `helm show values oci://ghcr.io/andidev30/charts/the-artifact --version 1.2.0` prints every value with what it does. The ones most servers set:
 
 <!-- x-release-please-end -->
 
@@ -97,7 +97,7 @@ existingSecret: artifact-settings
 <!-- x-release-please-start-version -->
 
 ```sh
-helm install the-artifact oci://ghcr.io/andidev30/charts/the-artifact --version 1.1.0 \
+helm install the-artifact oci://ghcr.io/andidev30/charts/the-artifact --version 1.2.0 \
   --namespace the-artifact --create-namespace -f values.yaml
 ```
 
@@ -146,7 +146,7 @@ Read [Upgrading](/docs/upgrading) and take a [backup](#backups), then upgrade to
 <!-- x-release-please-start-version -->
 
 ```sh
-helm upgrade the-artifact oci://ghcr.io/andidev30/charts/the-artifact --version 1.1.0 \
+helm upgrade the-artifact oci://ghcr.io/andidev30/charts/the-artifact --version 1.2.0 \
   --namespace the-artifact -f values.yaml
 kubectl -n the-artifact rollout status deploy/the-artifact
 ```
