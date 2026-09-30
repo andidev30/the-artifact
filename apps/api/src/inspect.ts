@@ -1,8 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import type { CDPSession } from 'playwright-core'
-import { log } from './log.js'
-import { BrowserGone, inPage, loadTree, PAGE_ORIGIN, type PageTree, type RequestNotes, renderConcurrency, type View } from './thumbnails.js'
+import { BrowserGone, inPage, PAGE_ORIGIN, type PageTree, type RequestNotes, type View } from './thumbnails.js'
 
 // inspect_artifact: an agent's look at its own page before it shares the link. The page is opened by
 // inPage in src/thumbnails.ts, like a thumbnail: same Chromium, same interception, CDN allowlist,
@@ -11,8 +10,7 @@ import { BrowserGone, inPage, loadTree, PAGE_ORIGIN, type PageTree, type Request
 // screenshot. axe-core runs in an isolated world (its own JavaScript globals, the page's DOM), so the
 // page's scripts can't see or tamper with it, and its source comes from node_modules, never the network.
 //
-// In a cluster, inspections run in the worker that has Chromium (the background one, src/primary.ts),
-// like thumbnails; other workers ask it over IPC and wait for the answer (src/server.ts).
+// Inspections take turns with PDFs, and reach the renderer in a cluster, through src/renders.ts.
 
 export const WIDTHS = [1280, 390] as const
 export type Width = (typeof WIDTHS)[number]
@@ -34,12 +32,6 @@ export const MAX_COLLECTED = 1000
 const MAX_VIOLATIONS = 20
 const MAX_TARGETS = 3
 const MAX_TEXT = 300
-// Inspections waiting for a free slot in the renderer; past it the answer is "busy"
-const MAX_WAITING = 20
-const MAX_WAIT_MS = 30_000
-// How long a worker waits for the renderer to answer: the wait for a slot, then two renders, each
-// with one retry after Chromium went away
-const ANSWER_MS = 130_000
 
 const AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']
 const IMPACT = ['critical', 'serious', 'moderate', 'minor']
@@ -56,7 +48,6 @@ export type Inspection = {
   blocked: string[]
   violations: Violation[]
 }
-export type InspectAnswer = { ok: true; inspection: Inspection } | { ok: false; reason: 'missing' | 'busy' | 'failed'; message: string }
 
 let axeSource: string | null = null
 function axe(): string {
@@ -209,91 +200,18 @@ function merge(results: { width: Width; found: Found }[]): Inspection {
   return out
 }
 
-// A render slot, shared by every inspection in this process; thumbnails have their own
-let active = 0
-const waiting: (() => void)[] = []
-
-function takeSlot(): Promise<boolean> | boolean {
-  if (active < renderConcurrency()) {
-    active += 1
-    return true
+// Inspects a version at each width, where Chromium runs
+export async function inspectTree(tree: PageTree, widths: Width[]): Promise<Inspection> {
+  const results: { width: Width; found: Found }[] = []
+  for (const width of widths) {
+    // Chromium dying under an inspection isn't the page's doing, so it gets one more try on a fresh one
+    const found = await inspectOnce(tree, width).catch((err) => {
+      if (err instanceof BrowserGone) return inspectOnce(tree, width)
+      throw err
+    })
+    results.push({ width, found })
   }
-  if (waiting.length >= MAX_WAITING) return false
-  return new Promise((resolve) => {
-    const take = () => {
-      clearTimeout(timer)
-      resolve(true)
-    }
-    // Past this the worker that asked may have given up, so it isn't rendered at all
-    const timer = setTimeout(() => {
-      waiting.splice(waiting.indexOf(take), 1)
-      resolve(false)
-    }, MAX_WAIT_MS)
-    waiting.push(take)
-  })
-}
-
-function freeSlot() {
-  const next = waiting.shift()
-  // The slot passes straight to the next inspection
-  if (next) next()
-  else active -= 1
-}
-
-// Inspects one version here, where Chromium runs. Never throws: the answer says what went wrong.
-export async function inspectHere(versionId: string, widths: Width[]): Promise<InspectAnswer> {
-  try {
-    const tree = await loadTree(versionId)
-    if (!tree) return { ok: false, reason: 'missing', message: 'The version is gone.' }
-    if (!(await takeSlot())) return { ok: false, reason: 'busy', message: 'The server is busy inspecting other pages. Try again in a minute.' }
-    try {
-      const results: { width: Width; found: Found }[] = []
-      for (const width of widths) {
-        // Chromium dying under an inspection isn't the page's doing, so it gets one more try on a fresh one
-        const found = await inspectOnce(tree, width).catch((err) => {
-          if (err instanceof BrowserGone) return inspectOnce(tree, width)
-          throw err
-        })
-        results.push({ width, found })
-      }
-      return { ok: true, inspection: merge(results) }
-    } finally {
-      freeSlot()
-    }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    log.warn('Inspection failed', { versionId, error: message })
-    return { ok: false, reason: 'failed', message: clip(message, 500) }
-  }
-}
-
-// In a cluster's other workers: where to send inspections, and the ones waiting for an answer
-let renderer: ((request: { id: number; versionId: string; widths: Width[] }) => void) | null = null
-const answers = new Map<number, (answer: InspectAnswer) => void>()
-let nextId = 0
-
-export function inspectElsewhere(send: ((request: { id: number; versionId: string; widths: Width[] }) => void) | null) {
-  renderer = send
-}
-
-export function inspectionAnswered(id: number, answer: InspectAnswer) {
-  answers.get(id)?.(answer)
-}
-
-export function inspect(versionId: string, widths: Width[]): Promise<InspectAnswer> {
-  const send = renderer
-  if (!send) return inspectHere(versionId, widths)
-  return new Promise((resolve) => {
-    const id = nextId++
-    const timer = setTimeout(() => done({ ok: false, reason: 'failed', message: 'The renderer did not answer in time. Try again in a minute.' }), ANSWER_MS)
-    function done(answer: InspectAnswer) {
-      clearTimeout(timer)
-      answers.delete(id)
-      resolve(answer)
-    }
-    answers.set(id, done)
-    send({ id, versionId, widths })
-  })
+  return merge(results)
 }
 
 function section(title: string, items: string[], none: string): string {

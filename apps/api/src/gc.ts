@@ -4,6 +4,7 @@ import { db } from './db/index.js'
 import { sweepExports } from './exports.js'
 import { deleteExpiredLimits } from './limits.js'
 import { log } from './log.js'
+import { sweepPdfs } from './pdf.js'
 import { indexStale } from './search.js'
 import { deleteBlobs, deleteStaleUploads, listBlobs } from './storage.js'
 import { deleteOldViews } from './views.js'
@@ -86,8 +87,9 @@ export async function runPruners() {
 }
 
 // Runs in the background every few hours while the server is up, and on the way clears rate limit
-// counters whose window is over, records of who opened a page that are past their retention, and
-// data exports that expired, and indexes pages for search that missed it (src/search.ts)
+// counters whose window is over, records of who opened a page that are past their retention, data
+// exports that expired and PDFs of versions that are gone, and indexes pages for search that missed it
+// (src/search.ts)
 export function scheduleSweeps() {
   const run = () =>
     runPruners()
@@ -100,6 +102,9 @@ export function scheduleSweeps() {
       .catch((err) => log.error('Deleting old page views failed', { err }))
       .then(() => sweepExports())
       .catch((err) => log.error('Deleting old data exports failed', { err }))
+      .then(() => sweepPdfs())
+      .then((pdfs) => pdfs && log.info('Deleted PDFs of deleted versions', { pdfs }))
+      .catch((err) => log.error('Deleting old PDFs failed', { err }))
       .then(() => indexStale())
       .then((indexed) => indexed && log.info('Indexed pages for search', { indexed }))
       .catch((err) => log.error('Indexing pages for search failed', { err }))

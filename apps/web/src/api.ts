@@ -823,6 +823,23 @@ export function downloadUrl(slug: string, version?: number) {
   return `/api/artifacts/${encodeURIComponent(slug)}/download${version ? `?version=${version}` : ''}`
 }
 
+// A version printed to PDF on the server, which takes a few seconds; saved under the name the server
+// gives it. Only on servers that make PDFs (AppConfig.pdf).
+export async function downloadPdf(slug: string, version?: number): Promise<void> {
+  const res = await fetch(`/api/artifacts/${encodeURIComponent(slug)}/pdf${version ? `?version=${version}` : ''}`, { credentials: 'same-origin' })
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'The PDF could not be made. Try again.')
+  const name = res.headers.get('content-disposition')?.match(/filename="([^"]+)"/)?.[1] ?? 'page.pdf'
+  const url = URL.createObjectURL(await res.blob())
+  const a = document.createElement('a')
+  a.href = url
+  a.download = name
+  document.body.append(a)
+  a.click()
+  a.remove()
+  // Revoking at once can cancel the download in some browsers
+  setTimeout(() => URL.revokeObjectURL(url), 60_000)
+}
+
 // Opaque origin: the page's scripts run, but can't read cookies or reach this app. The frame loads the
 // version from its own URL (versionUrl), so a page's files resolve by relative paths.
 export const FRAME_SANDBOX = 'allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads'

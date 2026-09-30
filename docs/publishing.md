@@ -539,6 +539,10 @@ Ask for the change in the same conversation ("make the chart a line chart"), or 
 
 In the gallery and the page viewer, the **…** menu lets anyone who can open a page **Download** it as a zip of `index.html` and its files or, once signed in, **Duplicate** it; lets editors rename it, change its **Tags** and move it to another workspace; and lets the owner delete it. See [Duplicating and moving pages](/docs/sharing#duplicating-a-page). In the viewer, **Download** saves the version you are looking at, including an older one picked in the history.
 
+On servers that render thumbnails, the viewer's **…** menu also has **Download PDF**: the server prints the version you are looking at and saves it as a PDF, which takes a few seconds the first time. A version never changes, so its PDF is kept and the next download of it is immediate. It prints like a browser's Print on a computer, with the page's backgrounds kept. Pages that have print styles (`@media print`) look their best: a page can set its paper size and margins with `@page` (for a deck, `@page { size: 1280px 720px; margin: 0 }`), and otherwise it goes on A4 with 1 cm margins. A deck that shows one slide at a time prints only that slide unless its print styles show them all. Ask the agent to add print styles when you want a page to print well. Like [inspections](#inspect_artifact), the page is printed with only its own files and a few public CDNs, so anything it loads from other servers is missing from the PDF.
+
+**Full screen** in the viewer shows the page alone, without the app's header, for presenting it. The page's own keys (a deck's arrow keys, say) work straight away, and Esc goes back.
+
 The gallery shows the newest pages first and loads more as you scroll, so a workspace with thousands of pages opens as fast as one with ten. The search box, the folders and the tags above it narrow the list, and they combine: for example the pages tagged `q3` in the folder Reports that mention "revenue".
 
 ## Search

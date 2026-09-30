@@ -15,7 +15,7 @@ const API = fileURLToPath(new URL('../..', import.meta.url))
 // Inside node_modules, so the build finds its dependencies
 const OUT = fileURLToPath(new URL('../../node_modules/.cache/cluster-test', import.meta.url))
 
-// With Chrome, the workers render thumbnails and inspections as in production
+// With Chrome, the workers render thumbnails, inspections and PDFs as in production
 const CHROME = process.env.TEST_CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 const hasChrome = existsSync(CHROME)
 
@@ -106,6 +106,10 @@ it('serves from two workers, runs the background jobs in one, and stops on SIGTE
       expect(answer.text).toContain('Inspected version 1 of "Clustered"')
       expect(answer.images).toBe(1)
     }
+    // PDFs go the same way
+    const shared = await createPage(owner, { title: 'Printed', visibility: 'link' })
+    const pdfs = await Promise.all(Array.from({ length: 4 }, () => pdf(origin, shared.slug)))
+    for (const printed of pdfs) expect(printed).toEqual({ status: 200, start: '%PDF-' })
   }
 
   child.kill('SIGTERM')
@@ -113,6 +117,19 @@ it('serves from two workers, runs the background jobs in one, and stops on SIGTE
   expect(lines().filter((l) => l.msg === 'Stopped')).toHaveLength(3)
   expect(lines().filter((l) => l.level === 'error')).toEqual([])
 }, 120_000)
+
+// A PDF of a link-shared page on a connection of its own, like the MCP calls below
+function pdf(origin: string, slug: string): Promise<{ status: number; start: string }> {
+  return new Promise((resolve, reject) => {
+    const req = request(`${origin}/api/artifacts/${slug}/pdf`, { agent: false }, (res) => {
+      const chunks: Buffer[] = []
+      res.on('data', (chunk: Buffer) => chunks.push(chunk))
+      res.on('end', () => resolve({ status: res.statusCode ?? 0, start: Buffer.concat(chunks).subarray(0, 5).toString('latin1') }))
+    })
+    req.on('error', reject)
+    req.end()
+  })
+}
 
 // One MCP tool call on a connection of its own, which the primary hands to the next worker in turn
 function inspect(origin: string, token: string, slug: string, id: number): Promise<{ text: string; images: number }> {

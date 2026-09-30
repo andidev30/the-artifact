@@ -17,6 +17,8 @@ export type AppConfig = {
   newOrganizations?: boolean
   // Enterprise single sign-on buttons (self-hosted with a license); empty otherwise
   sso?: { id: string; name: string }[]
+  // Pages can be downloaded as PDFs: the server has the browser that renders thumbnails
+  pdf?: boolean
   // The API didn't answer (restarting, or down); the other fields are guesses
   unreachable?: boolean
 }

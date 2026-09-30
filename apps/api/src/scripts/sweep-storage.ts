@@ -1,11 +1,13 @@
 // Removes blobs from object storage that no page, file or thumbnail refers to any more, records of
-// who opened a page that are past their retention, and data exports that expired. The server does
+// who opened a page that are past their retention, data exports that expired and PDFs of versions that
+// are gone. The server does
 // this every few hours on its own; this runs it now.
 //   pnpm --filter @the-artifact/api storage:sweep
 //   docker compose exec app node dist/scripts/sweep-storage.js
 import { db } from '../db/index.js'
 import { sweepExports } from '../exports.js'
 import { sweepStorage } from '../gc.js'
+import { sweepPdfs } from '../pdf.js'
 import { deleteOldViews, VIEWER_RETENTION_DAYS } from '../views.js'
 
 const { checked, deleted, uploads } = await sweepStorage()
@@ -14,4 +16,6 @@ const views = await deleteOldViews()
 console.log(`Deleted ${views} record${views === 1 ? '' : 's'} of who opened a page from more than ${VIEWER_RETENTION_DAYS} days ago`)
 const exports = await sweepExports()
 console.log(`Deleted ${exports} expired or unused data export${exports === 1 ? '' : 's'} and their files`)
+const pdfs = await sweepPdfs()
+console.log(`Deleted ${pdfs} PDF${pdfs === 1 ? '' : 's'} of deleted versions`)
 await db.$client.end()

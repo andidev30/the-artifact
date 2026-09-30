@@ -45,6 +45,8 @@ const CORE = {
   upload: { max: 2048, seconds: HOUR },
   // Pages one account has rendered on the server with inspect_artifact (each takes a few seconds of Chromium)
   inspect: { max: 100, seconds: HOUR },
+  // PDFs of pages one account (or, without one, one address) has printed on the server (each takes a few seconds of Chromium)
+  pdf: { max: 60, seconds: HOUR },
   // Access tokens one account creates in settings
   'access-token': { max: 20, seconds: HOUR },
   // Comments and replies one account writes, in the app or through agents

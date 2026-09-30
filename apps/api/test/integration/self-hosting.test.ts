@@ -21,6 +21,7 @@ describe('config for the web app', () => {
       instanceName: null,
       newOrganizations: false,
       sso: [],
+      pdf: false,
     })
   })
 })

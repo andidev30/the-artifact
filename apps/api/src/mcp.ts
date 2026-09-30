@@ -67,7 +67,7 @@ import { comparisonText, compareVersions, MAX_DIFF_FILE_BYTES } from './compare.
 import { checkLinkPassword, describeLink, LinkError, parseLinkExpiry, publicLink, updateLink, type LinkChange } from './links.js'
 import { db, schema } from './db/index.js'
 import type { Artifact } from './db/schema.js'
-import { describeInspection, inspect, type Width } from './inspect.js'
+import { describeInspection, type Width } from './inspect.js'
 import { hit, rule, waitText, windowText } from './limits.js'
 import { canFile, checkFolderName, ensureFolder, fileInto, FolderError, folderNamed, listFolders, MAX_FOLDER_NAME, workspaceOf } from './folders.js'
 import { ALLOWED_EXTENSIONS, checkPath, ENTRY_PATH, isText, MAX_FILE_BYTES, MAX_FILES, MAX_HTML_BYTES, MAX_TOTAL_BYTES } from './files.js'
@@ -75,6 +75,7 @@ import { MAX_PEOPLE_PER_INVITE, parseEmails, sharePeople, SharingError } from '.
 import { changeTags, checkTag, MAX_TAG_LENGTH, MAX_TAGS, TagError, tagsOf } from './tags.js'
 import { authenticateBearer, RESOURCE_METADATA_URL, type McpAuth } from './oauth/server.js'
 import { directUploads, UPLOAD_TTL_SECONDS } from './storage.js'
+import { render } from './renders.js'
 import { thumbnailsEnabled } from './thumbnails.js'
 import { prepareUpload } from './uploads.js'
 import { MAX_VIEWERS, pageViewers, REPEAT_MINUTES, versionViews, VIEWER_RETENTION_DAYS } from './views.js'
@@ -1102,7 +1103,7 @@ function buildServer(auth: McpAuth) {
         )
       const wait = await hit('inspect', auth.userId)
       if (wait) return text(refusal('inspect', 'page inspections', wait), true)
-      const answer = await inspect(v.id, [...new Set<Width>(widths ?? [1280])])
+      const answer = await render({ kind: 'inspect', versionId: v.id, widths: [...new Set<Width>(widths ?? [1280])] })
       if (!answer.ok) {
         if (answer.reason === 'missing') return text(`No page you can edit has the id "${artifact_id}".`, true)
         return text(
@@ -1112,7 +1113,7 @@ function buildServer(auth: McpAuth) {
           true,
         )
       }
-      return describeInspection(answer.inspection, `Inspected version ${n} of "${artifact.title}" (artifact_id: ${artifact.slug}).`)
+      return describeInspection(answer.value, `Inspected version ${n} of "${artifact.title}" (artifact_id: ${artifact.slug}).`)
     }),
   )
 
