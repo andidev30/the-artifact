@@ -2,6 +2,13 @@
 
 Every release of The Artifact, newest first. Entries are generated from the commit messages when a release is made; what you have to do when you upgrade is in [Upgrading](docs/upgrading.md), and the versioning policy is there too.
 
+## [1.2.0](https://github.com/andidev30/the-artifact/compare/v1.1.0...v1.2.0) (2026-09-30)
+
+
+### Features
+
+* download a page as a PDF, and present it full screen ([#182](https://github.com/andidev30/the-artifact/issues/182)) ([62b768b](https://github.com/andidev30/the-artifact/commit/62b768b9b8f33866dbaf4a53780a424c063a66e7))
+
 ## [1.1.0](https://github.com/andidev30/the-artifact/compare/v1.0.0...v1.1.0) (2026-09-29)
 
 
