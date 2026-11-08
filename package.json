@@ -19,9 +19,9 @@
     "format": "biome check --write"
   },
   "devDependencies": {
-    "@axe-core/playwright": "^4.13.0",
-    "@biomejs/biome": "2.5.14",
-    "@playwright/test": "^1.63.0"
+    "@axe-core/playwright": "^4.14.0",
+    "@biomejs/biome": "2.6.5",
+    "@playwright/test": "^1.65.0"
   },
   "engines": {
     "node": ">=24"
