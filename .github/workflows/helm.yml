@@ -23,7 +23,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+      - uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
         with:
           version: v4.3.0
       - name: Install kubeconform
@@ -54,7 +54,7 @@ jobs:
           load: true
           tags: the-artifact:ci
           cache-from: type=gha
-      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+      - uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
         with:
           version: v4.3.0
       # Chromium's sandbox needs unprivileged user namespaces, which Ubuntu 24.04 restricts by default
@@ -72,7 +72,7 @@ jobs:
                   containerPath: /var/lib/kubelet/seccomp/profiles/the-artifact-chromium.json
                   readOnly: true
           EOF
-      - uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1.14.0
+      - uses: helm/kind-action@ea822c7bf1874f08e5a491df991c228edffc3376 # v1.15.2
         with:
           cluster_name: the-artifact
           config: ${{ runner.temp }}/kind.yaml
